@@ -97,10 +97,13 @@ namespace LTSM {
 
     class PcscRemote {
         boost::asio::local::stream_protocol::socket sock_;
-        boost::asio::streambuf sb_;
+
         std::mutex sock_lock_;
+        bool error_{false};
 
       protected:
+        void wait_async_send(boost::asio::streambuf &);
+        void wait_async_recv(boost::asio::streambuf &, size_t);
 
       public:
         PcscRemote(boost::asio::io_context &, const std::string & path, std::promise<bool> connected);
@@ -121,6 +124,7 @@ namespace LTSM {
 
         uint32_t sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
         std::list<std::string> sendListReaders(const int32_t & id, const uint64_t & context);
+        bool isError(void) const { return error_; }
     };
 
     class PcscLocal;

@@ -197,7 +197,7 @@ namespace LTSM {
 
         sock_.async_connect(path, [res = std::move(connected)](const boost::system::error_code & ec) mutable {
             if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "handlerRemoteConnected", "connect", ec.value(), ec.message());
+                Application::error("{}: {} failed, code: {}, error: {}", "handlerRemoteConnected", "connect", ec.value(), ec.message());
                 res.set_value(false);
             } else {
                 res.set_value(true);
@@ -205,26 +205,112 @@ namespace LTSM {
         });
     }
 
+    template<typename T>
+    struct always_false : std::false_type {};
+
+    template<typename T>
+    inline constexpr bool always_false_v = always_false<T>::value;
+
+    template<typename T, typename = void>
+    struct has_data_size : std::false_type {};
+
+    template<typename T>
+    struct has_data_size<T, std::void_t<decltype(std::declval<T>().data()), decltype(std::declval<T>().size())>> : std::true_type {};
+
+    template<typename T>
+    inline constexpr bool has_data_size_v = has_data_size<T>::value;
+
+    namespace le {
+        template<typename Sock, typename T>
+        constexpr void write_value(Sock & sock, T val) {
+            if constexpr(std::is_integral_v<T>) {
+                boost::endian::native_to_little_inplace(val);
+                boost::asio::write(sock, boost::asio::const_buffer(&val, sizeof(val)), boost::asio::transfer_all());
+            } else if constexpr(has_data_size_v<T>) {
+                boost::asio::write(sock, boost::asio::const_buffer(val.data(), val.size()), boost::asio::transfer_all());
+            } else {
+                static_assert(always_false_v<T>, "Error: Type is not supported");
+            }
+        }
+
+        template<typename Sock, typename... Args>
+        constexpr void write_from(Sock & sock, Args... args) {
+            (write_value(sock, args), ...);
+        }
+
+        template<typename Sock, typename T>
+        constexpr void read_value(Sock & sock, T&& val) {
+            if constexpr(std::is_integral_v<std::decay_t<T>>) {
+                boost::asio::read(sock, boost::asio::buffer(&val, sizeof(val)), boost::asio::transfer_exactly(sizeof(val)));
+                boost::endian::little_to_native_inplace(val);
+            } else if constexpr(has_data_size_v<std::decay_t<T>>) {
+                boost::asio::read(sock, boost::asio::buffer(val), boost::asio::transfer_exactly(val.size()));
+            } else {
+                static_assert(always_false_v<T>, "Error: Type is not supported");
+            }
+        }
+
+        template<typename Sock, typename... Args>
+        constexpr void read_to(Sock & sock, Args&&... args) {
+            (read_value(sock, std::forward<Args>(args)), ...);
+        }
+
+        template<typename Sock, typename... Args>
+        constexpr auto read_tuple(Sock & sock, Args&&... args) {
+            (read_value(sock, std::forward<Args>(args)), ...);
+            return std::forward_as_tuple(std::forward<Args>(args)...);
+        }
+    }
+
+        //le::write_from(sock_, static_cast<uint16_t>(PcscOp::Init),
+        //               static_cast<uint16_t>(PcscLite::EstablishContext), scope);
+        //
+        //
+        //uint64_t context;
+        //uint32_t ret;
+        //return le::read_tuple(sock_, context, ret);
+
+    void PcscRemote::wait_async_send(boost::asio::streambuf & sb) {
+        auto send = boost::asio::async_write(sock_, sb, boost::asio::transfer_all(), boost::asio::use_future);
+
+        try {
+            [[maybe_unused]] auto bytes = send.get();
+        } catch(const boost::system::error_code & ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            error_ = true;
+            throw pcsc_error(NS_FuncNameS);
+        }
+    }
+
+    void PcscRemote::wait_async_recv(boost::asio::streambuf & sb, size_t rsz) {
+        auto recv = boost::asio::async_read(sock_, sb, boost::asio::transfer_exactly(rsz), boost::asio::use_future);
+
+        try {
+            [[maybe_unused]] auto bytes = recv.get();
+        } catch(const boost::system::error_code & ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            error_ = true;
+            throw pcsc_error(NS_FuncNameS);
+        }
+    }
+
     std::tuple<uint64_t, uint32_t>
     PcscRemote::sendEstablishedContext(const int32_t & id, const uint32_t & scope) {
         const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", __FUNCTION__, id, scope);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::EstablishContext).write_le32(scope);
-
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        bs.write_le16(PcscOp::Init).write_le16(PcscLite::EstablishContext).write_le32(scope);
+        wait_async_send(sb);
 
         // rsz: context64 + ret32
         const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto context = bs.read_le64();
         auto ret = bs.read_le32();
-
         return std::make_tuple(context, ret);
     }
 
@@ -234,17 +320,17 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: {:#016x}",
                            __FUNCTION__, id, context);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::ReleaseContext).write_le64(context);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -259,8 +345,8 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: {:#016x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::Connect).
@@ -269,11 +355,11 @@ namespace LTSM {
           write_le32(prefferedProtocols).
           write_le32(readerName.size()).write_string(readerName);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: handle64 + proto32 + ret32
         const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto handle = bs.read_le64();
         auto activeProtocol = bs.read_le32();
@@ -291,8 +377,8 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}",
                            __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::Reconnect).
@@ -301,11 +387,11 @@ namespace LTSM {
           write_le32(prefferedProtocols).
           write_le32(initialization);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: proto32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto activeProtocol = bs.read_le32();
         auto ret = bs.read_le32();
@@ -319,19 +405,19 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::Disconnect).
           write_le64(handle).
           write_le32(disposition);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -346,18 +432,18 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}",
                            __FUNCTION__, id, handle);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::BeginTransaction).
           write_le64(handle);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ret = bs.read_le32();
 
@@ -375,19 +461,19 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::EndTransaction).
           write_le64(handle).
           write_le32(disposition);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ret = bs.read_le32();
 
@@ -408,8 +494,8 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::Transmit).
@@ -423,24 +509,24 @@ namespace LTSM {
             bs.write_bytes(data1);
         }
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: proto32 + length32 + bytes32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ioRecvPciProtocol = bs.read_le32();
         auto ioRecvPciLength = bs.read_le32();
         auto bytesReturned = bs.read_le32();
         auto ret = bs.read_le32();
+        binary_buf data2;
 
         if(bytesReturned) {
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned));
-            auto data2 = bs.read_bytes(bytesReturned);
-            return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
+            // FIXED
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(data2), boost::asio::transfer_exactly(bytesReturned));
         }
 
-        return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, binary_buf{});
+        return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
     }
 
     std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>
@@ -449,35 +535,42 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}",
                            __FUNCTION__, id, handle);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
-        bs.write_le16(PcscOp::Init).
+        bs.write_le16(PcscOp::InitV2).
           write_le16(PcscLite::Status).
           write_le64(handle);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
-        // rsz: str32
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)));
-
+        wait_async_recv(sb, sizeof(uint32_t));
         auto nameLen = bs.read_le32();
+        std::string name;
 
-        // rsz: nameLen + state32 + proto32 + len32
-        const size_t rsz = nameLen + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        if(nameLen) {
+            // FIXED
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(name), boost::asio::transfer_exactly(nameLen));
+        }
 
-        auto name = bs.read_string(nameLen);
+        // rsz: state32 + proto32 + atr32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        wait_async_recv(sb, rsz);
+
         auto state = bs.read_le32();
         auto protocol = bs.read_le32();
         auto atrLen = bs.read_le32();
+        binary_buf atr;
 
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(atrLen + sizeof(uint32_t)));
+        if(atrLen) {
+            // FIXED
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(atr), boost::asio::transfer_exactly(atrLen));
+        }
 
-        auto atr = bs.read_bytes(atrLen);
+        wait_async_recv(sb, sizeof(uint32_t));
         auto ret = bs.read_le32();
 
-        return std::make_tuple(name, state, protocol, ret, atr);
+        return std::make_tuple(std::move(name), state, protocol, ret, std::move(atr));
     }
 
     std::tuple<uint32_t, binary_buf>
@@ -491,8 +584,8 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::Control).
@@ -505,22 +598,22 @@ namespace LTSM {
             bs.write_bytes(data1);
         }
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: bytes32 + len32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto bytesReturned = bs.read_le32();
         auto ret = bs.read_le32();
+        binary_buf data2;
 
         if(bytesReturned) {
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned));
-            auto data2 = bs.read_bytes(bytesReturned);
-            return std::make_tuple(ret, std::move(data2));
+            // FIXED
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(data2), boost::asio::transfer_exactly(bytesReturned));
         }
 
-        return std::make_tuple(ret, binary_buf{});
+        return std::make_tuple(ret, std::move(data2));
     }
 
     std::tuple<uint32_t, binary_buf>
@@ -529,31 +622,31 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, attrId: {}",
                            __FUNCTION__, id, handle, attrId);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::GetAttrib).
           write_le64(handle).
           write_le32(attrId);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: len32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto attrLen = bs.read_le32();
         auto ret = bs.read_le32();
+        binary_buf attr;
 
         if(attrLen) {
             assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(attrLen));
-            auto attr = bs.read_bytes(attrLen);
-            return std::make_tuple(ret, std::move(attr));
+            // FIXED
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(attr), boost::asio::transfer_exactly(attrLen));
         }
 
-        return std::make_tuple(ret, binary_buf{});
+        return std::make_tuple(ret, std::move(attr));
     }
 
     std::tuple<uint32_t>
@@ -567,8 +660,8 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
         }
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::SetAttrib).
@@ -580,11 +673,11 @@ namespace LTSM {
             bs.write_bytes(attr);
         }
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -596,18 +689,18 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext {:#016x}",
                            __FUNCTION__, id, context);
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::Cancel).
           write_le64(context);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -616,20 +709,20 @@ namespace LTSM {
     std::list<std::string> PcscRemote::sendListReaders(const int32_t & id, const uint64_t & context) {
         const std::scoped_lock guard{ sock_lock_ };
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::ListReaders).
           write_le64(context);
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: count32
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)));
+        const size_t rsz = sizeof(uint32_t);
+        wait_async_recv(sb, rsz);
 
         auto readersCount = bs.read_le32();
-
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localContext: {:#08x}, readers count: {}",
                            __FUNCTION__, id, context, readersCount);
 
@@ -637,11 +730,13 @@ namespace LTSM {
 
         while(readersCount--) {
             // rsz: len32
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)));
+            const size_t rsz = sizeof(uint32_t);
+            wait_async_recv(sb, rsz);
             uint32_t len = bs.read_le32();
-
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(len));
-            names.emplace_back(bs.read_string(len));
+            std::string name;
+            // FIXME
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(name), boost::asio::transfer_exactly(len));
+            names.emplace_back(std::move(name));
 
             if(names.back().size() > MAX_READERNAME - 1) {
                 names.back().resize(MAX_READERNAME - 1);
@@ -654,8 +749,8 @@ namespace LTSM {
     uint32_t PcscRemote::sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount) {
         const std::scoped_lock guard{ sock_lock_ };
 
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
 
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::GetStatusChange).
@@ -672,11 +767,11 @@ namespace LTSM {
               write_bytes(state.rgbAtr, state.cbAtr);
         }
 
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+        wait_async_send(sb);
 
         // rsz: count32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+        wait_async_recv(sb, rsz);
 
         auto counts = bs.read_le32();
         auto ret = bs.read_le32();
@@ -689,7 +784,7 @@ namespace LTSM {
         for(uint32_t it = 0; it < statesCount; ++it) {
             // rsz: state32 + state32 + name32 + atr32
             const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+            wait_async_recv(sb, rsz);
 
             SCARD_READERSTATE & state = states[it];
 
@@ -699,8 +794,9 @@ namespace LTSM {
             auto szReader = bs.read_le32();
             auto cbAtr = bs.read_le32();
 
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(szReader));
-            auto reader = bs.read_string(szReader);
+            std::string reader;
+            // FIXME
+            boost::asio::read(sock_, boost::asio::dynamic_buffer(reader), boost::asio::transfer_exactly(szReader));
 
             if(reader != state.szReader) {
                 Application::warning("{}: invalid reader, `{}' != `'", __FUNCTION__, reader, state.szReader);
@@ -709,6 +805,7 @@ namespace LTSM {
             assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
 
             state.cbAtr = cbAtr;
+            // FIXME
             boost::asio::read(sock_, boost::asio::buffer(state.rgbAtr, cbAtr), boost::asio::transfer_exactly(cbAtr));
         }
 
@@ -2021,7 +2118,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_pcsc_path),
 #endif
-        ioc_ {2}, signals_ {ioc_}, pool_ {8}, pcsc_sock_ {pool_.get_executor()}, dbus_conn_ {std::move(conn)} {
+        ioc_ {2}, signals_ {ioc_}, pool_ {8}, pcsc_sock_ {pool_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
