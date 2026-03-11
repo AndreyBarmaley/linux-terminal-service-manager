@@ -103,7 +103,36 @@ namespace LTSM {
 
       protected:
         void wait_async_send(boost::asio::streambuf &);
-        void wait_async_recv(boost::asio::streambuf &, size_t);
+
+        template<typename Buffer>
+        void wait_async_recv(Buffer & sb, size_t rsz) {
+            auto recv = boost::asio::async_read(sock_, sb,
+                    boost::asio::transfer_exactly(rsz), boost::asio::use_future);
+            try {
+                [[maybe_unused]] auto bytes = recv.get();
+            } catch(const boost::system::error_code & ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+                error_ = true;
+                throw pcsc_error(NS_FuncNameS);
+            }
+        }
+
+        template<typename Buffer>
+        Buffer async_recv_buffer(size_t rsz) {
+            Buffer res;
+            if(rsz) {
+                auto recv = boost::asio::async_read(sock_,
+                    boost::asio::dynamic_buffer(res), boost::asio::transfer_exactly(rsz), boost::asio::use_future);
+                try {
+                    [[maybe_unused]] auto bytes = recv.get();
+                } catch(const boost::system::error_code & ec) {
+                    Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+                    error_ = true;
+                    throw pcsc_error(NS_FuncNameS);
+                }
+            }
+            return res;
+        }
 
       public:
         PcscRemote(boost::asio::io_context &, const std::string & path, std::promise<bool> connected);
