@@ -1232,11 +1232,11 @@ void LTSM::Channel::Remote2Local::setSpeed(const Channel::Speed & speed) {
             break;
 
         case Speed::Medium:
-            delay = std::chrono::milliseconds(100);
+            delay = std::chrono::milliseconds(70);
             break;
 
         case Speed::Fast:
-            delay = std::chrono::milliseconds(60);
+            delay = std::chrono::milliseconds(40);
             break;
 
         case Speed::UltraFast:
@@ -1328,32 +1328,32 @@ void LTSM::Channel::Local2Remote::setSpeed(const Channel::Speed & speed) {
     switch(speed) {
         // ~10k/sec
         case Speed::VerySlow:
-            blocksz = 4096;
+            blocksz = 8192;
             delay = std::chrono::milliseconds(200);
             break;
 
         // ~40k/sec
         case Speed::Slow:
-            blocksz = 8192;
+            blocksz = 16384;
             delay = std::chrono::milliseconds(100);
             break;
 
         // ~80k/sec
         case Speed::Medium:
             blocksz = 16384;
-            delay = std::chrono::milliseconds(100);
+            delay = std::chrono::milliseconds(70);
             break;
 
         // ~800k/sec
         case Speed::Fast:
             blocksz = 32768;
-            delay = std::chrono::milliseconds(60);
+            delay = std::chrono::milliseconds(40);
             break;
 
         // ~1600k/sec
         case Speed::UltraFast:
             delay = std::chrono::milliseconds(20);
-            blocksz = 49152;
+            blocksz = 32768;
             break;
     }
 }
