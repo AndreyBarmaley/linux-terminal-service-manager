@@ -801,6 +801,12 @@ namespace LTSM {
     bool PcscLocal::clientAction(uint32_t cmd, uint32_t len) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: {:#08x}, len: {}", __FUNCTION__, id(), cmd, len);
 
+        /*
+            объект PcscLocal - это связь с клиентской программой
+            каждый объект PcscLocal запускается в своей нитке по ThreadPool
+            поэтому в методах proxyXYZ используются синхронные asio::read/asio::write
+        */
+
         switch(cmd) {
             case PcscLite::EstablishContext:
                 return proxyEstablishContext();
