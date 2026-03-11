@@ -94,20 +94,18 @@ namespace byte {
             return write_le<uint16_t>(val);
         }
 
-        streambuf & write_string(std::string_view val) {
-            auto buf = sb_.prepare(val.size());
-            assert(val.size() <= boost::asio::buffer_size(buf));
-            boost::asio::buffer_copy(buf, boost::asio::buffer(val));
-            sb_.commit(val.size());
+        streambuf & write_bytes(const uint8_t* ptr, size_t len) {
+            if(len) {
+                auto buf = sb_.prepare(len);
+                assert(len <= boost::asio::buffer_size(buf));
+                boost::asio::buffer_copy(buf, boost::asio::buffer(ptr, len));
+                sb_.commit(len);
+            }
             return *this;
         }
 
-        streambuf & write_bytes(const uint8_t* ptr, size_t len) {
-            auto buf = sb_.prepare(len);
-            assert(len <= boost::asio::buffer_size(buf));
-            boost::asio::buffer_copy(buf, boost::asio::buffer(ptr, len));
-            sb_.commit(len);
-            return *this;
+        streambuf & write_string(std::string_view val) {
+            return write_bytes(reinterpret_cast<const uint8_t*>(val.data()), val.size());
         }
 
         streambuf & write_bytes(const std::vector<uint8_t> & val) {
@@ -137,22 +135,25 @@ namespace byte {
             sb_.consume(len);
         }
 
+        template<typename Buffer>
+        Buffer read_buffer(size_t len) {
+            if(len) {
+                auto buf = sb_.data();
+                assert(len <= boost::asio::buffer_size(buf));
+                Buffer res(len, 0);
+                boost::asio::buffer_copy(boost::asio::buffer(res), buf);
+                sb_.consume(len);
+                return res;
+            }
+            return {};
+        }
+
         std::string read_string(size_t len) {
-            auto buf = sb_.data();
-            assert(len <= boost::asio::buffer_size(buf));
-            std::string res(len, 0);
-            boost::asio::buffer_copy(boost::asio::buffer(res), buf);
-            sb_.consume(len);
-            return res;
+            return read_buffer<std::string>(len);
         }
 
         std::vector<uint8_t> read_bytes(size_t len) {
-            auto buf = sb_.data();
-            assert(len <= boost::asio::buffer_size(buf));
-            std::vector<uint8_t> res(len, 0);
-            boost::asio::buffer_copy(boost::asio::buffer(res), buf);
-            sb_.consume(len);
-            return res;
+            return read_buffer<std::vector<uint8_t>>(len);
         }
     };
 }
