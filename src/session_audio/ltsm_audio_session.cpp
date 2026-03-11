@@ -44,6 +44,32 @@ namespace LTSM {
 #endif
 
     /// AudioClient
+    bool AudioClient::wait_async_send(boost::asio::streambuf & sb) {
+        auto send = boost::asio::async_write(sock_, sb, boost::asio::transfer_all(), boost::asio::use_future);
+
+        try {
+            [[maybe_unused]] auto bytes = send.get();
+        } catch(const boost::system::error_code & ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            return false;
+        }
+
+        return true;
+    }
+
+    bool AudioClient::wait_async_recv(boost::asio::streambuf & sb, size_t rsz) {
+        auto recv = boost::asio::async_read(sock_, sb,
+                    boost::asio::transfer_exactly(rsz), boost::asio::use_future);
+        try {
+            [[maybe_unused]] auto bytes = recv.get();
+        } catch(const boost::system::error_code & ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            return false;
+        }
+
+        return true;
+    }
+
     void AudioClient::handlerSocketConnect(const boost::system::error_code & ec) {
         // wait socket
         if(ec) {
@@ -96,24 +122,19 @@ namespace LTSM {
         bs.write_le32(48000);
         bs.write_le16(bitsPerSample);
 #endif
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb, boost::asio::transfer_all(), ec);
 
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+        if(!wait_async_send(sb)) {
             sock_.close();
             return false;
         }
 
-        auto rlen = boost::asio::read(sock_, sb, boost::asio::transfer_exactly(4), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+        // rsz: cmd16, err16
+        const size_t rsz = sizeof(uint16_t) + sizeof(uint16_t);
+        if(! wait_async_recv(sb, rsz)) {
             sock_.close();
             return false;
         }
 
-        // client reply
         auto cmd = bs.read_le16();
         auto err = bs.read_le16();
 
@@ -123,16 +144,17 @@ namespace LTSM {
         }
 
         if(err) {
-            boost::asio::read(sock_, sb, boost::asio::transfer_exactly(err), ec);
-            auto str = bs.read_string(err);
-            Application::error("{}: recv error: {}", __FUNCTION__, str);
+            if(wait_async_recv(sb, err)) {
+                auto str = bs.read_string(err);
+                Application::error("{}: recv error: {}", __FUNCTION__, str);
+            }
+
+            sock_.close();
             return false;
         }
 
-        boost::asio::read(sock_, sb, boost::asio::transfer_exactly(4), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+        // ver16, enc16
+        if(! wait_async_recv(sb, rsz)) {
             sock_.close();
             return false;
         }

@@ -84,6 +84,9 @@ namespace LTSM {
         uint32_t bit_rate_ = 44100;
         uint32_t frag_size_ = 1024;
 
+        bool wait_async_send(boost::asio::streambuf &);
+        bool wait_async_recv(boost::asio::streambuf &, size_t rsz);
+ 
         AudioClient(boost::asio::io_context &, const std::string &);
         ~AudioClient();
 
