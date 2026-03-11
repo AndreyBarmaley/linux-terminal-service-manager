@@ -443,6 +443,12 @@ namespace LTSM {
         return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
     }
 
+    inline void fixed_string_name(std::string & str) {
+        while(str.size() && str.back() == 0) {
+            str.pop_back();
+        }
+    }
+
     std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>
     PcscRemote::sendStatus(const int32_t & id, const uint64_t & handle) {
         const std::scoped_lock guard{ sock_lock_ };
@@ -464,7 +470,8 @@ namespace LTSM {
 
         auto nameLen = bs.read_le32();
         auto name = async_recv_buffer<std::string>(nameLen);
-
+        fixed_string_name(name);
+    
         // rsz: state32 + proto32 + atr32
         rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
         wait_async_recv(sb, rsz);
