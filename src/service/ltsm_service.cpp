@@ -968,7 +968,7 @@ namespace LTSM::Manager {
 #else
         , AdaptorInterfaces(*conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_},
+        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_}, work_guard_{boost::asio::make_work_guard(ioc_)},
             timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_}, dbus_conn_{std::move(conn)} {
         //
         checkConfigPathes();
@@ -1055,6 +1055,8 @@ namespace LTSM::Manager {
 
         childs_.clear();
         jobs_.clear();
+        
+        work_guard_.reset();
     }
 
     void DBusAdaptor::createRuntimeDir(void) const {
@@ -1090,10 +1092,6 @@ namespace LTSM::Manager {
                 Application::warning("{}: path not found: `{}'", "CheckProgram", value);
             }
         }
-    }
-
-    void DBusAdaptor::shutdownService(void) {
-        busShutdownService();
     }
 
     void DBusAdaptor::configReloadedEvent(void) {
@@ -3095,7 +3093,11 @@ namespace LTSM::Manager {
             }
         }
     
-        boost::asio::io_context ctx{4}; 
+        const size_t concurency = 4;
+
+        boost::asio::io_context ctx{concurency};
+        boost::asio::thread_pool pool{concurency};
+
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
@@ -3107,7 +3109,11 @@ namespace LTSM::Manager {
         sd_notify(0, "READY=1");
 #endif
 
-        ctx.run();
+        for(auto it = 0; it < concurency; ++it) {
+            boost::asio::post(pool, [&ctx](){ ctx.run(); });
+        }
+
+        pool.join();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");

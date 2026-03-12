@@ -365,6 +365,7 @@ namespace LTSM::Manager {
 
         boost::asio::io_context & ioc_;
         boost::asio::signal_set signals_;
+        boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
 
         boost::asio::steady_timer timer_limit_;
         boost::asio::steady_timer timer_ended_;
@@ -414,8 +415,6 @@ namespace LTSM::Manager {
       public:
         DBusAdaptor(boost::asio::io_context &, DBusConnectionPtr, const std::filesystem::path & confile);
         ~DBusAdaptor();
-
-        void shutdownService(void);
 
         // ApplicationJsonConfig interface
         void configReloadedEvent(void) override;
