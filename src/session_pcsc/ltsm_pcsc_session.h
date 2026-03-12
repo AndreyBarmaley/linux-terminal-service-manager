@@ -143,46 +143,49 @@ namespace LTSM {
 
         uint32_t context = 0;
         uint32_t handle = 0;
-        int cid_ = 0;
+        const int cid_ = 0;
 
         std::weak_ptr<PcscRemote> remote_;
 
         ClientCancelFunc clientCanceledCb;
-        ClientShutdownFunc clientShutdownCb;
 
       protected:
-        void handlerReadersStatusChanged(const boost::system::error_code & ec, int32_t timeout);
+        boost::asio::awaitable<std::pair<bool,uint32_t>> readersStatusChanged(const boost::system::error_code & ec, int32_t timeout);
         void handlerClientWaitCommand(const boost::system::error_code & ec);
+
         void handlerClientActionStarted(void);
-        void replyError(uint32_t len, uint32_t err);
+        boost::asio::awaitable<void> replyError(uint32_t len, uint32_t err);
 
-        bool proxyEstablishContext(void);
-        bool proxyReleaseContext(void);
-        bool proxyConnect(void);
-        bool proxyReconnect(void);
-        bool proxyDisconnect(void);
-        bool proxyBeginTransaction(void);
-        bool proxyEndTransaction(void);
-        bool proxyTransmit(void);
-        bool proxyStatus(void);
-        bool proxyControl(void);
-        bool proxyGetAttrib(void);
-        bool proxySetAttrib(void);
-        bool proxyCancel(void);
-        bool proxyGetVersion(void);
-        bool proxyGetReaderState(void);
-        bool proxyReaderStateChangeStart(void);
-        bool proxyReaderStateChangeStop(void);
+        boost::asio::awaitable<bool> proxyEstablishContext(void);
+        boost::asio::awaitable<bool> proxyReleaseContext(void);
+        boost::asio::awaitable<bool> proxyConnect(void);
+        boost::asio::awaitable<bool> proxyReconnect(void);
+        boost::asio::awaitable<bool> proxyDisconnect(void);
+        boost::asio::awaitable<bool> proxyBeginTransaction(void);
+        boost::asio::awaitable<bool> proxyEndTransaction(void);
+        boost::asio::awaitable<bool> proxyTransmit(void);
+        boost::asio::awaitable<bool> proxyStatus(void);
+        boost::asio::awaitable<bool> proxyControl(void);
+        boost::asio::awaitable<bool> proxyGetAttrib(void);
+        boost::asio::awaitable<bool> proxySetAttrib(void);
+        boost::asio::awaitable<bool> proxyCancel(void);
+        boost::asio::awaitable<bool> proxyGetVersion(void);
+        boost::asio::awaitable<bool> proxyGetReaderState(void);
+        boost::asio::awaitable<bool> proxyReaderStateChangeStart(void);
+        boost::asio::awaitable<bool> proxyReaderStateChangeStop(void);
 
-        bool clientAction(uint32_t cmd, uint32_t len);
+        boost::asio::awaitable<bool> clientAction(uint32_t cmd, uint32_t len);
         void statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr);
 
-        uint32_t syncReaderStatus(const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
-        uint32_t syncReaders(bool* changed = nullptr);
+        boost::asio::awaitable<uint32_t> syncReaderStatus(const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
+        boost::asio::awaitable<uint32_t> syncReaders(bool* changed = nullptr);
+        boost::asio::awaitable<uint32_t> waitReadersStatusChanged(uint32_t timeout);
 
       public:
         PcscLocal(boost::asio::local::stream_protocol::socket &&, int id, std::shared_ptr<PcscRemote>, PcscSessionBus* sessionBus);
         ~PcscLocal();
+
+        boost::asio::awaitable<bool> handlerClientWaitCommand(void);
 
         inline int id(void) const {
             return cid_;
@@ -211,10 +214,8 @@ namespace LTSM {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
 
-        boost::asio::thread_pool pool_; // for PcscLocal clients
-
-        boost::asio::local::stream_protocol::acceptor pcsc_sock_;
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;
+        boost::asio::cancellation_signal listen_stop_;
 
         DBusConnectionPtr dbus_conn_;
 
@@ -225,8 +226,10 @@ namespace LTSM {
 
       protected:
         void stop(void);
-        void handlerLocalAccepted(const boost::system::error_code & ec, boost::asio::local::stream_protocol::socket);
 
+        boost::asio::awaitable<void> handlerLocalAccept(boost::asio::local::stream_protocol::socket peer);
+        boost::asio::awaitable<void> handlerLocalListener(void);
+    
       public:
         PcscSessionBus(DBusConnectionPtr, bool debug = false);
         virtual ~PcscSessionBus();
