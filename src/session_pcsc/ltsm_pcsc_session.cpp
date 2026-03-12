@@ -42,8 +42,6 @@
 using namespace std::chrono_literals;
 
 namespace PcscLite {
-    uint32_t apiVersion = 0;
-
     std::array<ReaderState, PCSCLITE_MAX_READERS_CONTEXTS> readers;
     std::mutex readersLock;
 
@@ -170,13 +168,9 @@ namespace PcscLite {
                 return 12;
 
             case GetReaderState:
-                return 0;
-
             case WaitReaderStateChangeStart:
-                return apiVersion < 43 ? 8 : 0;
-
             case WaitReaderStateChangeStop:
-                return apiVersion < 43 ? 8 : 0;
+                return 0;
 
             default:
                 LTSM::Application::warning("{}: unknown cmd: {:#08x}", __FUNCTION__, cmd);
@@ -727,12 +721,14 @@ namespace LTSM {
         sock_.cancel();
         sock_.close();
 
+        if(timer_status_) {
+            timer_status_->cancel();
+        }
+
         if(transaction_id == id()) {
             transaction_id = 0;
             trans_lock.unlock();
         }
-
-        waitStatusChanged.stop();
     }
 
     void PcscLocal::handlerClientWaitCommand(const boost::system::error_code & ec) {
@@ -1751,14 +1747,22 @@ namespace LTSM {
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> protocol version: {}.{}",
                            __FUNCTION__, id(), versionMajor, versionMinor);
-        PcscLite::apiVersion = versionMajor * 10 + versionMinor;
+
+        uint32_t ret = SCARD_S_SUCCESS;
+
+        // supported only 4.4 protocol or higher
+        if(versionMajor * 10 + versionMinor < 44) {
+            Application::warning("{}: clientId: {}, unsupported version: version: {}.{}",
+                           __FUNCTION__, id(), versionMajor, versionMinor);
+            ret = SCARD_E_NO_SERVICE;
+        }
 
         bs.write_le32(versionMajor).
           write_le32(versionMinor).
-          write_le32(0);
+          write_le32(ret);
         boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
-        return true;
+        return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyGetReaderState(void) {
@@ -1773,127 +1777,80 @@ namespace LTSM {
         return true;
     }
 
-    uint32_t PcscLocal::waitReadersStatusChanged(uint32_t timeout) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
+    void PcscLocal::handlerReadersStatusChanged(const boost::system::error_code & ec, int32_t timeout) {
+
+        if(ec) {
+            if(ec.value() == boost::system::errc::operation_canceled) {
+                timer_ret_ = SCARD_E_CANCELLED;
+                if(status_cancel_) {
+                    Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "timeout");
+                } else {
+                    Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "stopped");
+                }
+            } else {
+                timer_ret_ = SCARD_F_INTERNAL_ERROR;
+                return;
+            }
+        } else {
+            bool readersChanged = false;
+            auto ret = syncReaders(& readersChanged);
+
+            if(readersChanged) {
+                timer_ret_ = ret;
+            }
+
+            const size_t pause_ms = 750;
+            timeout -= pause_ms;
+
+            if(timeout < 0) {
+                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "limit");
+                timer_ret_ = SCARD_E_TIMEOUT;
+                return;
+            }
+
+            Application::trace(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
                            __FUNCTION__, id(), context, timeout);
 
-        if(0 == timeout) {
-            auto ret = syncReaders();
-            return ret == SCARD_E_NO_READERS_AVAILABLE ?
-                   SCARD_S_SUCCESS : ret;
+            timer_status_->expires_after(std::chrono::milliseconds(pause_ms));
+            timer_status_->async_wait(std::bind(&PcscLocal::handlerReadersStatusChanged, this, std::placeholders::_1, timeout));
         }
-
-        std::this_thread::sleep_for(100ms);
-        auto wait_ms = std::chrono::milliseconds(timeout);
-        uint32_t ret = SCARD_E_TIMEOUT;
-        Tools::Timeout timeoutLimit(wait_ms);
-        Tools::Timeout timeoutSyncReaders(1s);
-        waitStatusChanged.start();
-
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "started");
-
-        while(ret == SCARD_E_TIMEOUT) {
-            if(waitStatusChanged.canceled) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "timeout");
-                ret = SCARD_E_CANCELLED;
-                break;
-            }
-
-            if(waitStatusChanged.stopped) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "stopped");
-                ret = SCARD_S_SUCCESS;
-                break;
-            }
-
-            if(timeoutLimit.check()) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "limit");
-                break;
-            }
-
-            if(timeoutSyncReaders.check()) {
-                bool readersChanged = false;
-                auto ret2 = syncReaders(& readersChanged);
-
-                if(ret2 != SCARD_S_SUCCESS || readersChanged) {
-                    Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "error");
-                    ret = ret2;
-                    break;
-                }
-            }
-
-            std::this_thread::sleep_for(100ms);
-        }
-
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> timeout: {}", __FUNCTION__, id(), timeout);
-
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
-
-        bs.write_le32(timeout).
-          write_le32(ret);
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
-
-        waitStatusChanged.reset();
-
-        return ret;
     }
 
     bool PcscLocal::proxyReaderStateChangeStart(void) {
 
-        if(PcscLite::apiVersion < 43) {
-            // old protocol: 4.2
-            sb_.consume(sb_.size());
-            byte::streambuf bs(sb_);
-
-            // rsz: timeout32, ret32
-            const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
-
-            const uint32_t timeout = bs.read_le32();
-            [[maybe_unused]] const uint32_t ret = bs.read_le32();
-
-            Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
-                               __FUNCTION__, id(), context, timeout);
-
-            waitStatusChanged.stop();
-            waitStatusChanged.job = std::async(std::launch::async, & PcscLocal::waitReadersStatusChanged, this, timeout);
-        } else {
-            // new protocol 4.4: empty params
-            Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
+        // new protocol 4.4: empty params
+        Application::debug(DebugType::Pcsc, "{}: !!! clientId: {} << localContext: {:#08x}, timeout: {}",
                                __FUNCTION__, id(), context);
-            waitReadersStatusChanged(0);
 
-            // send all readers
-            const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
-            std::scoped_lock guard{ PcscLite::readersLock };
+        syncReaders();
 
-            boost::asio::write(sock_, boost::asio::buffer(PcscLite::readers.data(), readersLength), boost::asio::transfer_all());
-        }
+        // run timer
+        status_cancel_ = false;
+        timer_ret_ = SCARD_S_SUCCESS;
+
+        timer_status_ = std::make_unique<boost::asio::steady_timer>(sock_.get_executor(), 750ms);
+        timer_status_->async_wait(std::bind(&PcscLocal::handlerReadersStatusChanged, this, std::placeholders::_1, INT32_MAX));
+
+        // send all readers
+        const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
+        std::scoped_lock guard{ PcscLite::readersLock };
+
+        boost::asio::write(sock_, boost::asio::buffer(PcscLite::readers.data(), readersLength), boost::asio::transfer_all());
+
 
         return true;
     }
 
     bool PcscLocal::proxyReaderStateChangeStop(void) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}",
+        Application::debug(DebugType::Pcsc, "{}: !!! clientId: {} << localContext: {:#08x}",
                            __FUNCTION__, id(), context);
+
+        // stop
+        status_cancel_ = false;
+        timer_status_.reset();
 
         sb_.consume(sb_.size());
         byte::streambuf bs(sb_);
-
-        if(PcscLite::apiVersion < 43) {
-            // old protocol: 4.2
-            // rsz: timeout32, ret32
-            const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
-
-            [[maybe_unused]] const uint32_t timeout = bs.read_le32();
-            [[maybe_unused]] const uint32_t ret = bs.read_le32();
-        } else {
-            // new protocol: 4.4, empty params
-        }
-
-        // stop
-        waitStatusChanged.stop();
 
         bs.write_le32(0).
           write_le32(SCARD_S_SUCCESS);
@@ -2011,8 +1968,8 @@ namespace LTSM {
     }
 
     void PcscLocal::canceledAction(void) {
-        waitStatusChanged.cancel();
-        sock_.close();
+        status_cancel_ = true;
+        timer_status_.reset();
     }
 
     /// PcscSessionBus

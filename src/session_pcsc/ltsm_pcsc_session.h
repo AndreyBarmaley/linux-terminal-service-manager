@@ -59,40 +59,6 @@ namespace PcscLite {
 }
 
 namespace LTSM {
-    class PcscSessionBus;
-
-    struct WaitStatus {
-        std::future<uint32_t> job;
-        std::atomic<bool> stopped{true};
-        std::atomic<bool> canceled{true};
-
-        void reset(void) {
-            stopped = true;
-            canceled = true;
-        }
-
-        void start(void) {
-            stopped = false;
-            canceled = false;
-        }
-
-        void stop(void) {
-            stopped = true;
-
-            if(job.valid()) {
-                job.get();
-            }
-        }
-
-        void cancel(void) {
-            canceled = true;
-
-            if(job.valid()) {
-                job.get();
-            }
-        }
-    };
-
     using binary_buf = std::vector<uint8_t>;
 
     class PcscRemote {
@@ -157,6 +123,7 @@ namespace LTSM {
     };
 
     class PcscLocal;
+    class PcscSessionBus;
 
     using ClientCancelFunc = std::function<uint64_t(uint32_t)>;
     using ClientShutdownFunc = std::function<void(const PcscLocal*)>;
@@ -166,7 +133,10 @@ namespace LTSM {
         boost::asio::streambuf sb_;
 
         PcscLite::ReaderState* reader_ = nullptr;
-        WaitStatus waitStatusChanged;
+
+        std::unique_ptr<boost::asio::steady_timer> timer_status_;
+        std::atomic<uint32_t> timer_ret_{SCARD_S_SUCCESS};
+        std::atomic<bool> status_cancel_{false};
 
         uint64_t remoteContext = 0;
         uint64_t remoteHandle = 0;
@@ -181,6 +151,7 @@ namespace LTSM {
         ClientShutdownFunc clientShutdownCb;
 
       protected:
+        void handlerReadersStatusChanged(const boost::system::error_code & ec, int32_t timeout);
         void handlerClientWaitCommand(const boost::system::error_code & ec);
         void handlerClientActionStarted(void);
         void replyError(uint32_t len, uint32_t err);
@@ -208,7 +179,6 @@ namespace LTSM {
 
         uint32_t syncReaderStatus(const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
         uint32_t syncReaders(bool* changed = nullptr);
-        uint32_t waitReadersStatusChanged(uint32_t timeout);
 
       public:
         PcscLocal(boost::asio::local::stream_protocol::socket &&, int id, std::shared_ptr<PcscRemote>, PcscSessionBus* sessionBus);
