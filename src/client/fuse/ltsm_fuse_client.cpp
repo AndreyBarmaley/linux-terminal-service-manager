@@ -68,29 +68,25 @@ namespace LTSM {
 
 #ifdef __UNIX__
     std::pair<ino_t, ino_t> readSymLink(const std::string & path, const struct stat & st1, const std::string & dir) {
-        std::vector<char> linkto(dir.size() + 1024, 0);
-        auto len = readlink(path.c_str(), linkto.data(), linkto.size() - 1);
 
-        if(len < 0) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "readlink", strerror(errno), errno, path);
-            throw fuse_error(NS_FuncNameS);
-        }
+        std::error_code err;
+        auto linkto = std::filesystem::read_symlink(path, err);
 
-        if(len < dir.size()) {
-            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
+        if(err) {
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "read_symlink", err.value(), err.message());
             throw fuse_error(NS_FuncNameS);
         }
 
         // check scope
-        if(! std::equal(dir.begin(), dir.end(), linkto.begin(), linkto.begin() + dir.size())) {
+        if(! startsWith(linkto.string(), dir)) {
             Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
             throw fuse_error(NS_FuncNameS);
         }
 
         struct stat st2 = {};
 
-        if(0 > ::stat(linkto.data(), & st2)) {
+        if(0 > ::stat(linkto.c_str(), & st2)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "stat", strerror(errno), errno, path);
             throw fuse_error(NS_FuncNameS);
