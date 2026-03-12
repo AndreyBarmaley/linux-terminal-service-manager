@@ -833,9 +833,9 @@ namespace LTSM::Manager {
         }
 
         std::error_code err;
-
         if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20)), err)) {
-            Application::warning("{}: {}, path: `{}'", __FUNCTION__, err.message(), cmd);
+            Application::error("{}: {} failed, code: {}, error: {}",
+                                __FUNCTION__, "exists", err.value(), err.message());
             return;
         }
 
@@ -1903,8 +1903,8 @@ namespace LTSM::Manager {
         std::error_code err;
 
         if(! std::filesystem::is_directory(dstdir, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, err.message(), dstdir, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                                __FUNCTION__, "is_directory", err.value(), err.message());
             emitTransferReject(xvfb->displayNum, files);
             return;
         }
@@ -1979,7 +1979,8 @@ namespace LTSM::Manager {
             if(fserr.value() == 18) {
                 std::filesystem::copy_file(tmpfile, dstfile, fserr);
             } else {
-                Application::error("{}: {}, path: `{}'", __FUNCTION__, fserr.message(), dstfile);
+                Application::error("{}: {} failed, code: {}, error: {}",
+                        __FUNCTION__, "exists", fserr.value(), fserr.message());
                 error = true;
             }
 
@@ -2518,8 +2519,8 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(socketFolder, err) &&
            ! std::filesystem::create_directories(socketFolder, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", socketFolder, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "create_directories", err.value(), err.message());
             return false;
         }
 
@@ -2573,8 +2574,8 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(audioFolder, err) &&
            ! std::filesystem::create_directories(audioFolder, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", audioFolder, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "create_directories", err.value(), err.message());
             return false;
         }
 
@@ -2637,8 +2638,8 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(socketFolder, err) &&
            ! std::filesystem::create_directories(socketFolder, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", socketFolder, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "create_directories", err.value(), err.message());
             return false;
         }
 
@@ -2693,8 +2694,8 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(pcscFolder, err) &&
            ! std::filesystem::create_directories(pcscFolder, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", pcscFolder, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "create_directories", err.value(), err.message());
             return false;
         }
 
@@ -2747,8 +2748,8 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(pkcs11Folder, err) &&
            ! std::filesystem::create_directories(pkcs11Folder, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", pkcs11Folder, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "create_directories", err.value(), err.message());
             return false;
         }
 
@@ -2810,8 +2811,8 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(fusePointFolder, err) &&
            ! std::filesystem::create_directories(fusePointFolder, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", fusePointFolder, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                            __FUNCTION__, "create_directories", err.value(), err.message());
             return false;
         }
 

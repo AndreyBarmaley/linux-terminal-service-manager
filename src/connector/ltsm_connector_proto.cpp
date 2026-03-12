@@ -289,8 +289,8 @@ namespace LTSM::Connector {
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"),
-                                   keytab, getuid());
+                Application::error("{}: {} failed, code: {}, error: {}",
+                                __FUNCTION__, "is_regular_file", err.value(), err.message());
                 secInfo.authKrb5 = false;
             }
         }

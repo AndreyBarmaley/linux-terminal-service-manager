@@ -284,11 +284,13 @@ namespace LTSM {
             auto ptr = packet.get();
 
             boost::asio::async_write(sock_, ptr->buffers_, boost::asio::transfer_all(),
-            boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
-                if(ec) {
-                    sock_.close();
+                boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
+                    if(ec) {
+                        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+                        sock_.close();
+                    }
                 }
-            }));
+            ));
 
         } else if(encoder_) {
             encoder_->push(data.data(), data.size());
@@ -305,11 +307,13 @@ namespace LTSM {
                     auto ptr = packet.get();
 
                     boost::asio::async_write(sock_, ptr->buffers_, boost::asio::transfer_all(),
-                    boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
-                        if(ec) {
-                            sock_.close();
+                        boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
+                            if(ec) {
+                                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+                                sock_.close();
+                            }
                         }
-                    }));
+                    ));
                 }
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", __FUNCTION__, err.what());
@@ -320,11 +324,13 @@ namespace LTSM {
             auto ptr = packet.get();
 
             boost::asio::async_write(sock_, ptr->buffers_, boost::asio::transfer_all(),
-            boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
-                if(ec) {
-                    sock_.close();
+                boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
+                    if(ec) {
+                        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+                        sock_.close();
+                    }
                 }
-            }));
+            ));
         }
     }
 

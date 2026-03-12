@@ -936,7 +936,8 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(cvt, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), cvt, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                    __FUNCTION__, "exists", err.value(), err.message());
             return 0;
         }
 

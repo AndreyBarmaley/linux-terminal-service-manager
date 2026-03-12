@@ -611,7 +611,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
         std::error_code err;
 
         if(! std::filesystem::is_regular_file(file, err)) {
-            Application::warning("{}: {}, path: `{}', uid: {}", "sendSystemTransferFiles", err.message(), file, getuid());
+            Application::warning("{}: {} failed, code: {}, error: {}", __FUNCTION__, "is_regular_file", err.value(), err.message());
             return true;
         }
 
@@ -1669,7 +1669,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path 
     std::error_code err;
 
     if(! std::filesystem::is_socket(path, err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
+        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "is_socket", err.value(), err.message());
         throw channel_error(NS_FuncNameS);
     }
 
@@ -1791,7 +1791,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
     if(mode == ConnectorMode::ReadOnly &&
        ! std::filesystem::exists(path, err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
+        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "exists", err.value(), err.message());
         throw channel_error(NS_FuncNameS);
     }
 
@@ -1863,7 +1863,7 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
     std::error_code err;
 
     if(! std::filesystem::exists(list.front(), err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), list.front(), getuid());
+        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "exists", err.value(), err.message());
         throw channel_error(NS_FuncNameS);
     }
 

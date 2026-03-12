@@ -737,7 +737,8 @@ namespace LTSM {
 
     void PcscLocal::handlerClientWaitCommand(const boost::system::error_code & ec) {
         if(ec) {
-            Application::error("{}: error, client id: {}, message: {}", __FUNCTION__, id(), ec.message());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                    __FUNCTION__, "wait", ec.value(), ec.message());
             return;
         }
 

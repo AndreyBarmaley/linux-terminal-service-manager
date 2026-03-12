@@ -547,13 +547,19 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), file, getuid());
+            Application::error("{}: {} failed, code: {}, error: {}",
+                     __FUNCTION__, "exists", err.value(), err.message());
             return false;
         }
 
         if((std::filesystem::status(file, err).permissions() &
             std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "permission failed"), file, getuid());
+            if(err) {
+                Application::error("{}: {} failed, code: {}, error: {}",
+                     __FUNCTION__, "status", err.value(), err.message());
+            } else {
+                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, "permission failed", file, getuid());
+            }
             return false;
         }
 
