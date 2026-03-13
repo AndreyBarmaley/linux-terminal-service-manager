@@ -31,6 +31,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/container/small_vector.hpp>
+#include <boost/asio/experimental/channel.hpp>
 
 #include "ltsm_application.h"
 #include "ltsm_audio_encoder.h"
@@ -64,14 +65,12 @@ namespace LTSM {
         };
     }
 
-    struct AudioClient {
-        boost::asio::io_context & ioc_;
-        boost::asio::strand<boost::asio::io_context::executor_type> strand_;
-        boost::asio::steady_timer timer_wait_;
-        boost::asio::local::stream_protocol::socket sock_;
+    using AudioPacketPtr = std::unique_ptr<AudioPacket::Base>;
 
-        std::future<bool> handshake_;
-        std::string socket_path_;
+    struct AudioClient {
+        boost::asio::local::stream_protocol::socket sock_;
+        boost::asio::strand<boost::asio::any_io_executor> strand_;
+
         const uint8_t channels_ = 2;
 
 #ifdef LTSM_WITH_PIPEWIRE
@@ -85,20 +84,23 @@ namespace LTSM {
         uint32_t bit_rate_ = 44100;
         uint32_t frag_size_ = 1024;
 
-        bool wait_async_send(boost::asio::streambuf &);
-        bool wait_async_recv(boost::asio::streambuf &, size_t rsz);
-
-        AudioClient(boost::asio::io_context &, const std::string &);
+        AudioClient(boost::asio::local::stream_protocol::socket &&,
+            boost::asio::strand<boost::asio::any_io_executor> &&);
         ~AudioClient();
 
-        void timerWaitEngineStarted(const boost::system::error_code & ec);
-        void handlerSocketConnect(const boost::system::error_code & ec);
+        AudioClient(AudioClient &&) = default;
+
+        boost::asio::awaitable<void> retryConnect(const std::string &, int);
+        boost::asio::awaitable<void> remoteHandshake(void);
+
+        bool engineInit(void);
         void dataReadyNotify(const uint8_t* ptr, size_t len);
-        void dataEncodeAndSend(std::vector<uint8_t>);
-        bool clientHandshake(void);
+        std::list<AudioPacketPtr> dataEncode(const uint8_t* ptr, size_t len);
+
         bool socketPath(std::string_view path) const {
-            return socket_path_ == path;
+            return sock_.local_endpoint().path() == path;
         }
+
         bool socketConnected(void) const {
             return sock_.is_open();
         }
