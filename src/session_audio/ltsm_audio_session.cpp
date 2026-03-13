@@ -62,7 +62,7 @@ namespace LTSM {
 
     /// AudioClient
     AudioClient::AudioClient(boost::asio::local::stream_protocol::socket && sock,
-            boost::asio::strand<boost::asio::any_io_executor> && strand)
+                             boost::asio::strand<boost::asio::any_io_executor> && strand)
         : sock_{std::move(sock)}, strand_{std::move(strand)} {
     }
 
@@ -91,6 +91,7 @@ namespace LTSM {
                     throw;
                 }
             }
+
             timer.expires_after(300ms);
             co_await timer.async_wait(asio::use_awaitable);
         }
@@ -225,7 +226,7 @@ namespace LTSM {
         }
 
 #else
- #ifdef LTSM_WITH_PULSE
+#ifdef LTSM_WITH_PULSE
         const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };
 
         // wait PulseAudio started
@@ -241,7 +242,7 @@ namespace LTSM {
         }
 
         pulse_.reset();
- #endif
+#endif
 #endif
         return false;
     }
@@ -250,10 +251,10 @@ namespace LTSM {
         // this thread - from audio engine callback
         if(sock_.is_open()) {
             auto packets = dataEncode(ptr, len);
-            Application::trace(DebugType::Audio, "{}: data size: {}, packets: {}", __FUNCTION__, len, packets.size());
+            Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", __FUNCTION__, len, packets.size());
 
             asio::co_spawn(strand_, [this, list = std::move(packets)]() -> asio::awaitable<void> {
-                for(auto & pkt: list) {
+                for(auto & pkt : list) {
                     try {
                         co_await asio::async_write(sock_, pkt->buffers_, asio::transfer_all(), asio::use_awaitable);
                     } catch(const boost::system::system_error& err) {
@@ -280,9 +281,9 @@ namespace LTSM {
             res.emplace_back(std::make_unique<AudioPacket::Silent>(len));
             return res;
         }
-        
+
         if(! encoder_) {
-            res.emplace_back(std::make_unique<AudioPacket::Data>(std::vector<uint8_t>{ptr, ptr + len}));
+            res.emplace_back(std::make_unique<AudioPacket::Data>(std::vector<uint8_t> {ptr, ptr + len}));
             return res;
         }
 
@@ -303,7 +304,7 @@ namespace LTSM {
             Application::error("{}: exception: {}", __FUNCTION__, err.what());
             sock_.close();
         }
-        
+
         return res;
     }
 
@@ -314,7 +315,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
-        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        signals_ {ioc_}, work_guard_ {asio::make_work_guard(ioc_)}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -330,6 +331,7 @@ namespace LTSM {
     void AudioSessionBus::stop(void) {
         clients_.clear();
         signals_.cancel();
+        work_guard_.reset();
         dbus_conn_->leaveEventLoop();
     }
 
@@ -384,30 +386,31 @@ namespace LTSM {
         Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
 
         if(std::ranges::any_of(clients_, [&](auto & cli) {
-                return cli.socketPath(socketPath) && cli.socketConnected(); })) {
+                return cli->socketPath(socketPath) && cli->socketConnected(); })) {
             Application::error("{}: socket busy, path: `{}'", __FUNCTION__, socketPath);
             return false;
         }
 
         asio::co_spawn(ioc_,
-            [socketPath, this]() -> asio::awaitable<void>  {
-                auto executor = co_await asio::this_coro::executor;
+        [socketPath, this]() -> asio::awaitable<void>  {
+            auto executor = co_await asio::this_coro::executor;
 
-                boost::asio::local::stream_protocol::socket sock{executor};
-                auto strand = asio::make_strand(executor);
-                AudioClient client(std::move(sock), std::move(strand));
+            boost::asio::local::stream_protocol::socket sock{executor};
+            auto strand = asio::make_strand(executor);
+            auto client = std::make_unique<AudioClient>(std::move(sock), std::move(strand));
 
-                try {
-                    co_await client.retryConnect(socketPath, 5);
-                    co_await client.remoteHandshake();
-                    clients_.emplace_front(std::move(client));
-                } catch(const boost::system::system_error& err) {
-                    auto ec = err.code();
-                    Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "remoteHandshake", "asio", ec.value(), ec.message());
-                } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", __FUNCTION__, "remoteHandshake", err.what());
-                }
-            }, asio::detached);
+            try {
+                co_await client->retryConnect(socketPath, 5);
+                co_await client->remoteHandshake();
+                clients_.emplace_front(std::move(client));
+            } catch(const boost::system::system_error& err) {
+                auto ec = err.code();
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "remoteHandshake", "asio", ec.value(), ec.message());
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", __FUNCTION__, "remoteHandshake", err.what());
+            }
+
+        }, asio::detached);
 
         return true;
     }
@@ -415,7 +418,7 @@ namespace LTSM {
     void AudioSessionBus::disconnectChannel(const std::string & socketPath) {
         Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
         std::erase_if(clients_, [&socketPath](auto & cli) {
-            return cli.socketPath(socketPath);
+            return cli->socketPath(socketPath);
         });
     }
 }

@@ -85,7 +85,7 @@ namespace LTSM {
         uint32_t frag_size_ = 1024;
 
         AudioClient(boost::asio::local::stream_protocol::socket &&,
-            boost::asio::strand<boost::asio::any_io_executor> &&);
+                    boost::asio::strand<boost::asio::any_io_executor> &&);
         ~AudioClient();
 
         AudioClient(AudioClient &&) = default;
@@ -107,13 +107,15 @@ namespace LTSM {
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
+    using AudioClientPtr = std::unique_ptr<AudioClient>;
 
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
+        boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
 
         DBusConnectionPtr dbus_conn_;
-        std::forward_list<AudioClient> clients_;
+        std::forward_list<AudioClientPtr> clients_;
 
       protected:
         void stop(void);
