@@ -257,8 +257,7 @@ namespace LTSM {
                 for(auto & pkt : list) {
                     try {
                         co_await asio::async_write(sock_, pkt->buffers_, asio::transfer_all(), asio::use_awaitable);
-                    } catch(const system::system_error& err) {
-                        auto ec = err.code();
+                    } catch(const boost::system::error_code& ec) {
                         Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "dataReadyNotify", "write", ec.value(), ec.message());
                         sock_.close();
                         co_return;
@@ -403,8 +402,7 @@ namespace LTSM {
                 co_await client->retryConnect(socketPath, 5);
                 co_await client->remoteHandshake();
                 clients_.emplace_front(std::move(client));
-            } catch(const system::system_error& err) {
-                auto ec = err.code();
+            } catch(const system::error_code& ec) {
                 Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "remoteHandshake", "asio", ec.value(), ec.message());
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", __FUNCTION__, "remoteHandshake", err.what());
