@@ -44,27 +44,16 @@
 #endif
 
 namespace LTSM {
-    namespace AudioPacket {
-        struct Base {
-            uint16_t id_ = 0;
-            uint32_t len_ = 0;
-            boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
+    struct AudioPacket {
+        uint16_t id_ = 0;
+        uint32_t len_ = 0;
+        std::vector<uint8_t> data_;
 
-            Base(uint16_t id, uint32_t len);
-        };
+        AudioPacket(uint32_t len);
+        AudioPacket(std::vector<uint8_t> &&);
+    };
 
-        struct Silent : Base {
-            Silent(uint32_t len);
-        };
-
-        struct Data : Base {
-            std::vector<uint8_t> data_;
-
-            Data(std::vector<uint8_t> &&);
-        };
-    }
-
-    using AudioPacketPtr = std::unique_ptr<AudioPacket::Base>;
+    using AudioPacketPtr = std::unique_ptr<AudioPacket>;
 
     struct AudioClient {
         boost::asio::local::stream_protocol::socket sock_;
@@ -91,6 +80,7 @@ namespace LTSM {
 
         boost::asio::awaitable<void> retryConnect(const std::string &, int);
         boost::asio::awaitable<void> remoteHandshake(void);
+        boost::asio::awaitable<void> timerWaitEngine(void);
 
         bool engineInit(void);
         void dataReadyNotify(const uint8_t* ptr, size_t len);
@@ -111,7 +101,6 @@ namespace LTSM {
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
-        boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
 
         DBusConnectionPtr dbus_conn_;
         std::forward_list<AudioClientPtr> clients_;

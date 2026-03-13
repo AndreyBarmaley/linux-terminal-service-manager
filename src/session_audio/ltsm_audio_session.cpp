@@ -44,20 +44,15 @@ namespace LTSM {
     const spa_audio_format def_format_pipew = platformBigEndian() ? SPA_AUDIO_FORMAT_S16_BE : SPA_AUDIO_FORMAT_S16_LE;
 #endif
 
-    AudioPacket::Base::Base(uint16_t id, uint32_t len) {
-        id_ = endian::native_to_little(id);
-        buffers_.emplace_back(&id_, sizeof(id_));
-
+    AudioPacket::AudioPacket(uint32_t len) {
+        id_ = endian::native_to_little(static_cast<uint16_t>(AudioOp::Silent));
         len_ = endian::native_to_little(len);
-        buffers_.emplace_back(&len_, sizeof(len_));
     }
 
-    AudioPacket::Silent::Silent(uint32_t len) : Base(AudioOp::Silent, len) {
-    }
-
-    AudioPacket::Data::Data(std::vector<uint8_t> && data) : Base(AudioOp::Data, data.size()) {
+    AudioPacket::AudioPacket(std::vector<uint8_t> && data) {
+        id_ = endian::native_to_little(static_cast<uint16_t>(AudioOp::Data));
+        len_ = endian::native_to_little(static_cast<uint32_t>(data.size()));
         data_ = std::move(data);
-        buffers_.emplace_back(data_.data(), data_.size());
     }
 
     /// AudioClient
@@ -185,10 +180,14 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
-        // init engine
-        auto executor = co_await asio::this_coro::executor;
+        co_await timerWaitEngine();
 
-        // timer for engine init
+        co_return;
+    }
+
+    asio::awaitable<void> AudioClient::timerWaitEngine(void)
+    {
+        auto executor = co_await asio::this_coro::executor;
         asio::steady_timer timer_init(executor);
 
         while(true) {
@@ -201,6 +200,8 @@ namespace LTSM {
 
             LTSM::Application::warning("{}: wait audio engine init...", __FUNCTION__);
         }
+
+        co_return;
     }
 
     bool AudioClient::engineInit(void) {
@@ -249,22 +250,33 @@ namespace LTSM {
 
     void AudioClient::dataReadyNotify(const uint8_t* ptr, size_t len) {
         // this thread - from audio engine callback
-        if(sock_.is_open()) {
-            auto packets = dataEncode(ptr, len);
-            Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", __FUNCTION__, len, packets.size());
-
-            asio::co_spawn(strand_, [this, list = std::move(packets)]() -> asio::awaitable<void> {
-                for(auto & pkt : list) {
-                    try {
-                        co_await asio::async_write(sock_, pkt->buffers_, asio::transfer_all(), asio::use_awaitable);
-                    } catch(const boost::system::error_code& ec) {
-                        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "dataReadyNotify", "write", ec.value(), ec.message());
-                        sock_.close();
-                        co_return;
-                    }
-                }
-            }, asio::detached);
+        if(! sock_.is_open()) {
+            return;
         }
+
+        auto packets = dataEncode(ptr, len);
+        Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", __FUNCTION__, len, packets.size());
+
+        asio::co_spawn(strand_, [this, list = std::move(packets)]() -> asio::awaitable<void> {
+            boost::container::small_vector<boost::asio::const_buffer, 3> buffers;
+            for(auto & pkt : list) {
+                buffers.clear();
+                buffers.emplace_back(&pkt->id_, sizeof(pkt->id_));
+                buffers.emplace_back(&pkt->len_, sizeof(pkt->len_));
+                if(pkt->data_.size()) {
+                    buffers.emplace_back(pkt->data_.data(), pkt->data_.size());
+                }
+                // send all buffers
+                try {
+                    co_await asio::async_write(sock_, buffers, asio::transfer_all(), asio::use_awaitable);
+                } catch(const boost::system::system_error& err) {
+                    auto ec = err.code();
+                    Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "dataReadyNotify", "write", ec.value(), ec.message());
+                    sock_.close();
+                    co_return;
+                }
+            }
+        }, asio::detached);
     }
 
     std::list<AudioPacketPtr>
@@ -277,12 +289,12 @@ namespace LTSM {
         });
 
         if(silent) {
-            res.emplace_back(std::make_unique<AudioPacket::Silent>(len));
+            res.emplace_back(std::make_unique<AudioPacket>(len));
             return res;
         }
 
         if(! encoder_) {
-            res.emplace_back(std::make_unique<AudioPacket::Data>(std::vector<uint8_t> {ptr, ptr + len}));
+            res.emplace_back(std::make_unique<AudioPacket>(std::vector<uint8_t> {ptr, ptr + len}));
             return res;
         }
 
@@ -297,7 +309,7 @@ namespace LTSM {
                     break;
                 }
 
-                res.emplace_back(std::make_unique<AudioPacket::Data>(std::move(buf)));
+                res.emplace_back(std::make_unique<AudioPacket>(std::move(buf)));
             }
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", __FUNCTION__, err.what());
@@ -314,7 +326,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
-        signals_ {ioc_}, work_guard_ {asio::make_work_guard(ioc_)}, dbus_conn_ {std::move(conn)} {
+        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -330,7 +342,6 @@ namespace LTSM {
     void AudioSessionBus::stop(void) {
         clients_.clear();
         signals_.cancel();
-        work_guard_.reset();
         dbus_conn_->leaveEventLoop();
     }
 
@@ -402,7 +413,8 @@ namespace LTSM {
                 co_await client->retryConnect(socketPath, 5);
                 co_await client->remoteHandshake();
                 clients_.emplace_front(std::move(client));
-            } catch(const system::error_code& ec) {
+            } catch(const system::system_error& err) {
+                auto ec = err.code();
                 Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "remoteHandshake", "asio", ec.value(), ec.message());
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", __FUNCTION__, "remoteHandshake", err.what());
