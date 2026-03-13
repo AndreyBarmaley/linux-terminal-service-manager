@@ -939,11 +939,11 @@ namespace LTSM {
             context = Tools::crc32b((const uint8_t*) & remoteContext, sizeof(remoteContext));
             context &= 0x7FFFFFFF;
 
-            // init readers status
-            syncReaders();
-
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> remoteContext: {:#016x}, localContext: {:#08x}",
                                __FUNCTION__, id(), remoteContext, context);
+
+            // init readers status
+            syncReaders();
         } else {
             Application::error("{}: clientId: {}, error: {:#08x} ({})",
                                __FUNCTION__, id(), ret, PcscLite::err2str(ret));
@@ -1783,43 +1783,44 @@ namespace LTSM {
             if(ec.value() == boost::system::errc::operation_canceled) {
                 timer_ret_ = SCARD_E_CANCELLED;
                 if(status_cancel_) {
-                    Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "timeout");
+                    Application::debug(DebugType::Pcsc, "{}: clientId: {}, {}", __FUNCTION__, id(), "canceled");
                 } else {
-                    Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "stopped");
+                    Application::debug(DebugType::Pcsc, "{}: clientId: {}, {}", __FUNCTION__, id(), "stopped");
                 }
             } else {
                 timer_ret_ = SCARD_F_INTERNAL_ERROR;
-                return;
+                Application::warning("{}: {} failed, code: {}, error: {}", __FUNCTION__, "timer", ec.value(), ec.message());
             }
-        } else {
-            bool readersChanged = false;
-            auto ret = syncReaders(& readersChanged);
+            return;
+        }
 
-            if(readersChanged) {
-                timer_ret_ = ret;
-            }
+        const size_t pause_ms = 750;
+        timeout -= pause_ms;
 
-            const size_t pause_ms = 750;
-            timeout -= pause_ms;
+        if(timeout < 0) {
+            Application::debug(DebugType::Pcsc, "{}: clientId: {}, {}", __FUNCTION__, id(), "timeout");
+            timer_ret_ = SCARD_E_TIMEOUT;
+            return;
+        }
 
-            if(timeout < 0) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "limit");
-                timer_ret_ = SCARD_E_TIMEOUT;
-                return;
-            }
-
-            Application::trace(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
+        Application::trace(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, continue: {}",
                            __FUNCTION__, id(), context, timeout);
 
-            timer_status_->expires_after(std::chrono::milliseconds(pause_ms));
-            timer_status_->async_wait(std::bind(&PcscLocal::handlerReadersStatusChanged, this, std::placeholders::_1, timeout));
+        bool readersChanged = false;
+        auto ret = syncReaders(& readersChanged);
+
+        if(readersChanged) {
+            timer_ret_ = ret;
         }
+
+        timer_status_->expires_after(std::chrono::milliseconds(pause_ms));
+        timer_status_->async_wait(std::bind(&PcscLocal::handlerReadersStatusChanged, this, std::placeholders::_1, timeout));
     }
 
     bool PcscLocal::proxyReaderStateChangeStart(void) {
 
         // new protocol 4.4: empty params
-        Application::debug(DebugType::Pcsc, "{}: !!! clientId: {} << localContext: {:#08x}, timeout: {}",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
                                __FUNCTION__, id(), context);
 
         syncReaders();
@@ -1842,7 +1843,7 @@ namespace LTSM {
     }
 
     bool PcscLocal::proxyReaderStateChangeStop(void) {
-        Application::debug(DebugType::Pcsc, "{}: !!! clientId: {} << localContext: {:#08x}",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}",
                            __FUNCTION__, id(), context);
 
         // stop
