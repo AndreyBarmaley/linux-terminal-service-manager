@@ -31,7 +31,6 @@
 
 #include <boost/asio.hpp>
 #include <boost/container/small_vector.hpp>
-#include <boost/asio/experimental/channel.hpp>
 
 #include "ltsm_application.h"
 #include "ltsm_audio_encoder.h"
