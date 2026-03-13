@@ -61,8 +61,8 @@ namespace LTSM {
     }
 
     /// AudioClient
-    AudioClient::AudioClient(boost::asio::local::stream_protocol::socket && sock,
-                             boost::asio::strand<boost::asio::any_io_executor> && strand)
+    AudioClient::AudioClient(asio::local::stream_protocol::socket && sock,
+                             asio::strand<asio::any_io_executor> && strand)
         : sock_{std::move(sock)}, strand_{std::move(strand)} {
     }
 
@@ -86,7 +86,7 @@ namespace LTSM {
             try {
                 co_await sock_.async_connect(path, asio::use_awaitable);
                 co_return;
-            } catch(const boost::system::system_error& ec) {
+            } catch(const system::system_error& ec) {
                 if(it == attempts) {
                     throw;
                 }
@@ -257,7 +257,7 @@ namespace LTSM {
                 for(auto & pkt : list) {
                     try {
                         co_await asio::async_write(sock_, pkt->buffers_, asio::transfer_all(), asio::use_awaitable);
-                    } catch(const boost::system::system_error& err) {
+                    } catch(const system::system_error& err) {
                         auto ec = err.code();
                         Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "dataReadyNotify", "write", ec.value(), ec.message());
                         sock_.close();
@@ -395,7 +395,7 @@ namespace LTSM {
         [socketPath, this]() -> asio::awaitable<void>  {
             auto executor = co_await asio::this_coro::executor;
 
-            boost::asio::local::stream_protocol::socket sock{executor};
+            asio::local::stream_protocol::socket sock{executor};
             auto strand = asio::make_strand(executor);
             auto client = std::make_unique<AudioClient>(std::move(sock), std::move(strand));
 
@@ -403,7 +403,7 @@ namespace LTSM {
                 co_await client->retryConnect(socketPath, 5);
                 co_await client->remoteHandshake();
                 clients_.emplace_front(std::move(client));
-            } catch(const boost::system::system_error& err) {
+            } catch(const system::system_error& err) {
                 auto ec = err.code();
                 Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "remoteHandshake", "asio", ec.value(), ec.message());
             } catch(const std::exception & err) {
