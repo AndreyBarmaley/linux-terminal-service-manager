@@ -2070,9 +2070,8 @@ namespace LTSM {
         Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, path);
 
         remote_ = std::make_shared<PcscRemote>(ioc_);
-        auto token = asio::bind_cancellation_slot(listen_stop_.slot(), asio::use_future);
 
-        std::future<bool> wait = asio::co_spawn(ioc_, remote_->handlerWaitConnect(path), token);
+        auto wait = asio::co_spawn(ioc_.get_executor(), remote_->handlerWaitConnect(path), asio::use_future);
         bool connected = false;
 
         try {
