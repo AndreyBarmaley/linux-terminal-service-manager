@@ -77,24 +77,26 @@ namespace LTSM {
 
     class PcscRemote {
         boost::asio::local::stream_protocol::socket sock_;
-        boost::asio::strand<boost::asio::any_io_executor> strand_;
 
-        bool error_{false};
+        boost::system::error_code ec_;
+        bool connected_{false};
 
       protected:
         template<typename Buffer>
         boost::asio::awaitable<Buffer> async_recv(size_t rsz) {
             Buffer res;
+
             if(rsz) {
                 co_await boost::asio::async_read(sock_,
-                    boost::asio::dynamic_buffer(res), boost::asio::transfer_exactly(rsz), boost::asio::use_awaitable);
+                                                 boost::asio::dynamic_buffer(res), boost::asio::transfer_exactly(rsz), boost::asio::redirect_error(boost::asio::use_awaitable, ec_));
             }
+
             co_return res;
         }
 
       public:
         PcscRemote(boost::asio::io_context & ctx)
-            : sock_{ctx}, strand_{ctx.get_executor()} {}
+            : sock_{ctx} {}
 
         boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
 
@@ -115,20 +117,23 @@ namespace LTSM {
         boost::asio::awaitable<uint32_t> sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
         boost::asio::awaitable<ListReaders> sendListReaders(const int32_t & id, const uint64_t & context);
 
-        bool isError(void) const { return error_; }
+        bool isError(void) const {
+            return !! ec_;
+        }
+
+        bool isConnected(void) const {
+            return connected_;
+        }
 
         boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
         boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
     };
 
-    class PcscLocal;
     class PcscSessionBus;
 
     class PcscLocal {
         boost::asio::local::stream_protocol::socket sock_;
         boost::asio::streambuf sb_;
-
-        PcscLite::ReaderState* reader_ = nullptr;
 
         uint64_t remoteContext = 0;
         uint64_t remoteHandle = 0;
@@ -138,6 +143,10 @@ namespace LTSM {
         const int cid_ = 0;
 
         std::weak_ptr<PcscRemote> remote_;
+        boost::asio::cancellation_signal stop_;
+
+        PcscLite::ReaderState* reader_ = nullptr;
+        PcscSessionBus* session_ = nullptr;
 
       protected:
         //boost::asio::awaitable<std::pair<bool,uint32_t>> readersStatusChanged(const boost::system::error_code & ec, int32_t timeout, bool cancel);
@@ -190,6 +199,14 @@ namespace LTSM {
         const uint32_t & localHandle(void) const {
             return handle;
         }
+
+        void stopSignal(void) {
+            stop_.emit(boost::asio::cancellation_type::terminal);
+        }
+
+        boost::asio::cancellation_slot stopSlot(void) {
+            return stop_.slot();
+        }
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
@@ -200,8 +217,10 @@ namespace LTSM {
 
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;
 
-        std::list<boost::asio::cancellation_signal> clients_stop_;
         boost::asio::cancellation_signal listen_stop_;
+
+        std::list<PcscLocal> clients_;
+        boost::asio::strand<boost::asio::any_io_executor> clients_guard_{ioc_.get_executor()};
 
         DBusConnectionPtr dbus_conn_;
         std::shared_ptr<PcscRemote> remote_;
@@ -209,14 +228,17 @@ namespace LTSM {
       protected:
         void stop(void);
 
-        boost::asio::awaitable<void> handlerLocalAccept(boost::asio::local::stream_protocol::socket peer);
+        boost::asio::awaitable<void> handlerLocalAccept(PcscLocal & client);
         boost::asio::awaitable<void> handlerLocalListener(void);
-    
+        void handlerLocalStopped(const PcscLocal* client, std::exception_ptr);
+
       public:
         PcscSessionBus(DBusConnectionPtr, bool debug = false);
         virtual ~PcscSessionBus();
 
         int start(void);
+
+        boost::asio::awaitable<void> handlerStopClient(uint64_t);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
