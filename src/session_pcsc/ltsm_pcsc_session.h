@@ -61,82 +61,74 @@ namespace PcscLite {
 namespace LTSM {
     using binary_buf = std::vector<uint8_t>;
 
+    using RetEstablishedContext = std::tuple<uint64_t, uint32_t>;
+    using RetReleaseContext = std::tuple<uint32_t>;
+    using RetConnect = std::tuple<uint64_t, uint32_t, uint32_t>;
+    using RetReconnect = std::tuple<uint32_t, uint32_t>;
+    using RetDisconnect = std::tuple<uint32_t>;
+    using RetTransaction = std::tuple<uint32_t>;
+    using RetTransmit = std::tuple<uint32_t, uint32_t, uint32_t, binary_buf>;
+    using RetStatus = std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>;
+    using RetControl = std::tuple<uint32_t, binary_buf>;
+    using RetGetAttrib = std::tuple<uint32_t, binary_buf>;
+    using RetSetAttrib = std::tuple<uint32_t>;
+    using RetCancel = std::tuple<uint32_t>;
+    using ListReaders = std::list<std::string>;
+
     class PcscRemote {
         boost::asio::local::stream_protocol::socket sock_;
+        boost::asio::strand<boost::asio::any_io_executor> strand_;
 
-        std::mutex sock_lock_;
         bool error_{false};
 
       protected:
-        void wait_async_send(boost::asio::streambuf &);
-
         template<typename Buffer>
-        void wait_async_recv(Buffer & sb, size_t rsz) {
-            auto recv = boost::asio::async_read(sock_, sb,
-                    boost::asio::transfer_exactly(rsz), boost::asio::use_future);
-            try {
-                [[maybe_unused]] auto bytes = recv.get();
-            } catch(const boost::system::error_code & ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-                error_ = true;
-                throw pcsc_error(NS_FuncNameS);
-            }
-        }
-
-        template<typename Buffer>
-        Buffer async_recv_buffer(size_t rsz) {
+        boost::asio::awaitable<Buffer> async_recv(size_t rsz) {
             Buffer res;
             if(rsz) {
-                auto recv = boost::asio::async_read(sock_,
-                    boost::asio::dynamic_buffer(res), boost::asio::transfer_exactly(rsz), boost::asio::use_future);
-                try {
-                    [[maybe_unused]] auto bytes = recv.get();
-                } catch(const boost::system::error_code & ec) {
-                    Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-                    error_ = true;
-                    throw pcsc_error(NS_FuncNameS);
-                }
+                co_await boost::asio::async_read(sock_,
+                    boost::asio::dynamic_buffer(res), boost::asio::transfer_exactly(rsz), boost::asio::use_awaitable);
             }
-            return res;
+            co_return res;
         }
 
       public:
-        PcscRemote(boost::asio::io_context &, const std::string & path, std::promise<bool> connected);
+        PcscRemote(boost::asio::io_context & ctx)
+            : sock_{ctx}, strand_{ctx.get_executor()} {}
 
-        std::tuple<uint64_t, uint32_t> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
-        std::tuple<uint32_t> sendReleaseContext(const int32_t & id, const uint64_t & context);
-        std::tuple<uint64_t, uint32_t, uint32_t> sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName);
-        std::tuple<uint32_t, uint32_t> sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
-        std::tuple<uint32_t> sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
-        std::tuple<uint32_t> sendBeginTransaction(const int32_t & id, const uint64_t & handle);
-        std::tuple<uint32_t> sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
-        std::tuple<uint32_t, uint32_t, uint32_t, binary_buf> sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data);
-        std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf> sendStatus(const int32_t & id, const uint64_t & handle);
-        std::tuple<uint32_t, binary_buf> sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
-        std::tuple<uint32_t, binary_buf> sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId);
-        std::tuple<uint32_t> sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr);
-        std::tuple<uint32_t> sendCancel(const int32_t & id, const uint64_t & context);
+        boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
 
-        uint32_t sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
-        std::list<std::string> sendListReaders(const int32_t & id, const uint64_t & context);
+        boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
+        boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
+        boost::asio::awaitable<RetConnect> sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName);
+        boost::asio::awaitable<RetReconnect> sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
+        boost::asio::awaitable<RetDisconnect> sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
+        boost::asio::awaitable<RetTransaction> sendBeginTransaction(const int32_t & id, const uint64_t & handle);
+        boost::asio::awaitable<RetTransaction> sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
+        boost::asio::awaitable<RetTransmit> sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data);
+        boost::asio::awaitable<RetStatus> sendStatus(const int32_t & id, const uint64_t & handle);
+        boost::asio::awaitable<RetControl> sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
+        boost::asio::awaitable<RetGetAttrib> sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId);
+        boost::asio::awaitable<RetSetAttrib> sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr);
+        boost::asio::awaitable<RetCancel> sendCancel(const int32_t & id, const uint64_t & context);
+
+        boost::asio::awaitable<uint32_t> sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
+        boost::asio::awaitable<ListReaders> sendListReaders(const int32_t & id, const uint64_t & context);
+
         bool isError(void) const { return error_; }
+
+        boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
+        boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
     };
 
     class PcscLocal;
     class PcscSessionBus;
-
-    using ClientCancelFunc = std::function<uint64_t(uint32_t)>;
-    using ClientShutdownFunc = std::function<void(const PcscLocal*)>;
 
     class PcscLocal {
         boost::asio::local::stream_protocol::socket sock_;
         boost::asio::streambuf sb_;
 
         PcscLite::ReaderState* reader_ = nullptr;
-
-        std::unique_ptr<boost::asio::steady_timer> timer_status_;
-        std::atomic<uint32_t> timer_ret_{SCARD_S_SUCCESS};
-        std::atomic<bool> status_cancel_{false};
 
         uint64_t remoteContext = 0;
         uint64_t remoteHandle = 0;
@@ -147,10 +139,8 @@ namespace LTSM {
 
         std::weak_ptr<PcscRemote> remote_;
 
-        ClientCancelFunc clientCanceledCb;
-
       protected:
-        boost::asio::awaitable<std::pair<bool,uint32_t>> readersStatusChanged(const boost::system::error_code & ec, int32_t timeout);
+        //boost::asio::awaitable<std::pair<bool,uint32_t>> readersStatusChanged(const boost::system::error_code & ec, int32_t timeout, bool cancel);
         void handlerClientWaitCommand(const boost::system::error_code & ec);
 
         void handlerClientActionStarted(void);
@@ -177,10 +167,6 @@ namespace LTSM {
         boost::asio::awaitable<bool> clientAction(uint32_t cmd, uint32_t len);
         void statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr);
 
-        boost::asio::awaitable<uint32_t> syncReaderStatus(const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
-        boost::asio::awaitable<uint32_t> syncReaders(bool* changed = nullptr);
-        boost::asio::awaitable<uint32_t> waitReadersStatusChanged(uint32_t timeout);
-
       public:
         PcscLocal(boost::asio::local::stream_protocol::socket &&, int id, std::shared_ptr<PcscRemote>, PcscSessionBus* sessionBus);
         ~PcscLocal();
@@ -204,8 +190,6 @@ namespace LTSM {
         const uint32_t & localHandle(void) const {
             return handle;
         }
-
-        void canceledAction(void);
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
@@ -215,13 +199,11 @@ namespace LTSM {
         boost::asio::signal_set signals_;
 
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;
+
+        std::list<boost::asio::cancellation_signal> clients_stop_;
         boost::asio::cancellation_signal listen_stop_;
 
         DBusConnectionPtr dbus_conn_;
-
-        std::forward_list<PcscLocal> clients_;
-        std::mutex clients_lock_;
-
         std::shared_ptr<PcscRemote> remote_;
 
       protected:
@@ -242,9 +224,6 @@ namespace LTSM {
 
         bool connectChannel(const std::string & sock) override;
         void disconnectChannel(const std::string & sock) override;
-
-        void clientShutdownNotify(const PcscLocal*);
-        uint64_t clientCanceledNotify(uint32_t ctx);
     };
 }
 
