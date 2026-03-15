@@ -177,44 +177,33 @@ namespace PcscLite {
 }
 
 namespace LTSM {
-    struct transaction_lock {
-        avast::asio::async_mutex trans_lock;
-        int32_t client_id{0};
-
-        asio::awaitable<void> lock(int32_t id) {
-            if(id) {
-                co_await trans_lock.async_lock(asio::use_awaitable);
-                client_id = id;
-            }
-            co_return;
-        }
-
-        void unlock(int32_t id = 0) {
-            if((0 == id && 0 < client_id) || client_id == id) {
-                client_id = 0;
-                trans_lock.unlock();
-            }
-        }
-    };
-
-    avast::asio::async_mutex send_lock;
-    transaction_lock trans_lock;
-
-    std::unordered_map<uint32_t, uint64_t> map_context;
-
-    uint32_t makeContext32(uint64_t remote) {
+    /// PcscRemote
+    uint32_t PcscRemote::makeContext64(uint64_t remote) {
         uint32_t context = Tools::crc32b((const uint8_t*) & remote, sizeof(remote));
         context &= 0x7FFFFFFF;
-        map_context.emplace(context, remote);
+        map_context_.emplace(context, remote);
         return context;
     }
 
-    uint64_t findContext64(uint32_t local) {
-        auto it = map_context.find(local);
-        return it != map_context.end() ? it->second : 0;
+    uint64_t PcscRemote::findContext32(uint32_t local) const {
+        auto it = map_context_.find(local);
+        return it != map_context_.end() ? it->second : 0;
     }
 
-    /// PcscRemote
+    void PcscRemote::removeContext32(uint32_t local) {
+        if(auto it = map_context_.find(local); it != map_context_.end()) {
+            map_context_.erase(it);
+        }
+    }
+
+    asio::awaitable<void> PcscRemote::transactionLock(int32_t id) {
+        co_await trans_lock_.lock(id);
+    }
+
+    void PcscRemote::transactionUnlock(int32_t id) {
+        trans_lock_.unlock(id);
+    }
+
     asio::awaitable<bool> PcscRemote::handlerWaitConnect(const std::string & path) {
         try {
             co_await socket().async_connect(path, asio::use_awaitable);
@@ -228,7 +217,7 @@ namespace LTSM {
 
     asio::awaitable<RetEstablishedContext>
     PcscRemote::sendEstablishedContext(const int32_t & id, const uint32_t & scope) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", __FUNCTION__, id, scope);
 
@@ -246,13 +235,13 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(context, ret);
     }
 
     asio::awaitable<RetReleaseContext>
     PcscRemote::sendReleaseContext(const int32_t & id, const uint64_t & context) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#016x}",
                            __FUNCTION__, id, context);
@@ -269,14 +258,14 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret);
     }
 
     asio::awaitable<RetConnect>
     PcscRemote::sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, std::string_view readerName) {
-        co_await trans_lock.lock(id);
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await transactionLock(id);
+        co_await send_lock_.async_lock(asio::use_awaitable);
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#016x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
 
@@ -304,15 +293,15 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
-        trans_lock.unlock();
+        send_lock_.unlock();
+        transactionUnlock(id);
 
         co_return std::make_tuple(handle, activeProtocol, ret);
     }
 
     asio::awaitable<RetReconnect>
     PcscRemote::sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}",
                            __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
@@ -332,13 +321,13 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(activeProtocol, ret);
     }
 
     asio::awaitable<RetDisconnect>
     PcscRemote::sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
@@ -355,14 +344,14 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret);
     }
 
     asio::awaitable<RetTransaction>
     PcscRemote::sendBeginTransaction(const int32_t & id, const uint64_t & handle) {
-        co_await trans_lock.lock(id);
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await transactionLock(id);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}",
                            __FUNCTION__, id, handle);
@@ -379,16 +368,16 @@ namespace LTSM {
         }
 
         if(ret != SCARD_S_SUCCESS) {
-            trans_lock.unlock();
+            transactionUnlock(id);
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret);
     }
 
     asio::awaitable<RetTransaction>
     PcscRemote::sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
@@ -405,15 +394,15 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
-        trans_lock.unlock();
+        send_lock_.unlock();
+        transactionUnlock(id);
 
         co_return std::make_tuple(ret);
     }
 
     asio::awaitable<RetTransmit>
     PcscRemote::sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data1) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, pciProtocol: {:#08x}, pciLength: {}, send size: {}, recv size: {}",
                            __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
@@ -450,7 +439,7 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
     }
 
@@ -462,7 +451,7 @@ namespace LTSM {
 
     asio::awaitable<RetStatus>
     PcscRemote::sendStatus(const int32_t & id, const uint64_t & handle) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}",
                            __FUNCTION__, id, handle);
@@ -489,13 +478,13 @@ namespace LTSM {
 
         fixed_string_name(readerName);
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(std::move(readerName), state, protocol, ret, std::move(atr));
     }
 
     asio::awaitable<RetControl>
     PcscRemote::sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, controlCode: {:#08x}, send size: {}, recv size: {}",
                            __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
@@ -529,13 +518,13 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret, std::move(data2));
     }
 
     asio::awaitable<RetGetAttrib>
     PcscRemote::sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, attrId: {}",
                            __FUNCTION__, id, handle, attrId);
@@ -558,13 +547,13 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret, std::move(attr));
     }
 
     asio::awaitable<RetSetAttrib>
     PcscRemote::sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64 {:#016x}, attrId: {}, attrLength {}",
                            __FUNCTION__, id, handle, attrId, attr.size());
@@ -594,13 +583,13 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret);
     }
 
     asio::awaitable<RetCancel>
     PcscRemote::sendCancel(const int32_t & id, const uint64_t & context) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64 {:#016x}",
                            __FUNCTION__, id, context);
@@ -622,12 +611,12 @@ namespace LTSM {
             timer_context_ = 0;
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return std::make_tuple(ret);
     }
 
     asio::awaitable<ListReaders> PcscRemote::sendListReaders(const int32_t & id, const uint64_t & context) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         uint32_t readersCount;
 
@@ -662,12 +651,12 @@ namespace LTSM {
             }
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return names;
     }
 
     asio::awaitable<uint32_t> PcscRemote::sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount) {
-        co_await send_lock.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock(asio::use_awaitable);
 
         uint32_t ret;
 
@@ -728,7 +717,7 @@ namespace LTSM {
             ec_ = err.code();
         }
 
-        send_lock.unlock();
+        send_lock_.unlock();
         co_return ret;
     }
 
@@ -872,7 +861,9 @@ namespace LTSM {
         }
 
         // client ended
-        trans_lock.unlock(id());
+        if(auto ptr = remote_.lock()) {
+            ptr->transactionUnlock(id());
+        }
 
         co_return false;
     }
@@ -997,7 +988,7 @@ namespace LTSM {
 
             if(ret == SCARD_S_SUCCESS) {
                 // make 32bit context
-                context = context32_ = makeContext32(context64_);
+                context = context32_ = ptr->makeContext64(context64_);
 
                 Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context64: {:#016x}, context32: {:#08x}",
                                    __FUNCTION__, id(), context64_, context32_);
@@ -1052,6 +1043,8 @@ namespace LTSM {
         co_await async_send_le32(context);
         co_await async_send_le32(ret);
 
+        ptr->removeContext32(context32_);
+
         context32_ = 0;
         context64_ = 0;
 
@@ -1091,6 +1084,11 @@ namespace LTSM {
             }
 
             std::tie(handle64_, activeProtocol, ret) = co_await ptr->sendConnect(id(), context64_, shareMode, prefferedProtocols, readerName);
+
+            if(ret == SCARD_S_SUCCESS) {
+                // make local handle
+                handle = handle32_ = ret != SCARD_S_SUCCESS ? 0 : ptr->makeContext64(handle64_);
+            }
         } else {
             Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName);
             co_await replyError(PcscLite::Connect, SCARD_E_INVALID_VALUE);
@@ -1098,9 +1096,6 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            // make local handle
-            handle = handle32_ = ret != SCARD_S_SUCCESS ? 0 : makeContext32(handle64_);
-
             // sync reader
             reader_ = currentReader;
 
@@ -1616,7 +1611,7 @@ namespace LTSM {
         uint64_t cancelContext = 0;
 
         if(auto ptr = remote_.lock()) {
-            cancelContext = findContext64(context);
+            cancelContext = ptr->findContext32(context);
             Application::debug(DebugType::Pcsc, "{}: clientId: {}, cancel context {:#08x}, remote: {:#08x}",
                                __FUNCTION__, id(), context, cancelContext);
             std::tie(ret) = co_await ptr->sendCancel(id(), cancelContext);
@@ -1856,7 +1851,7 @@ namespace LTSM {
         if(it != clients_.end()) {
             Application::debug(DebugType::Dbus, "{}: clientId: {}, destroy", __FUNCTION__, it->id());
 
-            trans_lock.unlock(it->id());
+            remote_->transactionUnlock(it->id());
             clients_.erase(it);
         }
     }

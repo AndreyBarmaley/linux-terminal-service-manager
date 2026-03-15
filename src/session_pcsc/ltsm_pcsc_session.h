@@ -40,6 +40,7 @@
 #include "ltsm_async_socket.h"
 #include "ltsm_application.h"
 #include "ltsm_pcsc_adaptor.h"
+#include "avast_asio_async_mutex.hpp"
 
 namespace PcscLite {
     // origin READER_STATE: PCSC/src/eventhandler.h
@@ -76,15 +77,42 @@ namespace LTSM {
     using ListReaders = std::list<std::string>;
     using RetStatusChanged = std::tuple<bool, uint32_t>;
 
+    struct Transaction {
+        avast::asio::async_mutex trans_lock;
+        int32_t client_id{0};
+
+        boost::asio::awaitable<void> lock(int32_t id) {
+            if(id) {
+                co_await trans_lock.async_lock(boost::asio::use_awaitable);
+                client_id = id;
+            }
+            co_return;
+        }
+
+        void unlock(int32_t id) {
+            if(id && client_id == id) {
+                client_id = 0;
+                trans_lock.unlock();
+            }
+        }
+    };
+
     class PcscRemote : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+
+        std::unordered_map<uint32_t, uint64_t> map_context_;
+
+        uint64_t timer_context_{0};
+        boost::asio::cancellation_signal timer_stop_;
+        avast::asio::async_mutex send_lock_;
+
+        Transaction trans_lock_;
+
         boost::system::error_code ec_;
         bool connected_{false};
 
-        std::atomic<uint64_t> timer_context_{0};
-        boost::asio::cancellation_signal timer_stop_;
-
       protected:
-        boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
+        [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
+        [[nodiscard]] boost::asio::awaitable<void> transactionLock(int32_t id);
 
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
@@ -92,7 +120,7 @@ namespace LTSM {
         }
         ~PcscRemote() = default;
 
-        boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
+        [[nodiscard]] boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
 
         [[nodiscard]] boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
         [[nodiscard]] boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
@@ -123,6 +151,11 @@ namespace LTSM {
         [[nodiscard]] boost::asio::awaitable<void> syncReaderTimerStart(const int32_t & id, const uint64_t & context);
 
         void syncReaderTimerStop(void);
+        void transactionUnlock(int32_t id);
+
+        uint32_t makeContext64(uint64_t remote);
+        uint64_t findContext32(uint32_t local) const;
+        void removeContext32(uint32_t local);
     };
 
     class PcscSessionBus;
