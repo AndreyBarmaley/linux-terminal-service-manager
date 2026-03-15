@@ -74,10 +74,17 @@ namespace LTSM {
     using RetSetAttrib = std::tuple<uint32_t>;
     using RetCancel = std::tuple<uint32_t>;
     using ListReaders = std::list<std::string>;
+    using RetStatusChanged = std::tuple<bool, uint32_t>;
 
     class PcscRemote : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
         boost::system::error_code ec_;
         bool connected_{false};
+
+        std::atomic<uint64_t> timer_context_{0};
+        boost::asio::cancellation_signal timer_stop_;
+
+      protected:
+        boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
 
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
@@ -85,22 +92,22 @@ namespace LTSM {
 
         boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
 
-        boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
-        boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
-        boost::asio::awaitable<RetConnect> sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, std::string_view readerName);
-        boost::asio::awaitable<RetReconnect> sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
-        boost::asio::awaitable<RetDisconnect> sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
-        boost::asio::awaitable<RetTransaction> sendBeginTransaction(const int32_t & id, const uint64_t & handle);
-        boost::asio::awaitable<RetTransaction> sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
-        boost::asio::awaitable<RetTransmit> sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data);
-        boost::asio::awaitable<RetStatus> sendStatus(const int32_t & id, const uint64_t & handle);
-        boost::asio::awaitable<RetControl> sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
-        boost::asio::awaitable<RetGetAttrib> sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId);
-        boost::asio::awaitable<RetSetAttrib> sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr);
-        boost::asio::awaitable<RetCancel> sendCancel(const int32_t & id, const uint64_t & context);
+        [[nodiscard]] boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
+        [[nodiscard]] boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
+        [[nodiscard]] boost::asio::awaitable<RetConnect> sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, std::string_view readerName);
+        [[nodiscard]] boost::asio::awaitable<RetReconnect> sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
+        [[nodiscard]] boost::asio::awaitable<RetDisconnect> sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
+        [[nodiscard]] boost::asio::awaitable<RetTransaction> sendBeginTransaction(const int32_t & id, const uint64_t & handle);
+        [[nodiscard]] boost::asio::awaitable<RetTransaction> sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
+        [[nodiscard]] boost::asio::awaitable<RetTransmit> sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data);
+        [[nodiscard]] boost::asio::awaitable<RetStatus> sendStatus(const int32_t & id, const uint64_t & handle);
+        [[nodiscard]] boost::asio::awaitable<RetControl> sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
+        [[nodiscard]] boost::asio::awaitable<RetGetAttrib> sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId);
+        [[nodiscard]] boost::asio::awaitable<RetSetAttrib> sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr);
+        [[nodiscard]] boost::asio::awaitable<RetCancel> sendCancel(const int32_t & id, const uint64_t & context);
 
-        boost::asio::awaitable<uint32_t> sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
-        boost::asio::awaitable<ListReaders> sendListReaders(const int32_t & id, const uint64_t & context);
+        [[nodiscard]] boost::asio::awaitable<uint32_t> sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
+        [[nodiscard]] boost::asio::awaitable<ListReaders> sendListReaders(const int32_t & id, const uint64_t & context);
 
         bool isError(void) const {
             return !! ec_;
@@ -110,8 +117,10 @@ namespace LTSM {
             return connected_;
         }
 
-        boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
-        boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
+        [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
+        [[nodiscard]] boost::asio::awaitable<void> syncReaderTimerStart(const int32_t & id, const uint64_t & context);
+
+        void syncReaderTimerStop(void);
     };
 
     class PcscSessionBus;
@@ -131,31 +140,30 @@ namespace LTSM {
         PcscSessionBus* session_ = nullptr;
 
       protected:
-        //boost::asio::awaitable<std::pair<bool,uint32_t>> readersStatusChanged(const boost::system::error_code & ec, int32_t timeout, bool cancel);
         void handlerClientWaitCommand(const boost::system::error_code & ec);
 
         void handlerClientActionStarted(void);
-        boost::asio::awaitable<void> replyError(uint32_t len, uint32_t err);
+        [[nodiscard]] boost::asio::awaitable<void> replyError(uint32_t len, uint32_t err);
 
-        boost::asio::awaitable<bool> proxyEstablishContext(void);
-        boost::asio::awaitable<bool> proxyReleaseContext(void);
-        boost::asio::awaitable<bool> proxyConnect(void);
-        boost::asio::awaitable<bool> proxyReconnect(void);
-        boost::asio::awaitable<bool> proxyDisconnect(void);
-        boost::asio::awaitable<bool> proxyBeginTransaction(void);
-        boost::asio::awaitable<bool> proxyEndTransaction(void);
-        boost::asio::awaitable<bool> proxyTransmit(void);
-        boost::asio::awaitable<bool> proxyStatus(void);
-        boost::asio::awaitable<bool> proxyControl(void);
-        boost::asio::awaitable<bool> proxyGetAttrib(void);
-        boost::asio::awaitable<bool> proxySetAttrib(void);
-        boost::asio::awaitable<bool> proxyCancel(void);
-        boost::asio::awaitable<bool> proxyGetVersion(void);
-        boost::asio::awaitable<bool> proxyGetReaderState(void);
-        boost::asio::awaitable<bool> proxyReaderStateChangeStart(void);
-        boost::asio::awaitable<bool> proxyReaderStateChangeStop(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyEstablishContext(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyReleaseContext(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyConnect(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyReconnect(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyDisconnect(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyBeginTransaction(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyEndTransaction(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyTransmit(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyStatus(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyControl(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyGetAttrib(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxySetAttrib(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyCancel(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyGetVersion(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyGetReaderState(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyReaderStateChangeStart(void);
+        [[nodiscard]] boost::asio::awaitable<bool> proxyReaderStateChangeStop(void);
 
-        boost::asio::awaitable<bool> clientAction(uint32_t cmd, uint32_t len);
+        [[nodiscard]] boost::asio::awaitable<bool> clientAction(uint32_t cmd, uint32_t len);
         void statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr);
 
       public:
@@ -164,7 +172,7 @@ namespace LTSM {
 
         ~PcscLocal();
 
-        boost::asio::awaitable<bool> handlerClientWaitCommand(void);
+        [[nodiscard]] boost::asio::awaitable<bool> handlerClientWaitCommand(void);
 
         inline int id(void) const {
             return cid_;
@@ -213,8 +221,8 @@ namespace LTSM {
       protected:
         void stop(void);
 
-        boost::asio::awaitable<void> handlerLocalAccept(PcscLocal & client);
-        boost::asio::awaitable<void> handlerLocalListener(void);
+        [[nodiscard]] boost::asio::awaitable<void> handlerLocalAccept(PcscLocal & client);
+        [[nodiscard]] boost::asio::awaitable<void> handlerLocalListener(void);
         void handlerLocalStopped(const PcscLocal* client, std::exception_ptr);
 
       public:
@@ -223,7 +231,7 @@ namespace LTSM {
 
         int start(void);
 
-        boost::asio::awaitable<void> handlerStopClient(uint64_t);
+        [[nodiscard]] boost::asio::awaitable<void> handlerStopClient(uint64_t);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;

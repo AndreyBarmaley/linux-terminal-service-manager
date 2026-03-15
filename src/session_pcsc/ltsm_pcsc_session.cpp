@@ -177,9 +177,29 @@ namespace PcscLite {
 }
 
 namespace LTSM {
+    struct transaction_lock {
+        avast::asio::async_mutex trans_lock;
+        int32_t client_id{0};
+
+        asio::awaitable<void> lock(int32_t id) {
+            if(id) {
+                co_await trans_lock.async_lock(asio::use_awaitable);
+                client_id = id;
+            }
+            co_return;
+        }
+
+        void unlock(int32_t id = 0) {
+            if((0 == id && 0 < client_id) || client_id == id) {
+                client_id = 0;
+                trans_lock.unlock();
+            }
+        }
+    };
+
     avast::asio::async_mutex send_lock;
-    avast::asio::async_mutex trans_lock;
-    std::atomic<int32_t> transaction_id{0};
+    transaction_lock trans_lock;
+
     std::unordered_map<uint32_t, uint64_t> map_context;
 
     uint32_t makeContext32(uint64_t remote) {
@@ -212,7 +232,8 @@ namespace LTSM {
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", __FUNCTION__, id, scope);
 
-        uint64_t context; uint32_t ret;
+        uint64_t context;
+        uint32_t ret;
 
         try {
             co_await async_send_le16(PcscOp::Init);
@@ -254,23 +275,27 @@ namespace LTSM {
 
     asio::awaitable<RetConnect>
     PcscRemote::sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, std::string_view readerName) {
-        co_await trans_lock.async_lock(asio::use_awaitable);
-        transaction_id = id;
-
+        co_await trans_lock.lock(id);
         co_await send_lock.async_lock(asio::use_awaitable);
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#016x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
 
-        uint64_t handle; uint32_t activeProtocol, ret;
+        uint64_t handle;
+        uint32_t activeProtocol, ret;
+
+        asio::streambuf sb;
+        byte::streambuf bs(sb);
+
+        bs.write_le16(PcscOp::Init).
+            write_le16(PcscLite::Connect).
+            write_le64(context).
+            write_le32(shareMode).
+            write_le32(prefferedProtocols).
+            write_le32(readerName.size()).
+            write_string(readerName);
 
         try {
-            co_await async_send_le16(PcscOp::Init);
-            co_await async_send_le16(PcscLite::Connect);
-            co_await async_send_le64(context);
-            co_await async_send_le32(shareMode);
-            co_await async_send_le32(prefferedProtocols);
-            co_await async_send_le32(readerName.size());
-            co_await async_send_buf(asio::buffer(readerName));
+            co_await async_send_buf(sb);
 
             handle = co_await async_recv_le64();
             activeProtocol = co_await async_recv_le32();
@@ -280,8 +305,6 @@ namespace LTSM {
         }
 
         send_lock.unlock();
-
-        transaction_id = 0;
         trans_lock.unlock();
 
         co_return std::make_tuple(handle, activeProtocol, ret);
@@ -338,10 +361,9 @@ namespace LTSM {
 
     asio::awaitable<RetTransaction>
     PcscRemote::sendBeginTransaction(const int32_t & id, const uint64_t & handle) {
-        co_await trans_lock.async_lock(asio::use_awaitable);
-        transaction_id = id;
-
+        co_await trans_lock.lock(id);
         co_await send_lock.async_lock(asio::use_awaitable);
+
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}",
                            __FUNCTION__, id, handle);
         uint32_t ret;
@@ -357,7 +379,6 @@ namespace LTSM {
         }
 
         if(ret != SCARD_S_SUCCESS) {
-            transaction_id = 0;
             trans_lock.unlock();
         }
 
@@ -385,8 +406,6 @@ namespace LTSM {
         }
 
         send_lock.unlock();
-
-        transaction_id = 0;
         trans_lock.unlock();
 
         co_return std::make_tuple(ret);
@@ -407,15 +426,20 @@ namespace LTSM {
         uint32_t ioRecvPciProtocol, ioRecvPciLength, ret;
         binary_buf data2;
 
+        asio::streambuf sb;
+        byte::streambuf bs(sb);
+
+        bs.write_le16(PcscOp::Init).
+            write_le16(PcscLite::Transmit).
+            write_le64(handle).
+            write_le32(ioSendPciProtocol).
+            write_le32(ioSendPciLength).
+            write_le32(recvLength).
+            write_le32(data1.size()).
+            write_bytes(data1);
+
         try {
-            co_await async_send_le16(PcscOp::Init);
-            co_await async_send_le16(PcscLite::Transmit);
-            co_await async_send_le64(handle);
-            co_await async_send_le32(ioSendPciProtocol);
-            co_await async_send_le32(ioSendPciLength);
-            co_await async_send_le32(recvLength);
-            co_await async_send_le32(data1.size());
-            co_await async_send_buf(asio::buffer(data1));
+            co_await async_send_buf(sb);
 
             ioRecvPciProtocol = co_await async_recv_le32();
             ioRecvPciLength = co_await async_recv_le32();
@@ -484,14 +508,19 @@ namespace LTSM {
         uint32_t ret;
         binary_buf data2;
 
+        asio::streambuf sb;
+        byte::streambuf bs(sb);
+
+        bs.write_le16(PcscOp::Init).
+            write_le16(PcscLite::Control).
+            write_le64(handle).
+            write_le32(controlCode).
+            write_le32(data1.size()).
+            write_le32(recvLength).
+            write_bytes(data1);
+
         try {
-            co_await async_send_le16(PcscOp::Init);
-            co_await async_send_le16(PcscLite::Control);
-            co_await async_send_le64(handle);
-            co_await async_send_le32(controlCode);
-            co_await async_send_le32(data1.size());
-            co_await async_send_le32(recvLength);
-            co_await async_send_buf(asio::buffer(data1));
+            co_await async_send_buf(sb);
 
             auto bytesReturned = co_await async_recv_le32();
             ret = co_await async_recv_le32();
@@ -547,13 +576,18 @@ namespace LTSM {
 
         uint32_t ret;
 
+        asio::streambuf sb;
+        byte::streambuf bs(sb);
+
+        bs.write_le16(PcscOp::Init).
+            write_le16(PcscLite::SetAttrib).
+            write_le64(handle).
+            write_le32(attrId).
+            write_le32(attr.size()).
+            write_bytes(attr);
+
         try {
-            co_await async_send_le16(PcscOp::Init);
-            co_await async_send_le16(PcscLite::SetAttrib);
-            co_await async_send_le64(handle);
-            co_await async_send_le32(attrId);
-            co_await async_send_le32(attr.size());
-            co_await async_send_buf(asio::buffer(attr));
+            co_await async_send_buf(sb);
 
             ret = co_await async_recv_le32();
         } catch(const system::system_error& err) {
@@ -581,6 +615,11 @@ namespace LTSM {
             ret = co_await async_recv_le32();
         } catch(const system::system_error& err) {
             ec_ = err.code();
+        }
+
+        if(timer_context_ == context) {
+            timer_stop_.emit(asio::cancellation_type::terminal);
+            timer_context_ = 0;
         }
 
         send_lock.unlock();
@@ -633,28 +672,33 @@ namespace LTSM {
         uint32_t ret;
 
         try {
-            co_await async_send_le16(PcscOp::Init);
-            co_await async_send_le16(PcscLite::GetStatusChange);
-            co_await async_send_le64(context);
-            co_await async_send_le32(timeout);
-            co_await async_send_le32(statesCount);
+            asio::streambuf sb;
+            byte::streambuf bs(sb);
+
+            bs.write_le16(PcscOp::Init).
+                write_le16(PcscLite::GetStatusChange).
+                write_le64(context).
+                write_le32(timeout).
+                write_le32(statesCount);
 
             for(uint32_t it = 0; it < statesCount; ++it) {
                 const SCARD_READERSTATE & state = states[it];
                 auto len = strnlen(state.szReader, MAX_READERNAME);
 
-                co_await async_send_le32(len);
-                co_await async_send_le32(state.dwCurrentState);
-                co_await async_send_le32(state.cbAtr);
-                co_await async_send_buf(asio::buffer(state.szReader, len));
-                co_await async_send_buf(asio::buffer(state.rgbAtr, state.cbAtr));
+                bs.write_le32(len).
+                    write_le32(state.dwCurrentState).
+                    write_le32(state.cbAtr).
+                    write_bytes(reinterpret_cast<const uint8_t*>(state.szReader), len).
+                    write_bytes(reinterpret_cast<const uint8_t*>(state.rgbAtr), state.cbAtr);
             }
+
+            co_await async_send_buf(sb);
 
             auto counts = co_await async_recv_le32();
             ret = co_await async_recv_le32();
 
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context64: {:#016x}, timeout: {}, states: {}",
-                           __FUNCTION__, id, context, timeout, counts);
+                               __FUNCTION__, id, context, timeout, counts);
 
             assertm(counts == statesCount, "count states invalid");
 
@@ -781,15 +825,45 @@ namespace LTSM {
         co_return static_cast<uint32_t>(SCARD_S_SUCCESS);
     }
 
+    void PcscRemote::syncReaderTimerStop(void) {
+/*
+        if(timer_context_) {
+            timer_stop_.emit(asio::cancellation_type::terminal);
+            timer_context_ = 0;
+        }
+*/
+    }
+
+    asio::awaitable<void> PcscRemote::syncReaderTimerStart(const int32_t & id, const uint64_t & context) {
+/*
+        if(timer_context_) {
+            co_return;
+        }
+
+        [[maybe_unused]] auto ret = co_await syncReaders(id, context, nullptr);
+        timer_context_ = context;
+        auto token = asio::bind_cancellation_slot(timer_stop_.slot(), asio::detached);
+
+        asio::co_spawn(socket().get_executor(),
+        [this, ex = socket().get_executor(), id, context]() -> asio::awaitable<void> {
+            asio::steady_timer timer{ex};
+
+            for(;;) {
+                timer.expires_after(std::chrono::milliseconds(750));
+                co_await timer.async_wait(asio::use_awaitable);
+                co_await syncReaders(id, context, nullptr);
+            }
+
+            co_return;
+        }, std::move(token));
+*/
+        co_return;
+    }
+
     /// PcscLocal
     PcscLocal::~PcscLocal() {
         socket().cancel();
         socket().close();
-
-        if(transaction_id == id()) {
-            transaction_id = 0;
-            trans_lock.unlock();
-        }
     }
 
     asio::awaitable<bool> PcscLocal::handlerClientWaitCommand(void) {
@@ -804,10 +878,7 @@ namespace LTSM {
         }
 
         // client ended
-        if(transaction_id == id()) {
-            transaction_id = 0;
-            trans_lock.unlock();
-        }
+        trans_lock.unlock(id());
 
         co_return false;
     }
@@ -986,7 +1057,7 @@ namespace LTSM {
 
         co_await async_send_le32(context);
         co_await async_send_le32(ret);
-    
+
         context32_ = 0;
         context64_ = 0;
 
@@ -1549,7 +1620,7 @@ namespace LTSM {
         auto ret = co_await async_recv_le32();
 
         uint64_t cancelContext = 0;
-        
+
         if(auto ptr = remote_.lock()) {
             cancelContext = findContext64(context);
             Application::debug(DebugType::Pcsc, "{}: clientId: {}, cancel context {:#08x}, remote: {:#08x}",
@@ -1573,7 +1644,7 @@ namespace LTSM {
         co_await async_send_le32(ret);
 
         asio::co_spawn(socket().get_executor(),
-            std::bind(&PcscSessionBus::handlerStopClient, session_, cancelContext), asio::detached);
+                       std::bind(&PcscSessionBus::handlerStopClient, session_, cancelContext), asio::detached);
 
         co_return true;
     }
@@ -1610,77 +1681,18 @@ namespace LTSM {
         co_await async_send_buf(asio::buffer(PcscLite::readers.data(), readersLength));
         co_return true;
     }
-    /*
-        asio::awaitable<std::pair<bool,uint32_t>> PcscLocal::readersStatusChanged(const system::error_code & ec, int32_t timeout, bool cancel) {
-            uint32_t ret = SCARD_S_SUCCESS;
 
-            if(ec) {
-                if(ec.value() == system::errc::operation_canceled) {
-                    ret = SCARD_E_CANCELLED;
-                    if(cancel) {
-                        Application::debug(DebugType::Pcsc, "{}: clientId: {}, {}", __FUNCTION__, id(), "canceled");
-                    } else {
-                        Application::debug(DebugType::Pcsc, "{}: clientId: {}, {}", __FUNCTION__, id(), "stopped");
-                    }
-                } else {
-                    ret = SCARD_F_INTERNAL_ERROR;
-                    Application::warning("{}: {} failed, code: {}, error: {}", __FUNCTION__, "timer", ec.value(), ec.message());
-                }
-                co_return std::make_pair(false, ret);
-            }
-
-            if(timeout < 0) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: {}, {}", __FUNCTION__, id(), "timeout");
-                ret = SCARD_E_TIMEOUT;
-                co_return std::make_pair(false, ret);
-            }
-
-            Application::trace(DebugType::Pcsc, "{}: clientId: {} << context32: {:#08x}, continue: {}",
-                               __FUNCTION__, id(), context32_, timeout);
-
-            bool readersChanged = false;
-            auto ret2 = co_await syncReaders(id(), context64_, & readersChanged);
-
-            if(readersChanged) {
-                ret = ret2;
-            }
-
-            co_return std::make_pair(true, ret);
-        }
-    */
     asio::awaitable<bool> PcscLocal::proxyReaderStateChangeStart(void) {
         // new protocol 4.4: empty params
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context32: {:#08x}, timeout: {}",
                            __FUNCTION__, id(), context32_);
 
         if(auto ptr = remote_.lock()) {
-            co_await ptr->syncReaders(id(), context64_, nullptr);
+            co_await ptr->syncReaderTimerStart(id(), context64_);
         } else {
             Application::error("{}: no service", __FUNCTION__);
             co_return false;
         }
-
-        /*
-            // run timer
-            status_cancel_ = false;
-
-            uint32_t timeout = INT32_MAX;
-            const size_t pause_ms = 750;
-            timer_status_ = std::make_unique<asio::steady_timer>(sock_.get_executor());
-
-            // FIXME: нужно убрать в readersStatusChanged и сделать co_spawn
-            while(true) {
-                timer_status_->expires_after(std::chrono::milliseconds(pause_ms));
-                auto [ec] = co_await timer_status_->async_wait(asio::as_tuple(asio::use_awaitable));
-                auto [cont, ret] = co_await readersStatusChanged(ec, timeout, status_cancel_);
-
-                if(! cont) {
-                    break;
-                }
-
-                timeout -= pause_ms;
-            }
-        */
 
         // send all readers
         const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
@@ -1692,6 +1704,10 @@ namespace LTSM {
     asio::awaitable<bool> PcscLocal::proxyReaderStateChangeStop(void) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context32: {:#08x}",
                            __FUNCTION__, id(), context32_);
+
+        if(auto ptr = remote_.lock()) {
+            ptr->syncReaderTimerStop();
+        }
 
         const uint32_t timeout = 0;
         const uint32_t ret = SCARD_S_SUCCESS;
@@ -1741,7 +1757,7 @@ namespace LTSM {
         Application::info("{}: socket path: `{}'", __FUNCTION__, pcsc_path);
 
         pcsc_ep_.path(pcsc_path);
-        remote_ = std::make_shared<PcscRemote>(boost::asio::local::stream_protocol::socket{ioc_});
+        remote_ = std::make_shared<PcscRemote>(asio::local::stream_protocol::socket{ioc_});
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
@@ -1766,7 +1782,6 @@ namespace LTSM {
         ioc_.run();
 
         Application::notice("{}: PCSC session shutdown", __FUNCTION__);
-        trans_lock.unlock();
 
         dbus_conn_->leaveEventLoop();
         sdbus_job.wait();
@@ -1794,7 +1809,10 @@ namespace LTSM {
     asio::awaitable<void> PcscSessionBus::handlerStopClient(uint64_t ctx) {
 
         asio::co_spawn(clients_guard_, [this, ctx]() -> asio::awaitable<void> {
-            auto it = std::find_if(clients_.begin(), clients_.end(), [=](auto & cli){ return cli.proxyContext() == ctx; });
+            auto it = std::find_if(clients_.begin(), clients_.end(), [ = ](auto & cli) {
+                return cli.proxyContext() == ctx;
+            });
+
             if(it != clients_.end()) {
                 Application::debug(DebugType::Dbus, "{}: stop remote: {:#016x}", "handlerStopClient", ctx);
                 it->stopSignal();
@@ -1815,10 +1833,12 @@ namespace LTSM {
                 success = co_await client.handlerClientWaitCommand();
             } catch(const system::system_error& err) {
                 auto ec = err.code();
+
                 if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
                     Application::error("{}: {} failed, code: {}, error: {}",
-                            __FUNCTION__, "handlerClientWaitCommand", ec.value(), ec.message());
+                                       __FUNCTION__, "handlerClientWaitCommand", ec.value(), ec.message());
                 }
+
                 success = false;
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", __FUNCTION__, err.what());
@@ -1835,9 +1855,14 @@ namespace LTSM {
     }
 
     void PcscSessionBus::handlerLocalStopped(const PcscLocal* client, std::exception_ptr eptr) {
-        auto it = std::find_if(clients_.begin(), clients_.end(), [&](auto & cli){ return client == std::addressof(cli); });
+        auto it = std::find_if(clients_.begin(), clients_.end(), [&](auto & cli) {
+            return client == std::addressof(cli);
+        });
+
         if(it != clients_.end()) {
             Application::debug(DebugType::Dbus, "{}: clientId: {}, destroy", __FUNCTION__, it->id());
+
+            trans_lock.unlock(it->id());
             clients_.erase(it);
         }
     }
@@ -1855,7 +1880,7 @@ namespace LTSM {
                 auto & client = clients_.back();
 
                 auto token = asio::bind_cancellation_slot(client.stopSlot(),
-                        std::bind(&PcscSessionBus::handlerLocalStopped, this, &client, std::placeholders::_1));
+                             std::bind(&PcscSessionBus::handlerLocalStopped, this, &client, std::placeholders::_1));
 
                 asio::co_spawn(executor, handlerLocalAccept(client), std::move(token));
             }
