@@ -88,7 +88,9 @@ namespace LTSM {
 
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)) {}
+            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)) {
+        }
+        ~PcscRemote() = default;
 
         boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
 
@@ -168,9 +170,9 @@ namespace LTSM {
 
       public:
         PcscLocal(boost::asio::local::stream_protocol::socket && sock, int cid, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* bus)
-            : AsyncSocket(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {}
-
-        ~PcscLocal();
+            : AsyncSocket(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {
+        }
+        ~PcscLocal() = default;
 
         [[nodiscard]] boost::asio::awaitable<bool> handlerClientWaitCommand(void);
 

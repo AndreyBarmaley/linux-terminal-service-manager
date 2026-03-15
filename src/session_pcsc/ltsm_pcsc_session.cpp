@@ -860,12 +860,6 @@ namespace LTSM {
         co_return;
     }
 
-    /// PcscLocal
-    PcscLocal::~PcscLocal() {
-        socket().cancel();
-        socket().close();
-    }
-
     asio::awaitable<bool> PcscLocal::handlerClientWaitCommand(void) {
         // begin data: len32, cmd32
         uint32_t len = co_await async_recv_le32();

@@ -55,19 +55,6 @@ namespace LTSM {
         data_ = std::move(data);
     }
 
-    /// AudioClient
-    AudioClient::~AudioClient() {
-        socket().cancel();
-        socket().close();
-#ifdef LTSM_WITH_PIPEWIRE
-        pipew_.reset();
-#endif
-#ifdef LTSM_WITH_PULSE
-        pulse_.reset();
-#endif
-        encoder_.reset();
-    }
-
     asio::awaitable<void> AudioClient::retryConnect(const std::string & path, int attempts) {
         auto executor = co_await asio::this_coro::executor;
         asio::steady_timer timer{executor};

@@ -75,9 +75,8 @@ namespace LTSM {
                     boost::asio::strand<boost::asio::any_io_executor> && strand)
             : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)), strand_{std::move(strand)} {
         }
+        ~AudioClient() = default;
     
-        ~AudioClient();
-
         boost::asio::awaitable<void> retryConnect(const std::string &, int);
         boost::asio::awaitable<void> remoteHandshake(void);
         boost::asio::awaitable<void> timerWaitEngine(void);
