@@ -29,10 +29,10 @@
 #include <string>
 #include <forward_list>
 
-#include <boost/asio.hpp>
 #include <boost/container/small_vector.hpp>
 
 #include "ltsm_application.h"
+#include "ltsm_async_socket.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
 
@@ -55,8 +55,7 @@ namespace LTSM {
 
     using AudioPacketPtr = std::unique_ptr<AudioPacket>;
 
-    struct AudioClient {
-        boost::asio::local::stream_protocol::socket sock_;
+    struct AudioClient : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         const uint8_t channels_ = 2;
@@ -72,11 +71,12 @@ namespace LTSM {
         uint32_t bit_rate_ = 44100;
         uint32_t frag_size_ = 1024;
 
-        AudioClient(boost::asio::local::stream_protocol::socket &&,
-                    boost::asio::strand<boost::asio::any_io_executor> &&);
+        AudioClient(boost::asio::local::stream_protocol::socket && sock,
+                    boost::asio::strand<boost::asio::any_io_executor> && strand)
+            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)), strand_{std::move(strand)} {
+        }
+    
         ~AudioClient();
-
-        AudioClient(AudioClient &&) = default;
 
         boost::asio::awaitable<void> retryConnect(const std::string &, int);
         boost::asio::awaitable<void> remoteHandshake(void);
@@ -87,11 +87,11 @@ namespace LTSM {
         std::list<AudioPacketPtr> dataEncode(const uint8_t* ptr, size_t len);
 
         bool socketPath(std::string_view path) const {
-            return sock_.local_endpoint().path() == path;
+            return socket().local_endpoint().path() == path;
         }
 
         bool socketConnected(void) const {
-            return sock_.is_open();
+            return socket().is_open();
         }
     };
 

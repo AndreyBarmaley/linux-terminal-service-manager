@@ -34,13 +34,10 @@
 #include <functional>
 #include <forward_list>
 
-#include <boost/asio.hpp>
-#include <boost/endian.hpp>
-
 #include "pcsclite.h"
 
 #include "ltsm_pcsc.h"
-#include "ltsm_streambuf.h"
+#include "ltsm_async_socket.h"
 #include "ltsm_application.h"
 #include "ltsm_pcsc_adaptor.h"
 
@@ -78,28 +75,13 @@ namespace LTSM {
     using RetCancel = std::tuple<uint32_t>;
     using ListReaders = std::list<std::string>;
 
-    class PcscRemote {
-        boost::asio::local::stream_protocol::socket sock_;
-
+    class PcscRemote : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
         boost::system::error_code ec_;
         bool connected_{false};
 
-      protected:
-        template<typename Buffer>
-        boost::asio::awaitable<Buffer> async_recv(size_t rsz) {
-            Buffer res;
-
-            if(rsz) {
-                co_await boost::asio::async_read(sock_,
-                                                 boost::asio::dynamic_buffer(res), boost::asio::transfer_exactly(rsz), boost::asio::redirect_error(boost::asio::use_awaitable, ec_));
-            }
-
-            co_return res;
-        }
-
       public:
-        PcscRemote(boost::asio::io_context & ctx)
-            : sock_{ctx} {}
+        PcscRemote(boost::asio::local::stream_protocol::socket && sock)
+            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)) {}
 
         boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
 
@@ -134,9 +116,7 @@ namespace LTSM {
 
     class PcscSessionBus;
 
-    class PcscLocal {
-        boost::asio::local::stream_protocol::socket sock_;
-
+    class PcscLocal : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
         uint64_t context64_ = 0; ///< remote context
         uint64_t handle64_ = 0;  ///< remote handle
 
@@ -151,48 +131,6 @@ namespace LTSM {
         PcscSessionBus* session_ = nullptr;
 
       protected:
-        template<typename T>
-        boost::asio::awaitable<T> async_recv_le(void) {
-            T val = 0;
-            co_await boost::asio::async_read(sock_, boost::asio::buffer(&val, sizeof(T)),
-                            boost::asio::transfer_exactly(sizeof(T)), boost::asio::use_awaitable);
-            co_return boost::endian::native_to_little(val);
-        }
-
-        template<typename Buffer>
-        boost::asio::awaitable<Buffer> async_recv_buf(size_t len) {
-            Buffer buf;
-            if(len) {
-                co_await boost::asio::async_read(sock_, boost::asio::dynamic_buffer(buf),
-                            boost::asio::transfer_exactly(len), boost::asio::use_awaitable);
-            }
-            co_return buf;
-        }
-
-        template<typename T>
-        boost::asio::awaitable<void> async_send_le(T val) {
-            boost::endian::native_to_little_inplace(val);
-            co_await boost::asio::async_write(sock_, boost::asio::buffer(&val, sizeof(T)),
-                            boost::asio::transfer_all(), boost::asio::use_awaitable);
-        }
-
-        template<typename Buffer>
-        boost::asio::awaitable<void> async_send_buf(const Buffer & buf) {
-            if(buf.size()) {
-                co_await boost::asio::async_write(sock_, boost::asio::buffer(buf),
-                            boost::asio::transfer_all(), boost::asio::use_awaitable);
-            }
-            co_return;
-        }
-
-        boost::asio::awaitable<uint32_t> async_recv_le32(void) {
-            co_return co_await async_recv_le<uint32_t>();
-        }
-
-        boost::asio::awaitable<void> async_send_le32(uint32_t val) {
-            co_await async_send_le<uint32_t>(val);
-        }
-
         //boost::asio::awaitable<std::pair<bool,uint32_t>> readersStatusChanged(const boost::system::error_code & ec, int32_t timeout, bool cancel);
         void handlerClientWaitCommand(const boost::system::error_code & ec);
 
@@ -221,7 +159,9 @@ namespace LTSM {
         void statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr);
 
       public:
-        PcscLocal(boost::asio::local::stream_protocol::socket &&, int id, std::shared_ptr<PcscRemote>, PcscSessionBus* sessionBus);
+        PcscLocal(boost::asio::local::stream_protocol::socket && sock, int cid, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* bus)
+            : AsyncSocket(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {}
+
         ~PcscLocal();
 
         boost::asio::awaitable<bool> handlerClientWaitCommand(void);

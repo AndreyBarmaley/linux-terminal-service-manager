@@ -197,7 +197,7 @@ namespace LTSM {
     /// PcscRemote
     asio::awaitable<bool> PcscRemote::handlerWaitConnect(const std::string & path) {
         try {
-            co_await sock_.async_connect(path, asio::use_awaitable);
+            co_await socket().async_connect(path, asio::use_awaitable);
             connected_ = true;
         } catch(const std::exception & ex) {
             Application::error("{}: exception: {}", __FUNCTION__, ex.what());
@@ -212,21 +212,18 @@ namespace LTSM {
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", __FUNCTION__, id, scope);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint64_t context; uint32_t ret;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::EstablishContext).
-          write_le32(scope);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::EstablishContext);
+            co_await async_send_le32(scope);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::use_awaitable);
-
-        // rsz: context64 + ret32
-        const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::use_awaitable);
-
-        auto context = bs.read_le64();
-        auto ret = bs.read_le32();
+            context = co_await async_recv_le64();
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         send_lock.unlock();
         co_return std::make_tuple(context, ret);
@@ -239,19 +236,18 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#016x}",
                            __FUNCTION__, id, context);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ret;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::ReleaseContext).write_le64(context);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::ReleaseContext);
+            co_await async_send_le64(context);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        // rsz: ret32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
         send_lock.unlock();
         co_return std::make_tuple(ret);
     }
@@ -265,25 +261,23 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#016x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint64_t handle; uint32_t activeProtocol, ret;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Connect).
-          write_le64(context).
-          write_le32(shareMode).
-          write_le32(prefferedProtocols).
-          write_le32(readerName.size()).write_string(readerName);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Connect);
+            co_await async_send_le64(context);
+            co_await async_send_le32(shareMode);
+            co_await async_send_le32(prefferedProtocols);
+            co_await async_send_le32(readerName.size());
+            co_await async_send_buf(asio::buffer(readerName));
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: handle64 + proto32 + ret32
-        const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto handle = bs.read_le64();
-        auto activeProtocol = bs.read_le32();
-        auto ret = bs.read_le32();
+            handle = co_await async_recv_le64();
+            activeProtocol = co_await async_recv_le32();
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         send_lock.unlock();
 
@@ -299,25 +293,21 @@ namespace LTSM {
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}",
                            __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
+        uint32_t activeProtocol, ret;
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Reconnect);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(shareMode);
+            co_await async_send_le32(prefferedProtocols);
+            co_await async_send_le32(initialization);
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Reconnect).
-          write_le64(handle).
-          write_le32(shareMode).
-          write_le32(prefferedProtocols).
-          write_le32(initialization);
-
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: proto32 + ret32
-        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto activeProtocol = bs.read_le32();
-        auto ret = bs.read_le32();
+            activeProtocol = co_await async_recv_le32();
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         send_lock.unlock();
         co_return std::make_tuple(activeProtocol, ret);
@@ -329,22 +319,19 @@ namespace LTSM {
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
+        uint32_t ret;
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Disconnect);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(disposition);
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Disconnect).
-          write_le64(handle).
-          write_le32(disposition);
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: ret32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
         send_lock.unlock();
         co_return std::make_tuple(ret);
     }
@@ -357,21 +344,17 @@ namespace LTSM {
         co_await send_lock.async_lock(asio::use_awaitable);
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}",
                            __FUNCTION__, id, handle);
+        uint32_t ret;
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::BeginTransaction);
+            co_await async_send_le64(handle);
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::BeginTransaction).
-          write_le64(handle);
-
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: ret32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         if(ret != SCARD_S_SUCCESS) {
             transaction_id = 0;
@@ -388,22 +371,19 @@ namespace LTSM {
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
+        uint32_t ret;
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::EndTransaction);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(disposition);
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::EndTransaction).
-          write_le64(handle).
-          write_le32(disposition);
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: ret32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
         send_lock.unlock();
 
         transaction_id = 0;
@@ -424,28 +404,27 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: send data: [{}]", __FUNCTION__, str);
         }
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ioRecvPciProtocol, ioRecvPciLength, ret;
+        binary_buf data2;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Transmit).
-          write_le64(handle).
-          write_le32(ioSendPciProtocol).
-          write_le32(ioSendPciLength).
-          write_le32(recvLength).
-          write_le32(data1.size()).write_bytes(data1);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Transmit);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(ioSendPciProtocol);
+            co_await async_send_le32(ioSendPciLength);
+            co_await async_send_le32(recvLength);
+            co_await async_send_le32(data1.size());
+            co_await async_send_buf(asio::buffer(data1));
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: proto32 + length32 + bytes32 + ret32
-        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ioRecvPciProtocol = bs.read_le32();
-        auto ioRecvPciLength = bs.read_le32();
-        auto bytesReturned = bs.read_le32();
-        auto ret = bs.read_le32();
-        auto data2 = co_await async_recv<binary_buf>(bytesReturned);
+            ioRecvPciProtocol = co_await async_recv_le32();
+            ioRecvPciLength = co_await async_recv_le32();
+            auto bytesReturned = co_await async_recv_le32();
+            ret = co_await async_recv_le32();
+            data2 = co_await async_recv_buf<binary_buf>(bytesReturned);
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         send_lock.unlock();
         co_return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
@@ -464,39 +443,30 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}",
                            __FUNCTION__, id, handle);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t state, protocol, atrLen, ret;
+        std::string readerName;
+        binary_buf atr;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Status).
-          write_le64(handle);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Status);
+            co_await async_send_le64(handle);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
+            auto nameLen = co_await async_recv_le32();
+            readerName = co_await async_recv_buf<std::string>(nameLen);
+            state = co_await async_recv_le32();
+            protocol = co_await async_recv_le32();
+            auto atrLen = co_await async_recv_le32();
+            atr = co_await async_recv_buf<binary_buf>(atrLen);
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        // rsz: name32
-        size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
+        fixed_string_name(readerName);
 
-        auto nameLen = bs.read_le32();
-        auto name = co_await async_recv<std::string>(nameLen);
-        fixed_string_name(name);
-
-        // rsz: state32 + proto32 + atr32
-        rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto state = bs.read_le32();
-        auto protocol = bs.read_le32();
-        auto atrLen = bs.read_le32();
-        auto atr = co_await async_recv<binary_buf>(atrLen);
-
-        // rsz: ret32
-        rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
         send_lock.unlock();
-        co_return std::make_tuple(std::move(name), state, protocol, ret, std::move(atr));
+        co_return std::make_tuple(std::move(readerName), state, protocol, ret, std::move(atr));
     }
 
     asio::awaitable<RetControl>
@@ -511,26 +481,24 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: send data: [{}]", __FUNCTION__, str);
         }
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ret;
+        binary_buf data2;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Control).
-          write_le64(handle).
-          write_le32(controlCode).
-          write_le32(data1.size()).
-          write_le32(recvLength).
-          write_bytes(data1);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Control);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(controlCode);
+            co_await async_send_le32(data1.size());
+            co_await async_send_le32(recvLength);
+            co_await async_send_buf(asio::buffer(data1));
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: bytes32 + len32
-        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto bytesReturned = bs.read_le32();
-        auto ret = bs.read_le32();
-        auto data2 = co_await async_recv<binary_buf>(bytesReturned);
+            auto bytesReturned = co_await async_recv_le32();
+            ret = co_await async_recv_le32();
+            data2 = co_await async_recv_buf<binary_buf>(bytesReturned);
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         send_lock.unlock();
         co_return std::make_tuple(ret, std::move(data2));
@@ -543,25 +511,23 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#016x}, attrId: {}",
                            __FUNCTION__, id, handle, attrId);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ret;
+        binary_buf attr;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::GetAttrib).
-          write_le64(handle).
-          write_le32(attrId);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::GetAttrib);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(attrId);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
+            auto attrLen = co_await async_recv_le32();
+            ret = co_await async_recv_le32();
 
-        // rsz: len32 + ret32
-        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto attrLen = bs.read_le32();
-        auto ret = bs.read_le32();
-
-        assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-        auto attr = co_await async_recv<binary_buf>(attrLen);
+            assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
+            attr = co_await async_recv_buf<binary_buf>(attrLen);
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
         send_lock.unlock();
         co_return std::make_tuple(ret, std::move(attr));
@@ -579,23 +545,21 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: attr: [{}]", __FUNCTION__, str);
         }
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ret;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::SetAttrib).
-          write_le64(handle).
-          write_le32(attrId).
-          write_le32(attr.size()).
-          write_bytes(attr);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::SetAttrib);
+            co_await async_send_le64(handle);
+            co_await async_send_le32(attrId);
+            co_await async_send_le32(attr.size());
+            co_await async_send_buf(asio::buffer(attr));
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        // rsz: ret32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
         send_lock.unlock();
         co_return std::make_tuple(ret);
     }
@@ -607,20 +571,18 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64 {:#016x}",
                            __FUNCTION__, id, context);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ret;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::Cancel).
-          write_le64(context);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::Cancel);
+            co_await async_send_le64(context);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
+            ret = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        // rsz: ret32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto ret = bs.read_le32();
         send_lock.unlock();
         co_return std::make_tuple(ret);
     }
@@ -628,35 +590,33 @@ namespace LTSM {
     asio::awaitable<ListReaders> PcscRemote::sendListReaders(const int32_t & id, const uint64_t & context) {
         co_await send_lock.async_lock(asio::use_awaitable);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t readersCount;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::ListReaders).
-          write_le64(context);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::ListReaders);
+            co_await async_send_le64(context);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
+            readersCount = co_await async_recv_le32();
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
 
-        // rsz: count32
-        const size_t rsz = sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto readersCount = bs.read_le32();
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context32: {:#08x}, readers count: {}",
                            __FUNCTION__, id, context, readersCount);
 
         ListReaders names;
 
         while(readersCount--) {
-            // rsz: len32
-            const size_t rsz = sizeof(uint32_t);
-            co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
+            try {
+                auto readerLen = co_await async_recv_le32();
+                auto readerName = co_await async_recv_buf<std::string>(readerLen);
+                names.emplace_back(std::move(readerName));
+            } catch(const system::system_error& err) {
+                ec_ = err.code();
+            }
 
-            auto len = bs.read_le32();
-            auto name = co_await async_recv<std::string>(len);
-            names.emplace_back(std::move(name));
-
-            Application::info("{}: reader - '{}'", name);
+            Application::debug(DebugType::Pcsc, "{}: reader - '{}'", names.back());
 
             if(names.back().size() > MAX_READERNAME - 1) {
                 names.back().resize(MAX_READERNAME - 1);
@@ -670,62 +630,58 @@ namespace LTSM {
     asio::awaitable<uint32_t> PcscRemote::sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount) {
         co_await send_lock.async_lock(asio::use_awaitable);
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        uint32_t ret;
 
-        bs.write_le16(PcscOp::Init).
-          write_le16(PcscLite::GetStatusChange).
-          write_le64(context).
-          write_le32(timeout).
-          write_le32(statesCount);
+        try {
+            co_await async_send_le16(PcscOp::Init);
+            co_await async_send_le16(PcscLite::GetStatusChange);
+            co_await async_send_le64(context);
+            co_await async_send_le32(timeout);
+            co_await async_send_le32(statesCount);
 
-        for(uint32_t it = 0; it < statesCount; ++it) {
-            const SCARD_READERSTATE & state = states[it];
-            bs.write_le32(strnlen(state.szReader, MAX_READERNAME)).
-              write_le32(state.dwCurrentState).
-              write_le32(state.cbAtr).
-              write_string(state.szReader).
-              write_bytes(state.rgbAtr, state.cbAtr);
-        }
+            for(uint32_t it = 0; it < statesCount; ++it) {
+                const SCARD_READERSTATE & state = states[it];
+                auto len = strnlen(state.szReader, MAX_READERNAME);
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::redirect_error(asio::use_awaitable, ec_));
-
-        // rsz: count32 + ret32
-        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-        auto counts = bs.read_le32();
-        auto ret = bs.read_le32();
-
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context64: {:#016x}, timeout: {}, states: {}",
-                           __FUNCTION__, id, context, timeout, counts);
-
-        assertm(counts == statesCount, "count states invalid");
-
-        for(uint32_t it = 0; it < statesCount; ++it) {
-            // rsz: state32 + state32 + name32 + atr32
-            const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-            co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::redirect_error(asio::use_awaitable, ec_));
-
-            SCARD_READERSTATE & state = states[it];
-
-            state.dwCurrentState = bs.read_le32();
-            state.dwEventState = bs.read_le32();
-
-            auto szReader = bs.read_le32();
-            auto cbAtr = bs.read_le32();
-
-            std::string reader = co_await async_recv<std::string>(szReader);
-
-            if(reader != state.szReader) {
-                Application::warning("{}: invalid reader, `{}' != `'", __FUNCTION__, reader, state.szReader);
+                co_await async_send_le32(len);
+                co_await async_send_le32(state.dwCurrentState);
+                co_await async_send_le32(state.cbAtr);
+                co_await async_send_buf(asio::buffer(state.szReader, len));
+                co_await async_send_buf(asio::buffer(state.rgbAtr, state.cbAtr));
             }
 
-            assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
+            auto counts = co_await async_recv_le32();
+            ret = co_await async_recv_le32();
 
-            state.cbAtr = cbAtr;
-            auto wrapper = asio::buffer(state.rgbAtr, cbAtr);
-            co_await asio::async_read(sock_, wrapper, asio::transfer_exactly(cbAtr), asio::redirect_error(asio::use_awaitable, ec_));
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context64: {:#016x}, timeout: {}, states: {}",
+                           __FUNCTION__, id, context, timeout, counts);
+
+            assertm(counts == statesCount, "count states invalid");
+
+            for(uint32_t it = 0; it < statesCount; ++it) {
+                SCARD_READERSTATE & state = states[it];
+
+                state.dwCurrentState = co_await async_recv_le32();
+                state.dwEventState = co_await async_recv_le32();
+
+                auto readerLen = co_await async_recv_le32();
+                auto cbAtr = co_await async_recv_le32();
+                auto readerName = co_await async_recv_buf<std::string>(readerLen);
+
+                if(readerName != state.szReader) {
+                    Application::warning("{}: invalid reader, `{}' != `{}'", __FUNCTION__, readerName, state.szReader);
+                }
+
+                assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
+
+                state.cbAtr = cbAtr;
+                auto atr = co_await async_recv_buf<binary_buf>(cbAtr);
+
+                atr.resize(sizeof(state.rgbAtr), 0);
+                std::ranges::copy_n(atr.data(), atr.size(), state.rgbAtr);
+            }
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
         }
 
         send_lock.unlock();
@@ -826,13 +782,9 @@ namespace LTSM {
     }
 
     /// PcscLocal
-    PcscLocal::PcscLocal(asio::local::stream_protocol::socket && sock, int cid, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* bus)
-        : sock_{std::move(sock)}, cid_{cid}, remote_{ptr}, session_{bus} {
-    }
-
     PcscLocal::~PcscLocal() {
-        sock_.cancel();
-        sock_.close();
+        socket().cancel();
+        socket().close();
 
         if(transaction_id == id()) {
             transaction_id = 0;
@@ -842,13 +794,8 @@ namespace LTSM {
 
     asio::awaitable<bool> PcscLocal::handlerClientWaitCommand(void) {
         // begin data: len32, cmd32
-        uint32_t len = 0;
-        co_await asio::async_read(sock_, asio::buffer(&len, sizeof(len)), asio::transfer_exactly(sizeof(len)), asio::use_awaitable);
-        endian::little_to_native_inplace(len);
-
-        uint32_t cmd = 0;
-        co_await asio::async_read(sock_, asio::buffer(&cmd, sizeof(cmd)), asio::transfer_exactly(sizeof(len)), asio::use_awaitable);
-        endian::little_to_native_inplace(cmd);
+        uint32_t len = co_await async_recv_le32();
+        uint32_t cmd = co_await async_recv_le32();
 
         bool alive = co_await clientAction(cmd, len);
 
@@ -969,7 +916,7 @@ namespace LTSM {
 
         if(zero) {
             binary_buf buf(zero, 0);
-            co_await async_send_buf(buf);
+            co_await async_send_buf(asio::buffer(buf));
         }
 
         co_await async_send_le32(err);
@@ -1105,7 +1052,7 @@ namespace LTSM {
         }
 
         co_await async_send_le32(context);
-        co_await async_send_buf(readerData);
+        co_await async_send_buf(asio::buffer(readerData));
         co_await async_send_le32(shareMode);
         co_await async_send_le32(prefferedProtocols);
         co_await async_send_le32(handle);
@@ -1349,7 +1296,7 @@ namespace LTSM {
         co_await async_send_le32(ioRecvPciLength);
         co_await async_send_le32(recvLength);
         co_await async_send_le32(ret);
-        co_await async_send_buf(data2);
+        co_await async_send_buf(asio::buffer(data2));
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1483,7 +1430,7 @@ namespace LTSM {
         co_await async_send_le32(recvLength);
         co_await async_send_le32(bytesReturned);
         co_await async_send_le32(ret);
-        co_await async_send_buf(data2);
+        co_await async_send_buf(asio::buffer(data2));
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1537,7 +1484,7 @@ namespace LTSM {
 
         co_await async_send_le32(handle);
         co_await async_send_le32(attrId);
-        co_await async_send_buf(attr);
+        co_await async_send_buf(asio::buffer(attr));
         co_await async_send_le32(attrLen);
         co_await async_send_le32(ret);
 
@@ -1590,7 +1537,7 @@ namespace LTSM {
 
         co_await async_send_le32(handle);
         co_await async_send_le32(attrId);
-        co_await async_send_buf(attr);
+        co_await async_send_buf(asio::buffer(attr));
         co_await async_send_le32(attrLen);
         co_await async_send_le32(ret);
 
@@ -1625,7 +1572,7 @@ namespace LTSM {
         co_await async_send_le32(context);
         co_await async_send_le32(ret);
 
-        asio::co_spawn(sock_.get_executor(),
+        asio::co_spawn(socket().get_executor(),
             std::bind(&PcscSessionBus::handlerStopClient, session_, cancelContext), asio::detached);
 
         co_return true;
@@ -1794,7 +1741,7 @@ namespace LTSM {
         Application::info("{}: socket path: `{}'", __FUNCTION__, pcsc_path);
 
         pcsc_ep_.path(pcsc_path);
-        remote_ = std::make_shared<PcscRemote>(ioc_);
+        remote_ = std::make_shared<PcscRemote>(boost::asio::local::stream_protocol::socket{ioc_});
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);

@@ -56,14 +56,9 @@ namespace LTSM {
     }
 
     /// AudioClient
-    AudioClient::AudioClient(asio::local::stream_protocol::socket && sock,
-                             asio::strand<asio::any_io_executor> && strand)
-        : sock_{std::move(sock)}, strand_{std::move(strand)} {
-    }
-
     AudioClient::~AudioClient() {
-        sock_.cancel();
-        sock_.close();
+        socket().cancel();
+        socket().close();
 #ifdef LTSM_WITH_PIPEWIRE
         pipew_.reset();
 #endif
@@ -79,7 +74,7 @@ namespace LTSM {
 
         for(int it = 1; it <= attempts; it++) {
             try {
-                co_await sock_.async_connect(path, asio::use_awaitable);
+                co_await socket().async_connect(path, asio::use_awaitable);
                 co_return;
             } catch(const system::system_error& ec) {
                 if(it == attempts) {
@@ -131,14 +126,10 @@ namespace LTSM {
         bs.write_le16(bitsPerSample);
 #endif
 
-        co_await asio::async_write(sock_, sb, asio::transfer_all(), asio::use_awaitable);
+        co_await async_send_buf(sb);
 
-        // rsz: cmd16, err16
-        const size_t rsz = sizeof(uint16_t) + sizeof(uint16_t);
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::use_awaitable);
-
-        auto cmd = bs.read_le16();
-        auto err = bs.read_le16();
+        auto cmd = co_await async_recv_le16();
+        auto err = co_await async_recv_le16();
 
         if(cmd != AudioOp::Init) {
             Application::error("{}: {} failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
@@ -146,19 +137,15 @@ namespace LTSM {
         }
 
         if(err) {
-            co_await asio::async_read(sock_, sb, asio::transfer_exactly(err), asio::use_awaitable);
-            auto str = bs.read_string(err);
+            auto str = co_await async_recv_buf<std::string>(err);
             Application::error("{}: recv error: {}", __FUNCTION__, str);
             throw audio_error(NS_FuncNameS);
         }
 
-        // ver16, enc16
-        co_await asio::async_read(sock_, sb, asio::transfer_exactly(rsz), asio::use_awaitable);
-
         // proto version
-        auto ver = bs.read_le16();
+        auto ver = co_await async_recv_le16();
         // encoding
-        auto enc = bs.read_le16();
+        auto enc = co_await async_recv_le16();
 
         Application::info("{}: client proto version: {}, encode type: {:#04x}", __FUNCTION__, ver, enc);
 
@@ -250,7 +237,7 @@ namespace LTSM {
 
     void AudioClient::dataReadyNotify(const uint8_t* ptr, size_t len) {
         // this thread - from audio engine callback
-        if(! sock_.is_open()) {
+        if(! socket().is_open()) {
             return;
         }
 
@@ -268,11 +255,11 @@ namespace LTSM {
                 }
                 // send all buffers
                 try {
-                    co_await asio::async_write(sock_, buffers, asio::transfer_all(), asio::use_awaitable);
+                    co_await async_send_buf(buffers);
                 } catch(const boost::system::system_error& err) {
                     auto ec = err.code();
                     Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "dataReadyNotify", "write", ec.value(), ec.message());
-                    sock_.close();
+                    socket().close();
                     co_return;
                 }
             }
@@ -313,7 +300,7 @@ namespace LTSM {
             }
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", __FUNCTION__, err.what());
-            sock_.close();
+            socket().close();
         }
 
         return res;
