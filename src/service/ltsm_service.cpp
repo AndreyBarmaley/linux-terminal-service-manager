@@ -2589,7 +2589,7 @@ namespace LTSM::Manager {
         auto clientUrl = Channel::createUrl(Channel::ConnectorType::Audio, "");
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                           serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
+                           serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "ultra", 5, 0);
 
         std::scoped_lock guard{ lock_jobs_ };
         jobs_.emplace_back(
