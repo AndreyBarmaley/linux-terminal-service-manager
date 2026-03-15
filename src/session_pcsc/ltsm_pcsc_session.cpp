@@ -605,12 +605,12 @@ namespace LTSM {
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
-
+/*
         if(timer_context_ == context) {
             timer_stop_.emit(asio::cancellation_type::terminal);
             timer_context_ = 0;
         }
-
+*/
         send_lock_.unlock();
         co_return std::make_tuple(ret);
     }

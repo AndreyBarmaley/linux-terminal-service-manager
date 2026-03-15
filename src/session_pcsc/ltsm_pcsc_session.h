@@ -101,10 +101,10 @@ namespace LTSM {
 
         std::unordered_map<uint32_t, uint64_t> map_context_;
 
-        uint64_t timer_context_{0};
-        boost::asio::cancellation_signal timer_stop_;
-        avast::asio::async_mutex send_lock_;
+        //uint64_t timer_context_{0};
+        //boost::asio::cancellation_signal timer_stop_;
 
+        avast::asio::async_mutex send_lock_;
         Transaction trans_lock_;
 
         boost::system::error_code ec_;
