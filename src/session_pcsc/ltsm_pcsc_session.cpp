@@ -1770,10 +1770,10 @@ namespace LTSM {
         // main loop
         ioc_.run();
 
-        Application::notice("{}: PCSC session shutdown", __FUNCTION__);
-
         dbus_conn_->leaveEventLoop();
         sdbus_job.wait();
+
+        Application::notice("{}: PCSC session shutdown", __FUNCTION__);
 
         std::filesystem::remove(pcsc_path);
 

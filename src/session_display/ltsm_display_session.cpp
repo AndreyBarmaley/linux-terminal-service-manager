@@ -536,15 +536,6 @@ namespace LTSM::DisplaySession {
         Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
                           getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
 
-        auto sdbus_job = std::async(std::launch::async, [this]() {
-           try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
-            }
-        });
-
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
 
@@ -558,10 +549,21 @@ namespace LTSM::DisplaySession {
         timer_childs_.expires_after(dur_childs_);
         timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
 
+        auto sdbus_job = std::async(std::launch::async, [this]() {
+           try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", err.what());
+                boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
+            }
+        });
+
         ioc_.run();
 
         dbus_conn_->leaveEventLoop();
         sdbus_job.wait();
+
+        Application::notice("{}: Display session shutdown", __FUNCTION__);
 
         return EXIT_SUCCESS;
     }

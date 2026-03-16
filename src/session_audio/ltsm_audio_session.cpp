@@ -323,15 +323,6 @@ namespace LTSM {
 
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
 
-        auto sdbus_job = std::async(std::launch::async, [this]() {
-            try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
-            }
-        });
-
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
 
@@ -342,12 +333,21 @@ namespace LTSM {
             }
         });
 
+        auto sdbus_job = std::async(std::launch::async, [this]() {
+            try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", err.what());
+                asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
+            }
+        });
+
         ioc_.run();
 
         dbus_conn_->leaveEventLoop();
         sdbus_job.wait();
 
-        Application::debug(DebugType::App, "service stopped");
+        Application::notice("{}: Audio session shutdown", __FUNCTION__);
         return EXIT_SUCCESS;
     }
 
