@@ -21,7 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#include <future>
+#include <thread>
 #include <cstring>
 #include <iostream>
 #include <filesystem>
@@ -172,7 +172,7 @@ namespace LTSM {
                 co_return;
             }
 
-            LTSM::Application::warning("{}: wait audio engine init...", __FUNCTION__);
+            LTSM::Application::debug(DebugType::Audio, "{}: wait audio engine init...", __FUNCTION__);
         }
 
         co_return;
@@ -193,6 +193,7 @@ namespace LTSM {
         // wait PipeWire started
         if(pipew_) {
             if(PW_STREAM_STATE_STREAMING == pipew_->streamState()) {
+                LTSM::Application::info("{}: success, engine: {}", __FUNCTION__, "PipeWire");
                 // success
                 return true;
             } else {
@@ -213,6 +214,7 @@ namespace LTSM {
 
         if(pulse_ && pulse_->initContext() && pulse_->streamConnect(false /* not paused */, & bufferAttr)) {
             // success
+            LTSM::Application::info("{}: success, engine: {}", __FUNCTION__, "PulseAudio");
             return true;
         }
 
@@ -333,7 +335,7 @@ namespace LTSM {
             }
         });
 
-        auto sdbus_job = std::async(std::launch::async, [this]() {
+        auto sdbus_job = std::thread([this]() {
             try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
@@ -345,7 +347,7 @@ namespace LTSM {
         ioc_.run();
 
         dbus_conn_->leaveEventLoop();
-        sdbus_job.wait();
+        sdbus_job.join();
 
         Application::notice("{}: Audio session shutdown", __FUNCTION__);
         return EXIT_SUCCESS;

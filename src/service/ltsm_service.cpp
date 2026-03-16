@@ -985,16 +985,6 @@ namespace LTSM::Manager {
         fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").string();
         cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").string();
 
-        jobs_.emplace_back(std::async(std::launch::async, [this]()
-        {
-            try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
-            }
-        }));
-
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
 
@@ -3092,7 +3082,8 @@ namespace LTSM::Manager {
                 }
             }
         }
-    
+
+        auto dbus_conn = conn.get();
         const size_t concurency = 4;
 
         boost::asio::io_context ctx{concurency};
@@ -3105,6 +3096,9 @@ namespace LTSM::Manager {
         Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
                 __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
 
+        // sdbus background
+        dbus_conn->enterEventLoopAsync();
+
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");
 #endif
@@ -3114,6 +3108,7 @@ namespace LTSM::Manager {
         }
 
         pool.join();
+        dbus_conn->leaveEventLoop();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");

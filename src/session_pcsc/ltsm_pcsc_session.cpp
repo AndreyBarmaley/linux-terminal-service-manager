@@ -1758,7 +1758,7 @@ namespace LTSM {
             }
         });
 
-        auto sdbus_job = std::async(std::launch::async, [this]() {
+        auto sdbus_job = std::thread([this]() {
             try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
@@ -1771,7 +1771,7 @@ namespace LTSM {
         ioc_.run();
 
         dbus_conn_->leaveEventLoop();
-        sdbus_job.wait();
+        sdbus_job.join();
 
         Application::notice("{}: PCSC session shutdown", __FUNCTION__);
 

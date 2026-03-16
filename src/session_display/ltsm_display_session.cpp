@@ -22,7 +22,7 @@
  **********************************************************************/
 
 #include <chrono>
-#include <future>
+#include <thread>
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
@@ -549,7 +549,7 @@ namespace LTSM::DisplaySession {
         timer_childs_.expires_after(dur_childs_);
         timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
 
-        auto sdbus_job = std::async(std::launch::async, [this]() {
+        auto sdbus_job = std::thread([this]() {
            try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
@@ -561,7 +561,7 @@ namespace LTSM::DisplaySession {
         ioc_.run();
 
         dbus_conn_->leaveEventLoop();
-        sdbus_job.wait();
+        sdbus_job.join();
 
         Application::notice("{}: Display session shutdown", __FUNCTION__);
 
