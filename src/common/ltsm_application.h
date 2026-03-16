@@ -44,14 +44,14 @@
 namespace LTSM {
     enum class DebugTarget { Console, Syslog, SyslogFile };
 
-    enum class DebugLevel : int {
-        Trace = SPDLOG_LEVEL_TRACE,
-        Debug = SPDLOG_LEVEL_DEBUG,
-        Info = SPDLOG_LEVEL_INFO,
-        Warn = SPDLOG_LEVEL_WARN,
-        Error = SPDLOG_LEVEL_ERROR,
-        Crit = SPDLOG_LEVEL_CRITICAL,
-        Quiet = SPDLOG_LEVEL_OFF
+    enum class DebugLevel {
+        Trace,
+        Debug,
+        Info,
+        Warn,
+        Error,
+        Crit,
+        Quiet
     };
 
     enum DebugType {

@@ -242,7 +242,16 @@ namespace LTSM {
                 break;
         }
 
-        log->set_level(static_cast<spdlog::level::level_enum>(appDebugLevel));
+        switch(appDebugLevel) {
+            case DebugLevel::Trace: log->set_level(spdlog::level::trace); break;
+            case DebugLevel::Debug: log->set_level(spdlog::level::debug); break;
+            case DebugLevel::Info: log->set_level(spdlog::level::info); break;
+            case DebugLevel::Warn: log->set_level(spdlog::level::warn); break;
+            case DebugLevel::Error: log->set_level(spdlog::level::err); break;
+            case DebugLevel::Crit: log->set_level(spdlog::level::critical); break;
+            case DebugLevel::Quiet: log->set_level(spdlog::level::off); break;
+        }
+    
 #if 11503 <= SPDLOG_VERSION
         spdlog::register_or_replace(log);
 #else
