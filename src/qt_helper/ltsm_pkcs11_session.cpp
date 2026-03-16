@@ -137,7 +137,8 @@ void Pkcs11Client::run(void) {
     emit pkcs11Shutdown();
 }
 
-const std::list<Pkcs11Token> & Pkcs11Client::getTokens(void) const {
+// FIXME
+std::list<Pkcs11Token> Pkcs11Client::getTokens(void) const {
     std::scoped_lock guard{ lock };
     return tokens;
 }

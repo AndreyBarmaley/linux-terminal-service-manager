@@ -241,8 +241,7 @@ namespace LTSM::LoginHelper {
 
     void LoginWindow::tokensChanged(void) {
 #ifdef LTSM_PKCS11_AUTH
-        auto & tokens = pkcs11->getTokens();
-
+        auto tokens = pkcs11->getTokens();
         Application::debug(DebugType::App, "{}: tokens count: {}", __FUNCTION__, tokens.size());
 
         if(tokens.empty()) {

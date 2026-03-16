@@ -85,8 +85,8 @@ class Pkcs11Client : public QThread {
     Pkcs11Client(int displayNum, QObject*);
     ~Pkcs11Client();
 
-    const std::list<Pkcs11Token> & getTokens(void) const;
-    std::list<Pkcs11Cert> getCertificates(uint64_t slotId);
+    std::list<Pkcs11Token> getTokens(void) const;
+    std::list<Pkcs11Cert> getCertificates(uint64_t slotId) const;
     std::list<Pkcs11Mech> getMechanisms(uint64_t slotId);
 
     std::vector<uint8_t> signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
