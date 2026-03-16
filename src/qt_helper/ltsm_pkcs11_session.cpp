@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 #include <chrono>
+#include <thread>
 #include <algorithm>
 #include <filesystem>
 
@@ -63,7 +64,7 @@ void Pkcs11Client::run(void) {
         }
 
         if(! std::filesystem::is_socket(socketPath, fserr)) {
-            msleep(350);
+            std::this_thread::sleep_for(350ms);
             continue;
         }
 
@@ -130,7 +131,7 @@ void Pkcs11Client::run(void) {
             updateTokens();
         }
 
-        msleep(250);
+        std::this_thread::sleep_for(350ms);
     }
 
     emit pkcs11Shutdown();
