@@ -516,20 +516,20 @@ namespace LTSM {
             return;
         }
 
+        std::scoped_lock guard{ lockUpdate };
+
         if(reg.toSize() != cli.clientSize()) {
             Application::warning("{}: incorrect region size: {}", __FUNCTION__, reg.toSize());
-            return;
+            avcctx.reset();
+        }
+
+        if(! avcctx) {
+            initContext(reg);
         }
 
         // The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
         if(len % AV_INPUT_BUFFER_PADDING_SIZE) {
             buf.resize(buf.size() + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
-        }
-
-        std::scoped_lock guard{ lockUpdate };
-
-        if(! avcctx) {
-            initContext(reg);
         }
 
         packet->data = buf.data();
