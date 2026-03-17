@@ -302,7 +302,7 @@ namespace LTSM {
         while(ret >= 0) {
             ret = avcodec_receive_packet(avcctx.get(), packet.get());
             if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                return;
+                break;
             } else if(ret < 0) {
                 Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret),
                                ret);
@@ -313,16 +313,12 @@ namespace LTSM {
             st->sendHeader(getType(), fb.region());
 
             // send region
-            if(ret == 0) {
-                st->sendIntBE32(packet->size);
-                Application::trace(DebugType::Enc, "{}: packet size: {}", __FUNCTION__, packet->size);
-                st->sendRaw(packet->data, packet->size);
-            } else {
-                st->sendIntBE32(0);
-            }
-
-            st->sendFlush();
+            st->sendIntBE32(packet->size);
+            Application::trace(DebugType::Enc, "{}: packet size: {}", __FUNCTION__, packet->size);
+            st->sendRaw(packet->data, packet->size);
         }
+
+        st->sendFlush();
     }
 
 #endif
