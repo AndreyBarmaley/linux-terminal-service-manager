@@ -293,33 +293,36 @@ namespace LTSM {
         frame->pts = pts++;
         int ret = 0;
 
+        // ref: https://ffmpeg.org/doxygen/7.0/encode_video_8c-example.html
         if(ret = avcodec_send_frame(avcctx.get(), frame.get()); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_frame", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-        if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret),
+        while(ret >= 0) {
+            ret = avcodec_receive_packet(avcctx.get(), packet.get());
+            if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                return;
+            } else if(ret < 0) {
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret),
                                ret);
-
-            if(ret != EAGAIN) {
                 throw ffmpeg_error(NS_FuncNameS);
             }
+
+            st->sendIntBE16(1);
+            st->sendHeader(getType(), fb.region());
+
+            // send region
+            if(ret == 0) {
+                st->sendIntBE32(packet->size);
+                Application::trace(DebugType::Enc, "{}: packet size: {}", __FUNCTION__, packet->size);
+                st->sendRaw(packet->data, packet->size);
+            } else {
+                st->sendIntBE32(0);
+            }
+
+            st->sendFlush();
         }
-
-        st->sendIntBE16(1);
-        st->sendHeader(getType(), fb.region());
-
-        // send region
-        if(ret == 0) {
-            st->sendIntBE32(packet->size);
-            Application::trace(DebugType::Enc, "{}: packet size: {}", __FUNCTION__, packet->size);
-            st->sendRaw(packet->data, packet->size);
-        } else {
-            st->sendIntBE32(0);
-        }
-
-        st->sendFlush();
     }
 
 #endif
