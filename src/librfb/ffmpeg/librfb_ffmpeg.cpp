@@ -539,39 +539,25 @@ namespace LTSM {
         packet->data = buf.data();
         packet->size = len;
         int ret = 0;
-        bool haveFrame = false;
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(57, 48, 101)
-
+        // ref: https://ffmpeg.org/doxygen/7.0/decode_video_8c-example.html
         if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret) {
             Application::error("{}: padding size: {}, packet size: {}, buf size: {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size, buf.size());
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-        do {
+        while(ret >= 0) {
             ret = avcodec_receive_frame(avcctx.get(), frame.get());
-        } while(ret == AVERROR(EAGAIN));
 
-        if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
+            if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                return;
+            } else if(ret < 0) {
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
                                ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
+                throw ffmpeg_error(NS_FuncNameS);
+            }
 
-        haveFrame = (ret == 0);
-#else
-        int gotFrame = 0;
-
-        if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
-                               ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
-        haveFrame = (gotFrame != 0);
-#endif
-
-        if(haveFrame) {
             int heightResult = sws_scale(swsctx.get(), (uint8_t const * const*) frame->data,
                                          frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
 
@@ -587,6 +573,33 @@ namespace LTSM {
 
             av_frame_unref(frame.get());
         }
+
+#else
+        int gotFrame = 0;
+
+        if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret) {
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
+                               ret);
+            throw ffmpeg_error(NS_FuncNameS);
+        }
+
+        if(gotFrame != 0) {
+            int heightResult = sws_scale(swsctx.get(), (uint8_t const * const*) frame->data,
+                                         frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
+
+            if(heightResult < 0) {
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
+                                   heightResult);
+                throw ffmpeg_error(NS_FuncNameS);
+            }
+
+            if(heightResult == avcctx->height) {
+                cli.updateRawPixels(XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->data[0], rgb->linesize[0], pf);
+            }
+
+            av_frame_unref(frame.get());
+        }
+#endif
     }
 
 #endif
