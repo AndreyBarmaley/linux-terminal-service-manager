@@ -540,7 +540,7 @@ namespace LTSM {
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(57, 48, 101)
 
         if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret) {
-            Application::error("{}: {} {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size);
+            Application::error("{}: padding size: {}, packet size: {}, buf size: {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size, buf.size());
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncNameS);
         }
