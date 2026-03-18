@@ -72,7 +72,7 @@ namespace LTSM {
         "usage: " << prog <<
         ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] " <<
         "[--version] [--debug [<types>]] [--trace] [--syslog [<tofile>]] " <<
-        "[--noltsm] [--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--fixed] " <<
+        "[--noltsm] [--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--resize] " <<
 #ifdef LTSM_WITH_GSSAPI
         "[--kerberos <" << krb5def << ">] " <<
 #endif
@@ -131,7 +131,7 @@ namespace LTSM {
                                   "    --framerate <fps>" << std::endl <<
                                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
                                   "    --dpi <DPI> (set X11 dpi)" << std::endl <<
-                                  "    --fixed (not resizable window)" << std::endl <<
+                                  "    --resize (allow resizable window)" << std::endl <<
                                   "    --extclip (extclip support)" << std::endl <<
                                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
 #ifdef LTSM_WITH_GNUTLS
@@ -397,8 +397,8 @@ namespace LTSM {
             alwaysRunning = true;
         } else if(cmd == "--fullscreen") {
             windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-        } else if(cmd == "--fixed") {
-            windowFlags &= ~SDL_WINDOW_RESIZABLE;
+        } else if(cmd == "--resize") {
+            windowFlags |= SDL_WINDOW_RESIZABLE;
         } else if(cmd == "--nodamage") {
             xcbNoDamage = true;
         }

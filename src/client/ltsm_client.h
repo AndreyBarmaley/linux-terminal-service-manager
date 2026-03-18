@@ -91,7 +91,7 @@ namespace LTSM {
         int xcbDpi = 0;
         int port = 5900;
         int frameRate = 16;
-        int windowFlags = SDL_WINDOW_SHOWN; // | SDL_WINDOW_RESIZABLE;
+        int windowFlags = SDL_WINDOW_SHOWN;
 
         //        BinaryBuf clipboardBufRemote;
         //        BinaryBuf clipboardBufLocal;
