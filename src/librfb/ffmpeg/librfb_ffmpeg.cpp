@@ -224,7 +224,7 @@ namespace LTSM {
         }
 
         avcctx->thread_count = threads;
-        avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
+        avcctx->pix_fmt = localFormat;
         avcctx->width = csz.width;
         avcctx->height = csz.height;
         avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
@@ -251,7 +251,7 @@ namespace LTSM {
 
         frame->width = avcctx->width;
         frame->height = avcctx->height;
-        frame->format = avcctx->pix_fmt;
+        frame->format = localFormat;
 #if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 48, 100)
         frame->colorspace = AVCOL_SPC_BT709;
 #endif
@@ -266,13 +266,8 @@ namespace LTSM {
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        AVPixelFormat avPixelFormat = AV_PIX_FMT_BGR0;
-#else
-        AVPixelFormat avPixelFormat = AV_PIX_FMT_0RGB;
-#endif
-        swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avPixelFormat,
-                                    frame->width, frame->height, (AVPixelFormat) frame->format, SWS_BILINEAR, nullptr, nullptr, nullptr));
+        swsctx.reset(sws_getContext(avcctx->width, avcctx->height, remoteFormat,
+                                    frame->width, frame->height, localFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
         packet.reset(av_packet_alloc());
         Application::info("{}: {}, size: {}", __FUNCTION__, RFB::encodingName(getType()), csz);
     }
@@ -398,21 +393,68 @@ namespace LTSM {
             }
         }
     */
+
     void RFB::DecodingFFmpeg::resizedEvent(const XCB::Size & nsz) {
         std::scoped_lock guard{ lockUpdate };
 
-        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height)) {
-            initContext(nsz);
+        Application::debug(DebugType::Enc, "{}: received", __FUNCTION__);
+
+        if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != nsz) {
+            initLocalContext(nsz);
         }
     }
 
-    void RFB::DecodingFFmpeg::initContext(const XCB::Size & csz) {
-        rgbdata.reset();
-        rgb.reset();
-        packet.reset();
-        frame.reset();
-        swsctx.reset();
-        avcctx.reset();
+    void RFB::DecodingFFmpeg::initLocalContext(const XCB::Size & csz) {
+        Application::debug(DebugType::Enc, "{}: size: {}", __FUNCTION__, csz);
+
+        // init local frame
+        localFrame.reset(av_frame_alloc());
+
+        if(! localFrame) {
+            Application::error("{}: {} failed", __FUNCTION__, "av_frame_alloc");
+            throw ffmpeg_error(NS_FuncNameS);
+        }
+
+        localFrame->width = csz.width;
+        localFrame->height = csz.height;
+        localFrame->format = localFormat;
+
+        int ret = av_image_get_buffer_size(localFormat, localFrame->width, localFrame->height, 1);
+        if(0 > ret) {
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncNameS);
+        }
+
+        localData.reset((uint8_t*) av_malloc(ret));
+
+        if(! localData) {
+            Application::error("{}: {} failed", __FUNCTION__, "av_malloc");
+            throw ffmpeg_error(NS_FuncNameS);
+        }
+
+        if(int ret = av_image_fill_arrays(localFrame->data, localFrame->linesize, localData.get(),
+                                      localFormat, localFrame->width, localFrame->height, 1); 0 > ret) {
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncNameS);
+        }
+
+        // init pixel format
+        int bpp;
+        uint32_t rmask, gmask, bmask, amask;
+
+        if(Tools::AV_PixelFormatEnumToMasks(localFormat, & bpp, & rmask, & gmask, & bmask, & amask, false)) {
+            pf = PixelFormat(bpp, rmask, gmask, bmask, amask);
+        } else {
+            Application::error("{}: unknown pixel format: {}, id: {}", __FUNCTION__, av_get_pix_fmt_name(localFormat), localFrame->format);
+            throw ffmpeg_error(NS_FuncNameS);
+        }
+
+        initSwScaller();
+    }
+
+    void RFB::DecodingFFmpeg::initRemoteContext(const XCB::Size & fsz) {
+        Application::debug(DebugType::Enc, "{}: size: {}", __FUNCTION__, fsz);
+
         avcctx.reset(avcodec_alloc_context3(codec));
 
         if(! avcctx) {
@@ -429,9 +471,9 @@ namespace LTSM {
             1, 25
         };
 
-        avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
-        avcctx->width = csz.width;
-        avcctx->height = csz.height;
+        avcctx->pix_fmt = remoteFormat;
+        avcctx->width = fsz.width;
+        avcctx->height = fsz.height;
         avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
         avcctx->extradata = nullptr;
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
@@ -441,73 +483,51 @@ namespace LTSM {
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-        frame.reset(av_frame_alloc());
+        // init av frame with frame size
+        remoteFrame.reset(av_frame_alloc());
 
-        if(! frame) {
+        if(! remoteFrame) {
             Application::error("{}: {} failed", __FUNCTION__, "av_frame_alloc");
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-        frame->width = avcctx->width;
-        frame->height = avcctx->height;
-        frame->format = avcctx->pix_fmt;
+        remoteFrame->width = avcctx->width;
+        remoteFrame->height = avcctx->height;
+        remoteFrame->format = remoteFormat;
 #if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 48, 100)
-        frame->colorspace = AVCOL_SPC_BT709;
+        remoteFrame->colorspace = AVCOL_SPC_BT709;
 #endif
 #if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 92, 100)
-        frame->chroma_location = AVCHROMA_LOC_LEFT;
+        remoteFrame->chroma_location = AVCHROMA_LOC_LEFT;
 #endif
-        frame->pts = 0;
-        ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
+        remoteFrame->pts = 0;
 
-        if(0 > ret) {
+        if(int ret = av_frame_get_buffer(remoteFrame.get(), 0 /* align auto*/); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        AVPixelFormat avPixelFormat = AV_PIX_FMT_BGR0;
-#else
-        AVPixelFormat avPixelFormat = AV_PIX_FMT_0RGB;
-#endif
-        int bpp;
-        uint32_t rmask, gmask, bmask, amask;
+        remotePacket.reset(av_packet_alloc());
 
-        if(Tools::AV_PixelFormatEnumToMasks(avPixelFormat, & bpp, & rmask, & gmask, & bmask, & amask, false)) {
-            pf = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        } else {
-            Application::error("{}: unknown pixel format: {}, id: {}", __FUNCTION__, av_get_pix_fmt_name(avPixelFormat),
-                               (int) avPixelFormat);
+        if(! remotePacket) {
+            Application::error("{}: {} failed", __FUNCTION__, "av_packet_alloc");
             throw ffmpeg_error(NS_FuncNameS);
         }
 
-        swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avcctx->pix_fmt,
-                                    frame->width, frame->height, avPixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
-        packet.reset(av_packet_alloc());
+        initSwScaller();
+    }
 
-        if(ret = av_image_get_buffer_size(avPixelFormat, avcctx->width, avcctx->height, 1); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret),
-                               ret);
-            throw ffmpeg_error(NS_FuncNameS);
+    void RFB::DecodingFFmpeg::initSwScaller(void) {
+        // init scaller (src frame, dst frame)
+        if(remoteFrame && localFrame) {
+            swsctx.reset(sws_getContext(avcctx->width, avcctx->height, remoteFormat,
+                                    localFrame->width, localFrame->height, localFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
         }
-
-        rgb.reset(av_frame_alloc());
-        rgb->width = avcctx->width;
-        rgb->height = avcctx->height;
-        rgb->format = avPixelFormat;
-        rgbdata.reset((uint8_t*) av_malloc(ret));
-
-        if(ret = av_image_fill_arrays(rgb->data, rgb->linesize, rgbdata.get(),
-                                      (AVPixelFormat) rgb->format, rgb->width, rgb->height, 1); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
-        Application::info("{}: {}, size: {}", __FUNCTION__, RFB::encodingName(getType()), csz);
+        Application::debug(DebugType::Enc, "{}: success", __FUNCTION__);
     }
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region {}", __FUNCTION__, reg);
+        Application::trace(DebugType::Enc, "{}: decoding region {}", __FUNCTION__, reg);
 
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);
@@ -518,13 +538,14 @@ namespace LTSM {
 
         std::scoped_lock guard{ lockUpdate };
 
-        if(reg.toSize() != cli.clientSize()) {
-            Application::warning("{}: incorrect region size: {}", __FUNCTION__, reg.toSize());
-            avcctx.reset();
+        if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != cli.clientSize()) {
+            initLocalContext(cli.clientSize());
         }
 
-        if(! avcctx) {
-            initContext(reg);
+        if(! remoteFrame) {
+            initRemoteContext(reg.toSize());
+        } else if(reg.toSize() != XCB::Size(avcctx->width, avcctx->height)) {
+            initRemoteContext(reg.toSize());
         }
 
         // The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
@@ -532,70 +553,43 @@ namespace LTSM {
             buf.resize(buf.size() + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
         }
 
-        packet->data = buf.data();
-        packet->size = len;
+        remotePacket->data = buf.data();
+        remotePacket->size = len;
         int ret = 0;
-#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(57, 48, 101)
+
+        Application::trace(DebugType::Enc, "{}: padding size: {}, packet size: {}, buf size: {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, remotePacket->size, buf.size());
+
         // ref: https://ffmpeg.org/doxygen/7.0/decode_video_8c-example.html
-        if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret) {
-            Application::error("{}: padding size: {}, packet size: {}, buf size: {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size, buf.size());
+        if(ret = avcodec_send_packet(avcctx.get(), remotePacket.get()); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncNameS);
         }
 
         while(ret >= 0) {
-            ret = avcodec_receive_frame(avcctx.get(), frame.get());
+            ret = avcodec_receive_frame(avcctx.get(), remoteFrame.get());
 
             if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                return;
+                break;
             } else if(ret < 0) {
-                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
-                               ret);
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret), ret);
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            int heightResult = sws_scale(swsctx.get(), (uint8_t const * const*) frame->data,
-                                         frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
+            // sws_scale(ctx, srcSlice[], srcStride[], srcSliceY, srcSliceH, dst[], dstStride[])
+            int heightResult = sws_scale(swsctx.get(), (uint8_t const* const*) remoteFrame->data,
+                                         remoteFrame->linesize, 0, remoteFrame->height, localFrame->data, localFrame->linesize);
 
             if(heightResult < 0) {
-                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
-                                   heightResult);
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult), heightResult);
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            if(heightResult == avcctx->height) {
-                cli.updateRawPixels(XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->data[0], rgb->linesize[0], pf);
+            if(heightResult == localFrame->height) {
+                cli.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), localFrame->data[0], localFrame->linesize[0], pf);
             }
 
-            av_frame_unref(frame.get());
+            av_frame_unref(remoteFrame.get());
         }
-
-#else
-        int gotFrame = 0;
-
-        if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
-                               ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
-        if(gotFrame != 0) {
-            int heightResult = sws_scale(swsctx.get(), (uint8_t const * const*) frame->data,
-                                         frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
-
-            if(heightResult < 0) {
-                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
-                                   heightResult);
-                throw ffmpeg_error(NS_FuncNameS);
-            }
-
-            if(heightResult == avcctx->height) {
-                cli.updateRawPixels(XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->data[0], rgb->linesize[0], pf);
-            }
-
-            av_frame_unref(frame.get());
-        }
-#endif
     }
 
 #endif

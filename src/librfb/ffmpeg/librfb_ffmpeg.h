@@ -115,6 +115,14 @@ namespace LTSM {
             std::mutex lockUpdate;
             std::chrono::steady_clock::time_point updatePoint;
 
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+            const AVPixelFormat remoteFormat{AV_PIX_FMT_BGR0};
+#else
+            const AVPixelFormat remoteFormat{AV_PIX_FMT_0RGB};
+#endif
+
+            const AVPixelFormat localFormat{AV_PIX_FMT_YUV420P};
+
             //int bitrate = 1024;
             int fps = 25;
             int pts = 0;
@@ -141,10 +149,10 @@ namespace LTSM {
 
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
-            std::unique_ptr<AVFrame, AVFrameDeleter> frame;
-            std::unique_ptr<AVPacket, AVPacketDeleter> packet;
-            std::unique_ptr<AVFrame, AVFrameDeleter> rgb;
-            std::unique_ptr<uint8_t, decltype(av_free)*> rgbdata{nullptr, av_free};
+            std::unique_ptr<AVFrame, AVFrameDeleter> remoteFrame;
+            std::unique_ptr<AVPacket, AVPacketDeleter> remotePacket;
+            std::unique_ptr<AVFrame, AVFrameDeleter> localFrame;
+            std::unique_ptr<uint8_t, decltype(av_free)*> localData{nullptr, av_free};
 
 #if LIBAVFORMAT_VERSION_MAJOR < 59
             AVCodec* codec = nullptr;
@@ -152,10 +160,20 @@ namespace LTSM {
             const AVCodec* codec = nullptr;
 #endif
 
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+            const AVPixelFormat localFormat{AV_PIX_FMT_BGR0};
+#else
+            const AVPixelFormat localFormat{AV_PIX_FMT_0RGB};
+#endif
+
+            const AVPixelFormat remoteFormat{AV_PIX_FMT_YUV420P};
+
             std::mutex lockUpdate;
 
           protected:
-            void initContext(const XCB::Size &);
+            void initLocalContext(const XCB::Size &);
+            void initRemoteContext(const XCB::Size &);
+            void initSwScaller(void);
 
           public:
             void resizedEvent(const XCB::Size &) override;
