@@ -71,6 +71,16 @@ namespace LTSM {
         AsyncSocket(const boost::asio::any_io_executor & ex) : sock_{ex} {}
         AsyncSocket(Socket && sock) : sock_{std::forward<Socket>(sock)} {}
 
+        template<typename Ptr>
+        [[nodiscard]] boost::asio::awaitable<void> async_recv_buf(Ptr ptr, size_t len) {
+            if(len) {
+                co_await boost::asio::async_read(sock_, boost::asio::buffer(ptr, len),
+                                                 boost::asio::transfer_exactly(len), boost::asio::use_awaitable);
+            }
+
+            co_return;
+        }
+
         template<typename Buffer>
         [[nodiscard]] boost::asio::awaitable<Buffer> async_recv_buf(size_t len) {
             Buffer buf;
@@ -87,6 +97,18 @@ namespace LTSM {
         [[nodiscard]] boost::asio::awaitable<void> async_send_buf(Buffer&& buf) {
             co_await boost::asio::async_write(sock_, std::forward<Buffer>(buf),
                                                   boost::asio::transfer_all(), boost::asio::use_awaitable);
+        }
+
+        [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) {
+            co_await boost::asio::async_write(sock_, boost::asio::buffer(&val, 1),
+                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+        }
+
+        [[nodiscard]] boost::asio::awaitable<uint8_t> async_recv_byte(void) {
+            uint8_t val;
+            co_await boost::asio::async_read(sock_, boost::asio::buffer(&val, 1),
+                                             boost::asio::transfer_exactly(1), boost::asio::use_awaitable);
+            co_return val;
         }
 
         [[nodiscard]] boost::asio::awaitable<uint16_t> async_recv_le16(void) {

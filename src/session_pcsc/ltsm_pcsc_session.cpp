@@ -708,10 +708,7 @@ namespace LTSM {
                 assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
 
                 state.cbAtr = cbAtr;
-                auto atr = co_await async_recv_buf<binary_buf>(cbAtr);
-
-                atr.resize(sizeof(state.rgbAtr), 0);
-                std::ranges::copy_n(atr.data(), atr.size(), state.rgbAtr);
+                co_await async_recv_buf(state.rgbAtr, cbAtr);
             }
         } catch(const system::system_error& err) {
             ec_ = err.code();
