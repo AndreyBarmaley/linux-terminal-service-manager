@@ -981,9 +981,10 @@ namespace LTSM::Manager {
         saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").string();
         audioRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "audio" / "%{user}").string();
         pcscRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "pcsc" / "%{user}").string();
-        pkcs11RuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").string();
         fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").string();
         cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").string();
+        // sync with ltsm_pkcs11_session
+        pkcs11RuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "pkcs11" / "%{display}").string();
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
@@ -2501,7 +2502,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        auto socketFolder = std::filesystem::path(cupsRuntimeFmt).parent_path();
+        auto socketFolder = std::filesystem::path(Tools::replace(cupsRuntimeFmt, "%{user}", xvfb->userInfo->user())).parent_path();
         auto lp = Tools::getGroupGid("lp");
         std::error_code err;
 
@@ -2514,13 +2515,14 @@ namespace LTSM::Manager {
 
         // fix owner xvfb.lp, mode 0750
         Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), lp, 0750);
-        auto printerSocket = Tools::replace(cupsRuntimeFmt, "%{user}", xvfb->userInfo->user());
+        auto printerSocket = socketFolder / std::to_string(xvfb->connectorId);
+        printerSocket += ".sock";
 
         if(std::filesystem::is_socket(printerSocket, err)) {
             std::filesystem::remove(printerSocket, err);
         }
 
-        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
@@ -2621,7 +2623,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        auto socketFolder = std::filesystem::path(saneRuntimeFmt).parent_path();
+        auto socketFolder = std::filesystem::path{Tools::replace(saneRuntimeFmt, "%{user}", xvfb->userInfo->user())};
         std::error_code err;
 
         if(! std::filesystem::is_directory(socketFolder, err) &&
@@ -2633,13 +2635,14 @@ namespace LTSM::Manager {
 
         // fix owner xvfb.user, mode 0750
         Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
-        auto saneSocket = Tools::replace(saneRuntimeFmt, "%{user}", xvfb->userInfo->user());
+        auto saneSocket = socketFolder / std::to_string(xvfb->connectorId);
+        saneSocket += ".sock";
 
         if(std::filesystem::is_socket(saneSocket, err)) {
             std::filesystem::remove(saneSocket, err);
         }
 
-        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, saneSocket);
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, saneSocket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
@@ -2689,7 +2692,8 @@ namespace LTSM::Manager {
 
         // fix owner xvfb.user, mode 0750
         Tools::setFileOwner(pcscFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
-        auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
+        auto pcscSocket = std::filesystem::path(pcscFolder) / std::to_string(xvfb->connectorId);
+        pcscSocket += ".sock";
 
         if(std::filesystem::is_socket(pcscSocket, err)) {
             std::filesystem::remove(pcscSocket, err);
@@ -2731,7 +2735,8 @@ namespace LTSM::Manager {
         }
 
         Application::info("{}: param: `{}'", __FUNCTION__, param);
-        auto pkcs11Folder = std::filesystem::path(Tools::replace(pkcs11RuntimeFmt, "%{display}", xvfb->displayNum));
+            
+        auto pkcs11Folder = std::filesystem::path{Tools::replace(pkcs11RuntimeFmt, "%{display}", xvfb->displayNum)};
         std::error_code err;
 
         if(! std::filesystem::is_directory(pkcs11Folder, err) &&
@@ -2743,6 +2748,7 @@ namespace LTSM::Manager {
 
         // fix owner xvfb.user, mode 0750
         Tools::setFileOwner(pkcs11Folder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
+        // fixme path to ltsm_session_pkcs11
         auto pkcs11Socket = std::filesystem::path(pkcs11Folder) / "sock";
 
         if(std::filesystem::is_socket(pkcs11Socket, err)) {
@@ -2792,9 +2798,9 @@ namespace LTSM::Manager {
         }
 
         Application::info("{}: remote point: {}", __FUNCTION__, remotePoint);
-        auto userShareFolder = Tools::replace(fuseRuntimeFmt, "%{user}", xvfb->userInfo->user());
+        auto userShareFolder = std::filesystem::path{Tools::replace(fuseRuntimeFmt, "%{user}", xvfb->userInfo->user())};
         auto fusePointName = std::filesystem::path(remotePoint).filename();
-        auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
+        auto fusePointFolder = userShareFolder / fusePointName;
         std::error_code err;
 
         if(! std::filesystem::is_directory(fusePointFolder, err) &&
@@ -2805,11 +2811,11 @@ namespace LTSM::Manager {
         }
 
         // fix owner xvfb.user, mode 0750
-        Tools::setFileOwner(userShareFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
+        Tools::setFileOwner(userShareFolder.string(), Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
         // fix owner user.user, mode 0700
         Tools::setFileOwner(fusePointFolder, xvfb->userInfo->uid(), xvfb->userInfo->gid(), 0700);
 
-        auto fuseSocket = std::filesystem::path(userShareFolder) / fusePointName;
+        auto fuseSocket = userShareFolder / fusePointName;
         fuseSocket += ".sock";
 
         if(std::filesystem::is_socket(fuseSocket, err)) {
