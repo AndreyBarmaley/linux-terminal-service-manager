@@ -575,19 +575,12 @@ namespace LTSM {
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            // sws_scale(ctx, srcSlice[], srcStride[], srcSliceY, srcSliceH, dst[], dstStride[])
-            int heightResult = sws_scale(swsctx.get(), (uint8_t const* const*) remoteFrame->data,
-                                         remoteFrame->linesize, 0, remoteFrame->height, localFrame->data, localFrame->linesize);
-
-            if(heightResult < 0) {
-                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult), heightResult);
+            if(int err = sws_scale_frame(swsctx.get(), localFrame.get(), remoteFrame.get()); 0 > err) {
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(err), err);
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            if(heightResult == localFrame->height) {
-                cli.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), localFrame->data[0], localFrame->linesize[0], pf);
-            }
-
+            cli.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), localFrame->data[0], localFrame->linesize[0], pf);
             av_frame_unref(remoteFrame.get());
         }
     }
