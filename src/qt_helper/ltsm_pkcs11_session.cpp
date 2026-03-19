@@ -21,7 +21,7 @@
  ***************************************************************************/
 
 #include <chrono>
-#include <thread>
+#include <future>
 #include <algorithm>
 #include <filesystem>
 
@@ -40,10 +40,10 @@ using namespace LTSM;
 using namespace std::chrono_literals;
 using namespace boost;
 
-Pkcs11Client::Pkcs11Client(int displayNum, QObject * obj) : QThread(obj),
-    AsyncSocket<asio::local::stream_protocol::socket>(ioc_.get_executor()),
+Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
+    AsyncSocket<asio::local::stream_protocol::socket>(member.get_executor()),
+    ioc_{member},
     work_guard_{asio::make_work_guard(ioc_)},
-    send_guard_{ioc_.get_executor()},
     templatePath{"/var/run/ltsm/pkcs11/%{display}/sock"} {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
 }
@@ -51,7 +51,6 @@ Pkcs11Client::Pkcs11Client(int displayNum, QObject * obj) : QThread(obj),
 Pkcs11Client::~Pkcs11Client() {
     stop();
 
-    shutdown = true;
     if(! wait(1000)) {
         terminate();
         wait();
@@ -76,16 +75,17 @@ void Pkcs11Client::run(void) {
 }
 
 asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
-    const int attempts = 5;
+    const int attempts = 7;
     const auto path = templatePath.toStdString();
 
     for(int it = 1; it <= attempts; it++) {
         try {
             co_await socket().async_connect(path, asio::use_awaitable);
-            co_return;
-        } catch(const system::system_error& ec) {
+            break;
+        } catch(const system::system_error& err) {
             if(it == attempts) {
-                throw;
+                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}", __FUNCTION__, "connect", path, attempts, err.code().message());
+                co_return;
             }
         }
 
@@ -127,7 +127,8 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     }
 
     // proto version
-    [[maybe_unused]] auto ver = co_await async_recv_le16();
+    auto ver = co_await async_recv_le16();
+
     if(ver != 1) {
         Application::error("{}: {}: failed, ver: {:#04x}", __FUNCTION__, "version", ver);
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
@@ -135,10 +136,15 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
         co_return;
     }
 
+    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", __FUNCTION__, ver);
+
     // library info
     PKCS11::LibraryInfo info;
     info.cryptokiVersion.major = co_await async_recv_byte();
     info.cryptokiVersion.minor = co_await async_recv_byte();
+
+    assert(sizeof(info.manufacturerID) == 32);
+    assert(sizeof(info.libraryDescription) == 32);
 
     co_await async_recv_buf(info.manufacturerID, sizeof(info.manufacturerID));
     info.flags = co_await async_recv_le64();
@@ -146,6 +152,12 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
     info.libraryVersion.major = co_await async_recv_byte();
     info.libraryVersion.minor = co_await async_recv_byte();
+
+    Application::debug(DebugType::Pkcs11, "{}: cryptoki version: {}.{}",
+         __FUNCTION__, static_cast<uint16_t>(info.cryptokiVersion.major), static_cast<uint16_t>(info.cryptokiVersion.minor));
+
+    Application::debug(DebugType::Pkcs11, "{}: library version: {}.{}",
+         __FUNCTION__, static_cast<uint16_t>(info.libraryVersion.major), static_cast<uint16_t>(info.libraryVersion.minor));
 
     // update tokens timer
     asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
@@ -159,7 +171,12 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
         for(;;) {
             asio::steady_timer timer(ioc_, std::chrono::seconds(1));
             co_await timer.async_wait(asio::use_awaitable);
-            co_await updateTokens();
+            co_await send_lock_.async_lock(asio::use_awaitable);
+            auto success = co_await updateTokens();
+            send_lock_.unlock();
+            if(success) {
+                Q_EMIT pkcs11TokensChanged();
+            }
         }
     } catch (const boost::system::system_error& err) {
         auto ec = err.code();
@@ -170,9 +187,10 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
         Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
         asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> { stop(); co_return; }, asio::detached);
     }
+    send_lock_.unlock();
 }
 
-asio::awaitable<void> Pkcs11Client::updateTokens(void) {
+asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     co_await async_send_le16(Pkcs11Op::GetSlots);
     co_await async_send_byte(1 /* bool tokenPresentOnly */);
 
@@ -191,13 +209,18 @@ asio::awaitable<void> Pkcs11Client::updateTokens(void) {
 
     // slot counts
     uint16_t counts = co_await async_recv_le16();
-    std::list<Pkcs11Token> newTokens;
+
+    ListTokens newTokens;
+    Application::debug(DebugType::Pkcs11, "{}: tokens counts: {}", __FUNCTION__, counts);
 
     while(counts--) {
         auto slotId = co_await async_recv_le64();
 
         PKCS11::SlotInfo slotInfo;
         auto slotValid = co_await async_recv_byte();
+
+        assert(sizeof(slotInfo.slotDescription) == 64);
+        assert(sizeof(slotInfo.manufacturerID) == 32);
 
         if(slotValid) {
             co_await async_recv_buf(slotInfo.slotDescription, sizeof(slotInfo.slotDescription));
@@ -211,6 +234,12 @@ asio::awaitable<void> Pkcs11Client::updateTokens(void) {
 
         PKCS11::TokenInfo tokenInfo;
         auto tokenValid = co_await async_recv_byte();
+
+        assert(sizeof(tokenInfo.label) == 32);
+        assert(sizeof(tokenInfo.manufacturerID) == 32);
+        assert(sizeof(tokenInfo.model) == 16);
+        assert(sizeof(tokenInfo.serialNumber) == 16);
+        assert(sizeof(tokenInfo.utcTime) == 16);
 
         if(tokenValid) {
             co_await async_recv_buf(tokenInfo.label, sizeof(tokenInfo.label));
@@ -239,7 +268,7 @@ asio::awaitable<void> Pkcs11Client::updateTokens(void) {
     }
 
     newTokens.sort();
-    std::list<Pkcs11Token> removedTokens, addedTokens;
+    ListTokens removedTokens, addedTokens;
     std::set_difference(tokens.begin(), tokens.end(),
                         newTokens.begin(), newTokens.end(),
                         std::back_inserter(removedTokens));
@@ -249,136 +278,216 @@ asio::awaitable<void> Pkcs11Client::updateTokens(void) {
 
     if(removedTokens.size() || addedTokens.size()) {
         tokens.swap(newTokens);
-        Q_EMIT pkcs11TokensChanged();
+        co_return true;
     }
 
-    co_return;
+    co_return false;
 }
 
-// FIXME
-std::list<Pkcs11Token> Pkcs11Client::getTokens(void) const {
-    std::scoped_lock guard{ lock };
-    return tokens;
+ListTokens Pkcs11Client::getTokens(void) const {
+
+    std::promise<ListTokens> promise;
+    auto res = promise.get_future();
+
+    asio::co_spawn(ioc_, [&promise, this]() -> asio::awaitable<void> {
+        co_await send_lock_.async_lock(asio::use_awaitable);
+        auto tokens = this->tokens;
+        send_lock_.unlock();
+        promise.set_value(std::move(tokens));
+        co_return;
+    }, asio::detached);
+
+    return res.get();
 }
 
+ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
 
-std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId) {
-    std::scoped_lock guard{ lock };
-    sock.sendIntLE16(Pkcs11Op::GetSlotCertificates);
-    sock.sendIntLE64(slotId);
-    sock.sendInt8(1 /* bool havePublicPrivateKeys */);
-    sock.sendFlush();
+    std::promise<ListCertificates> promise;
+    auto res = promise.get_future();
+
+    asio::co_spawn(ioc_, [&promise, &slotId, this]() -> asio::awaitable<void> {
+        co_await send_lock_.async_lock(asio::use_awaitable);
+        auto certs = co_await this->loadCertificates(slotId);
+        send_lock_.unlock();
+        promise.set_value(std::move(certs));
+        co_return;
+    }, asio::detached);
+
+    return res.get();
+}
+
+asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId) const {
+
+    co_await async_send_le16(Pkcs11Op::GetSlotCertificates);
+    co_await async_send_le64(slotId);
+    co_await async_send_byte(1 /* bool havePublicPrivateKeys */);
+
+    ListCertificates certs;
+
     // client reply
-    auto cmd = sock.recvIntLE16();
+    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::GetSlotCertificates) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
-        return {};
+        co_return certs;
     }
 
     // certs counts
-    uint16_t counts = sock.recvIntLE16();
-    std::list<Pkcs11Cert> certs;
+    auto counts = co_await async_recv_le16();
+    Application::debug(DebugType::Pkcs11, "{}: certs counts: {}", __FUNCTION__, counts);
 
     while(counts--) {
-        auto idLen = sock.recvIntLE16();
-        auto id = sock.recvData(idLen);
-        auto valueLen = sock.recvIntLE32();
-        auto value = sock.recvData(valueLen);
+        auto idLen = co_await async_recv_le16();
+        auto id = co_await async_recv_buf<binary_buf>(idLen);
+        auto valueLen = co_await async_recv_le32();
+        auto value = co_await async_recv_buf<binary_buf>(valueLen);
+
         certs.emplace_back(Pkcs11Cert{ .objectId = std::move(id), .objectValue = std::move(value) });
     }
 
-    return certs;
+    co_return certs;
 }
 
-std::list<Pkcs11Mech> Pkcs11Client::getMechanisms(uint64_t slotId) {
-    std::scoped_lock guard{ lock };
-    sock.sendIntLE16(Pkcs11Op::GetSlotMechanisms);
-    sock.sendIntLE64(slotId);
-    sock.sendFlush();
+ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
+
+    std::promise<ListMechanisms> promise;
+    auto res = promise.get_future();
+
+    asio::co_spawn(ioc_, [&promise, &slotId, this]() -> asio::awaitable<void> {
+        co_await send_lock_.async_lock(asio::use_awaitable);
+        auto mechs = co_await this->loadMechanisms(slotId);
+        send_lock_.unlock();
+        promise.set_value(std::move(mechs));
+        co_return;
+    }, asio::detached);
+
+    return res.get();
+}
+
+asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) const {
+
+    co_await async_send_le16(Pkcs11Op::GetSlotMechanisms);
+    co_await async_send_le64(slotId);
+
+    ListMechanisms res;
+
     // client reply
-    auto cmd = sock.recvIntLE16();
+    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::GetSlotMechanisms) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
-        return {};
+        co_return res;
     }
 
     // certs counts
-    uint16_t counts = sock.recvIntLE16();
-    std::list<Pkcs11Mech> res;
+    auto counts = co_await async_recv_le16();
+    Application::debug(DebugType::Pkcs11, "{}: mechs counts: {}", __FUNCTION__, counts);
 
     while(counts--) {
-        auto id = sock.recvIntLE64();
-        auto min = sock.recvIntLE64();
-        auto max = sock.recvIntLE64();
-        auto flags = sock.recvIntLE64();
-        auto len = sock.recvIntLE16();
-        auto name = sock.recvString(len);
+        auto id = co_await async_recv_le64();
+        auto min = co_await async_recv_le64();
+        auto max = co_await async_recv_le64();
+        auto flags = co_await async_recv_le64();
+        auto len = co_await async_recv_le16();
+        auto name = co_await async_recv_buf<std::string>(len);
         res.emplace_back(Pkcs11Mech{ .mechId = id, .minKey = min, .maxKey = max, .flags = flags, .name = name });
     }
 
-    return res;
+    co_return res;
 }
 
-std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
+binary_buf Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
-    std::scoped_lock guard{ lock };
-    sock.sendIntLE16(Pkcs11Op::SignData);
-    sock.sendIntLE64(slotId);
-    sock.sendIntLE64(mechType);
-    sock.sendIntLE16(pin.size());
-    sock.sendString(pin);
-    sock.sendIntLE16(certId.size());
-    sock.sendData(certId);
-    sock.sendIntLE32(len);
-    sock.sendRaw(data, len);
-    sock.sendFlush();
+
+    std::promise<binary_buf> promise;
+    auto res = promise.get_future();
+
+    asio::co_spawn(ioc_, [&promise, &slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<void> {
+        co_await send_lock_.async_lock(asio::use_awaitable);
+        auto buf = co_await this->loadSignData(slotId, pin, certId, data, len, mechType);
+        send_lock_.unlock();
+        promise.set_value(std::move(buf));
+        co_return;
+    }, asio::detached);
+
+    return res.get();
+}
+
+asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const std::string & pin,
+        const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
+
+    co_await async_send_le16(Pkcs11Op::SignData);
+    co_await async_send_le64(slotId);
+    co_await async_send_le64(mechType);
+    co_await async_send_le16(pin.size());
+    co_await async_send_buf(asio::buffer(pin));
+    co_await async_send_le16(certId.size());
+    co_await async_send_buf(asio::buffer(certId));
+    co_await async_send_le32(len);
+    co_await async_send_buf(asio::buffer(data, len));
+
     // client reply
-    auto cmd = sock.recvIntLE16();
+    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::SignData) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
-        return {};
+        co_return binary_buf{};
     }
 
     // sign result length
-    uint32_t length = sock.recvIntLE32();
+    auto length = co_await async_recv_le32();
 
     if(length) {
-        return sock.recvData(length);
+        co_return co_await async_recv_buf<binary_buf>(length);
     }
 
-    return {};
+    co_return binary_buf{};
 }
 
 std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
-    std::scoped_lock guard{ lock };
-    sock.sendIntLE16(Pkcs11Op::DecryptData);
-    sock.sendIntLE64(slotId);
-    sock.sendIntLE64(mechType);
-    sock.sendIntLE16(pin.size());
-    sock.sendString(pin);
-    sock.sendIntLE16(certId.size());
-    sock.sendData(certId);
-    sock.sendIntLE32(len);
-    sock.sendRaw(data, len);
-    sock.sendFlush();
+
+    std::promise<binary_buf> promise;
+    auto res = promise.get_future();
+
+    asio::co_spawn(ioc_, [&promise, &slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<void> {
+        co_await send_lock_.async_lock(asio::use_awaitable);
+        auto buf = co_await this->loadDecryptData(slotId, pin, certId, data, len, mechType);
+        send_lock_.unlock();
+        promise.set_value(std::move(buf));
+        co_return;
+    }, asio::detached);
+
+    return res.get();
+}
+
+asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const std::string & pin,
+        const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
+
+    co_await async_send_le16(Pkcs11Op::DecryptData);
+    co_await async_send_le64(slotId);
+    co_await async_send_le64(mechType);
+    co_await async_send_le16(pin.size());
+    co_await async_send_buf(asio::buffer(pin));
+    co_await async_send_le16(certId.size());
+    co_await async_send_buf(asio::buffer(certId));
+    co_await async_send_le32(len);
+    co_await async_send_buf(asio::buffer(data, len));
+
     // client reply
-    auto cmd = sock.recvIntLE16();
+    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::DecryptData) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
-        return {};
+        co_return binary_buf{};
     }
 
     // decrypt result length
-    uint32_t length = sock.recvIntLE32();
+    auto length = co_await async_recv_le32();
 
     if(length) {
-        return sock.recvData(length);
+        co_return co_await async_recv_buf<binary_buf>(length);
     }
 
-    return {};
+    co_return binary_buf{};
 }

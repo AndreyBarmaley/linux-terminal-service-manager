@@ -46,6 +46,8 @@
 #include "ltsm_ldap_wrapper.h"
 #endif
 
+#include <boost/asio/io_context.hpp>
+
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_pkcs11.h"
@@ -242,6 +244,7 @@ namespace LTSM::LoginHelper {
     void LoginWindow::tokensChanged(void) {
 #ifdef LTSM_PKCS11_AUTH
         auto tokens = pkcs11->getTokens();
+
         Application::debug(DebugType::App, "{}: tokens count: {}", __FUNCTION__, tokens.size());
 
         if(tokens.empty()) {

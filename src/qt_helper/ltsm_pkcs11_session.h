@@ -24,18 +24,17 @@
 #define LTSM_HELPER_PKCS11_H
 
 #include <list>
-#include <mutex>
-#include <atomic>
 #include <vector>
 #include <cinttypes>
 
 #include <QThread>
-#include <boost/asio.hpp>
 
-#include "ltsm_sockets.h"
+#include <boost/asio.hpp>
+#include <boost/utility/base_from_member.hpp>
 
 #include "ltsm_async_socket.h"
 #include "ltsm_pkcs11_wrapper.h"
+#include "avast_asio_async_mutex.hpp"
 
 struct Pkcs11Token {
     uint64_t slotId;
@@ -73,33 +72,34 @@ struct Pkcs11Cert {
     std::vector<uint8_t> objectValue;
 };
 
-class Pkcs11Client : public QThread, protected LTSM::AsyncSocket<boost::asio::local::stream_protocol::socket> {
+using ListTokens = std::list<Pkcs11Token>;
+using ListCertificates = std::list<Pkcs11Cert>;
+using ListMechanisms = std::list<Pkcs11Mech>;
+using binary_buf = std::vector<uint8_t>;
+
+class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncSocket<boost::asio::local::stream_protocol::socket> {
     Q_OBJECT
 
-    boost::asio::io_context ioc_;
+    boost::asio::io_context& ioc_;
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
-    boost::asio::strand<boost::asio::any_io_executor> send_guard_;
     boost::asio::cancellation_signal update_tokens_;
 
-    LTSM::SocketStream sock;
+    mutable avast::asio::async_mutex send_lock_;
+
     QString templatePath;
-
-    mutable std::mutex lock;
-    std::atomic<bool> shutdown{false};
-
-    std::list<Pkcs11Token> tokens;
+    ListTokens tokens;
 
   public:
     Pkcs11Client(int displayNum, QObject*);
     ~Pkcs11Client();
 
-    std::list<Pkcs11Token> getTokens(void) const;
-    std::list<Pkcs11Cert> getCertificates(uint64_t slotId);
-    std::list<Pkcs11Mech> getMechanisms(uint64_t slotId);
+    ListTokens getTokens(void) const;
+    ListCertificates getCertificates(uint64_t slotId) const;
+    ListMechanisms getMechanisms(uint64_t slotId) const;
 
-    std::vector<uint8_t> signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+    binary_buf signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
                                   const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
-    std::vector<uint8_t> decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+    binary_buf decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
                                      const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
   protected:
@@ -107,8 +107,14 @@ class Pkcs11Client : public QThread, protected LTSM::AsyncSocket<boost::asio::lo
     void stop(void);
 
     boost::asio::awaitable<void> remoteConnect(void);
-    boost::asio::awaitable<void> updateTokens(void);
+    boost::asio::awaitable<bool> updateTokens(void);
     boost::asio::awaitable<void> updateTokensTimer(void);
+    boost::asio::awaitable<ListCertificates> loadCertificates(uint64_t slotId) const;
+    boost::asio::awaitable<ListMechanisms> loadMechanisms(uint64_t slotId) const;
+    boost::asio::awaitable<binary_buf> loadSignData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+                                  const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+    boost::asio::awaitable<binary_buf> loadDecryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+                                     const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
   Q_SIGNALS:
     void pkcs11Error(const QString &);
