@@ -29,8 +29,6 @@
 #include <string>
 #include <forward_list>
 
-#include <boost/container/small_vector.hpp>
-
 #include "ltsm_application.h"
 #include "ltsm_async_socket.h"
 #include "ltsm_audio_encoder.h"
@@ -71,9 +69,8 @@ namespace LTSM {
         uint32_t bit_rate_ = 44100;
         uint32_t frag_size_ = 1024;
 
-        AudioClient(boost::asio::local::stream_protocol::socket && sock,
-                    boost::asio::strand<boost::asio::any_io_executor> && strand)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)), strand_{std::move(strand)} {
+        AudioClient(const boost::asio::any_io_executor & ex)
+            : AsyncSocket<boost::asio::local::stream_protocol::socket>(ex), strand_{boost::asio::make_strand(ex)} {
         }
         ~AudioClient() = default;
     

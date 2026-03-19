@@ -68,6 +68,7 @@ namespace LTSM {
         }
 
       public:
+        AsyncSocket(const boost::asio::any_io_executor & ex) : sock_{ex} {}
         AsyncSocket(Socket && sock) : sock_{std::forward<Socket>(sock)} {}
 
         template<typename Buffer>

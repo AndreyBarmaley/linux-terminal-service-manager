@@ -26,6 +26,8 @@
 #include <iostream>
 #include <filesystem>
 
+#include <boost/container/small_vector.hpp>
+
 #include "ltsm_tools.h"
 #include "ltsm_audio.h"
 #include "ltsm_global.h"
@@ -380,10 +382,7 @@ namespace LTSM {
         asio::co_spawn(ioc_,
         [socketPath, this]() -> asio::awaitable<void>  {
             auto executor = co_await asio::this_coro::executor;
-
-            asio::local::stream_protocol::socket sock{executor};
-            auto strand = asio::make_strand(executor);
-            auto client = std::make_unique<AudioClient>(std::move(sock), std::move(strand));
+            auto client = std::make_unique<AudioClient>(executor);
 
             try {
                 co_await client->retryConnect(socketPath, 5);
