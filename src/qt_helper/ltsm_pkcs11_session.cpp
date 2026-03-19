@@ -29,6 +29,8 @@
 #include <QDesktopWidget>
 #include <QGuiApplication>
 
+#include <boost/asio/cancellation_signal.hpp>
+
 #include "ltsm_tools.h"
 #include "ltsm_pkcs11.h"
 #include "ltsm_application.h"
@@ -36,172 +38,201 @@
 
 using namespace LTSM;
 using namespace std::chrono_literals;
+using namespace boost;
 
 Pkcs11Client::Pkcs11Client(int displayNum, QObject * obj) : QThread(obj),
-    templatePath("/var/run/ltsm/pkcs11/%{display}/sock") {
+    AsyncSocket<asio::local::stream_protocol::socket>(ioc_.get_executor()),
+    work_guard_{asio::make_work_guard(ioc_)},
+    send_guard_{ioc_.get_executor()},
+    templatePath{"/var/run/ltsm/pkcs11/%{display}/sock"} {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
 }
 
 Pkcs11Client::~Pkcs11Client() {
-    shutdown = true;
+    stop();
 
+    shutdown = true;
     if(! wait(1000)) {
         terminate();
         wait();
     }
 }
 
+void Pkcs11Client::stop(void) {
+    update_tokens_.emit(asio::cancellation_type::terminal);
+
+    system::error_code ec;
+    socket().cancel(ec);
+    socket().close(ec);
+
+    work_guard_.reset();
+}
+
 void Pkcs11Client::run(void) {
-    // 1. wait socket
-    std::error_code fserr;
-    std::filesystem::path socketPath(templatePath.toStdString());
-    int fd = -1;
+    asio::co_spawn(ioc_, remoteConnect(), asio::detached);
 
-    while(0 > fd) {
-        if(shutdown) {
-            emit pkcs11Shutdown();
-            return;
+    ioc_.run();
+    Q_EMIT pkcs11Shutdown();
+}
+
+asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
+    const int attempts = 5;
+    const auto path = templatePath.toStdString();
+
+    for(int it = 1; it <= attempts; it++) {
+        try {
+            co_await socket().async_connect(path, asio::use_awaitable);
+            co_return;
+        } catch(const system::system_error& ec) {
+            if(it == attempts) {
+                throw;
+            }
         }
 
-        if(! std::filesystem::is_socket(socketPath, fserr)) {
-            std::this_thread::sleep_for(350ms);
-            continue;
-        }
-
-        fd = UnixSocket::connect(socketPath);
+        asio::steady_timer timer{ioc_, 300ms};
+        co_await timer.async_wait(asio::use_awaitable);
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: connected, socket fd: {}", __FUNCTION__, fd);
-    sock.setSocket(fd);
+    Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", __FUNCTION__, path);
+    uint16_t cmd, err;
 
-    uint16_t cmd = 0;
-    uint16_t err = 0;
-
-    // client may be not supported PKCS11 and closed socket
     try {
-        // send initialize packet
-        sock.sendIntLE16(Pkcs11Op::Init);
+        co_await async_send_le16(Pkcs11Op::Init);
         // send proto ver
-        sock.sendIntLE16(1);
-        sock.sendFlush();
+        co_await async_send_le16(1);
+
         // client reply
-        cmd = sock.recvIntLE16();
-        err = sock.recvIntLE16();
+        cmd = co_await async_recv_le16();
+        err = co_await async_recv_le16();
     } catch(const std::exception & exp) {
         Application::error("{}: exception: {}", NS_FuncNameV, "PKCS11 initialization failed");
-        emit pkcs11Error("PKCS11 initialization failed");
-        emit pkcs11Shutdown();
-        return;
+        Q_EMIT pkcs11Error("PKCS11 initialization failed");
+        stop();
+        co_return;
     }
 
     if(cmd != Pkcs11Op::Init) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", NS_FuncNameV, "id", cmd);
-        emit pkcs11Error("PKCS11 initialization failed");
-        emit pkcs11Shutdown();
-        return;
+        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Q_EMIT pkcs11Error("PKCS11 initialization failed");
+        stop();
+        co_return;
     }
 
     if(err) {
-        auto str = sock.recvString(err);
+        auto str = co_await async_recv_buf<std::string>(err);
         Application::error("{}: recv error: {}", __FUNCTION__, str);
-        emit pkcs11Error(QString("PKCS11 error: %1").arg(str.c_str()));
-        emit pkcs11Shutdown();
-        return;
+        Q_EMIT pkcs11Error(QString("PKCS11 error: %1").arg(str.c_str()));
+        stop();
+        co_return;
     }
 
     // proto version
-    [[maybe_unused]] auto ver = sock.recvIntLE16();
-    // library info
-    PKCS11::LibraryInfo info;
-    info.cryptokiVersion.major = sock.recvInt8();
-    info.cryptokiVersion.minor = sock.recvInt8();
-    sock.recvData(& info.manufacturerID, 32);
-    info.flags = sock.recvIntLE64();
-    sock.recvData(& info.libraryDescription, 32);
-    info.libraryVersion.major = sock.recvInt8();
-    info.libraryVersion.minor = sock.recvInt8();
-    auto updateTokensTime = Tools::TimePoint(std::chrono::seconds(1));
-
-    while(true) {
-        if(shutdown) {
-            break;
-        }
-
-        if(updateTokensTime.check()) {
-            updateTokens();
-        }
-
-        std::this_thread::sleep_for(350ms);
+    [[maybe_unused]] auto ver = co_await async_recv_le16();
+    if(ver != 1) {
+        Application::error("{}: {}: failed, ver: {:#04x}", __FUNCTION__, "version", ver);
+        Q_EMIT pkcs11Error("PKCS11 initialization failed");
+        stop();
+        co_return;
     }
 
-    emit pkcs11Shutdown();
+    // library info
+    PKCS11::LibraryInfo info;
+    info.cryptokiVersion.major = co_await async_recv_byte();
+    info.cryptokiVersion.minor = co_await async_recv_byte();
+
+    co_await async_recv_buf(info.manufacturerID, sizeof(info.manufacturerID));
+    info.flags = co_await async_recv_le64();
+    co_await async_recv_buf(info.libraryDescription, sizeof(info.libraryDescription));
+
+    info.libraryVersion.major = co_await async_recv_byte();
+    info.libraryVersion.minor = co_await async_recv_byte();
+
+    // update tokens timer
+    asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
+
+    co_return;
 }
 
-// FIXME
-std::list<Pkcs11Token> Pkcs11Client::getTokens(void) const {
-    std::scoped_lock guard{ lock };
-    return tokens;
+asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
+    bool success = false;
+    try {
+        for(;;) {
+            asio::steady_timer timer(ioc_, std::chrono::seconds(1));
+            co_await timer.async_wait(asio::use_awaitable);
+            co_await updateTokens();
+        }
+    } catch (const boost::system::system_error& err) {
+        auto ec = err.code();
+        if(ec != asio::error::operation_aborted) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "timer", ec.value(), ec.message());
+        }
+    } catch (const std::exception& err) {
+        Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
+        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> { stop(); co_return; }, asio::detached);
+    }
 }
 
-bool Pkcs11Client::updateTokens(void) {
-    std::scoped_lock guard{ lock };
-    sock.sendIntLE16(Pkcs11Op::GetSlots);
-    sock.sendInt8(1 /* bool tokenPresentOnly */);
-    sock.sendFlush();
+asio::awaitable<void> Pkcs11Client::updateTokens(void) {
+    co_await async_send_le16(Pkcs11Op::GetSlots);
+    co_await async_send_byte(1 /* bool tokenPresentOnly */);
+
     // client reply
     // <CMD16> - cmd id
     // <LEN16> - slots count
     // <ID64> - slot id
     // <DATA> slot info struct
     // <DATA> token info struct
-    auto cmd = sock.recvIntLE16();
+    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::GetSlots) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
-        return false;
+        throw pkcs11_error(NS_FuncNameS);
     }
 
     // slot counts
-    uint16_t counts = sock.recvIntLE16();
+    uint16_t counts = co_await async_recv_le16();
     std::list<Pkcs11Token> newTokens;
 
     while(counts--) {
-        auto slotId = sock.recvIntLE64();
-        PKCS11::SlotInfo slotInfo;
+        auto slotId = co_await async_recv_le64();
 
-        if(sock.recvInt8()) {
-            sock.recvData(slotInfo.slotDescription, 64);
-            sock.recvData(slotInfo.manufacturerID, 32);
-            slotInfo.flags = sock.recvIntLE64();
-            slotInfo.hardwareVersion.major = sock.recvInt8();
-            slotInfo.hardwareVersion.minor = sock.recvInt8();
-            slotInfo.firmwareVersion.major = sock.recvInt8();
-            slotInfo.firmwareVersion.minor = sock.recvInt8();
+        PKCS11::SlotInfo slotInfo;
+        auto slotValid = co_await async_recv_byte();
+
+        if(slotValid) {
+            co_await async_recv_buf(slotInfo.slotDescription, sizeof(slotInfo.slotDescription));
+            co_await async_recv_buf(slotInfo.manufacturerID, sizeof(slotInfo.manufacturerID));
+            slotInfo.flags = co_await async_recv_le64();
+            slotInfo.hardwareVersion.major = co_await async_recv_byte();
+            slotInfo.hardwareVersion.minor = co_await async_recv_byte();
+            slotInfo.firmwareVersion.major = co_await async_recv_byte();
+            slotInfo.firmwareVersion.minor = co_await async_recv_byte();
         }
 
         PKCS11::TokenInfo tokenInfo;
+        auto tokenValid = co_await async_recv_byte();
 
-        if(sock.recvInt8()) {
-            sock.recvData(tokenInfo.label, 32);
-            sock.recvData(tokenInfo.manufacturerID, 32);
-            sock.recvData(tokenInfo.model, 16);
-            sock.recvData(tokenInfo.serialNumber, 16);
-            tokenInfo.flags = sock.recvIntLE64();
-            tokenInfo.ulMaxSessionCount = sock.recvIntLE64();
-            tokenInfo.ulSessionCount = sock.recvIntLE64();
-            tokenInfo.ulMaxRwSessionCount = sock.recvIntLE64();
-            tokenInfo.ulRwSessionCount = sock.recvIntLE64();
-            tokenInfo.ulMaxPinLen = sock.recvIntLE64();
-            tokenInfo.ulMinPinLen = sock.recvIntLE64();
-            tokenInfo.ulTotalPublicMemory = sock.recvIntLE64();
-            tokenInfo.ulFreePublicMemory = sock.recvIntLE64();
-            tokenInfo.ulTotalPrivateMemory = sock.recvIntLE64();
-            tokenInfo.ulFreePrivateMemory = sock.recvIntLE64();
-            tokenInfo.hardwareVersion.major = sock.recvInt8();
-            tokenInfo.hardwareVersion.minor = sock.recvInt8();
-            tokenInfo.firmwareVersion.major = sock.recvInt8();
-            tokenInfo.firmwareVersion.minor = sock.recvInt8();
-            sock.recvData(tokenInfo.utcTime, 16);
+        if(tokenValid) {
+            co_await async_recv_buf(tokenInfo.label, sizeof(tokenInfo.label));
+            co_await async_recv_buf(tokenInfo.manufacturerID, sizeof(tokenInfo.manufacturerID));
+            co_await async_recv_buf(tokenInfo.model, sizeof(tokenInfo.model));
+            co_await async_recv_buf(tokenInfo.serialNumber, sizeof(tokenInfo.serialNumber));
+            tokenInfo.flags = co_await async_recv_le64();
+            tokenInfo.ulMaxSessionCount = co_await async_recv_le64();
+            tokenInfo.ulSessionCount = co_await async_recv_le64();
+            tokenInfo.ulMaxRwSessionCount = co_await async_recv_le64();
+            tokenInfo.ulRwSessionCount = co_await async_recv_le64();
+            tokenInfo.ulMaxPinLen = co_await async_recv_le64();
+            tokenInfo.ulMinPinLen = co_await async_recv_le64();
+            tokenInfo.ulTotalPublicMemory = co_await async_recv_le64();
+            tokenInfo.ulFreePublicMemory = co_await async_recv_le64();
+            tokenInfo.ulTotalPrivateMemory = co_await async_recv_le64();
+            tokenInfo.ulFreePrivateMemory = co_await async_recv_le64();
+            tokenInfo.hardwareVersion.major = co_await async_recv_byte();
+            tokenInfo.hardwareVersion.minor = co_await async_recv_byte();
+            tokenInfo.firmwareVersion.major = co_await async_recv_byte();
+            tokenInfo.firmwareVersion.minor = co_await async_recv_byte();
+            co_await async_recv_buf(tokenInfo.utcTime, sizeof(tokenInfo.utcTime));
         }
 
         newTokens.emplace_back(Pkcs11Token{ slotId, std::move(slotInfo), std::move(tokenInfo) });
@@ -218,11 +249,18 @@ bool Pkcs11Client::updateTokens(void) {
 
     if(removedTokens.size() || addedTokens.size()) {
         tokens.swap(newTokens);
-        emit pkcs11TokensChanged();
+        Q_EMIT pkcs11TokensChanged();
     }
 
-    return true;
+    co_return;
 }
+
+// FIXME
+std::list<Pkcs11Token> Pkcs11Client::getTokens(void) const {
+    std::scoped_lock guard{ lock };
+    return tokens;
+}
+
 
 std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId) {
     std::scoped_lock guard{ lock };

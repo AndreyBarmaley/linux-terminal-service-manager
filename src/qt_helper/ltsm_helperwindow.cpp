@@ -79,7 +79,7 @@ namespace LTSM::LoginHelper {
             Application::debug(DebugType::Dbus, "{}: display: {}, message: `{}'",
                                __FUNCTION__, display, msg);
 
-            emit loginFailureNotify(QString::fromStdString(msg));
+            Q_EMIT loginFailureNotify(QString::fromStdString(msg));
         }
     }
 
@@ -88,7 +88,7 @@ namespace LTSM::LoginHelper {
             Application::debug(DebugType::Dbus, "{}: display: {}, username: `{}', uid: {}",
                                __FUNCTION__, display, userName, userUid);
 
-            emit loginSuccessNotify(QString::fromStdString(userName));
+            Q_EMIT loginSuccessNotify(QString::fromStdString(userName));
         }
     }
 
@@ -98,7 +98,7 @@ namespace LTSM::LoginHelper {
             Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: {}, auto login: {}",
                                __FUNCTION__, display, login, pass.size(), static_cast<int>(autologin));
 
-            emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
+            Q_EMIT loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
         }
     }
 
@@ -107,7 +107,7 @@ namespace LTSM::LoginHelper {
             Application::debug(DebugType::Dbus, "{}: display: {}, connectorId: {:#08x}",
                                __FUNCTION__, display, connectorId);
 
-            emit pkcs11ListennerStartedNotify(connectorId);
+            Q_EMIT pkcs11ListennerStartedNotify(connectorId);
         }
     }
 
@@ -125,7 +125,7 @@ namespace LTSM::LoginHelper {
             Application::debug(DebugType::Dbus, "{}: display: {}",
                                __FUNCTION__, display);
 
-            emit connectorShutdownNotify();
+            Q_EMIT connectorShutdownNotify();
         }
     }
 

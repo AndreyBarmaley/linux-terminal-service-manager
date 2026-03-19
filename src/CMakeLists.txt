@@ -146,7 +146,7 @@ if(LTSM_BUILD_SERVER)
 
         set(LTSM_HELPER_PKCS11_AUTH ON CACHE BOOL "helper: pkcs11 auth")
 
-        CommonDefaults(SDBUS JSON SYSTEMD GNUTLS LDAP)
+        CommonDefaults(SDBUS JSON SYSTEMD GNUTLS LDAP BOOST)
 
         set(CMAKE_AUTOMOC ON)
         set(CMAKE_AUTORCC ON)

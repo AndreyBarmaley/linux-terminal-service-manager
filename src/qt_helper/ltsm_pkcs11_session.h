@@ -30,8 +30,11 @@
 #include <cinttypes>
 
 #include <QThread>
+#include <boost/asio.hpp>
 
 #include "ltsm_sockets.h"
+
+#include "ltsm_async_socket.h"
 #include "ltsm_pkcs11_wrapper.h"
 
 struct Pkcs11Token {
@@ -70,8 +73,13 @@ struct Pkcs11Cert {
     std::vector<uint8_t> objectValue;
 };
 
-class Pkcs11Client : public QThread {
+class Pkcs11Client : public QThread, protected LTSM::AsyncSocket<boost::asio::local::stream_protocol::socket> {
     Q_OBJECT
+
+    boost::asio::io_context ioc_;
+    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
+    boost::asio::strand<boost::asio::any_io_executor> send_guard_;
+    boost::asio::cancellation_signal update_tokens_;
 
     LTSM::SocketStream sock;
     QString templatePath;
@@ -96,10 +104,13 @@ class Pkcs11Client : public QThread {
 
   protected:
     void run(void) override;
+    void stop(void);
 
-    bool updateTokens(void);
+    boost::asio::awaitable<void> remoteConnect(void);
+    boost::asio::awaitable<void> updateTokens(void);
+    boost::asio::awaitable<void> updateTokensTimer(void);
 
-  signals:
+  Q_SIGNALS:
     void pkcs11Error(const QString &);
     void pkcs11Shutdown(void);
     void pkcs11TokensChanged(void);

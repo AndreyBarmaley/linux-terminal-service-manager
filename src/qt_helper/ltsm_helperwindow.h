@@ -33,7 +33,6 @@
 #include "ltsm_service_proxy.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
-#include "ltsm_sockets.h"
 
 namespace Ui {
     class LoginWindow;
@@ -106,7 +105,7 @@ namespace LTSM::LoginHelper {
         DBusProxy(int display);
         ~DBusProxy();
 
-      signals:
+      Q_SIGNALS:
         void loginFailureNotify(const QString &);
         void loginSuccessNotify(const QString &);
         void loginPasswordChangedNotify(const QString, const QString &, bool);
@@ -121,7 +120,7 @@ namespace LTSM::LoginHelper {
         explicit LoginWindow(QWidget * parent = 0);
         ~LoginWindow();
 
-      protected slots:
+      protected Q_SLOTS:
         void loginClicked(void);
         void domainIndexChanged(int);
         void usernameIndexChanged(int);
