@@ -67,6 +67,7 @@ namespace LTSM {
                 co_return;
             } catch(const system::system_error& ec) {
                 if(it == attempts) {
+                    Application::warning("{}: {} failed, path: {}, attempts: {}", __FUNCTION__, "connect", path, attempts);
                     throw;
                 }
             }
