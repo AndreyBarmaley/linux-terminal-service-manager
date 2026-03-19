@@ -96,7 +96,7 @@ namespace LTSM {
         template<typename Buffer>
         [[nodiscard]] boost::asio::awaitable<void> async_send_buf(Buffer&& buf) const {
             co_await boost::asio::async_write(sock_, std::forward<Buffer>(buf),
-                                                  boost::asio::transfer_all(), boost::asio::use_awaitable);
+                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) const {

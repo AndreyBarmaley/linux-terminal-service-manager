@@ -154,10 +154,10 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     info.libraryVersion.minor = co_await async_recv_byte();
 
     Application::debug(DebugType::Pkcs11, "{}: cryptoki version: {}.{}",
-         __FUNCTION__, static_cast<uint16_t>(info.cryptokiVersion.major), static_cast<uint16_t>(info.cryptokiVersion.minor));
+                       __FUNCTION__, static_cast<uint16_t>(info.cryptokiVersion.major), static_cast<uint16_t>(info.cryptokiVersion.minor));
 
     Application::debug(DebugType::Pkcs11, "{}: library version: {}.{}",
-         __FUNCTION__, static_cast<uint16_t>(info.libraryVersion.major), static_cast<uint16_t>(info.libraryVersion.minor));
+                       __FUNCTION__, static_cast<uint16_t>(info.libraryVersion.major), static_cast<uint16_t>(info.libraryVersion.minor));
 
     // update tokens timer
     asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
@@ -167,6 +167,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
 asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
     bool success = false;
+
     try {
         for(;;) {
             asio::steady_timer timer(ioc_, std::chrono::seconds(1));
@@ -174,19 +175,22 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
             co_await send_lock_.async_lock(asio::use_awaitable);
             auto success = co_await updateTokens();
             send_lock_.unlock();
+
             if(success) {
                 Q_EMIT pkcs11TokensChanged();
             }
         }
-    } catch (const boost::system::system_error& err) {
+    } catch(const boost::system::system_error& err) {
         auto ec = err.code();
+
         if(ec != asio::error::operation_aborted) {
             Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "timer", ec.value(), ec.message());
         }
-    } catch (const std::exception& err) {
+    } catch(const std::exception& err) {
         Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
         asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> { stop(); co_return; }, asio::detached);
     }
+
     send_lock_.unlock();
 }
 
@@ -397,7 +401,7 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
 }
 
 binary_buf Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
-        const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
+                                  const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
     std::promise<binary_buf> promise;
     auto res = promise.get_future();

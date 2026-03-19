@@ -80,7 +80,7 @@ using binary_buf = std::vector<uint8_t>;
 class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncSocket<boost::asio::local::stream_protocol::socket> {
     Q_OBJECT
 
-    boost::asio::io_context& ioc_;
+    boost::asio::io_context & ioc_;
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
     boost::asio::cancellation_signal update_tokens_;
 
@@ -98,9 +98,9 @@ class Pkcs11Client : public QThread, protected boost::base_from_member<boost::as
     ListMechanisms getMechanisms(uint64_t slotId) const;
 
     binary_buf signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
-                                  const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+                        const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
     binary_buf decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
-                                     const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+                           const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
   protected:
     void run(void) override;
@@ -112,9 +112,9 @@ class Pkcs11Client : public QThread, protected boost::base_from_member<boost::as
     boost::asio::awaitable<ListCertificates> loadCertificates(uint64_t slotId) const;
     boost::asio::awaitable<ListMechanisms> loadMechanisms(uint64_t slotId) const;
     boost::asio::awaitable<binary_buf> loadSignData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
-                                  const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+            const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
     boost::asio::awaitable<binary_buf> loadDecryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
-                                     const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+            const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
   Q_SIGNALS:
     void pkcs11Error(const QString &);
