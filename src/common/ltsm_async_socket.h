@@ -26,11 +26,46 @@
 
 #include <string>
 #include <vector>
+#include <cinttypes>
+#include <type_traits>
 
 #include <boost/asio.hpp>
 #include <boost/endian.hpp>
 
+template <typename T>
+inline constexpr bool always_false_v = false;
+
+template <typename T, typename = void>
+struct has_data_size : std::false_type {};
+
+template <typename T>
+struct has_data_size<T, std::void_t<
+decltype(std::declval<T>().data()),
+decltype(std::declval<T>().size())>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool has_data_size_v = has_data_size<T>::value;
+
 namespace LTSM {
+
+    template<typename T>
+    boost::asio::const_buffer value_to_buffer(const T & val) {
+        using DecayedT = std::decay_t<T>;
+
+        if constexpr(std::is_integral_v<DecayedT>) {
+            return boost::asio::const_buffer(&val, sizeof(val));
+        } else if constexpr(std::is_same_v<DecayedT, boost::asio::const_buffer>) {
+                return val;
+        } else if constexpr(has_data_size_v<DecayedT>) {
+            if constexpr(sizeof(typename DecayedT::value_type) == 1) {
+                return boost::asio::const_buffer(val.data(), val.size());
+            } else {
+                static_assert(always_false_v<T>, "invalid value type for has_data_size");
+            }
+        } else {
+            static_assert(always_false_v<T>, "invalid type for asio::const_buffer");
+        }
+    }
 
     template<typename Socket>
     class AsyncSocket {
@@ -55,6 +90,7 @@ namespace LTSM {
         explicit AsyncSocket(const boost::asio::any_io_executor & ex) : sock_{ex} {}
         explicit AsyncSocket(Socket && sock) : sock_{std::forward<Socket>(sock)} {}
 
+        // RECV
         template<typename Ptr>
         [[nodiscard]] boost::asio::awaitable<void> async_recv_buf(Ptr ptr, size_t len) const {
             if(len) {
@@ -75,22 +111,6 @@ namespace LTSM {
             }
 
             co_return buf;
-        }
-
-        template<typename Buffer>
-        [[nodiscard]] boost::asio::awaitable<void> async_send_buf(const Buffer& buf) const {
-            co_await boost::asio::async_write(sock_, buf,
-                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
-        }
-
-        template<typename Buffer>
-        [[nodiscard]] boost::asio::awaitable<void> async_send_buf(Buffer&& buf) const {
-            co_await boost::asio::async_write(sock_, std::forward<Buffer>(buf),
-                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
-        }
-
-        [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) const {
-            co_await async_send<uint8_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint8_t> async_recv_byte(void) const {
@@ -125,6 +145,30 @@ namespace LTSM {
         [[nodiscard]] boost::asio::awaitable<uint64_t> async_recv_be64(void) const {
             auto val = co_await async_recv<uint64_t>();
             co_return boost::endian::big_to_native(val);
+        }
+
+        // SEND
+        template<typename Buffer>
+        [[nodiscard]] boost::asio::awaitable<void> async_send_buf(const Buffer& buf) const {
+            co_await boost::asio::async_write(sock_, buf,
+                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+        }
+
+        template<typename Buffer>
+        [[nodiscard]] boost::asio::awaitable<void> async_send_buf(Buffer&& buf) const {
+            co_await boost::asio::async_write(sock_, std::forward<Buffer>(buf),
+                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+        }
+
+        template <typename... Values>
+        [[nodiscard]] boost::asio::awaitable<void> async_send_values(const Values&... vals) const {
+            auto list = { value_to_buffer(vals)... };
+            co_await boost::asio::async_write(sock_, list,
+                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+        }
+
+        [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) const {
+            co_await async_send<uint8_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_le16(uint16_t val) const {
