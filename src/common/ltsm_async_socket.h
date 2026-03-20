@@ -38,32 +38,16 @@ namespace LTSM {
 
       protected:
         template<typename T>
-        [[nodiscard]] boost::asio::awaitable<T> async_recv_le(void) const {
+        [[nodiscard]] boost::asio::awaitable<T> async_recv(void) const {
             T val = 0;
             co_await boost::asio::async_read(sock_, boost::asio::buffer(&val, sizeof(T)),
                                              boost::asio::transfer_exactly(sizeof(T)), boost::asio::use_awaitable);
-            co_return boost::endian::little_to_native(val);
+            co_return val;
         }
 
         template<typename T>
-        [[nodiscard]] boost::asio::awaitable<T> async_recv_be(void) const {
-            T val = 0;
-            co_await boost::asio::async_read(sock_, boost::asio::buffer(&val, sizeof(T)),
-                                             boost::asio::transfer_exactly(sizeof(T)), boost::asio::use_awaitable);
-            co_return boost::endian::big_to_native(val);
-        }
-
-        template<typename T>
-        [[nodiscard]] boost::asio::awaitable<void> async_send_le(T val) const {
-            boost::endian::native_to_little_inplace(val);
-            co_await boost::asio::async_write(sock_, boost::asio::buffer(&val, sizeof(T)),
-                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
-        }
-
-        template<typename T>
-        [[nodiscard]] boost::asio::awaitable<void> async_send_be(T val) const {
-            boost::endian::native_to_big_inplace(val);
-            co_await boost::asio::async_write(sock_, boost::asio::buffer(&val, sizeof(T)),
+        [[nodiscard]] boost::asio::awaitable<void> async_send(const T & val) const {
+            co_await boost::asio::async_write(sock_, boost::asio::const_buffer(&val, sizeof(T)),
                                               boost::asio::transfer_all(), boost::asio::use_awaitable);
         }
 
@@ -94,69 +78,83 @@ namespace LTSM {
         }
 
         template<typename Buffer>
+        [[nodiscard]] boost::asio::awaitable<void> async_send_buf(const Buffer& buf) const {
+            co_await boost::asio::async_write(sock_, buf,
+                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+        }
+
+        template<typename Buffer>
         [[nodiscard]] boost::asio::awaitable<void> async_send_buf(Buffer&& buf) const {
             co_await boost::asio::async_write(sock_, std::forward<Buffer>(buf),
                                               boost::asio::transfer_all(), boost::asio::use_awaitable);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) const {
-            co_await boost::asio::async_write(sock_, boost::asio::buffer(&val, 1),
-                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+            co_await async_send<uint8_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint8_t> async_recv_byte(void) const {
-            uint8_t val;
-            co_await boost::asio::async_read(sock_, boost::asio::buffer(&val, 1),
-                                             boost::asio::transfer_exactly(1), boost::asio::use_awaitable);
-            co_return val;
+            co_return co_await async_recv<uint8_t>();
         }
 
         [[nodiscard]] boost::asio::awaitable<uint16_t> async_recv_le16(void) const {
-            co_return co_await async_recv_le<uint16_t>();
+            auto val = co_await async_recv<uint16_t>();
+            co_return boost::endian::little_to_native(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint32_t> async_recv_le32(void) const {
-            co_return co_await async_recv_le<uint32_t>();
+            auto val = co_await async_recv<uint32_t>();
+            co_return boost::endian::little_to_native(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint64_t> async_recv_le64(void) const {
-            co_return co_await async_recv_le<uint64_t>();
+            auto val = co_await async_recv<uint64_t>();
+            co_return boost::endian::little_to_native(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint16_t> async_recv_be16(void) const {
-            co_return co_await async_recv_be<uint16_t>();
+            auto val = co_await async_recv<uint16_t>();
+            co_return boost::endian::big_to_native(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint32_t> async_recv_be32(void) const {
-            co_return co_await async_recv_be<uint32_t>();
+            auto val = co_await async_recv<uint32_t>();
+            co_return boost::endian::big_to_native(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint64_t> async_recv_be64(void) const {
-            co_return co_await async_recv_be<uint64_t>();
+            auto val = co_await async_recv<uint64_t>();
+            co_return boost::endian::big_to_native(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_le16(uint16_t val) const {
-            co_await async_send_le<uint16_t>(val);
+            boost::endian::native_to_little_inplace(val);
+            co_await async_send<uint16_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_le32(uint32_t val) const {
-            co_await async_send_le<uint32_t>(val);
+            boost::endian::native_to_little_inplace(val);
+            co_await async_send<uint32_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_le64(uint64_t val) const {
-            co_await async_send_le<uint64_t>(val);
+            boost::endian::native_to_little_inplace(val);
+            co_await async_send<uint64_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_be16(uint16_t val) const {
-            co_await async_send_be<uint16_t>(val);
+            boost::endian::native_to_big_inplace(val);
+            co_await async_send<uint16_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_be32(uint32_t val) const {
-            co_await async_send_be<uint32_t>(val);
+            boost::endian::native_to_big_inplace(val);
+            co_await async_send<uint32_t>(val);
         }
 
         [[nodiscard]] boost::asio::awaitable<void> async_send_be64(uint64_t val) const {
-            co_await async_send_be<uint64_t>(val);
+            boost::endian::native_to_big_inplace(val);
+            co_await async_send<uint64_t>(val);
         }
 
         const Socket & socket(void) const {
