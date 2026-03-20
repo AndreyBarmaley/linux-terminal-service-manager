@@ -170,7 +170,7 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
 
     try {
         for(;;) {
-            asio::steady_timer timer(ioc_, std::chrono::seconds(1));
+            asio::steady_timer timer(ioc_, std::chrono::milliseconds(450));
             co_await timer.async_wait(asio::use_awaitable);
             co_await send_lock_.async_lock(asio::use_awaitable);
             auto success = co_await updateTokens();
