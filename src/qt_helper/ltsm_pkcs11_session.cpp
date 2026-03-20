@@ -97,9 +97,9 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     uint16_t cmd, err;
 
     try {
-        co_await async_send_le16(Pkcs11Op::Init);
-        // send proto ver
-        co_await async_send_le16(1);
+        co_await async_send_values(
+            endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::Init)),
+            endian::native_to_little(static_cast<uint16_t>(1 /* proto version */)));
 
         // client reply
         cmd = co_await async_recv_le16();
@@ -195,8 +195,9 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
 }
 
 asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
-    co_await async_send_le16(Pkcs11Op::GetSlots);
-    co_await async_send_byte(1 /* bool tokenPresentOnly */);
+    co_await async_send_values(
+        endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlots)),
+        static_cast<uint8_t>(1 /* bool tokenPresentOnly */));
 
     // client reply
     // <CMD16> - cmd id
@@ -322,9 +323,10 @@ ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
 
 asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId) const {
 
-    co_await async_send_le16(Pkcs11Op::GetSlotCertificates);
-    co_await async_send_le64(slotId);
-    co_await async_send_byte(1 /* bool havePublicPrivateKeys */);
+    co_await async_send_values(
+        endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlotCertificates)),
+        endian::native_to_little(slotId),
+        static_cast<uint8_t>(1 /* bool havePublicPrivateKeys */));
 
     ListCertificates certs;
 
@@ -370,8 +372,9 @@ ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
 
 asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) const {
 
-    co_await async_send_le16(Pkcs11Op::GetSlotMechanisms);
-    co_await async_send_le64(slotId);
+    co_await async_send_values(
+        endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlotMechanisms)),
+        endian::native_to_little(slotId));
 
     ListMechanisms res;
 
@@ -420,15 +423,13 @@ binary_buf Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
 asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    co_await async_send_le16(Pkcs11Op::SignData);
-    co_await async_send_le64(slotId);
-    co_await async_send_le64(mechType);
-    co_await async_send_le16(pin.size());
-    co_await async_send_buf(asio::buffer(pin));
-    co_await async_send_le16(certId.size());
-    co_await async_send_buf(asio::buffer(certId));
-    co_await async_send_le32(len);
-    co_await async_send_buf(asio::buffer(data, len));
+    co_await async_send_values(
+        endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::SignData)),
+        endian::native_to_little(slotId),
+        endian::native_to_little(mechType),
+        endian::native_to_little(static_cast<uint16_t>(pin.size())), pin,
+        endian::native_to_little(static_cast<uint16_t>(certId.size())), certId,
+        endian::native_to_little(static_cast<uint32_t>(len)), asio::const_buffer(data, len));
 
     // client reply
     auto cmd = co_await async_recv_le16();
@@ -468,15 +469,13 @@ std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::strin
 asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    co_await async_send_le16(Pkcs11Op::DecryptData);
-    co_await async_send_le64(slotId);
-    co_await async_send_le64(mechType);
-    co_await async_send_le16(pin.size());
-    co_await async_send_buf(asio::buffer(pin));
-    co_await async_send_le16(certId.size());
-    co_await async_send_buf(asio::buffer(certId));
-    co_await async_send_le32(len);
-    co_await async_send_buf(asio::buffer(data, len));
+    co_await async_send_values(
+        endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::DecryptData)),
+        endian::native_to_little(slotId),
+        endian::native_to_little(mechType),
+        endian::native_to_little(static_cast<uint16_t>(pin.size())), pin,
+        endian::native_to_little(static_cast<uint16_t>(certId.size())), certId,
+        endian::native_to_little(static_cast<uint32_t>(len)), asio::const_buffer(data, len));
 
     // client reply
     auto cmd = co_await async_recv_le16();
