@@ -49,16 +49,22 @@ decltype(std::declval<T>().size())>> : std::true_type {};
 template <typename T>
 inline constexpr bool has_data_size_v = has_data_size<T>::value;
 
+template <typename T>
+inline constexpr bool is_mutable_buffer_v = boost::asio::is_mutable_buffer_sequence<T>::value;
+
+template <typename T>
+inline constexpr bool is_const_buffer_v = boost::asio::is_const_buffer_sequence<T>::value;
+
 namespace LTSM {
 
     template<typename T>
-    auto value_to_buffer(T & val) {
+    boost::asio::mutable_buffer value_to_buffer(T&& val) {
         using DecayedT = std::decay_t<T>;
 
         if constexpr(std::is_integral_v<DecayedT>) {
             return boost::asio::buffer(&val, sizeof(val));
-        } else if constexpr(std::is_same_v<DecayedT, boost::asio::buffer>) {
-                return val;
+        } else if constexpr(is_mutable_buffer_v<DecayedT>) {
+                return std::move(val);
         } else if constexpr(has_data_size_v<DecayedT>) {
             if constexpr(sizeof(typename DecayedT::value_type) == 1) {
                 return boost::asio::buffer(val.data(), val.size());
@@ -71,12 +77,12 @@ namespace LTSM {
     }
 
     template<typename T>
-    auto value_to_const_buffer(const T & val) {
+    boost::asio::const_buffer value_to_const_buffer(const T & val) {
         using DecayedT = std::decay_t<T>;
 
         if constexpr(std::is_integral_v<DecayedT>) {
             return boost::asio::const_buffer(&val, sizeof(val));
-        } else if constexpr(std::is_same_v<DecayedT, boost::asio::const_buffer>) {
+        } else if constexpr(is_const_buffer_v<DecayedT>) {
                 return val;
         } else if constexpr(has_data_size_v<DecayedT>) {
             if constexpr(sizeof(typename DecayedT::value_type) == 1) {
@@ -135,47 +141,12 @@ namespace LTSM {
             co_return buf;
         }
 
-        // const auto & [ val64, val16, str ] = co_await async_recv_values<uint64_t, uint16_t, std::string>({16});
+        // async_read_values(val1&, val2&, ... valX&)
         template <typename... Values>
-        [[nodiscard]] boost::asio::awaitable<std::tuple<Values...>> async_recv_values(std::initializer_list<size_t> sizes) const {
-            auto tuple = std::tuple<Values...>{};
-            auto itsz = sizes.begin();
-            std::apply([&](auto&... val) {
-                ([&]() {
-                    using T = std::decay_t<decltype(val)>;
-                    if constexpr(has_data_size_v<T>) {
-//                        if(itsz != sizes.end()) {
-//                            val.resize(*itsz++);
-//                        }
-                    }
-                }, ...);
-            }, tuple);
-        
-            boost::container::small_vector<boost::asio::mutable_buffer, sizeof...(Values)> buffers;
-            std::apply([&](auto&... val) {
-                (buffers.emplace_back(value_to_buffer(val)), ...);
-            }, tuple);
-
-/*
-
-        if constexpr(std::is_integral_v<DecayedT>) {
-            return boost::asio::buffer(&val, sizeof(val));
-        } else if constexpr(std::is_same_v<DecayedT, boost::asio::buffer>) {
-                return val;
-        } else if constexpr(has_data_size_v<DecayedT>) {
-            if constexpr(sizeof(typename DecayedT::value_type) == 1) {
-                return boost::asio::buffer(val.data(), val.size());
-            } else {
-                static_assert(always_false_v<T>, "invalid value type for has_data_size");
-            }
-        } else {
-            static_assert(always_false_v<T>, "invalid type for asio::const_buffer");
-        }
-*/
-
-            co_await boost::asio::async_read(sock_, buffers,
+        [[nodiscard]] boost::asio::awaitable<void> async_recv_values(Values&&... vals) const {
+            auto list = { value_to_buffer(std::forward<Values>(vals))... };
+            co_await boost::asio::async_read(sock_, list,
                                               boost::asio::transfer_all(), boost::asio::use_awaitable);
-            co_return tuple;
         }
 
         [[nodiscard]] boost::asio::awaitable<uint8_t> async_recv_byte(void) const {
