@@ -101,9 +101,10 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::Init)),
             endian::native_to_little(static_cast<uint16_t>(1 /* proto version */)));
 
-        // client reply
-        cmd = co_await async_recv_le16();
-        err = co_await async_recv_le16();
+        // client reply: cmd16, err16
+        co_await async_recv_values(cmd, err);
+        endian::little_to_native_inplace(cmd);
+        endian::little_to_native_inplace(err);
     } catch(const std::exception & exp) {
         Application::error("{}: exception: {}", NS_FuncNameV, "PKCS11 initialization failed");
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
@@ -140,24 +141,26 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
     // library info
     PKCS11::LibraryInfo info;
-    info.cryptokiVersion.major = co_await async_recv_byte();
-    info.cryptokiVersion.minor = co_await async_recv_byte();
-
     assert(sizeof(info.manufacturerID) == 32);
     assert(sizeof(info.libraryDescription) == 32);
 
-    co_await async_recv_buf(info.manufacturerID, sizeof(info.manufacturerID));
-    info.flags = co_await async_recv_le64();
-    co_await async_recv_buf(info.libraryDescription, sizeof(info.libraryDescription));
+    co_await async_recv_values(
+        info.cryptokiVersion.major,
+        info.cryptokiVersion.minor,
+        asio::buffer(info.manufacturerID, sizeof(info.manufacturerID)),
+        info.flags,
+        asio::buffer(info.libraryDescription, sizeof(info.libraryDescription)),
+        info.libraryVersion.major,
+        info.libraryVersion.minor
+    );
 
-    info.libraryVersion.major = co_await async_recv_byte();
-    info.libraryVersion.minor = co_await async_recv_byte();
+    endian::little_to_native_inplace(info.flags);
 
     Application::debug(DebugType::Pkcs11, "{}: cryptoki version: {}.{}",
-                       __FUNCTION__, static_cast<uint16_t>(info.cryptokiVersion.major), static_cast<uint16_t>(info.cryptokiVersion.minor));
+                       __FUNCTION__, info.cryptokiVersion.major, info.cryptokiVersion.minor);
 
     Application::debug(DebugType::Pkcs11, "{}: library version: {}.{}",
-                       __FUNCTION__, static_cast<uint16_t>(info.libraryVersion.major), static_cast<uint16_t>(info.libraryVersion.minor));
+                       __FUNCTION__, info.libraryVersion.major, info.libraryVersion.minor);
 
     // update tokens timer
     asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
@@ -202,10 +205,13 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     // client reply
     // <CMD16> - cmd id
     // <LEN16> - slots count
-    // <ID64> - slot id
-    // <DATA> slot info struct
-    // <DATA> token info struct
-    auto cmd = co_await async_recv_le16();
+    uint16_t cmd, counts;
+    co_await async_recv_values(cmd, counts);
+
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(counts);
+
+//    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::GetSlots) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
@@ -213,60 +219,86 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     }
 
     // slot counts
-    uint16_t counts = co_await async_recv_le16();
+//    uint16_t counts = co_await async_recv_le16();
 
     ListTokens newTokens;
     Application::debug(DebugType::Pkcs11, "{}: tokens counts: {}", __FUNCTION__, counts);
 
     while(counts--) {
-        auto slotId = co_await async_recv_le64();
+        // <ID64> - slot id
+        // <ID8> - valid slot
+        // <DATA> slot info struct
+        // <ID8> - valid token
+        // <DATA> token info struct
 
+        uint64_t slotId; uint8_t slotValid;
+        co_await async_recv_values(slotId, slotValid);
+
+        endian::little_to_native_inplace(slotId);
         PKCS11::SlotInfo slotInfo;
-        auto slotValid = co_await async_recv_byte();
-
-        assert(sizeof(slotInfo.slotDescription) == 64);
-        assert(sizeof(slotInfo.manufacturerID) == 32);
 
         if(slotValid) {
-            co_await async_recv_buf(slotInfo.slotDescription, sizeof(slotInfo.slotDescription));
-            co_await async_recv_buf(slotInfo.manufacturerID, sizeof(slotInfo.manufacturerID));
-            slotInfo.flags = co_await async_recv_le64();
-            slotInfo.hardwareVersion.major = co_await async_recv_byte();
-            slotInfo.hardwareVersion.minor = co_await async_recv_byte();
-            slotInfo.firmwareVersion.major = co_await async_recv_byte();
-            slotInfo.firmwareVersion.minor = co_await async_recv_byte();
+            static_assert(sizeof(slotInfo.slotDescription) == 64);
+            static_assert(sizeof(slotInfo.manufacturerID) == 32);
+            static_assert(sizeof(slotInfo.flags) == sizeof(uint64_t));
+
+            co_await async_recv_values(
+                asio::buffer(slotInfo.slotDescription, sizeof(slotInfo.slotDescription)),
+                asio::buffer(slotInfo.manufacturerID, sizeof(slotInfo.manufacturerID)),
+                slotInfo.flags,
+                slotInfo.hardwareVersion.major,
+                slotInfo.hardwareVersion.minor,
+                slotInfo.firmwareVersion.major,
+                slotInfo.firmwareVersion.minor
+            );
+
+            endian::little_to_native_inplace(slotInfo.flags);
         }
 
         PKCS11::TokenInfo tokenInfo;
         auto tokenValid = co_await async_recv_byte();
 
-        assert(sizeof(tokenInfo.label) == 32);
-        assert(sizeof(tokenInfo.manufacturerID) == 32);
-        assert(sizeof(tokenInfo.model) == 16);
-        assert(sizeof(tokenInfo.serialNumber) == 16);
-        assert(sizeof(tokenInfo.utcTime) == 16);
-
         if(tokenValid) {
-            co_await async_recv_buf(tokenInfo.label, sizeof(tokenInfo.label));
-            co_await async_recv_buf(tokenInfo.manufacturerID, sizeof(tokenInfo.manufacturerID));
-            co_await async_recv_buf(tokenInfo.model, sizeof(tokenInfo.model));
-            co_await async_recv_buf(tokenInfo.serialNumber, sizeof(tokenInfo.serialNumber));
-            tokenInfo.flags = co_await async_recv_le64();
-            tokenInfo.ulMaxSessionCount = co_await async_recv_le64();
-            tokenInfo.ulSessionCount = co_await async_recv_le64();
-            tokenInfo.ulMaxRwSessionCount = co_await async_recv_le64();
-            tokenInfo.ulRwSessionCount = co_await async_recv_le64();
-            tokenInfo.ulMaxPinLen = co_await async_recv_le64();
-            tokenInfo.ulMinPinLen = co_await async_recv_le64();
-            tokenInfo.ulTotalPublicMemory = co_await async_recv_le64();
-            tokenInfo.ulFreePublicMemory = co_await async_recv_le64();
-            tokenInfo.ulTotalPrivateMemory = co_await async_recv_le64();
-            tokenInfo.ulFreePrivateMemory = co_await async_recv_le64();
-            tokenInfo.hardwareVersion.major = co_await async_recv_byte();
-            tokenInfo.hardwareVersion.minor = co_await async_recv_byte();
-            tokenInfo.firmwareVersion.major = co_await async_recv_byte();
-            tokenInfo.firmwareVersion.minor = co_await async_recv_byte();
-            co_await async_recv_buf(tokenInfo.utcTime, sizeof(tokenInfo.utcTime));
+            assert(sizeof(tokenInfo.label) == 32);
+            assert(sizeof(tokenInfo.manufacturerID) == 32);
+            assert(sizeof(tokenInfo.model) == 16);
+            assert(sizeof(tokenInfo.serialNumber) == 16);
+            assert(sizeof(tokenInfo.utcTime) == 16);
+
+            co_await async_recv_values(
+                asio::buffer(tokenInfo.label, sizeof(tokenInfo.label)),
+                asio::buffer(tokenInfo.manufacturerID, sizeof(tokenInfo.manufacturerID)),
+                asio::buffer(tokenInfo.model, sizeof(tokenInfo.model)),
+                asio::buffer(tokenInfo.serialNumber, sizeof(tokenInfo.serialNumber)),
+                tokenInfo.flags,
+                tokenInfo.ulMaxSessionCount,
+                tokenInfo.ulSessionCount,
+                tokenInfo.ulMaxRwSessionCount,
+                tokenInfo.ulRwSessionCount,
+                tokenInfo.ulMaxPinLen,
+                tokenInfo.ulMinPinLen,
+                tokenInfo.ulTotalPublicMemory,
+                tokenInfo.ulFreePublicMemory,
+                tokenInfo.ulTotalPrivateMemory,
+                tokenInfo.ulFreePrivateMemory,
+                tokenInfo.hardwareVersion.major,
+                tokenInfo.hardwareVersion.minor,
+                tokenInfo.firmwareVersion.major,
+                tokenInfo.firmwareVersion.minor,
+                asio::buffer(tokenInfo.utcTime, sizeof(tokenInfo.utcTime))
+            );
+
+            endian::little_to_native_inplace(tokenInfo.flags);
+            endian::little_to_native_inplace(tokenInfo.ulMaxSessionCount);
+            endian::little_to_native_inplace(tokenInfo.ulSessionCount);
+            endian::little_to_native_inplace(tokenInfo.ulMaxRwSessionCount);
+            endian::little_to_native_inplace(tokenInfo.ulRwSessionCount);
+            endian::little_to_native_inplace(tokenInfo.ulMaxPinLen);
+            endian::little_to_native_inplace(tokenInfo.ulMinPinLen);
+            endian::little_to_native_inplace(tokenInfo.ulTotalPublicMemory);
+            endian::little_to_native_inplace(tokenInfo.ulFreePublicMemory);
+            endian::little_to_native_inplace(tokenInfo.ulTotalPrivateMemory);
+            endian::little_to_native_inplace(tokenInfo.ulFreePrivateMemory);
         }
 
         newTokens.emplace_back(Pkcs11Token{ slotId, std::move(slotInfo), std::move(tokenInfo) });
@@ -330,19 +362,25 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
 
     ListCertificates certs;
 
-    // client reply
-    auto cmd = co_await async_recv_le16();
+    // client reply: cmd16, counts16
+    uint16_t cmd, counts;
+    co_await async_recv_values(cmd, counts);
+
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(counts);
 
     if(cmd != Pkcs11Op::GetSlotCertificates) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         co_return certs;
     }
 
-    // certs counts
-    auto counts = co_await async_recv_le16();
     Application::debug(DebugType::Pkcs11, "{}: certs counts: {}", __FUNCTION__, counts);
 
     while(counts--) {
+        // <LEN16> - cert id len
+        // <DATA> - cert id data
+        // <LEN32> - cert data len
+        // <DATA> - cert data
         auto idLen = co_await async_recv_le16();
         auto id = co_await async_recv_buf<binary_buf>(idLen);
         auto valueLen = co_await async_recv_le32();
@@ -378,24 +416,31 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
 
     ListMechanisms res;
 
-    // client reply
-    auto cmd = co_await async_recv_le16();
+    // client reply: cmd16, counts16
+    uint16_t cmd, counts;
+    co_await async_recv_values(cmd, counts);
+
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(counts);
 
     if(cmd != Pkcs11Op::GetSlotMechanisms) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         co_return res;
     }
 
-    // certs counts
-    auto counts = co_await async_recv_le16();
     Application::debug(DebugType::Pkcs11, "{}: mechs counts: {}", __FUNCTION__, counts);
 
     while(counts--) {
-        auto id = co_await async_recv_le64();
-        auto min = co_await async_recv_le64();
-        auto max = co_await async_recv_le64();
-        auto flags = co_await async_recv_le64();
-        auto len = co_await async_recv_le16();
+        uint64_t id, min, max, flags;
+        uint16_t len;
+
+        co_await async_recv_values(id, min, max, flags, len);
+        endian::little_to_native_inplace(id);
+        endian::little_to_native_inplace(min);
+        endian::little_to_native_inplace(max);
+        endian::little_to_native_inplace(flags);
+        endian::little_to_native_inplace(len);
+
         auto name = co_await async_recv_buf<std::string>(len);
         res.emplace_back(Pkcs11Mech{ .mechId = id, .minKey = min, .maxKey = max, .flags = flags, .name = name });
     }
@@ -431,18 +476,20 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
         endian::native_to_little(static_cast<uint16_t>(certId.size())), certId,
         endian::native_to_little(static_cast<uint32_t>(len)), asio::const_buffer(data, len));
 
-    // client reply
-    auto cmd = co_await async_recv_le16();
+    // client reply: cmd16, length32
+    uint16_t cmd; uint32_t length;
+    co_await async_recv_values(cmd, length);
+
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(length);
 
     if(cmd != Pkcs11Op::SignData) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         co_return binary_buf{};
     }
 
-    // sign result length
-    auto length = co_await async_recv_le32();
-
     if(length) {
+        // sign result
         co_return co_await async_recv_buf<binary_buf>(length);
     }
 
@@ -477,18 +524,20 @@ asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const
         endian::native_to_little(static_cast<uint16_t>(certId.size())), certId,
         endian::native_to_little(static_cast<uint32_t>(len)), asio::const_buffer(data, len));
 
-    // client reply
-    auto cmd = co_await async_recv_le16();
+    // client reply: cmd16, length32
+    uint16_t cmd; uint32_t length;
+    co_await async_recv_values(cmd, length);
+
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(length);
 
     if(cmd != Pkcs11Op::DecryptData) {
         Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         co_return binary_buf{};
     }
 
-    // decrypt result length
-    auto length = co_await async_recv_le32();
-
     if(length) {
+        // decrypt result
         co_return co_await async_recv_buf<binary_buf>(length);
     }
 
