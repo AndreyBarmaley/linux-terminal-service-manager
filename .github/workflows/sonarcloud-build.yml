@@ -99,18 +99,26 @@ jobs:
       - name: Prepare LTSM coverage tests
         run: |
           echo "::group::scripts"
+          echo "info"
+          /usr/bin/id
           echo "generate certs"
           openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout ${{github.workspace}}/etc/ltsm/server.key -out ${{github.workspace}}/etc/ltsm/server.crt
           echo "copy ltsm files"
           chmod +x ${{github.workspace}}/etc/ltsm/xclients
-          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
-          echo "change groups"
-          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          chmod +x ${{github.workspace}}/etc/ltsm/xsetup
+          echo "change configs"
           sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/ltsm_session_display.json
+          sed -i -e 's|#starter|starter|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e 's|"#session:start:timeout": 3|"session:start:timeout": 7|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e 's|#helper|helper|' ${{github.workspace}}/etc/ltsm/ltsm_session_display.json
+          echo "change group"
           sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf
+          sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/etc/dbus-1/ltsm.session.display.conf
           echo "copy configs"
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
-          sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
+          sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /usr/share/dbus-1/system.d
+          sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.session.display.conf /usr/share/dbus-1/session.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
           echo "::endgroup::"
