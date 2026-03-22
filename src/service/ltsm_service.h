@@ -403,10 +403,10 @@ namespace LTSM::Manager {
 
       protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
-
         XvfbSessionPtr runNewDisplaySession(const std::string & username, const std::string & password, EnvironmentsMap && envs, OptionsMap && opts);
-        bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
-        bool checkDisplaySessionAlive(int display) const;
+
+        static bool checkDisplaySessionAlive(int display);
+        static bool checkDisplaySessionStarted(XvfbSessionPtr);
 
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);

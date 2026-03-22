@@ -62,6 +62,7 @@
 #include "ltsm_xcb_wrapper.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM::DisplaySession {
     // SessionAudio
@@ -961,14 +962,14 @@ namespace LTSM::Manager {
     }
 
     /* DBusAdaptor */
-    DBusAdaptor::DBusAdaptor(boost::asio::io_context& ctx, DBusConnectionPtr conn, const std::filesystem::path & confile)
+    DBusAdaptor::DBusAdaptor(asio::io_context& ctx, DBusConnectionPtr conn, const std::filesystem::path & confile)
         : ApplicationJsonConfig("ltsm_service", confile)
 #ifdef SDBUS_2_0_API
         , AdaptorInterfaces(*conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
         , AdaptorInterfaces(*conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_}, work_guard_{boost::asio::make_work_guard(ioc_)},
+        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_}, work_guard_{asio::make_work_guard(ioc_)},
             timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_}, dbus_conn_{std::move(conn)} {
         //
         checkConfigPathes();
@@ -989,10 +990,10 @@ namespace LTSM::Manager {
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
 
-        signals_.async_wait([this](const boost::system::error_code& ec, int signal)
+        signals_.async_wait([this](const system::error_code& ec, int signal)
         {
             // skip canceled
-            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
+            if(ec != asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
             {
                 this->stop();
             }
@@ -1099,7 +1100,7 @@ namespace LTSM::Manager {
         Application::notice("{}: success", __FUNCTION__);
     }
 
-    void DBusAdaptor::timerSessionsTimeLimitAction(const boost::system::error_code& ec) {
+    void DBusAdaptor::timerSessionsTimeLimitAction(const system::error_code& ec) {
         if(ec) {
             return;
         }
@@ -1177,7 +1178,7 @@ namespace LTSM::Manager {
         timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
     }
 
-    void DBusAdaptor::timerSessionsEndedAction(const boost::system::error_code& ec) {
+    void DBusAdaptor::timerSessionsEndedAction(const system::error_code& ec) {
         if(ec) {
             return;
         }
@@ -1192,7 +1193,7 @@ namespace LTSM::Manager {
                     if(auto ptr = findPidSession(pid)) {
                         Application::notice("{}: session ended, pid: {}, ret: {}", "removeChildsEnded", pid, future.get());
                         ptr->pid1 = 0;
-                        boost::asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
+                        asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
                     }
                     return true;
                 }
@@ -1215,7 +1216,7 @@ namespace LTSM::Manager {
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
     }
 
-    void DBusAdaptor::timerSessionsCheckConnectedAction(const boost::system::error_code& ec) {
+    void DBusAdaptor::timerSessionsCheckConnectedAction(const system::error_code& ec) {
         if(ec) {
             return;
         }
@@ -1278,7 +1279,7 @@ namespace LTSM::Manager {
         }
 
         // script run in thread
-        boost::asio::post(ioc_, [wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
+        asio::post(ioc_, [wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
             if(wait) {
                 std::this_thread::sleep_for(10ms);
             }
@@ -1298,48 +1299,47 @@ namespace LTSM::Manager {
         return true;
     }
 
-    bool DBusAdaptor::checkDisplaySessionAlive(int display) const {
+    bool DBusAdaptor::checkDisplaySessionAlive(int display) {
         return 0 < display && Tools::checkUnixSocket(Tools::x11UnixPath(display));
     }
 
-    bool DBusAdaptor::waitDisplaySessionStarting(XvfbSessionPtr sess, uint32_t ms) const {
+    bool DBusAdaptor::checkDisplaySessionStarted(XvfbSessionPtr sess) {
+        try {
+            auto dbusPath = sess->dbusSessionPath();
+            if(! std::filesystem::is_regular_file(dbusPath)) {
+                return false;
+            }
+            auto addr = Tools::fileToString(dbusPath);
+            auto dbus = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
+            if(0 < dbus->getVersion()) {
+                // set valid session dbus address
+                sess->dbusAddress = std::move(addr);
+                return true;
+            }
+        } catch(...) {}
+        return false;
+    }
 
-        auto checkDisplaySessionStarted = [ptr = std::move(sess)]() {
-            try {
-                auto dbusPath = ptr->dbusSessionPath();
-                if(! std::filesystem::is_regular_file(dbusPath)) {
-                    return false;
-                }
-                auto addr = Tools::fileToString(dbusPath);
-                auto dbus = std::make_unique<DisplaySessionProxy>(addr, ptr->displayNum);
-                if(0 < dbus->getVersion()) {
-                    // set valid session dbus address
-                    ptr->dbusAddress = std::move(addr);
-                    return true;
-                }
-            } catch(...) {}
-            return false;
-        };
-
-        const uint32_t pause = 300;
-        boost::asio::steady_timer timer{ioc_};
+    template <typename WaitFunc>
+    bool waitAsioCallable(asio::io_context & ioc, uint32_t total, uint32_t pause, const WaitFunc & waitFunc) {
+        asio::steady_timer timer{ioc};
 
         while(true) {
             timer.expires_after(std::chrono::milliseconds(pause));
-            auto wait = timer.async_wait(boost::asio::use_future);
+            auto wait = timer.async_wait(asio::use_future);
 
-            // thread: sdbus
+            // ioc in thread pool
             wait.get();
 
-            if(checkDisplaySessionStarted()) {
+            if(waitFunc()) {
                 return true;
             }
 
-            if(ms < pause) {
+            if(total < pause) {
                 return false;
             }
 
-            ms -= pause;
+            total -= pause;
         }
 
         return false;
@@ -1489,7 +1489,7 @@ namespace LTSM::Manager {
 
         // set permissons user,auth, 0440
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0440);
-        ioc_.notify_fork(boost::asio::execution_context::fork_prepare);
+        ioc_.notify_fork(asio::execution_context::fork_prepare);
 
         try {
             sess->pid1 = ForkMode::forkStart();
@@ -1505,14 +1505,16 @@ namespace LTSM::Manager {
         }
 
         // main thread
-        ioc_.notify_fork(boost::asio::execution_context::fork_parent);
+        ioc_.notify_fork(asio::execution_context::fork_parent);
 
         Application::debug(DebugType::App, "{}: started, pid: {}, display: {}",
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
         auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
 
-        if(waitDisplaySessionStarting(sess, sessionStartTimeout * 1000 /* ms */)) {
+        // wait display session starting
+        if(waitAsioCallable(ioc_, sessionStartTimeout * 1000 /* ms */, 300,
+                            std::bind(&DBusAdaptor::checkDisplaySessionStarted, sess))) {
             try {
                 // fix X11 socket pemissions 0660
                 Tools::setFileOwner(Tools::x11UnixPath(sess->displayNum),
@@ -1726,7 +1728,7 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::busShutdownConnector(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
-        boost::asio::post(ioc_, [this, display]() {
+        asio::post(ioc_, [this, display]() {
             std::this_thread::sleep_for(1ms);
             this->emitShutdownConnector(display);
         });
@@ -1780,7 +1782,7 @@ namespace LTSM::Manager {
             emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
 
             if(ptr->idleDisconnect) {
-                boost::asio::post(ioc_, [this, xvfb = std::move(ptr)]() {
+                asio::post(ioc_, [this, xvfb = std::move(ptr)]() {
                     std::this_thread::sleep_for(1ms);
                     this->emitShutdownConnector(xvfb->displayNum);
                 });
@@ -2107,7 +2109,7 @@ namespace LTSM::Manager {
             if(xvfb->mode == SessionMode::Connected ||
                xvfb->mode == SessionMode::Disconnected) {
                 // thread mode
-                boost::asio::post(ioc_, [ptr = std::move(xvfb), summary, body, icontype](){
+                asio::post(ioc_, [ptr = std::move(xvfb), summary, body, icontype](){
                     sendNotifyCall(ptr, summary, body, icontype /*, urgency2 = urgency */);
                 });
                 return;
@@ -2164,7 +2166,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, login);
 
         if(auto xvfb = this->findDisplaySession(display)) {
-            boost::asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, "******", true));
+            asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, "******", true));
             return true;
         }
 
@@ -2178,7 +2180,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, login);
 
         if(auto xvfb = this->findDisplaySession(display)) {
-            boost::asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, password, false));
+            asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, password, false));
             return true;
         }
 
@@ -2550,7 +2552,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        boost::asio::post(ioc_, std::bind(&threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+        asio::post(ioc_, std::bind(&threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
         return true;
     }
 
@@ -2670,7 +2672,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        boost::asio::post(std::bind(&threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
+        asio::post(std::bind(&threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
                     S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
         return true;
     }
@@ -2784,7 +2786,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
-        boost::asio::post(ioc_, std::bind(&threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
+        asio::post(ioc_, std::bind(&threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
         return true;
     }
 
@@ -2984,7 +2986,7 @@ namespace LTSM::Manager {
             const std::string & password, const bool & action) {
         Application::info("{}: display: {}, user: {}", __FUNCTION__, display, login);
 
-        boost::asio::post(ioc_, [this, display, login, password, action]() {
+        asio::post(ioc_, [this, display, login, password, action]() {
             std::this_thread::sleep_for(1ms);
             this->emitHelperSetLoginPassword(display, login, password, action);
         });
@@ -3009,7 +3011,7 @@ namespace LTSM::Manager {
     void DBusAdaptor::busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        boost::asio::post(ioc_, [this, display, rect, color, fill]() {
+        asio::post(ioc_, [this, display, rect, color, fill]() {
             std::this_thread::sleep_for(1ms);
             this->emitAddRenderRect(display, rect, color, fill);
         });
@@ -3018,7 +3020,7 @@ namespace LTSM::Manager {
     void DBusAdaptor::busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        boost::asio::post(ioc_, [this, display, text, pos, color]() {
+        asio::post(ioc_, [this, display, text, pos, color]() {
             std::this_thread::sleep_for(1ms);
             this->emitAddRenderText(display, text, pos, color);
         });
@@ -3027,7 +3029,7 @@ namespace LTSM::Manager {
     void DBusAdaptor::busRenderClear(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        boost::asio::post(ioc_, [this, display]() {
+        asio::post(ioc_, [this, display]() {
             std::this_thread::sleep_for(1ms);
             this->emitClearRenderPrimitives(display);
         });
@@ -3115,8 +3117,8 @@ namespace LTSM::Manager {
         auto dbus_conn = conn.get();
         const size_t concurency = 4;
 
-        boost::asio::io_context ctx{concurency};
-        boost::asio::thread_pool pool{concurency};
+        asio::io_context ctx{concurency};
+        asio::thread_pool pool{concurency};
 
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
@@ -3133,7 +3135,7 @@ namespace LTSM::Manager {
 #endif
 
         for(auto it = 0; it < concurency; ++it) {
-            boost::asio::post(pool, [&ctx](){ ctx.run(); });
+            asio::post(pool, [&ctx](){ ctx.run(); });
         }
 
         pool.join();
