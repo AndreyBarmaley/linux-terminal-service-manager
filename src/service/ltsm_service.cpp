@@ -2413,20 +2413,18 @@ namespace LTSM::Manager {
         }
     }
 
-    void threadPermissionJob(std::filesystem::path path, uid_t uid, gid_t gid, mode_t mode) {
-        auto success = Tools::waitCallable<std::chrono::milliseconds>(3500, 300, [&path]() {
+    bool waitFileSetPermission(asio::io_context & ioc, std::filesystem::path path, uid_t uid, gid_t gid, mode_t mode) {
+        auto fileExists = [&path]() {
             std::error_code fserr;
+            return std::filesystem::exists(path, fserr);
+        };
 
-            if(std::filesystem::exists(path, fserr)) {
-                return true;
-            }
-
-            return false;
-        });
-
-        if(success) {
+        if(waitAsioCallable(ioc, 3500, 300, fileExists)) {
             Tools::setFileOwner(path, uid, gid, mode);
+            return true;
         }
+
+        return false;
     }
 
     void DBusAdaptor::startSessionChannelsAsync(XvfbSessionPtr xvfb) {
@@ -2552,8 +2550,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        asio::post(ioc_, std::bind(&threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
-        return true;
+        return waitFileSetPermission(ioc_, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
 
     bool startAudioSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string audioSocket) {
@@ -2608,16 +2605,18 @@ namespace LTSM::Manager {
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "ultra", 5, 0);
 
-        std::scoped_lock guard{ lock_jobs_ };
-        jobs_.emplace_back(
-            std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(audioSocket)](){
-                // fix permissions job
-                threadPermissionJob(path, ptr->userInfo->uid(), ptr->userInfo->gid(), S_IRUSR | S_IWUSR);
-                // start session audio helper
-                startAudioSessionJob(this, std::move(ptr), path.string());
-            })
-        );
-        return true;
+        // fix permissions job
+        if(waitFileSetPermission(ioc_, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)){
+            std::scoped_lock guard{ lock_jobs_ };
+            jobs_.emplace_back(
+                std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(audioSocket)](){
+                    // start session audio helper
+                    startAudioSessionJob(this, std::move(ptr), path.string());
+                })
+            );
+            return true;
+        }
+        return false;
     }
 
     void DBusAdaptor::stopAudioListener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2672,9 +2671,8 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        asio::post(std::bind(&threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
-                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
-        return true;
+        return waitFileSetPermission(ioc_, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
 
     bool startPcscSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string pcscSocket) {
@@ -2729,17 +2727,18 @@ namespace LTSM::Manager {
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
 
-        std::scoped_lock guard{ lock_jobs_ };
-        jobs_.emplace_back(
-            std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(pcscSocket)](){
-                // fix permissions job
-                threadPermissionJob(path, ptr->userInfo->uid(), ptr->userInfo->gid(), S_IRUSR | S_IWUSR);
-                // start session pcsc helper
-                startPcscSessionJob(this, std::move(ptr), path.string());
-            })
-        );
-
-        return true;
+        // fix permissions job
+        if(waitFileSetPermission(ioc_, pcscSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)) {
+            std::scoped_lock guard{ lock_jobs_ };
+            jobs_.emplace_back(
+                std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(pcscSocket)](){
+                    // start session pcsc helper
+                    startPcscSessionJob(this, std::move(ptr), path.string());
+                })
+            );
+            return true;
+        }
+        return false;
     }
 
     void DBusAdaptor::stopPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2786,8 +2785,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
-        asio::post(ioc_, std::bind(&threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
-        return true;
+        return waitFileSetPermission(ioc_, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR);
     }
 
     void DBusAdaptor::stopPkcs11Listener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2852,17 +2850,18 @@ namespace LTSM::Manager {
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
 
-        std::scoped_lock guard{ lock_jobs_ };
-        jobs_.emplace_back(
-            std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(fuseSocket), point=fusePointFolder.string(), remote=std::move(remotePoint)](){
-                // fix permissions job
-                threadPermissionJob(path, ptr->userInfo->uid(), ptr->userInfo->gid(), S_IRUSR | S_IWUSR);
-                // start session fuse helper
-                startFuseSessionJob(this, std::move(ptr), point, remote, path.string());
-            })
-        );
-
-        return true;
+        // fix permissions job
+        if(waitFileSetPermission(ioc_, fuseSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)) {
+            std::scoped_lock guard{ lock_jobs_ };
+            jobs_.emplace_back(
+                std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(fuseSocket), point=fusePointFolder.string(), remote=std::move(remotePoint)](){
+                    // start session fuse helper
+                    startFuseSessionJob(this, std::move(ptr), point, remote, path.string());
+                })
+            );
+            return true;
+        }
+        return false;
     }
 
     void DBusAdaptor::stopFuseListener(XvfbSessionPtr xvfb, const std::string & remotePoint) {
