@@ -1250,7 +1250,6 @@ namespace LTSM::Manager {
         }
 
         xvfb->mode = SessionMode::Shutdown;
-        xvfb->mode.notify_one();
 
         if(emitSignal) {
             emitShutdownConnector(xvfb->displayNum);
@@ -2276,7 +2275,7 @@ namespace LTSM::Manager {
                 // shutdown prev connect
                 emitShutdownConnector(userSess->displayNum);
                 // wait session: changes connected
-                userSess->mode.wait(SessionMode::Connected);
+                waitAsioCallable(ioc_, 2000, 50, [userSess](){ return userSess->mode == SessionMode::Disconnected; });
             }
         }
 
