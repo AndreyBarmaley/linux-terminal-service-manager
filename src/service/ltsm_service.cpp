@@ -1036,18 +1036,18 @@ namespace LTSM::Manager {
         timer_ended_.cancel();
         timer_alive_.cancel();
 
-        std::scoped_lock guard{ lock_childs_, lock_jobs_ };
-        for(const auto & [pid, future]: childs_) {
-            if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                if(0 < pid) {
-                    kill(pid, SIGTERM);
+        {
+            std::scoped_lock guard{ lock_childs_ };
+            for(const auto & [pid, future]: childs_) {
+                if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                    if(0 < pid) {
+                        kill(pid, SIGTERM);
+                    }
                 }
             }
+            childs_.clear();
         }
 
-        childs_.clear();
-        jobs_.clear();
-        
         work_guard_.reset();
     }
 
@@ -1201,16 +1201,7 @@ namespace LTSM::Manager {
             });
         };
 
-        auto removeJobsEnded = [this]() {
-            std::scoped_lock guard{ lock_jobs_ };
-            std::erase_if(jobs_, [](auto & ps)
-            {
-                return ps.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
-            });
-        };
-
         removeChildsEnded();
-        removeJobsEnded();
 
         timer_ended_.expires_after(dur_ended_);
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
@@ -1268,12 +1259,10 @@ namespace LTSM::Manager {
         const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
         
         if(notSysUser) {
-            std::scoped_lock guard{ lock_jobs_ };
-            jobs_.emplace_back(
-                std::async(std::launch::async, [ptr = xvfb, system = configGetString("system:disconnect"), session = configGetString("session:disconnect")](){
+            asio::post(ioc_, [ptr = xvfb, system = configGetString("system:disconnect"), session = configGetString("session:disconnect")](){
                     runSessionScript(ptr, session);
                     runSystemScript(ptr, system);
-                })
+                }
             );
         }
 
@@ -1680,12 +1669,10 @@ namespace LTSM::Manager {
 
         newSess->dbusSetSessionKeyboardLayout();
         if(true) {
-            std::scoped_lock guard{ lock_jobs_ };
-            jobs_.emplace_back(
-                std::async(std::launch::async, [ptr = newSess, system = configGetString("system:connect"), session = configGetString("session:connect")](){
+            asio::post(ioc_, [ptr = newSess, system = configGetString("system:connect"), session = configGetString("session:connect")](){
                     runSystemScript(ptr, system);
                     runSessionScript(ptr, session);
-                })
+                }
             );
         }
 
@@ -2048,9 +2035,7 @@ namespace LTSM::Manager {
         };
 
         //run background
-        std::scoped_lock guard{ lock_jobs_ };
-        jobs_.emplace_back(
-            std::async(std::launch::async, & DBusAdaptor::transferFilesRequestCommunication, this, std::move(xvfb),
+        asio::post(ioc_, std::bind(&DBusAdaptor::transferFilesRequestCommunication, this, std::move(xvfb),
                     files, std::move(emitTransferReject), fmt::format("Can you receive remote files? ({})", files.size()))
         );
 
@@ -2064,9 +2049,7 @@ namespace LTSM::Manager {
 
         if(auto xvfb = findDisplaySession(display)) {
             //run background
-            std::scoped_lock guard{ lock_jobs_ };
-            jobs_.emplace_back(
-                std::async(std::launch::async, &DBusAdaptor::transferFileStartBackground, this,
+            asio::post(ioc_, std::bind(&DBusAdaptor::transferFileStartBackground, this,
                     std::move(xvfb), tmpfile, dstfile, filesz)
             );
             return true;
