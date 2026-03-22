@@ -2553,20 +2553,6 @@ namespace LTSM::Manager {
         return waitFileSetPermission(ioc_, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
 
-    bool startAudioSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string audioSocket) {
-        Application::info("{}: display: {}, user: {}, socket: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket);
-
-        if(! xvfb->dbusAudioChannelConnect(audioSocket)) {
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket);
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Audio, "");
-            owner->emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
-        }
-
-        return true;
-    }
-
     bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & param) {
         if(xvfb->mode == SessionMode::Login) {
             Application::error("{}: login session skipped, display: {}", __FUNCTION__, xvfb->displayNum);
@@ -2607,14 +2593,18 @@ namespace LTSM::Manager {
 
         // fix permissions job
         if(waitFileSetPermission(ioc_, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)){
-            std::scoped_lock guard{ lock_jobs_ };
-            jobs_.emplace_back(
-                std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(audioSocket)](){
-                    // start session audio helper
-                    startAudioSessionJob(this, std::move(ptr), path.string());
-                })
-            );
-            return true;
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket);
+
+            if(xvfb->dbusAudioChannelConnect(audioSocket)) {
+                return true;
+            }
+
+            // destroy channel
+            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket.string());
+            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Audio, "");
+            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+            return false;
         }
         return false;
     }
@@ -2675,20 +2665,6 @@ namespace LTSM::Manager {
                     S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
 
-    bool startPcscSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string pcscSocket) {
-        Application::info("{}: display: {}, user: {}, socket: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket);
-
-        if(! xvfb->dbusPcscChannelConnect(pcscSocket)) {
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket);
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Pcsc, "");
-            owner->emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
-        }
-        
-        return true;
-    }
-
     bool DBusAdaptor::startPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
         if(xvfb->mode == SessionMode::Login) {
             Application::error("{}: login session skipped, display: {}", __FUNCTION__, xvfb->displayNum);
@@ -2729,14 +2705,18 @@ namespace LTSM::Manager {
 
         // fix permissions job
         if(waitFileSetPermission(ioc_, pcscSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)) {
-            std::scoped_lock guard{ lock_jobs_ };
-            jobs_.emplace_back(
-                std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(pcscSocket)](){
-                    // start session pcsc helper
-                    startPcscSessionJob(this, std::move(ptr), path.string());
-                })
-            );
-            return true;
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket);
+
+            if(xvfb->dbusPcscChannelConnect(pcscSocket)) {
+                return true;
+            }
+
+            // destroy channel
+            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket.string());
+            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Pcsc, "");
+            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+            return false;
         }
         return false;
     }
@@ -2852,15 +2832,22 @@ namespace LTSM::Manager {
 
         // fix permissions job
         if(waitFileSetPermission(ioc_, fuseSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)) {
-            std::scoped_lock guard{ lock_jobs_ };
-            jobs_.emplace_back(
-                std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(fuseSocket), point=fusePointFolder.string(), remote=std::move(remotePoint)](){
-                    // start session fuse helper
-                    startFuseSessionJob(this, std::move(ptr), point, remote, path.string());
-                })
-            );
-            return true;
+            const auto & localPoint = fusePointFolder.string();
+
+            Application::info("{}: display: {}, user: {}, local: `{}', remote: `{}', socket: `{}'",
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint, remotePoint, fuseSocket);
+
+            if(xvfb->dbusFuseMountPoint(localPoint, remotePoint, fuseSocket)) {
+                return true;
+            }
+    
+            // destroy channel
+            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, fuseSocket.string());
+            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Fuse, "");
+            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+            return false;
         }
+
         return false;
     }
 
