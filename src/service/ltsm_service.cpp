@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
 #include <sys/mount.h>
@@ -1037,12 +1038,11 @@ namespace LTSM::Manager {
         timer_ended_.cancel();
         timer_alive_.cancel();
 
-        for(const auto & [pid, future]: childs_) {
-            if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                if(0 < pid) {
-                    kill(pid, SIGTERM);
-                }
-            }
+        for(const auto & pid: childs_) {
+            kill(pid, SIGTERM);
+        }
+        for(const auto & pid: childs_) {
+            waitpid(pid, nullptr, 0);
         }
         childs_.clear();
 
@@ -1181,19 +1181,39 @@ namespace LTSM::Manager {
             return;
         }
 
-        std::erase_if(childs_, [this](auto & ps)
+        std::erase_if(childs_, [this](auto & pid)
         {
-            auto & [pid, future] = ps;
-            if(future.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
-            {
-                if(auto ptr = findPidSession(pid)) {
-                    Application::notice("{}: session ended, pid: {}, ret: {}", "removeChildsEnded", pid, future.get());
-                    ptr->pid1 = 0;
-                    asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
-                }
-                return true;
+            int status;
+            int ret = waitpid(pid, &status, WNOHANG);
+            if(0 > ret) {
+                Application::error("{}: {} failed, error: {}, code: {}",
+                        "removeChildsEnded", "waitpid", strerror(errno), errno);
+                return false;
             }
-            return false;
+
+            if(0 == ret) {
+                // wnohang - is running
+                return false;
+            }
+
+            if(WIFSIGNALED(status)) {
+                Application::warning("{}: process {}, pid: {}, signal: {}",
+                        "removeChildsEnded", "killed", pid, WTERMSIG(status));
+            } else if(WIFEXITED(status)) {
+                Application::info("{}: process {}, pid: {}, return: {}",
+                        "removeChildsEnded", "exited", pid, WEXITSTATUS(status));
+            } else {
+                Application::info("{}: process {}, pid: {}, wstatus: {:#08x}",
+                        "removeChildsEnded", "ended", pid, status);
+            }
+
+            if(auto ptr = findPidSession(pid)) {
+                Application::notice("{}: session ended, pid: {}", "removeChildsEnded", pid);
+                ptr->pid1 = 0;
+                asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
+            }
+
+            return true;
         });
 
         timer_ended_.expires_after(dur_ended_);
@@ -1233,10 +1253,9 @@ namespace LTSM::Manager {
             return false;
         }
 
-        xvfb->mode = SessionMode::Shutdown;
-
-        if(emitSignal) {
-            emitShutdownConnector(xvfb->displayNum);
+        if(xvfb->connectorId && xvfb->mode != SessionMode::Login) {
+            kill(xvfb->connectorId, SIGTERM);
+            xvfb->connectorId = 0;
         }
 
 #ifdef LTSM_WITH_AUDIT
@@ -1246,6 +1265,12 @@ namespace LTSM::Manager {
         }
 
 #endif
+        // mode shutdown
+        xvfb->mode = SessionMode::Shutdown;
+
+        if(emitSignal) {
+            emitShutdownConnector(xvfb->displayNum);
+        }
 
         Application::notice("{}: display: {}", __FUNCTION__, xvfb->displayNum);
         // dbus no wait, remove background
@@ -1524,7 +1549,7 @@ namespace LTSM::Manager {
         if(sess) {
             // registered xvfb job
             asio::post(childs_guard_, [this, pid = sess->pid1](){
-                childs_.emplace_back(pid, std::async(std::launch::async, & ForkMode::waitPid, pid));
+                childs_.emplace_back(pid);
             });
         } else {
             return -1;
@@ -1610,7 +1635,7 @@ namespace LTSM::Manager {
         if(newSess) {
             // registered xvfb job
             asio::post(ioc_, [this, pid = newSess->pid1](){
-                childs_.emplace_back(pid, std::async(std::launch::async, & ForkMode::waitPid, pid));
+                childs_.emplace_back(pid);
             });
         } else {        
             return -1;

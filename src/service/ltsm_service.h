@@ -377,7 +377,7 @@ namespace LTSM::Manager {
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::list<PidStatus> childs_;
+        std::list<pid_t> childs_;
         std::atomic<bool> loginsDisable = false;
 
 #ifdef LTSM_WITH_AUDIT
