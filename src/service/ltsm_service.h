@@ -477,7 +477,6 @@ namespace LTSM::Manager {
         void busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) override;
         void busRenderClear(const int32_t & display) override;
 
-        void startSessionChannelsAsync(XvfbSessionPtr);
         void startSessionChannels(XvfbSessionPtr);
         void stopSessionChannels(XvfbSessionPtr);
 

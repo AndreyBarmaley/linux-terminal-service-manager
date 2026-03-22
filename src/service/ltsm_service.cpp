@@ -1616,7 +1616,7 @@ namespace LTSM::Manager {
             runSessionScript(oldSess, configGetString("session:connect"));
 
             int res = oldSess->displayNum;
-            startSessionChannelsAsync(std::move(oldSess));
+            asio::post(ioc_, std::bind(&DBusAdaptor::startSessionChannels, this, std::move(oldSess)));
 
             return res;
         }
@@ -1695,7 +1695,7 @@ namespace LTSM::Manager {
 #endif
 
         int res = newSess->displayNum;
-        startSessionChannelsAsync(std::move(newSess));
+        asio::post(ioc_, std::bind(&DBusAdaptor::startSessionChannels, this, std::move(newSess)));
 
         return res;
     }
@@ -2427,11 +2427,6 @@ namespace LTSM::Manager {
         return false;
     }
 
-    void DBusAdaptor::startSessionChannelsAsync(XvfbSessionPtr xvfb) {
-        std::scoped_lock guard{ lock_jobs_ };
-        jobs_.emplace_back(std::async(std::launch::async, & DBusAdaptor::startSessionChannels, this, std::move(xvfb)));
-    }
-
     void DBusAdaptor::startSessionChannels(XvfbSessionPtr xvfb) {
 
         auto printer = xvfb->options.find("redirect:cups");
@@ -2441,13 +2436,13 @@ namespace LTSM::Manager {
         auto fuse = xvfb->options.find("redirect:fuse");
 
         // wait new session started
-        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(550ms);
+        if(xvfb->sessionOnlinedSec() < 2s) {
+            waitAsioCallable(ioc_, 2000, 500, [xvfb](){ return 2s <= xvfb->sessionOnlinedSec(); });
         }
 
         try {
             if(xvfb->options.end() != printer) {
-                startPrinterListener(xvfb, printer->second);
+                std::bind(&DBusAdaptor::startPrinterListener, this, xvfb, printer->second);
             }
 
             if(xvfb->options.end() != sane) {
