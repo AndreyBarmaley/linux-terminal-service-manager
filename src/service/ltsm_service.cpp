@@ -1249,6 +1249,8 @@ namespace LTSM::Manager {
         }
 
         xvfb->mode = SessionMode::Shutdown;
+        xvfb->mode.notify_one();
+
         if(emitSignal) {
             emitShutdownConnector(xvfb->displayNum);
         }
@@ -2271,10 +2273,8 @@ namespace LTSM::Manager {
             } else if(userSess->policy == SessionPolicy::AuthTake) {
                 // shutdown prev connect
                 emitShutdownConnector(userSess->displayNum);
-                // wait session
-                Tools::waitCallable<std::chrono::milliseconds>(1000, 50, [& userSess]() {
-                    return userSess->mode == SessionMode::Disconnected;
-                });
+                // wait session: changes connected
+                userSess->mode.wait(SessionMode::Connected);
             }
         }
 
