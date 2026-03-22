@@ -1302,22 +1302,45 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::waitDisplaySessionStarting(XvfbSessionPtr sess, uint32_t ms) const {
 
-        return Tools::waitCallable<std::chrono::milliseconds>(ms, 150, [ptr = std::move(sess)]() {
+        auto checkDisplaySessionStarted = [ptr = std::move(sess)]() {
             try {
                 auto dbusPath = ptr->dbusSessionPath();
-                if(std::filesystem::is_regular_file(dbusPath)) {
-                    auto addr = Tools::fileToString(dbusPath);
-                    auto dbus = std::make_unique<DisplaySessionProxy>(addr, ptr->displayNum);
-                    if(0 < dbus->getVersion()) {
-                        // set valid session dbus address
-                        ptr->dbusAddress = std::move(addr);
-                        return true;
-                    }
+                if(! std::filesystem::is_regular_file(dbusPath)) {
+                    return false;
+                }
+                auto addr = Tools::fileToString(dbusPath);
+                auto dbus = std::make_unique<DisplaySessionProxy>(addr, ptr->displayNum);
+                if(0 < dbus->getVersion()) {
+                    // set valid session dbus address
+                    ptr->dbusAddress = std::move(addr);
+                    return true;
                 }
             } catch(...) {}
-
             return false;
-        });
+        };
+
+        const uint32_t pause = 300;
+        boost::asio::steady_timer timer{ioc_};
+
+        while(true) {
+            timer.expires_after(std::chrono::milliseconds(pause));
+            auto wait = timer.async_wait(boost::asio::use_future);
+
+            // thread: sdbus
+            wait.get();
+
+            if(checkDisplaySessionStarted()) {
+                return true;
+            }
+
+            if(ms < pause) {
+                return false;
+            }
+
+            ms -= pause;
+        }
+
+        return false;
     }
 
     std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie) const {
