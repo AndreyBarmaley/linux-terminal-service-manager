@@ -366,6 +366,7 @@ namespace LTSM::Manager {
         boost::asio::io_context & ioc_;
         boost::asio::signal_set signals_;
         boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
+        boost::asio::strand<boost::asio::any_io_executor> childs_guard_;
 
         boost::asio::steady_timer timer_limit_;
         boost::asio::steady_timer timer_ended_;
@@ -376,9 +377,7 @@ namespace LTSM::Manager {
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::mutex lock_childs_;
         std::list<PidStatus> childs_;
-
         std::atomic<bool> loginsDisable = false;
 
 #ifdef LTSM_WITH_AUDIT

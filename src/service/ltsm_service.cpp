@@ -969,8 +969,9 @@ namespace LTSM::Manager {
 #else
         , AdaptorInterfaces(*conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_}, work_guard_{asio::make_work_guard(ioc_)},
-            timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_}, dbus_conn_{std::move(conn)} {
+        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_},
+            work_guard_{asio::make_work_guard(ioc_)}, childs_guard_{asio::make_strand(ioc_)},
+            timer_limit_{ioc_}, timer_ended_{childs_guard_}, timer_alive_{ioc_}, dbus_conn_{std::move(conn)} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -1036,17 +1037,14 @@ namespace LTSM::Manager {
         timer_ended_.cancel();
         timer_alive_.cancel();
 
-        {
-            std::scoped_lock guard{ lock_childs_ };
-            for(const auto & [pid, future]: childs_) {
-                if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                    if(0 < pid) {
-                        kill(pid, SIGTERM);
-                    }
+        for(const auto & [pid, future]: childs_) {
+            if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                if(0 < pid) {
+                    kill(pid, SIGTERM);
                 }
             }
-            childs_.clear();
         }
+        childs_.clear();
 
         work_guard_.reset();
     }
@@ -1183,25 +1181,20 @@ namespace LTSM::Manager {
             return;
         }
 
-        auto removeChildsEnded = [this]() {
-            std::scoped_lock guard{ lock_childs_ };
-            std::erase_if(childs_, [this](auto & ps)
+        std::erase_if(childs_, [this](auto & ps)
+        {
+            auto & [pid, future] = ps;
+            if(future.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
             {
-                auto & [pid, future] = ps;
-                if(future.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
-                {
-                    if(auto ptr = findPidSession(pid)) {
-                        Application::notice("{}: session ended, pid: {}, ret: {}", "removeChildsEnded", pid, future.get());
-                        ptr->pid1 = 0;
-                        asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
-                    }
-                    return true;
+                if(auto ptr = findPidSession(pid)) {
+                    Application::notice("{}: session ended, pid: {}, ret: {}", "removeChildsEnded", pid, future.get());
+                    ptr->pid1 = 0;
+                    asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
                 }
-                return false;
-            });
-        };
-
-        removeChildsEnded();
+                return true;
+            }
+            return false;
+        });
 
         timer_ended_.expires_after(dur_ended_);
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
@@ -1530,8 +1523,9 @@ namespace LTSM::Manager {
 
         if(sess) {
             // registered xvfb job
-            std::scoped_lock guard{ lock_childs_ };
-            childs_.emplace_back(sess->pid1, std::async(std::launch::async, & ForkMode::waitPid, sess->pid1));
+            asio::post(childs_guard_, [this, pid = sess->pid1](){
+                childs_.emplace_back(pid, std::async(std::launch::async, & ForkMode::waitPid, pid));
+            });
         } else {
             return -1;
         }
@@ -1615,8 +1609,9 @@ namespace LTSM::Manager {
 
         if(newSess) {
             // registered xvfb job
-            std::scoped_lock guard{ lock_childs_ };
-            childs_.emplace_back(newSess->pid1, std::async(std::launch::async, & ForkMode::waitPid, newSess->pid1));
+            asio::post(ioc_, [this, pid = newSess->pid1](){
+                childs_.emplace_back(pid, std::async(std::launch::async, & ForkMode::waitPid, pid));
+            });
         } else {        
             return -1;
         }
