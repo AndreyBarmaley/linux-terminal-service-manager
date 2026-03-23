@@ -44,6 +44,7 @@ Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
     AsyncSocket<asio::local::stream_protocol::socket>(member.get_executor()),
     ioc_{member},
     work_guard_{asio::make_work_guard(ioc_)},
+    send_lock_{ioc_.get_executor()},
     templatePath{"/var/run/ltsm/pkcs11/%{display}/sock"} {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
 }
@@ -175,7 +176,7 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
         for(;;) {
             asio::steady_timer timer(ioc_, std::chrono::milliseconds(450));
             co_await timer.async_wait(asio::use_awaitable);
-            co_await send_lock_.async_lock(asio::use_awaitable);
+            co_await send_lock_.async_lock();
             auto success = co_await updateTokens();
             send_lock_.unlock();
 
@@ -327,7 +328,7 @@ ListTokens Pkcs11Client::getTokens(void) const {
     auto res = promise.get_future();
 
     asio::co_spawn(ioc_, [&promise, this]() -> asio::awaitable<void> {
-        co_await send_lock_.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock();
         auto tokens = this->tokens;
         send_lock_.unlock();
         promise.set_value(std::move(tokens));
@@ -343,7 +344,7 @@ ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
     auto res = promise.get_future();
 
     asio::co_spawn(ioc_, [&promise, &slotId, this]() -> asio::awaitable<void> {
-        co_await send_lock_.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock();
         auto certs = co_await this->loadCertificates(slotId);
         send_lock_.unlock();
         promise.set_value(std::move(certs));
@@ -398,7 +399,7 @@ ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
     auto res = promise.get_future();
 
     asio::co_spawn(ioc_, [&promise, &slotId, this]() -> asio::awaitable<void> {
-        co_await send_lock_.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock();
         auto mechs = co_await this->loadMechanisms(slotId);
         send_lock_.unlock();
         promise.set_value(std::move(mechs));
@@ -455,7 +456,7 @@ binary_buf Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
     auto res = promise.get_future();
 
     asio::co_spawn(ioc_, [&promise, &slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<void> {
-        co_await send_lock_.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock();
         auto buf = co_await this->loadSignData(slotId, pin, certId, data, len, mechType);
         send_lock_.unlock();
         promise.set_value(std::move(buf));
@@ -503,7 +504,7 @@ std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::strin
     auto res = promise.get_future();
 
     asio::co_spawn(ioc_, [&promise, &slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<void> {
-        co_await send_lock_.async_lock(asio::use_awaitable);
+        co_await send_lock_.async_lock();
         auto buf = co_await this->loadDecryptData(slotId, pin, certId, data, len, mechType);
         send_lock_.unlock();
         promise.set_value(std::move(buf));

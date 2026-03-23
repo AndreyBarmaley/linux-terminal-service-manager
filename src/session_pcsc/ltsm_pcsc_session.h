@@ -40,7 +40,7 @@
 #include "ltsm_async_socket.h"
 #include "ltsm_application.h"
 #include "ltsm_pcsc_adaptor.h"
-#include "avast_asio_async_mutex.hpp"
+#include "ltsm_async_mutex.h"
 
 namespace PcscLite {
     // origin READER_STATE: PCSC/src/eventhandler.h
@@ -78,12 +78,12 @@ namespace LTSM {
     using RetStatusChanged = std::tuple<bool, uint32_t>;
 
     struct Transaction {
-        avast::asio::async_mutex trans_lock;
+        async_mutex trans_lock;
         int32_t client_id{0};
 
         boost::asio::awaitable<void> lock(int32_t id) {
             if(id) {
-                co_await trans_lock.async_lock(boost::asio::use_awaitable);
+                co_await trans_lock.async_lock();
                 client_id = id;
             }
             co_return;
@@ -95,6 +95,8 @@ namespace LTSM {
                 trans_lock.unlock();
             }
         }
+
+        Transaction(const boost::asio::any_io_executor & ex) : trans_lock{ex} {}
     };
 
     class PcscRemote : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
@@ -104,7 +106,7 @@ namespace LTSM {
         //uint64_t timer_context_{0};
         //boost::asio::cancellation_signal timer_stop_;
 
-        avast::asio::async_mutex send_lock_;
+        async_mutex send_lock_;
         Transaction trans_lock_;
 
         boost::system::error_code ec_;
@@ -116,8 +118,9 @@ namespace LTSM {
 
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock)) {
-        }
+            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock))
+            , send_lock_{socket().get_executor()}
+            , trans_lock_{socket().get_executor()} {}
         ~PcscRemote() = default;
 
         [[nodiscard]] boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
