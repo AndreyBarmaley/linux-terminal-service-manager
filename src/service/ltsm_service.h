@@ -390,7 +390,11 @@ namespace LTSM::Manager {
         void timerSessionsEndedAction(const boost::system::error_code&);
         void timerSessionsCheckConnectedAction(const boost::system::error_code&);
 
-        void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
+        boost::asio::awaitable<void> sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) const;
+        boost::asio::awaitable<void> transferFileComplete(XvfbSessionPtr, std::string tmpfile, uint32_t filesz) const;
+        boost::asio::awaitable<void> transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz) const;
+
+        bool transferFileCopyAllow(XvfbSessionPtr xvfb, const std::filesystem::path & dstdir, const std::filesystem::path & tmpname, const FileNameSize &);
         void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
                                                TransferRejectFunc emitTransferReject, std::string msg);
 
@@ -407,6 +411,8 @@ namespace LTSM::Manager {
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
         std::forward_list<std::string> getAllowLogins(void) const;
+
+        void sendNotifyCallAsync(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) const;
 
       public:
         DBusAdaptor(boost::asio::io_context &, DBusConnectionPtr, const std::filesystem::path & confile);

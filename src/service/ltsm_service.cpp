@@ -130,7 +130,6 @@ namespace LTSM::Manager {
     void runSessionScript(XvfbSessionPtr, const std::string & cmd);
 
     bool switchToUser(const UserSession &);
-    void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype);
 
     namespace ChildProcess {
         int pidNext = 0;
@@ -1031,6 +1030,26 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stop(void) {
+
+        // terminate connectors
+        for(const auto & ptr : sessions) {
+            if(ptr) {
+                displayShutdown(ptr, true);
+            }
+        }
+
+        auto isValidSession = [](const XvfbSessionPtr & ptr) {
+            return !! ptr;
+        };
+
+        // wait sessions
+        while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
+            Application::debug(DebugType::App, "{}: wait sessions: {}", __FUNCTION__, sessionsAlive);
+            std::this_thread::sleep_for(50ms);
+        }
+
+        Application::notice("{}: {}, pid: {}", __FUNCTION__, "complete", getpid());
+
         dbus_conn_->leaveEventLoop();
 
         signals_.cancel();
@@ -1285,11 +1304,7 @@ namespace LTSM::Manager {
         }
 
         // script run in thread
-        asio::post(ioc_, [wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
-            if(wait) {
-                std::this_thread::sleep_for(10ms);
-            }
-
+        asio::post(ioc_, [ptr = std::move(xvfb), notsys = notSysUser, this]() {
             auto displayNum = ptr->displayNum;
 
             this->removeDisplaySession(displayNum);
@@ -1735,7 +1750,6 @@ namespace LTSM::Manager {
     void DBusAdaptor::busShutdownConnector(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
         asio::post(ioc_, [this, display]() {
-            std::this_thread::sleep_for(1ms);
             this->emitShutdownConnector(display);
         });
     }
@@ -1743,25 +1757,9 @@ namespace LTSM::Manager {
     void DBusAdaptor::busShutdownService(void) {
         Application::debug(DebugType::Dbus, "{}: {}, pid: {}", __FUNCTION__, "starting", getpid());
 
-        // terminate connectors
-        for(const auto & ptr : sessions) {
-            if(ptr) {
-                displayShutdown(ptr, true);
-            }
-        }
-
-        auto isValidSession = [](const XvfbSessionPtr & ptr) {
-            return !! ptr;
-        };
-
-        // wait sessions
-        while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
-            Application::debug(DebugType::App, "{}: wait sessions: {}", __FUNCTION__, sessionsAlive);
-            std::this_thread::sleep_for(100ms);
-        }
-
-        Application::notice("{}: {}, pid: {}", __FUNCTION__, "complete", getpid());
-        stop();
+        asio::post(ioc_, [this]() {
+            this->stop();
+        });
     }
 
     void DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message) {
@@ -1789,7 +1787,6 @@ namespace LTSM::Manager {
 
             if(ptr->idleDisconnect) {
                 asio::post(ioc_, [this, xvfb = std::move(ptr)]() {
-                    std::this_thread::sleep_for(1ms);
                     this->emitShutdownConnector(xvfb->displayNum);
                 });
             }
@@ -1895,6 +1892,33 @@ namespace LTSM::Manager {
         }
     }
 
+    bool DBusAdaptor::transferFileCopyAllow(XvfbSessionPtr xvfb, const std::filesystem::path & dstdir, const std::filesystem::path & tmpname, const FileNameSize & info) {
+        Application::debug(DebugType::App, "{}: transfer file request, display: {}, select dir: `{}', tmp name: `{}'",
+                               __FUNCTION__, xvfb->displayNum, dstdir, tmpname);
+        auto filepath = std::filesystem::path(std::get<0>(info));
+        auto filesize = std::get<1>(info);
+        std::error_code fserr;
+
+        // check disk space limited
+        if(auto spaceInfo = std::filesystem::space(dstdir, fserr); spaceInfo.available < filesize) {
+            sendNotifyCallAsync(xvfb, "Transfer Rejected", "not enough disk space", NotifyParams::Error);
+            Application::error("{}: no space available", __FUNCTION__);
+            throw service_error(NS_FuncNameS);
+        }
+
+        // check dstdir writeable / filename present
+        auto dstfile = dstdir / filepath.filename();
+
+        if(std::filesystem::exists(dstfile, fserr)) {
+            Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile);
+            sendNotifyCallAsync(xvfb, "Transfer Skipping", fmt::format("such a file exists: {}", dstfile.string()), NotifyParams::Warning);
+            return false;
+        }
+
+        emitTransferAllow(xvfb->displayNum, filepath, tmpname, dstdir);
+        return true;
+    }
+
     void DBusAdaptor::transferFilesRequestCommunication(XvfbSessionPtr xvfb,
             std::vector<FileNameSize> files, TransferRejectFunc emitTransferReject, std::string msg) {
         // wait zenity question
@@ -1922,11 +1946,11 @@ namespace LTSM::Manager {
         const auto & buf = std::get<1>(statusSelectDir);
         auto end = buf.back() == 0x0a ? std::prev(buf.end()) : buf.end();
         std::filesystem::path dstdir(std::string(buf.begin(), end));
-        std::error_code err;
 
-        if(! std::filesystem::is_directory(dstdir, err)) {
+        std::error_code fserr;
+        if(! std::filesystem::is_directory(dstdir, fserr)) {
             Application::error("{}: {} failed, code: {}, error: {}",
-                                __FUNCTION__, "is_directory", err.value(), err.message());
+                                __FUNCTION__, "is_directory", fserr.value(), fserr.message());
             emitTransferReject(xvfb->displayNum, files);
             return;
         }
@@ -1934,88 +1958,75 @@ namespace LTSM::Manager {
         // copy all files to (Connector) user home, after success move to real user
         auto connectorHome = Tools::getUserHome(ltsm_user_conn);
 
-        for(const auto & info : files) {
+        for(const auto & info: files) {
             auto tmpname = std::filesystem::path(connectorHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
-            Application::debug(DebugType::App, "{}: transfer file request, display: {}, select dir: `{}', tmp name: `{}'",
-                               __FUNCTION__, xvfb->displayNum, dstdir, tmpname);
-            auto filepath = std::filesystem::path(std::get<0>(info));
-            auto filesize = std::get<1>(info);
-            // check disk space limited
-            //size_t ftotal = std::accumulate(files.begin(), files.end(), 0, [](size_t sum, auto & val){ return sum += std::get<1>(val); });
-            auto spaceInfo = std::filesystem::space(dstdir, err);
 
-            if(spaceInfo.available < filesize) {
-                sendNotifyCall(xvfb, "Transfer Rejected", "not enough disk space", NotifyParams::Error);
-                break;
+            try {
+                transferFileCopyAllow(xvfb, dstdir, tmpname, info);
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                return;
             }
-
-            // check dstdir writeable / filename present
-            auto dstfile = dstdir / filepath.filename();
-
-            if(std::filesystem::exists(dstfile, err)) {
-                Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile);
-                sendNotifyCall(xvfb, "Transfer Skipping", fmt::format("such a file exists: {}", dstfile.string()), NotifyParams::Warning);
-                continue;
-            }
-
-            //xvfb->allowTransfer.emplace_front(filepath);
-            emitTransferAllow(xvfb->displayNum, filepath, tmpname, dstdir);
         }
     }
 
-    void DBusAdaptor::transferFileStartBackground(XvfbSessionPtr xvfb, std::string tmpfile, std::string dstfile, uint32_t filesz) {
-        bool error = false;
-        std::error_code fserr;
+    asio::awaitable<void> DBusAdaptor::transferFileComplete(XvfbSessionPtr xvfb, std::string tmpfile, uint32_t filesz) const {
+        asio::steady_timer timer{ioc_};
 
-        while(! error) {
+        while(true) {
             // check fill data complete
-            if(std::filesystem::exists(tmpfile, fserr) &&
-               std::filesystem::file_size(tmpfile, fserr) >= filesz) {
+            if(std::filesystem::exists(tmpfile) &&
+               std::filesystem::file_size(tmpfile) >= filesz) {
                 break;
             }
 
-            // FIXME create progress informer session
-
             // check lost conn
             if(xvfb->mode != SessionMode::Connected) {
-                sendNotifyCall(xvfb, "Transfer Error", "transfer connection is lost", NotifyParams::Error);
-                error = true;
-                std::filesystem::remove(tmpfile, fserr);
-                continue;
+                sendNotifyCallAsync(xvfb, "Transfer Error", "transfer connection is lost", NotifyParams::Error);
+                std::filesystem::remove(tmpfile);
+                Application::warning("{}: session disconnected, display: {}", __FUNCTION__, xvfb->displayNum);
+                throw service_error(NS_FuncNameS);
             }
 
-            std::this_thread::sleep_for(350ms);
+            timer.expires_after(250ms);
+            co_await timer.async_wait(asio::use_awaitable);
         }
 
-        //xvfb->allowTransfer.remove(tmpfile);
+        co_return;
+    }
 
-        if(error) {
-            return;
+    asio::awaitable<void> DBusAdaptor::transferFileStartBackground(XvfbSessionPtr xvfb, std::string tmpfile, std::string dstfile, uint32_t filesz) const {
+        try {
+            co_await transferFileComplete(xvfb, tmpfile, filesz);
+        } catch(const std::exception & err) {
+            Application::error("{}: exception: {}", __FUNCTION__, err.what());
+            co_return;
         }
 
+        std::error_code fserr;
         // move tmpfile to dstfile
         std::filesystem::rename(tmpfile, dstfile, fserr);
 
         if(fserr) {
-            if(fserr.value() == 18) {
+            // rename failed
+            if(fserr == std::errc::cross_device_link) {
                 std::filesystem::copy_file(tmpfile, dstfile, fserr);
             } else {
                 Application::error("{}: {} failed, code: {}, error: {}",
                         __FUNCTION__, "exists", fserr.value(), fserr.message());
-                error = true;
+                co_return;
             }
 
             std::filesystem::remove(tmpfile, fserr);
         }
 
-        if(! error) {
-            Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
-            sendNotifyCall(xvfb, "Transfer Complete",
+        Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
+        sendNotifyCallAsync(xvfb, "Transfer Complete",
                           fmt::format("new file added: <a href='file://{}'>{}</a>",
-                                              dstfile, std::filesystem::path(dstfile).filename().string()),
+                                     dstfile, std::filesystem::path(dstfile).filename().string()),
                           NotifyParams::Information);
-        }
+        co_return;
     }
 
     bool DBusAdaptor::busTransferFilesRequest(const int32_t & display, const std::vector<FileNameSize> & files) {
@@ -2029,7 +2040,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::TransferFiles)) {
             Application::warning("{}: display {}, transfer reject", __FUNCTION__, display);
-            sendNotifyCall(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
+            sendNotifyCallAsync(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
@@ -2040,7 +2051,7 @@ namespace LTSM::Manager {
 
                 if(std::ranges::none_of(gids, [&](auto & gid) { return gid == groupInfo->gid(); })) {
                     Application::warning("{}: display {}, transfer reject", __FUNCTION__, display);
-                    sendNotifyCall(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
+                    sendNotifyCallAsync(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
                                   NotifyParams::IconType::Warning);
                     return false;
                 }
@@ -2069,9 +2080,8 @@ namespace LTSM::Manager {
 
         if(auto xvfb = findDisplaySession(display)) {
             //run background
-            asio::post(ioc_, std::bind(&DBusAdaptor::transferFileStartBackground, this,
-                    std::move(xvfb), tmpfile, dstfile, filesz)
-            );
+            asio::co_spawn(ioc_, std::bind(&DBusAdaptor::transferFileStartBackground, this,
+                    std::move(xvfb), tmpfile, dstfile, filesz), asio::detached);
             return true;
         }
 
@@ -2079,10 +2089,12 @@ namespace LTSM::Manager {
         return false;
     }
 
-    void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) {
+    asio::awaitable<void> DBusAdaptor::sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) const {
+
         // wait new session started
-        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(550ms);
+        if(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
+            asio::steady_timer timer{ioc_, 2s};
+            co_await timer.async_wait(asio::use_awaitable);
         }
 
         switch(icontype) {
@@ -2098,6 +2110,12 @@ namespace LTSM::Manager {
                 xvfb->dbusNotifyInfo(summary, body);
                 break;
         }
+
+        co_return;
+    }
+
+    void DBusAdaptor::sendNotifyCallAsync(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) const {
+        asio::co_spawn(ioc_, std::bind(&DBusAdaptor::sendNotifyCall, this, std::move(xvfb), std::move(summary), std::move(body), icontype), asio::detached);
     }
 
     void DBusAdaptor::busSendNotify(const int32_t & display, const std::string & summary, const std::string & body,
@@ -2111,9 +2129,7 @@ namespace LTSM::Manager {
             if(xvfb->mode == SessionMode::Connected ||
                xvfb->mode == SessionMode::Disconnected) {
                 // thread mode
-                asio::post(ioc_, [ptr = std::move(xvfb), summary, body, icontype](){
-                    sendNotifyCall(ptr, summary, body, icontype /*, urgency2 = urgency */);
-                });
+                sendNotifyCallAsync(xvfb, summary, body, icontype /*, urgency2 = urgency */);
                 return;
             }
 
@@ -2509,7 +2525,7 @@ namespace LTSM::Manager {
     bool DBusAdaptor::startPrinterListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPrinter)) {
             Application::warning("{}: display {}, redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "printer");
-            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "printer" " is blocked, contact the administrator",
+            sendNotifyCallAsync(xvfb, "Channel Disabled", "redirect " "printer" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
@@ -2558,7 +2574,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectAudio)) {
             Application::warning("{}: display {}, redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "audio");
-            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "audio" " is blocked, contact the administrator",
+            sendNotifyCallAsync(xvfb, "Channel Disabled", "redirect " "audio" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
@@ -2621,7 +2637,7 @@ namespace LTSM::Manager {
     bool DBusAdaptor::startSaneListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectScanner)) {
             Application::warning("{}: display {}, redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "scanner");
-            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "scanner" " is blocked, contact the administrator",
+            sendNotifyCallAsync(xvfb, "Channel Disabled", "redirect " "scanner" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
@@ -2670,7 +2686,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPcsc)) {
             Application::warning("{}: display {}, redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "pcsc");
-            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "smartcard" " is blocked, contact the administrator",
+            sendNotifyCallAsync(xvfb, "Channel Disabled", "redirect " "smartcard" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
@@ -2792,7 +2808,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RemoteFilesUse)) {
             Application::warning("{}: display {}, redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "fuse");
-            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "drivers" " is blocked, contact the administrator",
+            sendNotifyCallAsync(xvfb, "Channel Disabled", "redirect " "drivers" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
@@ -2970,7 +2986,6 @@ namespace LTSM::Manager {
         Application::info("{}: display: {}, user: {}", __FUNCTION__, display, login);
 
         asio::post(ioc_, [this, display, login, password, action]() {
-            std::this_thread::sleep_for(1ms);
             this->emitHelperSetLoginPassword(display, login, password, action);
         });
     }
@@ -2995,7 +3010,6 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         asio::post(ioc_, [this, display, rect, color, fill]() {
-            std::this_thread::sleep_for(1ms);
             this->emitAddRenderRect(display, rect, color, fill);
         });
     }
@@ -3004,7 +3018,6 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         asio::post(ioc_, [this, display, text, pos, color]() {
-            std::this_thread::sleep_for(1ms);
             this->emitAddRenderText(display, text, pos, color);
         });
     }
@@ -3013,7 +3026,6 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         asio::post(ioc_, [this, display]() {
-            std::this_thread::sleep_for(1ms);
             this->emitClearRenderPrimitives(display);
         });
     }
