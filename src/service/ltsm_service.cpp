@@ -1510,7 +1510,9 @@ namespace LTSM::Manager {
 
         // set permissons user,auth, 0440
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0440);
-        ioc_.notify_fork(asio::execution_context::fork_prepare);
+
+        // the io_context is not used in the child process, so we skip it...
+        // ioc_.notify_fork(asio::execution_context::fork_prepare);
 
         try {
             sess->pid1 = ForkMode::forkStart();
@@ -1526,7 +1528,7 @@ namespace LTSM::Manager {
         }
 
         // main thread
-        ioc_.notify_fork(asio::execution_context::fork_parent);
+        // ioc_.notify_fork(asio::execution_context::fork_parent);
 
         Application::debug(DebugType::App, "{}: started, pid: {}, display: {}",
                            __FUNCTION__, sess->pid1, sess->displayNum);
