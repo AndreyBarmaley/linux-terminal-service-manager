@@ -789,7 +789,7 @@ namespace LTSM {
                 case ENCODING_LTSM_H264:
                 case ENCODING_LTSM_AV1:
                 case ENCODING_LTSM_VP8:
-                    decoder = std::make_unique<DecodingFFmpeg>(type);
+                    decoder = std::make_unique<DecodingFFmpeg>(type, frameRateOption());
                     // FIXME
                     // decoder->setDebug(4 /* AV_LOG_VERBOSE */);
                     break;

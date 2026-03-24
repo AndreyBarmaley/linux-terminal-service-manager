@@ -378,7 +378,7 @@ namespace LTSM::Connector {
             _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
             _frameRate = opts->getInteger("frame:rate", _frameRate);
 
-            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"));
+            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), _frameRate);
 
             if(_x11NoDamage && ! XCB::RootDisplay::hasError()) {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);

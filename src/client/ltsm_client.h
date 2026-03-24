@@ -170,6 +170,10 @@ namespace LTSM {
             return ltsmSupport;
         }
 
+        uint32_t frameRateOption(void) const override {
+            return frameRate;
+        }
+
         int start(void);
         bool isAlwaysRunning(void) const;
     };

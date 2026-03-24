@@ -111,6 +111,7 @@ namespace LTSM {
             virtual bool setEncodingOptions(const std::forward_list<std::string> &) {
                 return false;
             }
+            virtual void setFps(uint32_t) {}
             virtual const char* getTypeName(void) const = 0;
 
             int getType(void) const;

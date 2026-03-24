@@ -84,7 +84,7 @@ namespace LTSM {
 
 #ifdef LTSM_ENCODING_FFMPEG
     // EncodingFFmpeg
-    RFB::EncodingFFmpeg::EncodingFFmpeg(int type) : EncodingBase(type) {
+    RFB::EncodingFFmpeg::EncodingFFmpeg(int type, int fps_) : EncodingBase(type), fps(fps_) {
         av_log_set_level(AV_LOG_QUIET);
         av_log_set_callback(FFMPEG::logCallback);
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
@@ -113,6 +113,8 @@ namespace LTSM {
                                encodingName(type));
             throw ffmpeg_error(NS_FuncNameS);
         }
+
+        Application::info("{}: set FPS: {}", __FUNCTION__, fps);
     }
 
     const char* RFB::EncodingFFmpeg::getTypeName(void) const {
@@ -169,6 +171,15 @@ namespace LTSM {
             }
         }
     */
+
+    void RFB::EncodingFFmpeg::setFps(uint32_t val) {
+        std::scoped_lock guard{ lockUpdate };
+        fps = val;
+        Application::info("{}: set FPS: {}", __FUNCTION__, fps);
+        if(avcctx) {
+            initContext(XCB::Size(avcctx->width, avcctx->height));
+        }
+    }
 
     void RFB::EncodingFFmpeg::resizedEvent(const XCB::Size & nsz) {
         std::scoped_lock guard{ lockUpdate };
@@ -320,7 +331,7 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING_FFMPEG
     // DecodingFFmpeg
-    RFB::DecodingFFmpeg::DecodingFFmpeg(int type) : DecodingBase(type) {
+    RFB::DecodingFFmpeg::DecodingFFmpeg(int type, int fps_) : DecodingBase(type), fps(fps_) {
         av_log_set_level(AV_LOG_QUIET);
         av_log_set_callback(FFMPEG::logCallback);
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
@@ -355,6 +366,8 @@ namespace LTSM {
             Application::error("{}: {} failed", __FUNCTION__, "avcodec_find_encoder");
             throw ffmpeg_error(NS_FuncNameS);
         }
+
+        Application::info("{}: set FPS: {}", __FUNCTION__, fps);
     }
 
     /*
@@ -467,8 +480,12 @@ namespace LTSM {
         // avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
         // }
 
+        avcctx->framerate = (AVRational) {
+            fps, 1
+        };
+
         avcctx->time_base = (AVRational) {
-            1, 25
+            1, fps
         };
 
         avcctx->pix_fmt = remoteFormat;

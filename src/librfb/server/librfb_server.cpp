@@ -1085,7 +1085,7 @@ namespace LTSM {
             case RFB::ENCODING_LTSM_H264:
             case RFB::ENCODING_LTSM_VP8:
             case RFB::ENCODING_LTSM_AV1:
-                encoder = std::make_unique<EncodingFFmpeg>(compatible);
+                encoder = std::make_unique<EncodingFFmpeg>(compatible, frameRateOption());
                 break;
 #endif
 #ifdef LTSM_ENCODING
@@ -1361,8 +1361,18 @@ namespace LTSM {
         return std::make_pair(clientAuthName, clientAuthDomain);
     }
 
-    void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts) {
+    void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts, uint32_t frameRate) {
         if(encoder) {
+            switch(encoder->getType()) {
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
+                    encoder->setFps(frameRate);
+                    serverScreenUpdateRequest();
+                    break;
+
+                default: break;
+            }
             // apply opts: need full update
             if(encoder->setEncodingOptions(opts)) {
                 serverScreenUpdateRequest();
