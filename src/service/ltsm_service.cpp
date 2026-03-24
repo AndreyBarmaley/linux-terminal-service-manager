@@ -1133,7 +1133,7 @@ namespace LTSM::Manager {
                 if(startedSec.count() > ptr->lifeTimeLimitSec) {
                     Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->lifeTimeLimitSec), startedSec.count());
-                    displayShutdown(std::move(ptr), true);
+                    displayShutdownAsync(std::move(ptr), true);
                     continue;
                 }
 
@@ -1163,7 +1163,7 @@ namespace LTSM::Manager {
                 if(offlinedSec.count() > ptr->offlineTimeLimitSec) {
                     Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "offline", ptr->displayNum, static_cast<uint32_t>(ptr->offlineTimeLimitSec), offlinedSec.count());
-                    displayShutdown(std::move(ptr), true);
+                    displayShutdownAsync(std::move(ptr), true);
                     continue;
                 }
             }
@@ -1229,7 +1229,7 @@ namespace LTSM::Manager {
             if(auto ptr = findPidSession(pid)) {
                 Application::notice("{}: session ended, pid: {}", "removeChildsEnded", pid);
                 ptr->pid1 = 0;
-                asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
+                this->displayShutdownAsync(std::move(ptr), true);
             }
 
             return true;
@@ -1267,6 +1267,10 @@ namespace LTSM::Manager {
         timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
     }
 
+    void DBusAdaptor::displayShutdownAsync(XvfbSessionPtr xvfb, bool emitSignal) {
+        asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(xvfb), emitSignal));
+    }
+
     bool DBusAdaptor::displayShutdown(XvfbSessionPtr xvfb, bool emitSignal) {
         if(! xvfb || xvfb->mode == SessionMode::Shutdown) {
             return false;
@@ -1292,30 +1296,22 @@ namespace LTSM::Manager {
         }
 
         Application::notice("{}: display: {}", __FUNCTION__, xvfb->displayNum);
-        // dbus no wait, remove background
         const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
         
         if(notSysUser) {
-            asio::post(ioc_, [ptr = xvfb, system = configGetString("system:disconnect"), session = configGetString("session:disconnect")](){
-                    runSessionScript(ptr, session);
-                    runSystemScript(ptr, system);
-                }
-            );
+            runSessionScript(xvfb, configGetString("session:disconnect"));
+            runSystemScript(xvfb, configGetString("system:disconnect"));
         }
 
-        // script run in thread
-        asio::post(ioc_, [ptr = std::move(xvfb), notsys = notSysUser, this]() {
-            auto displayNum = ptr->displayNum;
+        // scripts
+        removeDisplaySession(xvfb->displayNum);
+        emitDisplayRemoved(xvfb->displayNum);
 
-            this->removeDisplaySession(displayNum);
-            this->emitDisplayRemoved(displayNum);
-
-            if(notsys) {
+        if(notSysUser) {
 #ifdef LTSM_WITH_AUDIT
-                this->auditLog->auditSessionStop();
+            auditLog->auditSessionStop();
 #endif
-            }
-        });
+        }
 
         return true;
     }
@@ -1622,7 +1618,7 @@ namespace LTSM::Manager {
                         if(! oldSess->pam || ! oldSess->pam->refreshCreds()) {
                             Application::error("{}: {}, display: {}, user: {}",
                                                __FUNCTION__, "PAM failed", oldSess->displayNum, oldSess->userInfo->user());
-                            displayShutdown(oldSess, true);
+                            displayShutdownAsync(oldSess, true);
                             return -1;
                         }
             */
@@ -1743,7 +1739,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
 
         if(auto ptr = findDisplaySession(display)) {
-            displayShutdown(std::move(ptr), true);
+            displayShutdownAsync(std::move(ptr), true);
         } else {
             Application::warning("{}: display not found: {}", __FUNCTION__, display);
         }
@@ -1866,7 +1862,7 @@ namespace LTSM::Manager {
 
 #endif
             stopLoginChannels(ptr);
-            displayShutdown(std::move(ptr), false);
+            displayShutdownAsync(std::move(ptr), false);
         } else if(ptr->mode == SessionMode::Connected) {
             ptr->resetStatus(Flags::SessionStatus::CheckConnection);
             ptr->remoteAddr.clear();
@@ -2255,7 +2251,7 @@ namespace LTSM::Manager {
                 if(loginFailuresConf < xvfb->loginFailures) {
                     Application::error("{}: login failures limit, display: {}", __FUNCTION__, xvfb->displayNum);
                     emitLoginFailure(xvfb->displayNum, "failures limit");
-                    displayShutdown(xvfb, true);
+                    displayShutdownAsync(xvfb, true);
                 }
 
                 return false;

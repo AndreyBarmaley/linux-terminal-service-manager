@@ -393,6 +393,7 @@ namespace LTSM::Manager {
         boost::asio::awaitable<void> transferFileComplete(XvfbSessionPtr, std::string tmpfile, uint32_t filesz) const;
         boost::asio::awaitable<void> transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz) const;
 
+        bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool transferFileCopyAllow(XvfbSessionPtr, const std::filesystem::path & dstdir, const std::filesystem::path & tmpname, const FileNameSize &);
         void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files, std::string msg);
 
@@ -406,7 +407,7 @@ namespace LTSM::Manager {
         static bool checkDisplaySessionAlive(int display);
         static bool checkDisplaySessionStarted(XvfbSessionPtr);
 
-        bool displayShutdown(XvfbSessionPtr, bool emitSignal);
+        void displayShutdownAsync(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
         std::forward_list<std::string> getAllowLogins(void) const;
 
