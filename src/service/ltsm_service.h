@@ -50,7 +50,7 @@ namespace LTSM::Manager {
 
     using Job = std::future<void>;
     using PidStatus = std::pair<pid_t, std::future<int>>;
-    using PidStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
+    using StatusStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
@@ -314,7 +314,7 @@ namespace LTSM::Manager {
         void dbusNotifyWarning(const std::string & summary, const std::string & body) const noexcept;
         void dbusNotifyError(const std::string & summary, const std::string & body) const noexcept;
         void dbusNotifyInfo(const std::string & summary, const std::string & body) const noexcept;
-        PidStdout dbusRunSessionZenity(const std::vector<std::string>& args) const noexcept;
+        StatusStdout dbusRunSessionZenity(const std::vector<std::string>& args) const noexcept;
         int32_t dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) const noexcept;
         void dbusSetSessionKeyboardLayout(void) const noexcept;
         bool dbusAudioChannelConnect(const std::string& socketPath) const noexcept;
@@ -332,7 +332,6 @@ namespace LTSM::Manager {
     };
 
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
-    using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
     class XvfbSessions {
@@ -394,9 +393,8 @@ namespace LTSM::Manager {
         boost::asio::awaitable<void> transferFileComplete(XvfbSessionPtr, std::string tmpfile, uint32_t filesz) const;
         boost::asio::awaitable<void> transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz) const;
 
-        bool transferFileCopyAllow(XvfbSessionPtr xvfb, const std::filesystem::path & dstdir, const std::filesystem::path & tmpname, const FileNameSize &);
-        void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
-                                               TransferRejectFunc emitTransferReject, std::string msg);
+        bool transferFileCopyAllow(XvfbSessionPtr, const std::filesystem::path & dstdir, const std::filesystem::path & tmpname, const FileNameSize &);
+        void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files, std::string msg);
 
         void checkConfigPathes(void) const;
         void createRuntimeDir(void) const;

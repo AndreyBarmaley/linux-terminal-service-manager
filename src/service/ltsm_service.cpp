@@ -512,7 +512,7 @@ namespace LTSM::Manager {
         return 0;
     }
 
-    PidStdout XvfbSession::dbusRunSessionZenity(const std::vector<std::string>& args) const noexcept {
+    StatusStdout XvfbSession::dbusRunSessionZenity(const std::vector<std::string>& args) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
@@ -521,7 +521,7 @@ namespace LTSM::Manager {
                 Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
-        return PidStdout{-1, {}};
+        return StatusStdout{0, {}};
     }
 
     int32_t XvfbSession::dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) const noexcept {
@@ -1921,14 +1921,21 @@ namespace LTSM::Manager {
         return true;
     }
 
-    void DBusAdaptor::transferFilesRequestCommunication(XvfbSessionPtr xvfb,
-            std::vector<FileNameSize> files, TransferRejectFunc emitTransferReject, std::string msg) {
+    void DBusAdaptor::transferFilesRequestCommunication(XvfbSessionPtr xvfb, std::vector<FileNameSize> files, std::string msg) {
+
+        auto emitTransferReject = [this, display = xvfb->displayNum, &files]() {
+            for(const auto & info : files) {
+                // empty dst/file erase job
+                this->emitTransferAllow(display, std::get<0>(info), "", "");
+            }
+        };
+
         // wait zenity question
         auto statusQuestion = xvfb->dbusRunSessionZenity({ "--question", "--default-cancel", "--text", msg });
 
         // yes = 0, no: 256
         if(256 == std::get<0>(statusQuestion)) {
-            emitTransferReject(xvfb->displayNum, files);
+            emitTransferReject();
             return;
         }
 
@@ -1940,7 +1947,7 @@ namespace LTSM::Manager {
 
         // status: ok = 0, cancel: 256
         if(256 == std::get<0>(statusSelectDir)) {
-            emitTransferReject(xvfb->displayNum, files);
+            emitTransferReject();
             return;
         }
 
@@ -1953,7 +1960,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(dstdir, fserr)) {
             Application::error("{}: {} failed, code: {}, error: {}",
                                 __FUNCTION__, "is_directory", fserr.value(), fserr.message());
-            emitTransferReject(xvfb->displayNum, files);
+            emitTransferReject();
             return;
         }
 
@@ -2060,17 +2067,9 @@ namespace LTSM::Manager {
             }
         }
 
-        TransferRejectFunc emitTransferReject = [this](int display, const std::vector<FileNameSize> & files) {
-            for(const auto & info : files) {
-                // empty dst/file erase job
-                this->emitTransferAllow(display, std::get<0>(info), "", "");
-            }
-        };
-
         //run background
         asio::post(ioc_, std::bind(&DBusAdaptor::transferFilesRequestCommunication, this, std::move(xvfb),
-                    files, std::move(emitTransferReject), fmt::format("Can you receive remote files? ({})", files.size()))
-        );
+                    files, fmt::format("Can you receive remote files? ({})", files.size())));
 
         return true;
     }
