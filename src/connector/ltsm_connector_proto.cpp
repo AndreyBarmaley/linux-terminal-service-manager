@@ -224,7 +224,6 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz) {
-        xcbShmInit(_shmUid);
         busDisplayResized(displayNum(), sz.width, sz.height);
     }
 

@@ -91,7 +91,7 @@ namespace LTSM {
             XCB::RootDisplay* xcbDisplay(void);
             const XCB::Region & getClientRegion(void) const;
 
-            void xcbShmInit(uid_t = 0);
+            void xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
             bool xcbProcessingEvents(void);
 
             virtual bool xcbAllowMessages(void) const = 0;

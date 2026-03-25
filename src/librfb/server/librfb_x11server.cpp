@@ -77,7 +77,7 @@ namespace LTSM {
 
     void RFB::X11Server::xcbRandrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify) {
         Application::info("{}: size: {}, sequence: {:#04x}", __FUNCTION__, wsz, notify.sequence);
-        xcbShmInit();
+        xcbShmInit(0, & wsz);
         displayResizeProcessed = false;
         serverDisplayResizedEvent(wsz);
 
@@ -646,9 +646,13 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::xcbShmInit(uid_t uid) {
+    void RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
+            if(psz && dsz < *psz) {
+                Application::warning("{}: display size: {}, select size: {}", __FUNCTION__, dsz, *psz);
+                dsz = *psz;
+            }
             auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
             shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
         }

@@ -82,6 +82,12 @@ namespace LTSM {
                 height = 0;
             }
 
+            inline bool operator>(const Size & sz) const {
+                return width * height > sz.width * sz.height;
+            }
+            inline bool operator<(const Size & sz) const {
+                return sz.width * sz.height > width * height;
+            }
             inline bool operator==(const Size & sz) const {
                 return sz.width == width && sz.height == height;
             }
