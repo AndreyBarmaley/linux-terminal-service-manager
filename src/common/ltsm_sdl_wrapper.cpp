@@ -132,15 +132,16 @@ namespace LTSM {
         _window.reset();
     }
 
-    bool SDL::Window::resize(int newsz_w, int newsz_h) {
-        newsz_w = std::max(newsz_w, 640);
-        newsz_h = std::max(newsz_h, 480);
+    bool SDL::Window::resize(uint16_t newsz_w, uint16_t newsz_h) {
+        Application::debug(DebugType::Sdl, "{}: new size: {}x{}", __FUNCTION__, newsz_w, newsz_h);
+
+        newsz_w = std::max(newsz_w, static_cast<uint16_t>(640));
+        newsz_h = std::max(newsz_h, static_cast<uint16_t>(480));
+
         int winsz_w, winsz_h;
         SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
 
-        if(winsz_w != newsz_w && winsz_h != newsz_h) {
-            int dispsz_w = newsz_w;
-            int dispsz_h = newsz_h;
+        if(winsz_w != newsz_w || winsz_h != newsz_h) {
             SDL_SetWindowSize(_window.get(), newsz_w, newsz_h);
             _display.reset();
             _renderer.reset();
@@ -151,7 +152,7 @@ namespace LTSM {
                 throw sdl_error(NS_FuncNameS);
             }
 
-            _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, dispsz_w, dispsz_h));
+            _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, newsz_w, newsz_h));
 
             if(! _display) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());

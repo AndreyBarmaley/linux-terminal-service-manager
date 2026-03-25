@@ -1095,8 +1095,8 @@ namespace LTSM {
             // resize event
             if(ue->code == LocalEvent::Resize ||
                ue->code == LocalEvent::ResizeCont) {
-                auto width = (size_t) ue->data1;
-                auto height = (size_t) ue->data2;
+                uint16_t width = (ptrdiff_t) ue->data1;
+                uint16_t height = (ptrdiff_t) ue->data2;
                 bool contUpdateResume = ue->code == LocalEvent::ResizeCont;
 
                 cursors.clear();
@@ -1177,9 +1177,13 @@ namespace LTSM {
     }
 
     bool Vnc2SDL::pushEventWindowResize(const XCB::Size & nsz) {
+
         if(windowSize == nsz) {
+            Application::warning("{}: the window has the same size: {}", __FUNCTION__, nsz);
             return true;
         }
+
+        Application::debug(DebugType::App, "{}: new size: {}", __FUNCTION__, nsz);
 
         bool contUpdateResume = false;
 
@@ -1209,11 +1213,17 @@ namespace LTSM {
             const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens) {
         needUpdate = false;
 
+        Application::debug(DebugType::App, "{}: status: {}, error: {}, size:: {}",
+                            __FUNCTION__, status, err, nsz);
+
         // 1. server request: status: 0x00, error: 0x00
         if(status == 0 && err == 0) {
             // negotiate part
             if(! serverExtDesktopSizeNego) {
                 serverExtDesktopSizeNego = true;
+
+                Application::debug(DebugType::App, "{}: nego part, primary: {}, window: {}",
+                            __FUNCTION__, primarySize, windowSize);
 
                 if(! primarySize.isEmpty() && primarySize != windowSize) {
                     sendSetDesktopSize(primarySize);
@@ -1221,8 +1231,8 @@ namespace LTSM {
             } else {
                 // server runtime
                 if(windowFullScreen() && primarySize != nsz) {
-                    Application::warning("{}: fullscreen mode: {}, server request resize desktop: {}",
-                                         __FUNCTION__, primarySize, nsz);
+                    Application::warning("{}: fullscreen mode, server request resize: {}, current primary: {}",
+                                         __FUNCTION__, nsz, primarySize);
                 }
 
                 pushEventWindowResize(nsz);
@@ -1235,7 +1245,6 @@ namespace LTSM {
 
             if(err) {
                 Application::error("{}: status: {}, error code: {}", __FUNCTION__, status, err);
-
                 //if(! nsz.isEmpty())
                 //    primarySize.reset();
             }
