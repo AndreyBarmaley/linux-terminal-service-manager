@@ -1384,7 +1384,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Xcb, "{}: resource id: {:#08x}", __FUNCTION__, res);
-        return std::make_shared<ShmId>(conn, shmId, shmAddr, res);
+        return std::make_shared<ShmId>(conn, shmId, shmAddr, shmsz, owner, res);
     }
 
     // XCB::ModuleXkb
@@ -3231,6 +3231,14 @@ namespace LTSM {
             PixmapInfoReply res;
 
             if(const auto & err = xcbReply.error()) {
+                // после быстрого изменения размера здесь ошибка
+                // xcb_shm_get_image failed, error: Match, extension: none, major: Shm, minor: GetImage
+                //
+                if(err->error_code == 8 && err->major_code == 0x82 && err->minor_code == 0x04) {
+                    throw xcb_error_busy(NS_FuncNameS);
+                }
+
+                // error code: 8, major: 0x82, minor: 0x04
                 extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
             } else if(const auto & reply = xcbReply.reply()) {
                 auto visptr = visual(reply->visual);
@@ -3266,6 +3274,13 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_get_image, _conn.get(), XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 
             if(const auto & err = xcbReply.error()) {
+                // после быстрого изменения размера здесь ошибка
+                // xcb_get_image failed, error code: 8, major: 0x49, minor: 0x00
+                //
+                if(err->error_code == 8 && err->major_code == 0x49 && err->minor_code == 0) {
+                    throw xcb_error_busy(NS_FuncNameS);
+                }
+
                 extendedError(err.get(), __FUNCTION__, "xcb_get_image");
                 break;
             }

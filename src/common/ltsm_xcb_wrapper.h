@@ -156,9 +156,12 @@ namespace LTSM {
             std::weak_ptr<xcb_connection_t> conn;
             int shm = -1;
             uint8_t* addr = nullptr;
+            size_t size = 0;
+            int owner = 0;
             xcb_shm_seg_t id = 0;
 
-            ShmId(const std::weak_ptr<xcb_connection_t> & ptr, int s, uint8_t* a, const xcb_shm_seg_t & v) : conn(ptr), shm(s), addr(a), id(v) {}
+            ShmId(const std::weak_ptr<xcb_connection_t> & ptr, int s, uint8_t* a, size_t sz, int own, const xcb_shm_seg_t & v)
+                : conn(ptr), shm(s), addr(a), size(sz), owner(own), id(v) {}
 
             ShmId() = default;
             ~ShmId();
@@ -554,6 +557,7 @@ namespace LTSM {
 
         struct ModuleShm : ModuleExtension {
             explicit ModuleShm(const ConnectionShared &);
+            ~ModuleShm() = default;
 
             ShmIdShared createShm(size_t shmsz, int mode, bool readOnly, uid_t owner = 0) const;
         };

@@ -653,14 +653,33 @@ namespace LTSM {
                 Application::warning("{}: display size: {}, select size: {}", __FUNCTION__, dsz, *psz);
                 dsz = *psz;
             }
+
             auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
-            shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+            size_t shmsz = dsz.width * dsz.height * bpp;
+
+            if(!shm || shm->owner != uid || shm->size < shmsz) {
+                Application::info("{}: size: {}", __FUNCTION__, shmsz);
+                shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+            }
         }
     }
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
         Application::debug(DebugType::X11Srv, "{}: region: {}", __FUNCTION__, reg);
-        auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
+        XCB::PixmapInfoReply pixmapReply;
+        const int attempts = 3;
+
+        for(int it = 0; it < attempts; ++it) {
+            try {
+                pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
+            } catch(const xcb_error_busy&) {
+                Application::warning("{}: {} failed", __FUNCTION__, "copyRootImageRegion");
+                std::this_thread::sleep_for(30ms);
+                continue;
+            } catch(const std::exception & err) {
+                break;
+            }
+        }
 
         if(! pixmapReply) {
             Application::error("{}: {}", __FUNCTION__, "xcb copy region empty");

@@ -35,6 +35,10 @@ namespace LTSM {
         explicit xcb_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
+    struct xcb_error_busy : public xcb_error {
+        explicit xcb_error_busy(std::string_view what) : xcb_error(what) {}
+    };
+
     namespace XCB {
         struct Point {
             int16_t x = -1;
