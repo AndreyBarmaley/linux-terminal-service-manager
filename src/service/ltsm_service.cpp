@@ -1222,7 +1222,7 @@ namespace LTSM::Manager {
                 Application::info("{}: process {}, pid: {}, return: {}",
                         "removeChildsEnded", "exited", pid, WEXITSTATUS(status));
             } else {
-                Application::info("{}: process {}, pid: {}, wstatus: {:#08x}",
+                Application::info("{}: process {}, pid: {}, wstatus: {:#010x}",
                         "removeChildsEnded", "ended", pid, status);
             }
 
@@ -3049,7 +3049,7 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busDestroyChannel(const int32_t & display, const uint8_t & channel) {
-        Application::debug(DebugType::Dbus, "{}:, display: {}, channel: {:#02x}",
+        Application::debug(DebugType::Dbus, "{}:, display: {}, channel: {:#04x}",
                            __FUNCTION__, display, channel);
 
         emitDestroyChannel(display, channel);

@@ -114,7 +114,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     }
 
     if(cmd != Pkcs11Op::Init) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
         stop();
         co_return;
@@ -132,7 +132,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     auto ver = co_await async_recv_le16();
 
     if(ver != 1) {
-        Application::error("{}: {}: failed, ver: {:#04x}", __FUNCTION__, "version", ver);
+        Application::error("{}: {}: failed, ver: {:#06x}", __FUNCTION__, "version", ver);
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
         stop();
         co_return;
@@ -215,7 +215,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
 //    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::GetSlots) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
         throw pkcs11_error(NS_FuncNameS);
     }
 
@@ -371,7 +371,7 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
     endian::little_to_native_inplace(counts);
 
     if(cmd != Pkcs11Op::GetSlotCertificates) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
         co_return certs;
     }
 
@@ -425,7 +425,7 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
     endian::little_to_native_inplace(counts);
 
     if(cmd != Pkcs11Op::GetSlotMechanisms) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
         co_return res;
     }
 
@@ -485,7 +485,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
     endian::little_to_native_inplace(length);
 
     if(cmd != Pkcs11Op::SignData) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
         co_return binary_buf{};
     }
 
@@ -533,7 +533,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const
     endian::little_to_native_inplace(length);
 
     if(cmd != Pkcs11Op::DecryptData) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
         co_return binary_buf{};
     }
 

@@ -76,7 +76,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbRandrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify) {
-        Application::info("{}: size: {}, sequence: {:#04x}", __FUNCTION__, wsz, notify.sequence);
+        Application::info("{}: size: {}, sequence: {:#06x}", __FUNCTION__, wsz, notify.sequence);
         xcbShmInit(0, & wsz);
         displayResizeProcessed = false;
         serverDisplayResizedEvent(wsz);
@@ -117,14 +117,14 @@ namespace LTSM {
                     uint16_t opcode = 0;
 
                     if(shm && extShm->isEventError(ev, & opcode)) {
-                        Application::warning("{}: {} error: {:#04x}", __FUNCTION__, "shm", opcode);
+                        Application::warning("{}: {} error: {:#06x}", __FUNCTION__, "shm", opcode);
                         shm.reset();
                     }
                 } else if(auto extFixes = XCB::RootDisplay::getExtensionConst(XCB::Module::XFIXES)) {
                     uint16_t opcode = 0;
 
                     if(extFixes->isEventError(ev, & opcode)) {
-                        Application::warning("{}: {} error: {:#04x}", __FUNCTION__, "xfixes", opcode);
+                        Application::warning("{}: {} error: {:#06x}", __FUNCTION__, "xfixes", opcode);
                     }
                 }
             } else {
@@ -579,7 +579,7 @@ namespace LTSM {
         XCB::Region desktop(0, 0, 0, 0);
 
         for(const auto & info : screens) {
-            Application::info("{}: screen id: {:#08x}, region: {}, flags: {:#08x}",
+            Application::info("{}: screen id: {:#010x}, region: {}, flags: {:#010x}",
                               __FUNCTION__, info.id, info.pos(), info.flags);
             desktop.join(info.pos());
         }
@@ -686,7 +686,7 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        Application::trace(DebugType::X11Srv, "{}: request size: {}, reply: length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
+        Application::trace(DebugType::X11Srv, "{}: request size: {}, reply: length: {}, bits per pixel: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}",
                            __FUNCTION__, reg.toSize(), pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
                            pixmapReply->gmask, pixmapReply->bmask);
 

@@ -371,7 +371,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo) {
     int flags = jo.getInteger("flags", 0);
     bool replyError = false;
 
-    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#08x}", __FUNCTION__, channel, stype, smode, sspeed, flags);
+    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#010x}", __FUNCTION__, channel, stype, smode, sspeed, flags);
 
     if(! isUserSession()) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "not user session", channel);
@@ -974,7 +974,7 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
     int version = ns.recvInt8();
 
     if(version != LtsmProtocolVersion) {
-        Application::error("{}: unknown version: {:#02x}", __FUNCTION__, version);
+        Application::error("{}: unknown version: {:#04x}", __FUNCTION__, version);
         throw std::runtime_error(NS_FuncNameS);
     }
 

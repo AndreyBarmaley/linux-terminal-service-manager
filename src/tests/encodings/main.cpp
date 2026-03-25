@@ -77,7 +77,7 @@ class EncodingTest : public Application {
 
             srv = std::make_unique<RFB::ServerEncoderBuf>(images.front().fb.get());
 
-            Application::info("{}: pixel format, bpp: {}, rmask: {:#08x}, gmask: {:#08x}, bmask: {:#08x}, amask: {:#08x}",
+            Application::info("{}: pixel format, bpp: {}, rmask: {:#010x}, gmask: {:#010x}, bmask: {:#010x}, amask: {:#010x}",
                               __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
 

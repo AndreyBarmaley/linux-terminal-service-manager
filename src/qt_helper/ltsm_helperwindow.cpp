@@ -106,7 +106,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: {}, connectorId: {:#08x}",
+            Application::debug(DebugType::Dbus, "{}: display: {}, connectorId: {:#010x}",
                                __FUNCTION__, display, connectorId);
 
             Q_EMIT pkcs11ListennerStartedNotify(connectorId);
@@ -675,7 +675,7 @@ namespace LTSM::LoginHelper {
                     uint16_t opcode = 0;
 
                     if(extXkb->isEventError(xcbEvent, & opcode)) {
-                        Application::warning("{}: {} error: {:#04x}", __FUNCTION__, "xkb", opcode);
+                        Application::warning("{}: {} error: {:#06x}", __FUNCTION__, "xkb", opcode);
                     }
                 }
             }

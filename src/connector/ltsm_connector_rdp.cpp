@@ -595,7 +595,7 @@ namespace LTSM::Connector {
         //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
         auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
         // reply info dump
-        Application::debug(DebugType::App, "{}: request size: {}, reply length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
+        Application::debug(DebugType::App, "{}: request size: {}, reply length: {}, bits per pixel: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}",
                            __FUNCTION__, reg.toSize(), reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
@@ -913,9 +913,9 @@ namespace LTSM::Connector {
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
         if(1) {
-            Application::info("peer settings: {}: {:#08x}", "RdpVersion", peer->settings->RdpVersion);
-            Application::info("peer settings: {}: {:#04x}", "OsMajorType", peer->settings->OsMajorType);
-            Application::info("peer settings: {}: {:#04x}", "OsMinorType", peer->settings->OsMinorType);
+            Application::info("peer settings: {}: {:#010x}", "RdpVersion", peer->settings->RdpVersion);
+            Application::info("peer settings: {}: {:#06x}", "OsMajorType", peer->settings->OsMajorType);
+            Application::info("peer settings: {}: {:#06x}", "OsMinorType", peer->settings->OsMinorType);
             Application::info("peer settings: {}: {}", "Username", peer->settings->Username);
             Application::info("peer settings: {}: {}", "Domain", peer->settings->Domain);
             Application::info("peer settings: {}: {}", "DesktopWidth", peer->settings->DesktopWidth);
@@ -1011,7 +1011,7 @@ namespace LTSM::Connector {
     /// @param flags: KBD_FLAGS_EXTENDED(0x0100), KBD_FLAGS_EXTENDED1(0x0200), KBD_FLAGS_DOWN(0x4000), KBD_FLAGS_RELEASE(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code) {
-        Application::debug(DebugType::App, "{}: flags: {:#04x}, code: {:#04x}, input: {}, context: {}", __FUNCTION__, flags, code,
+        Application::debug(DebugType::App, "{}: flags: {:#06x}, code: {:#06x}, input: {}, context: {}", __FUNCTION__, flags, code,
                            fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
@@ -1064,7 +1064,7 @@ namespace LTSM::Connector {
     ///               PTR_FLAGS_WHEEL(0x0200), PTR_FLAGS_WHEEL_NEGATIVE(0x0100), PTR_FLAGS_MOVE(0x0800), PTR_FLAGS_DOWN(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 posx, UINT16 posy) {
-        Application::debug(DebugType::App, "{}: flags: {:#04x}, pos: {}, input: {}, context: {}", __FUNCTION__,
+        Application::debug(DebugType::App, "{}: flags: {:#06x}, pos: {}, input: {}, context: {}", __FUNCTION__,
                            flags, XCB::Point(posx, posy), fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;

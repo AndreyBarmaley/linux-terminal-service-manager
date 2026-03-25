@@ -232,7 +232,7 @@ namespace LTSM {
 #else
             bool bigEndian = true;
 #endif
-            Application::info("{}: pixel format, bpp: {}, rmask: {:#08x}, gmask: {:#08x}, bmask: {:#08x}, amask: {:#08x}, be: {}",
+            Application::info("{}: pixel format, bpp: {}, rmask: {:#010x}, gmask: {:#010x}, bmask: {:#010x}, amask: {:#010x}, be: {}",
                               __FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
         }
 
@@ -318,7 +318,7 @@ namespace LTSM {
 #endif
         }
 
-        Application::error("{}: unsupported pixel format, bpp: {}, rmask: {:#08x}, gmask: {:#08x}, bmask: {:#08x}, amask: {:#08x}",
+        Application::error("{}: unsupported pixel format, bpp: {}, rmask: {:#010x}, gmask: {:#010x}, bmask: {:#010x}, amask: {:#010x}",
                            __FUNCTION__, bpp, rmask, gmask, bmask, amask);
 
         return AV_PIX_FMT_NONE;

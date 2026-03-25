@@ -106,7 +106,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto pkcs11Cmd = sb.readIntLE16();
-            Application::debug(DebugType::Pkcs11, "{}: cmd: {:#04x}", __FUNCTION__, pkcs11Cmd);
+            Application::debug(DebugType::Pkcs11, "{}: cmd: {:#06x}", __FUNCTION__, pkcs11Cmd);
 
             if(Pkcs11Op::Init == pkcs11Cmd) {
                 pkcs11Init(sb);
@@ -121,7 +121,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             } else if(Pkcs11Op::DecryptData == pkcs11Cmd) {
                 pkcs11DecryptData(sb);
             } else {
-                Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
+                Application::error("{}: {} failed, cmd: {:#06x}, recv size: {}", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
                 throw channel_error(NS_FuncNameS);
             }
         }

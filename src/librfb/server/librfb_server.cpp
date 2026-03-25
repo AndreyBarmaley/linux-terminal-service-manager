@@ -402,7 +402,7 @@ namespace LTSM {
         }
 
         int clientSecurity = recvInt8();
-        Application::debug(DebugType::Rfb, "{}, client security: {:#02x}", __FUNCTION__, clientSecurity);
+        Application::debug(DebugType::Rfb, "{}, client security: {:#04x}", __FUNCTION__, clientSecurity);
 
         if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
             // RFB 6.1.3 security result
@@ -507,7 +507,7 @@ namespace LTSM {
             const PixelFormat & pf) {
         // RFB 6.3.1 client init
         int clientSharedFlag = recvInt8();
-        Application::debug(DebugType::Rfb, "{}: client shared: {:#02x}", __FUNCTION__, clientSharedFlag);
+        Application::debug(DebugType::Rfb, "{}: client shared: {:#04x}", __FUNCTION__, clientSharedFlag);
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
@@ -632,7 +632,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("{}: unknown message: {:#02x}", __FUNCTION__, msgType);
+                    Application::error("{}: unknown message: {:#04x}", __FUNCTION__, msgType);
                     rfbMessagesShutdown();
                     break;
             }
@@ -749,7 +749,7 @@ namespace LTSM {
             const char* name = RFB::encodingName(encoding);
 
             if(0 == std::strcmp(name, "unknown")) {
-                Application::info("{}: request encodings: {:#08x}", __FUNCTION__, encoding);
+                Application::info("{}: request encodings: {:#010x}", __FUNCTION__, encoding);
             } else {
                 Application::info("{}: request encodings: {}", __FUNCTION__, RFB::encodingName(encoding));
             }
@@ -799,7 +799,7 @@ namespace LTSM {
         bool pressed = recvInt8();
         recvSkip(2);
         uint32_t keysym = recvIntBE32();
-        Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#08x}", __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
+        Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}", __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
         serverRecvKeyEvent(pressed, keysym);
     }
 
@@ -809,7 +809,7 @@ namespace LTSM {
         uint8_t buttons = recvInt8();
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: mask: {:#02x}, pos: [ {}, {}]", __FUNCTION__, buttons, posx, posy);
+        Application::debug(DebugType::Rfb, "{}: mask: {:#04x}, pos: [ {}, {}]", __FUNCTION__, buttons, posx, posy);
         serverRecvPointerEvent(buttons, posx, posy);
     }
 
@@ -1381,7 +1381,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::cursorFailed(uint32_t cursorId) {
-        Application::info("{}: cursorId: {:#08x}", __FUNCTION__, cursorId);
+        Application::info("{}: cursorId: {:#010x}", __FUNCTION__, cursorId);
         cursorSended.remove(cursorId);
     }
 }

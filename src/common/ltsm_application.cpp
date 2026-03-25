@@ -749,7 +749,7 @@ namespace LTSM {
             Application::info("{}: process {}, pid: {}, return: {}",
                               __FUNCTION__, "exited", pid, WEXITSTATUS(status));
         } else {
-            Application::debug(DebugType::App, "{}: process {}, pid: {}, wstatus: {:#08x}",
+            Application::debug(DebugType::App, "{}: process {}, pid: {}, wstatus: {:#010x}",
                                __FUNCTION__, "ended", pid, status);
         }
 

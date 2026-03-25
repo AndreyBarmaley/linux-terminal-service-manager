@@ -1506,7 +1506,7 @@ namespace LTSM {
 
         void Server::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const {
             auto err = Gss::error2str(code1, code2);
-            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#08x}, {:#08x}]", func, subfunc, err, code1, code2);
+            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
 
         // GssApi::Client
@@ -1539,7 +1539,7 @@ namespace LTSM {
 
         void Client::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const {
             auto err = Gss::error2str(code1, code2);
-            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#08x}, {:#08x}]", func, subfunc, err, code1, code2);
+            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
     } // GssApi
 

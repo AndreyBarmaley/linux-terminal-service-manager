@@ -213,7 +213,7 @@ namespace LTSM {
             auto err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Init) {
-                Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
                 fuse->exitSession();
                 return;
             }
@@ -272,7 +272,7 @@ namespace LTSM {
         Application::debug(DebugType::App, "{}: ino: {}", __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "{}: file info - flags: {:#08x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: {:#010x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -354,7 +354,7 @@ namespace LTSM {
         Application::debug(DebugType::App, "{}: ino: {}, max size: {}, offset: {}", __FUNCTION__, ino, maxsize, off);
 
         if(fi) {
-            Application::debug(DebugType::App, "{}: file info - flags: {:#08x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: {:#010x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -399,7 +399,7 @@ namespace LTSM {
         Application::debug(DebugType::App, "{}: ino: {}", __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "{}: file info - flags: {:#08x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: {:#010x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
         } else {
             Application::error("{}: {} failed", __FUNCTION__, "fuse_file_info");
             fuse_reply_err(req, EFAULT);
@@ -448,7 +448,7 @@ namespace LTSM {
             auto err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Open) {
-                Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
                 fuse_reply_err(req, EFAULT);
                 return;
             }
@@ -474,7 +474,7 @@ namespace LTSM {
         Application::debug(DebugType::App, "{}: ino: {}", __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "{}: file info - flags: {:#08x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: {:#010x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
         } else {
             Application::error("{}: {} failed", __FUNCTION__, "fuse_file_info");
             fuse_reply_err(req, EFAULT);
@@ -519,7 +519,7 @@ namespace LTSM {
             auto err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Release) {
-                Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
                 fuse_reply_err(req, EFAULT);
                 return;
             }
@@ -542,7 +542,7 @@ namespace LTSM {
         Application::debug(DebugType::App, "{}: ino: {}", __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "{}: file info - flags: {:#08x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: {:#010x}, fh: {}", __FUNCTION__, fi->flags, fi->fh);
         } else {
             Application::error("{}: {} failed", __FUNCTION__, "fuse_file_info");
             fuse_reply_err(req, EFAULT);
@@ -592,7 +592,7 @@ namespace LTSM {
             int err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Read) {
-                Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
                 fuse_reply_err(req, EFAULT);
                 return;
             }
@@ -621,7 +621,7 @@ namespace LTSM {
     }
 
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask) {
-        Application::debug(DebugType::App, "{}: ino: {}, mask: {:#08x}", __FUNCTION__, ino, mask);
+        Application::debug(DebugType::App, "{}: ino: {}, mask: {:#010x}", __FUNCTION__, ino, mask);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse) {

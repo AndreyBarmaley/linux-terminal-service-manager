@@ -122,7 +122,7 @@ namespace LTSM {
         auto err = co_await async_recv_le16();
 
         if(cmd != AudioOp::Init) {
-            Application::error("{}: {} failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+            Application::error("{}: {} failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
             throw audio_error(NS_FuncNameS);
         }
 
@@ -137,7 +137,7 @@ namespace LTSM {
         // encoding
         auto enc = co_await async_recv_le16();
 
-        Application::info("{}: client proto version: {}, encode type: {:#04x}", __FUNCTION__, ver, enc);
+        Application::info("{}: client proto version: {}, encode type: {:#06x}", __FUNCTION__, ver, enc);
 
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS

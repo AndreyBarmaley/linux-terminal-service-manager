@@ -171,13 +171,13 @@ namespace LTSM {
 
         if(media_type != SPA_MEDIA_TYPE_audio) {
             const char* type_name = spa_debug_type_find_name(spa_type_media_type, media_type);
-            Application::warning("{}: unsupported media type: {}({:#08x})", __FUNCTION__, type_name, media_type);
+            Application::warning("{}: unsupported media type: {}({:#010x})", __FUNCTION__, type_name, media_type);
             return;
         }
 
         if(media_subtype != SPA_MEDIA_SUBTYPE_raw) {
             const char* subtype_name = spa_debug_type_find_name(spa_type_media_subtype, media_subtype);
-            Application::warning("{}: unsupported media subtype: {}({:#08x})", __FUNCTION__, subtype_name, media_subtype);
+            Application::warning("{}: unsupported media subtype: {}({:#010x})", __FUNCTION__, subtype_name, media_subtype);
             return;
         }
 

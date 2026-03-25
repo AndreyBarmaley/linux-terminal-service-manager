@@ -87,7 +87,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::extClipboardRemoteTypesEvent(uint16_t types) {
-        Application::debug(DebugType::X11Cli, "{}, types: {:#04x}", __FUNCTION__, types);
+        Application::debug(DebugType::X11Cli, "{}, types: {:#06x}", __FUNCTION__, types);
 
         if(extClipboardRemoteCaps()) {
             clipRemoteTypes = types;
@@ -102,7 +102,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::X11Cli, "{}, type: {:#04x}, length: {}", __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::X11Cli, "{}, type: {:#06x}, length: {}", __FUNCTION__, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
@@ -114,7 +114,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, const uint8_t* buf, uint32_t len) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#08x}, length: {}", __FUNCTION__, atom, len);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, length: {}", __FUNCTION__, atom, len);
 
         if(auto ptr = const_cast<RFB::X11Client*>(this)) {
             if(extClipboardRemoteCaps()) {
@@ -166,7 +166,7 @@ namespace LTSM {
     }
 
     bool RFB::X11Client::selectionSourceReady(xcb_atom_t atom) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#08x}", __FUNCTION__, atom);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}", __FUNCTION__, atom);
         auto targets = selectionSourceTargets();
 
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
@@ -205,7 +205,7 @@ namespace LTSM {
     }
 
     size_t RFB::X11Client::selectionSourceSize(xcb_atom_t atom) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#08x}", __FUNCTION__, atom);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}", __FUNCTION__, atom);
         auto targets = selectionSourceTargets();
 
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
@@ -217,7 +217,7 @@ namespace LTSM {
     }
 
     std::vector<uint8_t> RFB::X11Client::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#08x}, offset: {}, length: {}", __FUNCTION__, atom, offset, length);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, offset: {}, length: {}", __FUNCTION__, atom, offset, length);
 
         auto targets = selectionSourceTargets();
 

@@ -591,7 +591,7 @@ namespace LTSM {
                     break;
 
                 default: {
-                    Application::error("{}: unknown message: {:#02x}", __FUNCTION__, msgType);
+                    Application::error("{}: unknown message: {:#04x}", __FUNCTION__, msgType);
                     rfbMessagesShutdown();
                 }
             }
@@ -654,7 +654,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym) {
-        Application::debug(DebugType::Rfb, "{}: keysym: {:#08x}, pressed: {}", __FUNCTION__, keysym, (int) pressed);
+        Application::debug(DebugType::Rfb, "{}: keysym: {:#010x}, pressed: {}", __FUNCTION__, keysym, (int) pressed);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_KEY);
         sendInt8(pressed ? 1 : 0);
@@ -665,7 +665,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {
-        Application::debug(DebugType::Rfb, "{}: pointer: {}, buttons: {:#02x}", __FUNCTION__, XCB::Point(posx, posy), buttons);
+        Application::debug(DebugType::Rfb, "{}: pointer: {}, buttons: {:#04x}", __FUNCTION__, XCB::Point(posx, posy), buttons);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_POINTER);
         sendInt8(buttons);
@@ -881,7 +881,7 @@ namespace LTSM {
             col.g = recvInt8();
             col.b = recvInt8();
 
-            Application::trace(DebugType::Rfb, "{}: color [{:#02x},{:#02x},{:#02x}]", __FUNCTION__, col.r, col.g, col.b);
+            Application::trace(DebugType::Rfb, "{}: color [{:#04x},{:#04x},{:#04x}]", __FUNCTION__, col.r, col.g, col.b);
         }
 
         clientRecvSetColorMapEvent(colors);
@@ -969,7 +969,7 @@ namespace LTSM {
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: screen: {}, area: {}, flags: {:#08x}",
+            Application::debug(DebugType::Rfb, "{}: screen: {}, area: {}, flags: {:#010x}",
                                __FUNCTION__, screen.id, XCB::Region(posx, posy, screen.width, screen.height), flags);
         }
 

@@ -84,7 +84,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardRemoteTypesEvent(uint16_t types) {
-        Application::debug(DebugType::WinCli, "{}, types: {:#04x}", __FUNCTION__, types);
+        Application::debug(DebugType::WinCli, "{}, types: {:#06x}", __FUNCTION__, types);
 
         if(extClipboardRemoteCaps()) {
             clipRemoteTypes = types;
@@ -98,7 +98,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::WinCli, "{}, type: {:#04x}, length: {}", __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::WinCli, "{}, type: {:#06x}, length: {}", __FUNCTION__, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };

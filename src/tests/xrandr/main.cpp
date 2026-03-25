@@ -31,7 +31,7 @@ class X11Test : public XCB::RootDisplay {
             Application::info("allowed depth: {}, visuals: {}", dIter.data->depth, dIter.data->visuals_len);
 
             for(auto vIter = xcb_depth_visuals_iterator(dIter.data); vIter.rem; xcb_visualtype_next(& vIter))
-                Application::info("visual id: {:#02x}, class: {:#02x}, bits per rgb value: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}, color entries: {}",
+                Application::info("visual id: {:#04x}, class: {:#04x}, bits per rgb value: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}, color entries: {}",
                                   vIter.data->visual_id, vIter.data->_class, vIter.data->bits_per_rgb_value, vIter.data->red_mask, vIter.data->green_mask, vIter.data->blue_mask, vIter.data->colormap_entries);
         }
 
@@ -63,20 +63,20 @@ class X11Test : public XCB::RootDisplay {
 
                     // window, crtc, mode, rotation, x, y, width, height
                     if(0 < cc.width && 0 < cc.height) {
-                        Application::info("randr crtc change notify, window: {:#08x}, crtc: {:#08x}, mode: {}, rotation: {:#04x}, geometry: [{}, {}, {}, {}], sequence: {:#04x}, timestamp: {}",
+                        Application::info("randr crtc change notify, window: {:#010x}, crtc: {:#010x}, mode: {}, rotation: {:#06x}, geometry: [{}, {}, {}, {}], sequence: {:#06x}, timestamp: {}",
                                           cc.window, cc.crtc, cc.mode, cc.rotation, cc.x, cc.y, cc.width, cc.height, rn->sequence, cc.timestamp);
                     }
                 } else if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_OUTPUT_CHANGE)) {
                     auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
                     xcb_randr_output_change_t oc = rn->u.oc;
                     // window, output, crtc, mode, rotation, connection, subpixel
-                    Application::info("randr output change notify, window: {:#08x}, output: {:#08x}, crtc: {:#08x}, mode: {}, rotation: {:#04x}, connection: {}, subpixel_order: {}, sequence: {:#04x}, timestamp: {}, config timestamp: {}",
+                    Application::info("randr output change notify, window: {:#010x}, output: {:#010x}, crtc: {:#010x}, mode: {}, rotation: {:#06x}, connection: {}, subpixel_order: {}, sequence: {:#06x}, timestamp: {}, config timestamp: {}",
                                       oc.window, oc.output, oc.crtc, oc.mode, oc.rotation, oc.connection, oc.subpixel_order, rn->sequence, oc.timestamp, oc.config_timestamp);
                 } else if(XCB::RootDisplay::isRandrScreenNotify(ev)) {
                     // windows, timestamps, sizeID, subpixel, width, height, mwidth, mheight,
                     auto sc = reinterpret_cast<xcb_randr_screen_change_notify_event_t*>(ev.get());
 
-                    Application::info("randr screen change notify,  rotation: {:#02x}, sequence: {:#04x}, root: {:#08x}, request_window: {:#08x}, sizeID: {}, size: [{}, {}], monitor: [{}, {}], timestamp: {}, config timestamp: {}",
+                    Application::info("randr screen change notify,  rotation: {:#04x}, sequence: {:#06x}, root: {:#010x}, request_window: {:#010x}, sizeID: {}, size: [{}, {}], monitor: [{}, {}], timestamp: {}, config timestamp: {}",
                                       sc->rotation, sc->sequence, sc->root, sc->request_window, sc->sizeID, sc->width, sc->height, sc->mwidth, sc->mheight, sc->timestamp, sc->config_timestamp);
                 }
             }
@@ -117,7 +117,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(auto info : modes) {
             if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
-                Application::info("mode {:#08x}, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
+                Application::info("mode {:#010x}, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
             }
         }
 

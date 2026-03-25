@@ -321,7 +321,7 @@ namespace LTSM {
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#08x}, sub rects: {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}, sub rects: {}",
                                __FUNCTION__, jobId, reg + top, back, goods.size());
 
             sendRects(& wrap, reg, fb, jobId, back, goods);
@@ -330,7 +330,7 @@ namespace LTSM {
         else {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#08x}, {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}, {}",
                                __FUNCTION__, jobId, reg + top, back, "solid");
 
             // num sub rects
@@ -383,7 +383,7 @@ namespace LTSM {
                 st->sendIntBE16(region.height);
             }
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#08x}",
+            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}",
                                __FUNCTION__, jobId, region - reg.topLeft(), pair.pixel());
         }
     }
@@ -434,7 +434,7 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, {}",
                                __FUNCTION__, jobId, reg + top, back, "solid");
 
             // hextile flags
@@ -461,7 +461,7 @@ namespace LTSM {
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, sub rects: {}, {}",
+                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, sub rects: {}, {}",
                                        __FUNCTION__, jobId, reg + top, back, goods.size(), "foreground");
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
@@ -476,7 +476,7 @@ namespace LTSM {
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, sub rects: {}, {}",
+                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, sub rects: {}, {}",
                                        __FUNCTION__, jobId, reg + top, back, goods.size(), "colored");
 
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
@@ -502,7 +502,7 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}",
+            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}",
                                __FUNCTION__, jobId, region- reg.topLeft(), pair.pixel());
         }
     }
@@ -587,7 +587,7 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, {}",
                                __FUNCTION__, jobId, reg + top, back, "solid");
 
             // subencoding type: solid tile
