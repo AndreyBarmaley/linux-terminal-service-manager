@@ -54,7 +54,9 @@ namespace LTSM {
         void unlock(void) {
             if(1 < queue_.fetch_sub(1, std::memory_order_release)) {
                 // there's someone else waiting, let's skip one
-                timer_.cancel_one();
+                while(0 == timer_.cancel_one()) {
+                    std::this_thread::yield();
+                }
             }
         }
     };
