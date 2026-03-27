@@ -76,7 +76,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbRandrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify) {
-        Application::info("{}: size: {}, sequence: {:#06x}", __FUNCTION__, wsz, notify.sequence);
+        Application::info("{}: size: {}, sequence: {}", __FUNCTION__, wsz, notify.sequence);
         xcbShmInit(0, & wsz);
         displayResizeProcessed = false;
         serverDisplayResizedEvent(wsz);
