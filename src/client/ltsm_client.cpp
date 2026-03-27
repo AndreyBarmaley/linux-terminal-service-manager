@@ -340,6 +340,22 @@ namespace LTSM {
                 }
             }
         }
+
+        if(frameRate == 0) {
+            switch(videoEncoding) {
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
+                    // set default
+                    frameRate = 16;
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    
+        appStart = std::chrono::steady_clock::now();
     }
 
     void Vnc2SDL::loadConfig(const std::filesystem::path & config) {
@@ -1612,8 +1628,11 @@ namespace LTSM {
         jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
         jo.push("x11:nodamage", xcbNoDamage);
         jo.push("x11:dpi", xcbDpi);
-        jo.push("frame:rate", frameRate);
         jo.push("enc:opts", opts.flush());
+
+        if(frameRate) {
+            jo.push("frame:rate", frameRate);
+        }
 
         if(username.empty()) {
             if(auto env = std::getenv("USER")) {
@@ -1698,9 +1717,13 @@ namespace LTSM {
     }
 
     void Vnc2SDL::windowResizedEvent(int width, int height) {
-        windowSize = XCB::Size(width, height);
-        sendSetDesktopSize(windowSize);
-        sendFrameBufferUpdate(false);
+        auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
+        // skip: starting window resized
+        if(time.count() > 3) {
+            windowSize = XCB::Size(width, height);
+            sendSetDesktopSize(windowSize);
+            sendFrameBufferUpdate(false);
+        }
     }
 }
 

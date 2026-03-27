@@ -188,6 +188,10 @@ namespace LTSM {
         auto frameTimePoint = std::chrono::steady_clock::now();
         size_t delayTimeout = 75;
 
+        if(0 == frameRateOption()) {
+            delayTimeout = 0;
+	}
+
         // process rfb messages background
         auto rfbThread = std::thread([this]() {
             this->rfbMessagesLoop();
@@ -579,7 +583,7 @@ namespace LTSM {
         XCB::Region desktop(0, 0, 0, 0);
 
         for(const auto & info : screens) {
-            Application::info("{}: screen id: {:#010x}, region: {}, flags: {:#010x}",
+            Application::info("{}: screen id: {}, region: {}, flags: {:#010x}",
                               __FUNCTION__, info.id, info.pos(), info.flags);
             desktop.join(info.pos());
         }
@@ -677,8 +681,8 @@ namespace LTSM {
                 std::this_thread::sleep_for(30ms);
                 continue;
             } catch(const std::exception & err) {
-                break;
             }
+            break;
         }
 
         if(! pixmapReply) {

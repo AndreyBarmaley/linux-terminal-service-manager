@@ -1362,12 +1362,15 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts, uint32_t frameRate) {
+	constexpr uint32_t minFps = 5;
+	constexpr uint32_t maxFps = 20;
+
         if(encoder) {
             switch(encoder->getType()) {
                 case RFB::ENCODING_LTSM_H264:
                 case RFB::ENCODING_LTSM_AV1:
                 case RFB::ENCODING_LTSM_VP8:
-                    encoder->setFps(frameRate);
+                    encoder->setFps(std::clamp(frameRate, minFps, maxFps));
                     serverScreenUpdateRequest();
                     break;
 

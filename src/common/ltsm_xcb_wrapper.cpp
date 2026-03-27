@@ -1260,10 +1260,10 @@ namespace LTSM {
             auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, ptr.get(), screen, screenInfo->timestamp,
                                            screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
 
-            if(const auto & err = xcbReply2.error()) {
-                Application::debug(DebugType::Xcb, "{}: set size: {}, timestamp: {}, config_timestamp: {}, id: {}, rotation: {}, rate: {}",
-                        __FUNCTION__, Size(szw, szh), screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
+            Application::debug(DebugType::Xcb, "{}: screenInfo timestamp: {}, config_timestamp: {}, id: {}, rotation: {}, rate: {}",
+                    __FUNCTION__, screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
 
+            if(const auto & err = xcbReply2.error()) {
                 error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
                 return false;
             }

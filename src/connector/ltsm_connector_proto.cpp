@@ -60,12 +60,7 @@ namespace LTSM::Connector {
         Application::info("{}: remote addr: {}", __FUNCTION__, _remoteaddr);
 
         _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
-        _frameRate = config().getInteger("vnc:frame:rate", 16);
-
-        if(_frameRate <= 0) {
-            Application::warning("{}: invalid value for: `{}'", __FUNCTION__, "vnc:frame:rate");
-            _frameRate = 16;
-        }
+        _frameRate = config().getInteger("vnc:frame:rate", 0);
 
         return rfbCommunication();
     }
@@ -375,7 +370,7 @@ namespace LTSM::Connector {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
             _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
             _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
-            _frameRate = opts->getInteger("frame:rate", _frameRate);
+            _frameRate = opts->getInteger("frame:rate", 0);
 
             setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), _frameRate);
 
