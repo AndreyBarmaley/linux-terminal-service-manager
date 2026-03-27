@@ -502,8 +502,8 @@ namespace LTSM {
         std::filesystem::remove(socketPath, err);
 
         if(err) {
-            Application::warning("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "remove", err.value(), err.message());
+            Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
+                    __FUNCTION__, "remove", err.value(), err.message(), socketPath.string());
         }
     }
 
@@ -814,8 +814,8 @@ namespace LTSM {
         std::filesystem::remove(path, err);
 
         if(err) {
-            Application::warning("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "remove", err.value(), err.message());
+            Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
+                    __FUNCTION__, "remove", err.value(), err.message(), path.string());
         }
 
         struct sockaddr_un sockaddr;
@@ -871,8 +871,8 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::is_socket(path, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "is_socket", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                    __FUNCTION__, "is_socket", err.value(), err.message(), path.string());
             return false;
         }
 
@@ -995,14 +995,14 @@ namespace LTSM {
             std::error_code err;
 
             if(! std::filesystem::exists(certFile, err)) {
-                Application::error("{}: {} failed, code: {}, error: {}",
-                        __FUNCTION__, "exists", err.value(), err.message());
+                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                        __FUNCTION__, "exists", err.value(), err.message(), certFile);
                 return false;
             }
 
             if(! std::filesystem::exists(keyFile, err)) {
-                Application::error("{}: {} failed, code: {}, error: {}",
-                        __FUNCTION__, "exists", err.value(), err.message());
+                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                        __FUNCTION__, "exists", err.value(), err.message(), keyFile);
                 return false;
             }
 
@@ -1026,8 +1026,8 @@ namespace LTSM {
                 }
 
                 if(err) {
-                    Application::warning("{}: {} failed, code: {}, error: {}",
-                            __FUNCTION__, "exists", err.value(), err.message());
+                    Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
+                            __FUNCTION__, "exists", err.value(), err.message(), caFile);
                 }
             }
 
@@ -1039,8 +1039,8 @@ namespace LTSM {
                 }
 
                 if(err) {
-                    Application::warning("{}: {} failed, code: {}, error: {}",
-                            __FUNCTION__, "exists", err.value(), err.message());
+                    Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
+                            __FUNCTION__, "exists", err.value(), err.message(), crlFile);
                 }
             }
 

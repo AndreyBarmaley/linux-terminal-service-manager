@@ -210,8 +210,8 @@ namespace LTSM::Connector {
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                            __FUNCTION__, "exists", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                            __FUNCTION__, "exists", err.value(), err.message(), fileName);
             fileName.clear();
         }
 

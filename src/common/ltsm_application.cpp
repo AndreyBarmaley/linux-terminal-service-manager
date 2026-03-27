@@ -556,16 +556,16 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                     __FUNCTION__, "exists", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                     __FUNCTION__, "exists", err.value(), err.message(), file.string());
             return false;
         }
 
         if((std::filesystem::status(file, err).permissions() &
             std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
             if(err) {
-                Application::error("{}: {} failed, code: {}, error: {}",
-                     __FUNCTION__, "status", err.value(), err.message());
+                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                     __FUNCTION__, "status", err.value(), err.message(), file.string());
             } else {
                 Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, "permission failed", file, getuid());
             }

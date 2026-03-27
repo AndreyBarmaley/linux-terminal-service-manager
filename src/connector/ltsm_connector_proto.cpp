@@ -271,9 +271,7 @@ namespace LTSM::Connector {
                 return secInfo;
             }
 
-            std::filesystem::path file(keytab);
             std::error_code err;
-
             if(std::filesystem::is_regular_file(keytab, err)) {
                 Application::info("{}: set KRB5_KTNAME=`{}'", __FUNCTION__, keytab);
                 setenv("KRB5_KTNAME", keytab.c_str(), 1);
@@ -283,8 +281,8 @@ namespace LTSM::Connector {
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {} failed, code: {}, error: {}",
-                                __FUNCTION__, "is_regular_file", err.value(), err.message());
+                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                                __FUNCTION__, "is_regular_file", err.value(), err.message(), keytab);
                 secInfo.authKrb5 = false;
             }
         }

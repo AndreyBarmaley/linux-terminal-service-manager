@@ -572,8 +572,8 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "exists", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                    __FUNCTION__, "exists", err.value(), err.message(), file.string());
             return {};
         }
 
@@ -890,8 +890,8 @@ namespace LTSM {
                 Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file);
             }
         } else {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "exists", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                    __FUNCTION__, "exists", err.value(), err.message(), file.string());
         }
 
         return buf;

@@ -936,8 +936,8 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(cvt, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "exists", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                    __FUNCTION__, "exists", err.value(), err.message(), cvt);
             return 0;
         }
 
@@ -3390,9 +3390,9 @@ namespace LTSM {
                 Application::debug(DebugType::Xcb, "{}: crtc change notify, size: {}, crtc: {:#010x}, mode: {}, rotation: {:#06x}, sequence: {}, timestamp: {}",
                                    __FUNCTION__, Size(cc.width, cc.height), cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
-                if(createFullScreenDamage()) {
-                    xcb_flush(_conn.get());
-                }
+                //if(createFullScreenDamage()) {
+                //    xcb_flush(_conn.get());
+                //}
 
                 xcbRandrScreenChangedEvent(wsz, *rn);
             }

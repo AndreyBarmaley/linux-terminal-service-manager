@@ -73,8 +73,8 @@ namespace LTSM {
         auto linkto = std::filesystem::read_symlink(path, err);
 
         if(err) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                            __FUNCTION__, "read_symlink", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                            __FUNCTION__, "read_symlink", err.value(), err.message(), path);
             throw fuse_error(NS_FuncNameS);
         }
 

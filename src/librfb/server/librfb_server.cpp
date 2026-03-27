@@ -421,8 +421,8 @@ namespace LTSM {
                 std::error_code err;
 
                 if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                    Application::error("{}: {} failed, code: {}, error: {}",
-                                        __FUNCTION__, "exists", err.value(), err.message());
+                    Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                                        __FUNCTION__, "exists", err.value(), err.message(), secInfo.passwdFile);
                     sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                     return false;
                 }
