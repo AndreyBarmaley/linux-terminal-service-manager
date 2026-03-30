@@ -318,7 +318,7 @@ namespace LTSM::DisplaySession {
 
         if(getenv("LTSM_LOGIN_MODE")) {
             // helper login
-            auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper");
+            auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/ltsm_helper");
 
             if(! std::filesystem::exists(helperBin)) {
                 Application::error("{}: path not found: `{}'", __FUNCTION__, helperBin);
