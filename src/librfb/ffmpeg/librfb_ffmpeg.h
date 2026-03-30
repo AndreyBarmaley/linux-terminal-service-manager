@@ -124,7 +124,7 @@ namespace LTSM {
             const AVPixelFormat localFormat{AV_PIX_FMT_YUV420P};
 
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
-            int fps;
+            int fps = 16;
             // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
             int64_t pts = 0;
 

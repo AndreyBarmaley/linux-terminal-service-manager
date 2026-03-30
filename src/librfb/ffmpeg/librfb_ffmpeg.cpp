@@ -173,11 +173,13 @@ namespace LTSM {
     */
 
     void RFB::EncodingFFmpeg::setFps(uint32_t val) {
-        std::scoped_lock guard{ lockUpdate };
-        fps = val;
-        Application::info("{}: set FPS: {}", __FUNCTION__, fps);
-        if(avcctx) {
-            initContext(XCB::Size(avcctx->width, avcctx->height));
+        if(val) {
+            std::scoped_lock guard{ lockUpdate };
+            fps = val;
+            Application::info("{}: set FPS: {}", __FUNCTION__, fps);
+            if(avcctx) {
+                initContext(XCB::Size(avcctx->width, avcctx->height));
+            }
         }
     }
 
