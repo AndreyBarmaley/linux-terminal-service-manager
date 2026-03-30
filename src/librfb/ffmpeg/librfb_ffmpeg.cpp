@@ -84,7 +84,7 @@ namespace LTSM {
 
 #ifdef LTSM_ENCODING_FFMPEG
     // EncodingFFmpeg
-    RFB::EncodingFFmpeg::EncodingFFmpeg(int type, int fps_) : EncodingBase(type), fps(fps_) {
+    RFB::EncodingFFmpeg::EncodingFFmpeg(int type) : EncodingBase(type) {
         av_log_set_level(AV_LOG_QUIET);
         av_log_set_callback(FFMPEG::logCallback);
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
@@ -113,8 +113,6 @@ namespace LTSM {
                                encodingName(type));
             throw ffmpeg_error(NS_FuncNameS);
         }
-
-        Application::info("{}: set FPS: {}", __FUNCTION__, fps);
     }
 
     const char* RFB::EncodingFFmpeg::getTypeName(void) const {

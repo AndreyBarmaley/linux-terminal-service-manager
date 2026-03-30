@@ -135,7 +135,7 @@ namespace LTSM {
             void resizedEvent(const XCB::Size &) override;
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 
-            EncodingFFmpeg(int type, int fps = 25);
+            EncodingFFmpeg(int type);
             ~EncodingFFmpeg() = default;
 
             const char* getTypeName(void) const override;
