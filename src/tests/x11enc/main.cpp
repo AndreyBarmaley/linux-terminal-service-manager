@@ -179,11 +179,7 @@ class EncodingTest : public Application {
         auto dsz = xcb->size();
         auto reg = XCB::Region{{0, 0}, dsz};
         auto bpp = xcb->bitsPerPixel() >> 3;
-        auto pitch = dsz.width * bpp;
-
-        if(auto align8 = pitch % 8) {
-            pitch += 8 - align8;
-        }
+        auto pitch = Tools::alignUp(dsz.width * bpp, 8);
 
         Application::info("{}: settings - fps: {}, threads: {}, iterations: {}", __FUNCTION__, frameRate, threadsCount, countLoop);
         Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());

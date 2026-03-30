@@ -1156,10 +1156,7 @@ namespace LTSM {
         }
 
         // align size
-        if(auto alignW = width % 8) {
-            width += 8 - alignW;
-        }
-
+        width = Tools::alignUp(width, 8);
         Application::debug(DebugType::Xcb,  "{}: size: {}, dpi: {}", __FUNCTION__, Size(width, height), dpi);
 
         uint32_t mm_width = width * 25.4 / dpi;
@@ -1184,9 +1181,7 @@ namespace LTSM {
         }
 
         // align size
-        if(auto alignW = szw % 8) {
-            szw += 8 - alignW;
-        }
+        szw = Tools::alignUp(szw, 8);
 
         auto screenSizes = getScreenSizes();
         auto its = std::ranges::find_if(screenSizes, [&](auto & ss) {
@@ -1334,10 +1329,7 @@ namespace LTSM {
         const size_t pagesz = 4096;
 
         // shmsz: align page 4096
-        if(auto align = shmsz % pagesz) {
-            shmsz += pagesz - align;
-        }
-
+        shmsz = Tools::alignUp(shmsz, 4096);
         int shmId = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
 
         if(shmId == -1) {
@@ -3104,9 +3096,7 @@ namespace LTSM {
             screenArea.y = 0;
         }
 
-        if(auto alignW = screenArea.width % 8) {
-            screenArea.width += 8 - alignW;
-        }
+        screenArea.width = Tools::alignUp(screenArea.width, 8);
 
         if(! _modRandr->setScreenSize(screenArea.width, screenArea.height)) {
             return false;

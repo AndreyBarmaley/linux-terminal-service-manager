@@ -101,25 +101,13 @@ namespace LTSM {
             *this = reg;
         }
 
-        template <typename T>
-        constexpr T align_up(T n, size_t alignment) {
-            if (!std::has_single_bit(alignment)) return 0; 
-            return (n + alignment - 1) & ~(alignment - 1);
-        }
-
-        template <typename T>
-        constexpr T align_down(T n, size_t alignment) {
-            if (!std::has_single_bit(alignment)) return n; 
-            return n & ~(alignment - 1);
-        }
-
         Region Region::align(size_t val) const {
             Region res;
 
-            res.x = align_down(x, val);
-            res.y = align_down(y, val);
-            res.width = align_up(width + (x - res.x), val);
-            res.height = align_up(height + (y - res.y), val);
+            res.x = Tools::alignDown(x, val);
+            res.y = Tools::alignDown(y, val);
+            res.width = Tools::alignUp(width + (x - res.x), val);
+            res.height = Tools::alignUp(height + (y - res.y), val);
 
             return res;
         }

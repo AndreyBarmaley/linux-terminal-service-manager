@@ -31,6 +31,7 @@
 #include <pwd.h>
 #endif
 
+#include <bit>
 #include <list>
 #include <chrono>
 #include <vector>
@@ -276,6 +277,18 @@ namespace LTSM {
         template<typename Cont>
         inline std::string hexString(const Cont & cont, size_t width = 8, std::string_view sep = ",", bool prefix = true) {
             return rangeHexString(std::cbegin(cont), std::cend(cont), width, sep, prefix);
+        }
+
+        template <typename T>
+        constexpr T alignUp(T n, size_t alignment) {
+            if (!std::has_single_bit(alignment)) return 0;
+            return (n + alignment - 1) & ~(alignment - 1);
+        }
+
+        template <typename T>
+        constexpr T alignDown(T n, size_t alignment) {
+            if (!std::has_single_bit(alignment)) return n;
+            return n & ~(alignment - 1);
         }
 
         // BaseSpinLock
