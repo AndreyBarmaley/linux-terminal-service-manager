@@ -1012,7 +1012,7 @@ namespace LTSM::Manager {
         timer_alive_.expires_after(dur_alive_);
         timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
 
-        inotifyWatchStart();
+        inotifyWatchStart(ctx);
 
 #ifdef LTSM_WITH_AUDIT
         auditLog = std::make_unique<AuditService>();
