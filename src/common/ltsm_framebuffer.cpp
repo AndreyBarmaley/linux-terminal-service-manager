@@ -76,23 +76,23 @@ namespace LTSM {
         return static_cast<uint32_t>(alphaMax) << alphaShift;
     }
 
-    uint8_t PixelFormat::red(int pixel) const {
+    uint8_t PixelFormat::red(uint32_t pixel) const {
         return (pixel >> redShift) & redMax;
     }
 
-    uint8_t PixelFormat::green(int pixel) const {
+    uint8_t PixelFormat::green(uint32_t pixel) const {
         return (pixel >> greenShift) & greenMax;
     }
 
-    uint8_t PixelFormat::blue(int pixel) const {
+    uint8_t PixelFormat::blue(uint32_t pixel) const {
         return (pixel >> blueShift) & blueMax;
     }
 
-    uint8_t PixelFormat::alpha(int pixel) const {
+    uint8_t PixelFormat::alpha(uint32_t pixel) const {
         return (pixel >> alphaShift) & alphaMax;
     }
 
-    Color PixelFormat::color(int pixel) const {
+    Color PixelFormat::color(uint32_t pixel) const {
         return Color(red(pixel), green(pixel), blue(pixel), alpha(pixel));
     }
 
@@ -171,7 +171,7 @@ namespace LTSM {
         }
     }
 
-    int PixelMapPalette::findColorIndex(const uint32_t & col) const {
+    uint32_t PixelMapPalette::findColorIndex(const uint32_t & col) const {
 #if defined(__APPLE__) || defined(LTSM_CENTOS7)
         auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
             return pair.first == col;
@@ -184,7 +184,7 @@ namespace LTSM {
         return it != cend() ? (*it).second : -1;
     }
 
-    int PixelMapWeight::maxWeightPixel(void) const {
+    uint32_t PixelMapWeight::maxWeightPixel(void) const {
 #if defined(__APPLE__) || defined(LTSM_CENTOS7)
         auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;

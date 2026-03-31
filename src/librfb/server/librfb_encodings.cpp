@@ -205,7 +205,7 @@ namespace LTSM {
     }
 
     std::list<XCB::RegionPixel> RFB::EncodingBase::rreProcessing(const XCB::Region & badreg, const FrameBuffer & fb,
-            int skipPixel) {
+            uint32_t skipPixel) {
         std::list<XCB::RegionPixel> goods;
         std::list<XCB::Region> bads1 = { badreg };
         std::list<XCB::Region> bads2;
@@ -316,7 +316,7 @@ namespace LTSM {
         }
 
         if(map.size() > 1) {
-            int back = map.maxWeightPixel();
+            auto back = map.maxWeightPixel();
             std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, back);
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
@@ -442,7 +442,7 @@ namespace LTSM {
             wrap.sendPixel(back);
         } else if(map.size() > 1) {
             // no wait, worked
-            int back = map.maxWeightPixel();
+            auto back = map.maxWeightPixel();
             std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, back);
             // all other color
             bool foreground = std::ranges::all_of(goods, [col = goods.front().second](auto & pair) {
@@ -594,16 +594,16 @@ namespace LTSM {
             wrap.sendInt8(1);
             wrap.sendCPixel(back);
         } else if(2 <= map.size() && map.size() <= 16) {
-            size_t fieldWidth = 1;
+            auto fieldWidth = Tools::StreamBitsPack::Field::Val1;
 
             if(4 < map.size()) {
-                fieldWidth = 4;
+                fieldWidth = Tools::StreamBitsPack::Field::Val4;
             } else if(2 < map.size()) {
-                fieldWidth = 2;
+                fieldWidth = Tools::StreamBitsPack::Field::Val2;
             }
 
             Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, palsz: {}, packed: {}",
-                               __FUNCTION__, jobId, reg + top, map.size(), fieldWidth);
+                               __FUNCTION__, jobId, reg + top, map.size(), static_cast<int>(fieldWidth));
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
         } else {
@@ -646,7 +646,7 @@ namespace LTSM {
     }
 
     void RFB::EncodingTRLE::sendRegionPacked(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId,
-            size_t field, const PixelMapPalette & pal) {
+            const Tools::StreamBitsPack::Field & field, const PixelMapPalette & pal) {
         // subencoding type: packed palette
         st->sendInt8(pal.size());
 
@@ -706,7 +706,7 @@ namespace LTSM {
 
         // send rle indexes
         for(const auto & pair : rle) {
-            int index = pal.findColorIndex(pair.pixel());
+            auto index = pal.findColorIndex(pair.pixel());
             assertm(0 <= index, "palette color not found");
 
             if(1 == pair.length()) {
