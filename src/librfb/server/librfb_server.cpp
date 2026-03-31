@@ -546,6 +546,9 @@ namespace LTSM {
                 serverSendFBUpdateEvent(area);
                 res = true;
             }
+        } catch(const xcb_error_busy&) {
+            Application::warning("{}: update busy, area: {}", __FUNCTION__, area);
+            res = true;
         } catch(const std::exception & err) {
             Application::error("{}: vnc exception: {}", __FUNCTION__, err.what());
         } catch(...) {

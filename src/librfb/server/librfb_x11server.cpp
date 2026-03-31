@@ -670,20 +670,7 @@ namespace LTSM {
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
         Application::debug(DebugType::X11Srv, "{}: region: {}", __FUNCTION__, reg);
-        XCB::PixmapInfoReply pixmapReply;
-        const int attempts = 3;
-
-        for(int it = 0; it < attempts; ++it) {
-            try {
-                pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
-            } catch(const xcb_error_busy&) {
-                Application::warning("{}: {} failed", __FUNCTION__, "copyRootImageRegion");
-                std::this_thread::sleep_for(30ms);
-                continue;
-            } catch(const std::exception & err) {
-            }
-            break;
-        }
+        auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
 
         if(! pixmapReply) {
             Application::error("{}: {}", __FUNCTION__, "xcb copy region empty");
