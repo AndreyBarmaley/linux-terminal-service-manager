@@ -802,7 +802,9 @@ namespace LTSM {
         std::list<XCB::RandrOutputInfoPtr> res;
         for(const auto & id: getOutputs()) {
             if(auto ptr = getOutputInfo(id)) {
-                res.emplace_back(std::move(ptr));
+                if(!connected || ptr->connected) {
+                    res.emplace_back(std::move(ptr));
+                }
             }
         }
         return res;
