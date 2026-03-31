@@ -534,8 +534,6 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_BOOST
         _inotifyStop.emit(boost::asio::cancellation_type::terminal);
-        _inotifyStream.cancel();
-        _inotifyStream.close();
 #else
         if(0 <= _inotifyFd) {
             close(_inotifyFd);

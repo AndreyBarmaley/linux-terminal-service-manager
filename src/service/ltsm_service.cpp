@@ -1067,6 +1067,7 @@ namespace LTSM::Manager {
         }
         childs_.clear();
 
+        inotifyWatchStop();
         work_guard_.reset();
     }
 
