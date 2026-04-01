@@ -58,7 +58,7 @@ struct fmt::formatter<xcb_rectangle_t> {
     }
 
     template <typename FormatContext>
-    auto format(const xcb_rectangle_t& rt, FormatContext& ctx) const {
+    auto format(const xcb_rectangle_t & rt, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "[{}, {}, {}, {}]", rt.x, rt.y, rt.width, rt.height);
     }
 };
@@ -257,10 +257,10 @@ namespace LTSM {
             AtomName(xcb_connection_t* conn, xcb_atom_t at);
             AtomName() = default;
         };
-    
+
         struct RandrOutputInfo {
-	    std::vector<xcb_randr_mode_t> modes;
-	    std::vector<xcb_randr_crtc_t> crtcs;
+            std::vector<xcb_randr_mode_t> modes;
+            std::vector<xcb_randr_crtc_t> crtcs;
             std::string name;
             xcb_randr_crtc_t crtc = 0;
             uint32_t mm_width = 0;
@@ -268,10 +268,10 @@ namespace LTSM {
             bool connected = false;
 
             RandrOutputInfo() = default;
-            RandrOutputInfo(const xcb_randr_get_output_info_reply_t&);
+            RandrOutputInfo(const xcb_randr_get_output_info_reply_t &);
 
-	    bool modeValid(const xcb_randr_mode_t &) const;
-	    bool crtcValid(const xcb_randr_crtc_t &) const;
+            bool modeValid(const xcb_randr_mode_t &) const;
+            bool crtcValid(const xcb_randr_crtc_t &) const;
         };
 
         struct RandrCrtcInfo {
@@ -547,8 +547,8 @@ namespace LTSM {
             std::vector<xcb_randr_screen_size_t> getScreenSizes(void) const;
             std::list<RandrOutputInfoPtr> getOutputsInfo(bool connected = false) const;
 
-            std::unique_ptr<RandrCrtcInfo> getCrtcInfo(const xcb_randr_crtc_t &) const;
-            std::unique_ptr<RandrOutputInfo> getOutputInfo(const xcb_randr_output_t &) const;
+            std::unique_ptr<RandrCrtcInfo> getCrtcInfo(const xcb_randr_crtc_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
+            std::unique_ptr<RandrOutputInfo> getOutputInfo(const xcb_randr_output_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
             std::unique_ptr<RandrScreenInfo> getScreenInfo(void) const;
 
             bool setScreenSize(const Size &, uint16_t dpi = 96) const;
@@ -557,7 +557,7 @@ namespace LTSM {
             bool destroyMode(const xcb_randr_mode_t &) const;
             bool addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
             bool deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
-            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &, uint16_t* = nullptr) const;
+            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &, const xcb_timestamp_t &, uint16_t* = nullptr) const;
             bool crtcDisconnect(const xcb_randr_crtc_t &) const;
         };
 

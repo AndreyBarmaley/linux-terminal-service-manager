@@ -665,7 +665,7 @@ namespace LTSM {
         return {};
     }
 
-    std::unique_ptr<XCB::RandrCrtcInfo> XCB::ModuleRandr::getCrtcInfo(const xcb_randr_crtc_t & id) const {
+    std::unique_ptr<XCB::RandrCrtcInfo> XCB::ModuleRandr::getCrtcInfo(const xcb_randr_crtc_t & id, const xcb_timestamp_t & configTime) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
@@ -673,7 +673,7 @@ namespace LTSM {
             return nullptr;
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, XCB_CURRENT_TIME);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, configTime);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
@@ -746,37 +746,41 @@ namespace LTSM {
         return {};
     }
 
-    XCB::RandrOutputInfo::RandrOutputInfo(const xcb_randr_get_output_info_reply_t& reply) {
+    XCB::RandrOutputInfo::RandrOutputInfo(const xcb_randr_get_output_info_reply_t & reply) {
         connected = reply.connection == XCB_RANDR_CONNECTION_CONNECTED;
         crtc = reply.crtc;
         mm_width = reply.mm_width;
         mm_height = reply.mm_height;
 
         if(auto ptr = xcb_randr_get_output_info_name(&reply)) {
-    	    int len = xcb_randr_get_output_info_name_length(&reply);
-    	    name.assign(reinterpret_cast<const char*>(ptr), len);
-	}
+            int len = xcb_randr_get_output_info_name_length(&reply);
+            name.assign(reinterpret_cast<const char*>(ptr), len);
+        }
 
         if(auto ptr = xcb_randr_get_output_info_modes(&reply)) {
-    	    int len = xcb_randr_get_output_info_modes_length(&reply);
-    	    modes.assign(ptr, ptr + len);
-	}
+            int len = xcb_randr_get_output_info_modes_length(&reply);
+            modes.assign(ptr, ptr + len);
+        }
 
         if(auto ptr = xcb_randr_get_output_info_crtcs(&reply)) {
             int len = xcb_randr_get_output_info_crtcs_length(&reply);
-    	    crtcs.assign(ptr, ptr + len);
-	}
+            crtcs.assign(ptr, ptr + len);
+        }
     }
 
     bool XCB::RandrOutputInfo::modeValid(const xcb_randr_mode_t & mode) const {
-        return std::ranges::any_of(modes, [&](auto & val) { return mode == val; });
+        return std::ranges::any_of(modes, [&](auto & val) {
+            return mode == val;
+        });
     }
 
     bool XCB::RandrOutputInfo::crtcValid(const xcb_randr_crtc_t & crtc) const {
-        return std::ranges::any_of(crtcs, [&](auto & val) { return crtc == val; });
+        return std::ranges::any_of(crtcs, [&](auto & val) {
+            return crtc == val;
+        });
     }
 
-    std::unique_ptr<XCB::RandrOutputInfo> XCB::ModuleRandr::getOutputInfo(const xcb_randr_output_t & id) const {
+    std::unique_ptr<XCB::RandrOutputInfo> XCB::ModuleRandr::getOutputInfo(const xcb_randr_output_t & id, const xcb_timestamp_t & configTime) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
@@ -784,7 +788,7 @@ namespace LTSM {
             return nullptr;
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, configTime);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
@@ -800,13 +804,15 @@ namespace LTSM {
 
     std::list<XCB::RandrOutputInfoPtr> XCB::ModuleRandr::getOutputsInfo(bool connected) const {
         std::list<XCB::RandrOutputInfoPtr> res;
-        for(const auto & id: getOutputs()) {
+
+        for(const auto & id : getOutputs()) {
             if(auto ptr = getOutputInfo(id)) {
-                if(!connected || ptr->connected) {
+                if(! connected || ptr->connected) {
                     res.emplace_back(std::move(ptr));
                 }
             }
         }
+
         return res;
     }
 
@@ -871,16 +877,21 @@ namespace LTSM {
             throw xcb_error(NS_FuncNameS);
         }
 
+        if(0 >= vertRef) {
+            Application::error("{}: vertRef incorrect", __FUNCTION__);
+            throw xcb_error(NS_FuncNameS);
+        }
+
         auto cvt = "/usr/bin/cvt";
         std::error_code err;
 
         if(! std::filesystem::exists(cvt, err)) {
             Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                    __FUNCTION__, "exists", err.value(), err.message(), cvt);
+                               __FUNCTION__, "exists", err.value(), err.message(), cvt);
             throw xcb_error(NS_FuncNameS);
         }
 
-        std::string cmd = Tools::runcmd(fmt::format("{} {} {}", cvt, sz.width, sz.height));
+        std::string cmd = Tools::runcmd(fmt::format("{} {} {} {}", cvt, sz.width, sz.height, vertRef));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
         std::erase_if(params, [](auto & val) {
             return val.empty();
@@ -995,7 +1006,7 @@ namespace LTSM {
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: id: {:#010x}, output: {:#010x}", __FUNCTION__, mode, output);
+        Application::debug(DebugType::Xcb, "{}: output: {:#010x}, mode: {:#010x}", __FUNCTION__, output, mode);
         return true;
     }
 
@@ -1018,7 +1029,7 @@ namespace LTSM {
         return true;
     }
 
-    bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode, uint16_t* sequence) const {
+    bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode, const xcb_timestamp_t & configTime, uint16_t* sequence) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
@@ -1026,46 +1037,44 @@ namespace LTSM {
             return false;
         }
 
-        if(auto screenInfo = getScreenInfo()) {
-	    bool success = true;
+        bool success = true;
 
-    	    for(const auto & output: outputs) {
-        	auto outputInfo = getOutputInfo(output);
+        for(const auto & output : outputs) {
+            auto outputInfo = getOutputInfo(output);
 
-		if(! outputInfo) {
-		    success = false;
-		    continue;
-		}
+            if(! outputInfo) {
+                success = false;
+                continue;
+            }
 
-    		// check output mode present
-		if(! outputInfo->modeValid(mode)) {
-            	    Application::error("{}: output mode not found, mode: {}, output: {}", __FUNCTION__, mode, output);
-		    success = false;
-            	    continue;
-		}
+            // check output mode present
+            if(! outputInfo->modeValid(mode)) {
+                Application::error("{}: output mode not found, mode: {}, output: {}", __FUNCTION__, mode, output);
+                success = false;
+                continue;
+            }
 
-        	auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, screenInfo->config_timestamp,
+            auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, configTime,
                                           posx, posy, mode, XCB_RANDR_ROTATION_ROTATE_0, 1, & output);
 
-        	if(const auto & err = xcbReply.error()) {
-            	    error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
-		    success = false;
-        	}
+            if(const auto & err = xcbReply.error()) {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
+                success = false;
+            }
 
-                if(const auto & reply = xcbReply.reply()) {
-                    if(reply->status == XCB_RANDR_SET_CONFIG_SUCCESS) {
-			if(sequence) {
-			    *sequence = reply->sequence;
-			}
-		    } else {
-                        Application::warning("{}: {} failed, status: {}",
-                               __FUNCTION__, "xcb_randr_set_crtc_config", reply->status);
-                        success = false;
+            if(const auto & reply = xcbReply.reply()) {
+                if(reply->status == XCB_RANDR_SET_CONFIG_SUCCESS) {
+                    if(sequence) {
+                        *sequence = reply->sequence;
                     }
+                } else {
+                    Application::warning("{}: {} failed, status: {}",
+                                         __FUNCTION__, "xcb_randr_set_crtc_config", reply->status);
+                    success = false;
                 }
-	    }
+            }
 
-    	    return success;
+            return success;
         }
 
         return false;
@@ -1079,19 +1088,15 @@ namespace LTSM {
             return false;
         }
 
-        if(auto info = getScreenInfo()) {
-            auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
-                                          0, 0, 0, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr);
+        auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, XCB_CURRENT_TIME,
+                                      0, 0, XCB_NONE, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr);
 
-            if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
-                return false;
-            }
-
-            return true;
+        if(const auto & err = xcbReply.error()) {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
+            return false;
         }
 
-        return false;
+        return true;
     }
 
     bool XCB::ModuleRandr::setScreenSize(const Size & sz, uint16_t dpi) const {
@@ -1488,7 +1493,7 @@ namespace LTSM {
         if(XCB_WINDOW_NONE == win) {
             requestsIncr.clear();
         } else {
-            std::erase_if(requestsIncr, [=](auto & req) {
+            std::erase_if(requestsIncr, [ = ](auto & req) {
                 return req.ev.requestor == win;
             });
         }
@@ -1531,7 +1536,7 @@ namespace LTSM {
             return;
         }
 
-        auto it = std::ranges::find_if(requestsIncr, [=](auto & req) {
+        auto it = std::ranges::find_if(requestsIncr, [ = ](auto & req) {
             return req.ev.requestor == ev->window && req.ev.property == ev->atom && req.ev.time < ev->time;
         });
 
@@ -1695,7 +1700,7 @@ namespace LTSM {
 
         eventRequestDebug(ptr, ev);
 
-        auto it = std::ranges::find_if(requestsIncr, [=](auto & req) {
+        auto it = std::ranges::find_if(requestsIncr, [ = ](auto & req) {
             return req.ev.requestor == ev->requestor && req.ev.selection == ev->selection &&
                    req.ev.target == ev->target && req.ev.property == ev->property;
         });
@@ -1747,7 +1752,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Xcb, "{}: window id: {:#010x}, selection {}",
-                                __FUNCTION__, selectionWin, selectionAtom);
+                           __FUNCTION__, selectionWin, selectionAtom);
 
         source = std::addressof(src);
         selectionTime = 0;
@@ -1936,7 +1941,7 @@ namespace LTSM {
                         eventNotifyWarning(ptr, ev);
 
                         Application::warning("{}: reply empty, type {}, format: {}",
-                                __FUNCTION__, typeAtom, reply->format);
+                                             __FUNCTION__, typeAtom, reply->format);
                     }
                 }
             } else {
@@ -2029,7 +2034,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Xcb, "{}: window id: {:#010x}, selection: {}, target: {:#010x}",
-                __FUNCTION__, selectionWin, selectionAtom, target);
+                           __FUNCTION__, selectionWin, selectionAtom, target);
 
         selectionTrgt = target;
         recipient = std::addressof(rcpt);
@@ -2932,7 +2937,7 @@ namespace LTSM {
         screenArea.width = Tools::alignUp(screenArea.width, 8);
 
         // disconnected current CRTCs
-        for(const auto & info: _modRandr->getOutputsInfo(true /* connected */)) {
+        for(const auto & info : _modRandr->getOutputsInfo(true /* connected */)) {
             _modRandr->crtcDisconnect(info->crtc);
         }
 
@@ -2952,27 +2957,28 @@ namespace LTSM {
                 return info.width == monitor.width && info.height == monitor.height;
             });
 
-	    if(itm == modes.end()) {
-		try {
-	    	    _modRandr->cvtCreateMode(monitor.toSize());
-		} catch(const std::exception & err) {
-	    	    Application::error("{}: exception: {}", __FUNCTION__, err.what());
-	    	    continue;
-		}
-		// rescan modes
-    		modes = _modRandr->getModesInfo();
-        	itm = std::ranges::find_if(modes, [&](auto & info) {
-            	    return info.width == monitor.width && info.height == monitor.height;
-        	});
-	    }
+            if(itm == modes.end()) {
+                try {
+                    _modRandr->cvtCreateMode(monitor.toSize(), 20);
+                } catch(const std::exception & err) {
+                    Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                    continue;
+                }
 
-	    const auto & mode = itm->id;
+                // rescan modes
+                modes = _modRandr->getModesInfo();
+                itm = std::ranges::find_if(modes, [&](auto & info) {
+                    return info.width == monitor.width && info.height == monitor.height;
+                });
+            }
 
-    	    if(_modRandr->addOutputMode(outputs[it], mode)) {
-            	_modRandr->crtcConnectOutputsMode(crtcs[it], monitor.x, monitor.y, { outputs[it] }, mode);
-	    } else {
-	    	Application::error("{}: {} failed", __FUNCTION__, "addOutputMode");
-	    }
+            const auto & mode = itm->id;
+
+            if(_modRandr->addOutputMode(outputs[it], mode)) {
+                _modRandr->crtcConnectOutputsMode(crtcs[it], monitor.x, monitor.y, { outputs[it] }, mode, XCB_CURRENT_TIME);
+            } else {
+                Application::error("{}: {} failed", __FUNCTION__, "addOutputMode");
+            }
         }
 
         return _modRandr->setScreenSize(screenArea.toSize());
@@ -2984,8 +2990,17 @@ namespace LTSM {
         }
 
         const Region monitor(0, 0, Tools::alignUp(sz.width, 8), sz.height);
-        
+
         Application::debug(DebugType::Xcb, "{}: size: {}", __FUNCTION__, monitor.toSize());
+
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn.get(), _screen->root);
+
+        if(const auto & err = xcbReply.error()) {
+            error(_conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            return false;
+        }
+
+        const auto & resources = xcbReply.reply();
 
         auto outputs = _modRandr->getOutputs();
         auto crtcs = _modRandr->getCrtcs();
@@ -3001,40 +3016,71 @@ namespace LTSM {
             return false;
         }
 
+        Region prevMonitor;
+        xcb_randr_mode_t prevMode = 0;
+
+        if(auto info = _modRandr->getOutputInfo(outputs[0], resources->config_timestamp)) {
+            Application::debug(DebugType::Xcb, "{}: output: {} - modes: {}, crtcs: {}, name: `{}', crtc: {}, connected: {}", __FUNCTION__,
+                               outputs[0], info->modes.size(), info->crtcs.size(), info->name, info->crtc, (int) info->connected);
+        }
+
+        if(auto info = _modRandr->getCrtcInfo(crtcs[0], resources->config_timestamp)) {
+            Application::debug(DebugType::Xcb, "{}: crtc: {} - mode: {}, time: {}, x: {}, y: {}, width: {}, height: {}, status: {}", __FUNCTION__,
+                               crtcs[0], info->mode, info->timestamp, info->x, info->y, info->width, info->height, (int) info->status);
+            prevMode = info->mode;
+            prevMonitor = XCB::Region(info->x, info->y, info->width, info->height);
+        }
+
         auto itm = std::ranges::find_if(modes, [&](auto & info) {
             return info.width == monitor.width && info.height == monitor.height;
         });
 
-	if(itm == modes.end()) {
-	    try {
-	    	_modRandr->cvtCreateMode(monitor.toSize());
-	    } catch(const std::exception & err) {
-	    	Application::error("{}: exception: {}", __FUNCTION__, err.what());
-	    	return false;
-	    }
-	    // rescan modes
-    	    modes = _modRandr->getModesInfo();
+        if(itm == modes.end()) {
+            try {
+                _modRandr->cvtCreateMode(monitor.toSize(), 20);
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                return false;
+            }
+
+            // rescan modes
+            modes = _modRandr->getModesInfo();
             itm = std::ranges::find_if(modes, [&](auto & info) {
-            	return info.width == monitor.width && info.height == monitor.height;
+                return info.width == monitor.width && info.height == monitor.height;
             });
-	}
+        } else {
+            Application::debug(DebugType::Xcb, "{}: mode found: {}, size: {}", __FUNCTION__, itm->id, monitor.toSize());
+        }
+
+        if(!_modRandr->setScreenSize(prevMonitor.toSize())) {
+            return false;
+        }
 
         // disconnected current CRTCs
-        for(const auto & info: _modRandr->getOutputsInfo(true /* connected */)) {
+        for(const auto & info : _modRandr->getOutputsInfo(true /* connected */)) {
             _modRandr->crtcDisconnect(info->crtc);
         }
 
-	const auto & mode = itm->id;
+        const auto & mode = itm->id;
 
-    	if(! _modRandr->addOutputMode(outputs[0], mode)) {
-    	    return false;
-    	}
+        if(_modRandr->addOutputMode(outputs[0], mode)) {
+            if(auto info = _modRandr->getOutputInfo(outputs[0])) {
+                auto & modes = info->modes;
+                std::sort(modes.begin(), modes.end());
+                Application::debug(DebugType::Xcb, "{}: modes: {}, [{}]", __FUNCTION__, modes.size(), Tools::join(modes, ","));
+            }
 
-        if(! _modRandr->crtcConnectOutputsMode(crtcs[0], monitor.x, monitor.y, { outputs[0] }, mode, sequence)) {
-    	    return false;
+            if(_modRandr->crtcConnectOutputsMode(crtcs[0], monitor.x, monitor.y,
+                { outputs[0] }, mode, resources->config_timestamp, sequence)) {
+                return true;
+            }
         }
 
-        return _modRandr->setScreenSize(monitor.toSize());
+        // restore
+        _modRandr->setScreenSize(prevMonitor.toSize());
+
+        return _modRandr->crtcConnectOutputsMode(crtcs[0], prevMonitor.x, prevMonitor.y,
+                    { outputs[0] }, prevMode, resources->config_timestamp, sequence);
     }
 
     size_t XCB::RootDisplay::bitsPerPixel(void) const {
@@ -3220,8 +3266,8 @@ namespace LTSM {
                 return GenericEvent();
             }
 
-            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, dn->area, dn->level, dn->sequence, dn->timestamp);
+            //            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
+            //                               __FUNCTION__, dn->area, dn->level, dn->sequence, dn->timestamp);
 
             xcbDamageNotifyEvent(dn->area);
         } else if(isXFixesSelectionNotify(ev)) {

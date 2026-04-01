@@ -272,11 +272,28 @@ class TestApp : public Application {
 */
 
 
-	xcb->setRandrMonitors({{0,0,1024,600}});
-	//uint16_t sequence;
+	//xcb->setRandrMonitors({{0,0,1024,600}});
+	uint16_t sequence;
 	//xcb->setRandrScreenSize(nsz, & sequence);
         //xcb->test_randr_change_events(nsz);
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+
+
+    	Application::info("{}: ----------------------------------", __FUNCTION__);
+	xcb->setRandrScreenSize(XCB::Size(1264, 862), & sequence);
+    	Application::info("{}: seq: {}", __FUNCTION__, sequence);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    	Application::info("{}: ----------------------------------", __FUNCTION__);
+
+
+	xcb->setRandrScreenSize(XCB::Size(1032, 768), & sequence);
+    	Application::info("{}: seq: {}", __FUNCTION__, sequence);
+    	std::this_thread::sleep_for(std::chrono::seconds(1));
+    	Application::info("{}: ----------------------------------", __FUNCTION__);
+
+	xcb->setRandrScreenSize(XCB::Size(1120, 798), & sequence);
+    	Application::info("{}: seq: {}", __FUNCTION__, sequence);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    	Application::info("{}: ----------------------------------", __FUNCTION__);
 
 	shutdown = true;
 	events.join();
