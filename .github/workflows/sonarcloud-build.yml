@@ -139,18 +139,18 @@ jobs:
           echo "::group::test services"
           echo "run ltsm service"
           sudo ./ltsm_service &
-          sleep 5
+          sleep 3
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./ltsm_connector --config /etc/ltsm/ltsm_connector.json --type ltsm" &
-          sleep 5
+          sleep 3
           echo "get vnc screenshot"
           ./ltsm_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
-          sleep 5
+          sleep 3
           grep -i ltsm /var/log/syslog
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
-          sleep 5
+          sleep 3
           echo "::endgroup::"
           echo "::group::x11 tests"
           /usr/bin/Xorg :55 -config ltsm.conf -nolisten tcp -quiet > /dev/null 2>&1 &
