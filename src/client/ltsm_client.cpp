@@ -128,7 +128,7 @@ namespace LTSM {
                                   "    --noaccel (disable SDL2 acceleration)" << std::endl <<
                                   "    --fullscreen (switch to fullscreen mode, Ctrl+F10 toggle)" << std::endl <<
                                   "    --nodamage (skip X11 damage events)" << std::endl <<
-                                  "    --framerate <fps>" << std::endl <<
+                                  "    --fps <fps>" << std::endl <<
                                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
                                   "    --dpi <DPI> (set X11 dpi)" << std::endl <<
                                   "    --resize (allow resizable window)" << std::endl <<
@@ -600,7 +600,7 @@ namespace LTSM {
                 port = 5900;
             }
 
-        } else if(cmd == "--framerate" && arg.size()) {
+        } else if(cmd == "--fps" && arg.size()) {
             try {
                 frameRate = std::stoi(view2string(arg));
             } catch(const std::invalid_argument &) {
