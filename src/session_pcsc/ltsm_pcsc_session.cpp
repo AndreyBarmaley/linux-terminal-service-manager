@@ -166,7 +166,7 @@ namespace PcscLite {
                 return 0;
 
             default:
-                LTSM::Application::warning("{}: unknown cmd: {:#010x}", __FUNCTION__, cmd);
+                LTSM::Application::warning("{}: unknown cmd: {:#010x}", NS_FuncNameV, cmd);
                 break;
         }
 
@@ -207,7 +207,7 @@ namespace LTSM {
             co_await socket().async_connect(path, asio::use_awaitable);
             connected_ = true;
         } catch(const std::exception & ex) {
-            Application::error("{}: exception: {}", __FUNCTION__, ex.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, ex.what());
         }
 
         co_return connected_;
@@ -217,7 +217,7 @@ namespace LTSM {
     PcscRemote::sendEstablishedContext(const int32_t & id, const uint32_t & scope) {
         co_await send_lock_.async_lock();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", __FUNCTION__, id, scope);
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", NS_FuncNameV, id, scope);
 
         uint64_t context;
         uint32_t ret;
@@ -245,7 +245,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#018x}",
-                           __FUNCTION__, id, context);
+                           NS_FuncNameV, id, context);
 
         uint32_t ret;
 
@@ -269,7 +269,7 @@ namespace LTSM {
         co_await transactionLock(id);
         co_await send_lock_.async_lock();
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64: {:#018x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
-                           __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
+                           NS_FuncNameV, id, context, shareMode, prefferedProtocols, readerName);
 
         uint64_t handle;
         uint32_t activeProtocol, ret;
@@ -303,7 +303,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}",
-                           __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
+                           NS_FuncNameV, id, handle, shareMode, prefferedProtocols, initialization);
         uint32_t activeProtocol, ret;
 
         try {
@@ -332,7 +332,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}, disposition: {}",
-                           __FUNCTION__, id, handle, disposition);
+                           NS_FuncNameV, id, handle, disposition);
         uint32_t ret;
 
         try {
@@ -357,7 +357,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}",
-                           __FUNCTION__, id, handle);
+                           NS_FuncNameV, id, handle);
         uint32_t ret;
 
         try {
@@ -384,7 +384,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}, disposition: {}",
-                           __FUNCTION__, id, handle, disposition);
+                           NS_FuncNameV, id, handle, disposition);
         uint32_t ret;
 
         try {
@@ -410,11 +410,11 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}, pciProtocol: {:#010x}, pciLength: {}, send size: {}, recv size: {}",
-                           __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
+                           NS_FuncNameV, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::hexString(data1, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: send data: [{}]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: send data: [{}]", NS_FuncNameV, str);
         }
 
         uint32_t ioRecvPciProtocol, ioRecvPciLength, ret;
@@ -458,7 +458,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}",
-                           __FUNCTION__, id, handle);
+                           NS_FuncNameV, id, handle);
 
         uint32_t state, protocol, atrLen, ret;
         std::string readerName;
@@ -497,11 +497,11 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}, controlCode: {:#010x}, send size: {}, recv size: {}",
-                           __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
+                           NS_FuncNameV, id, handle, controlCode, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::hexString(data1, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: send data: [{}]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: send data: [{}]", NS_FuncNameV, str);
         }
 
         uint32_t ret;
@@ -536,7 +536,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64: {:#018x}, attrId: {}",
-                           __FUNCTION__, id, handle, attrId);
+                           NS_FuncNameV, id, handle, attrId);
 
         uint32_t ret;
         binary_buf attr;
@@ -569,11 +569,11 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << handle64 {:#018x}, attrId: {}, attrLength {}",
-                           __FUNCTION__, id, handle, attrId, attr.size());
+                           NS_FuncNameV, id, handle, attrId, attr.size());
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::hexString(attr, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: attr: [{}]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: attr: [{}]", NS_FuncNameV, str);
         }
 
         uint32_t ret;
@@ -600,7 +600,7 @@ namespace LTSM {
         co_await send_lock_.async_lock();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context64 {:#018x}",
-                           __FUNCTION__, id, context);
+                           NS_FuncNameV, id, context);
 
         uint32_t ret;
 
@@ -641,7 +641,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context32: {:#010x}, readers count: {}",
-                           __FUNCTION__, id, context, readersCount);
+                           NS_FuncNameV, id, context, readersCount);
 
         ListReaders names;
 
@@ -697,7 +697,7 @@ namespace LTSM {
             endian::little_to_native_inplace(ret);
 
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context64: {:#018x}, timeout: {}, states: {}",
-                               __FUNCTION__, id, context, timeout, counts);
+                               NS_FuncNameV, id, context, timeout, counts);
 
             assertm(counts == statesCount, "count states invalid");
 
@@ -723,7 +723,7 @@ namespace LTSM {
                 co_await async_recv_values(readerName, asio::buffer(state.rgbAtr, cbAtr));
 
                 if(readerName != state.szReader) {
-                    Application::warning("{}: invalid reader, `{}' != `{}'", __FUNCTION__, readerName, state.szReader);
+                    Application::warning("{}: invalid reader, `{}' != `{}'", NS_FuncNameV, readerName, state.szReader);
                 }
             }
         } catch(const system::system_error& err) {
@@ -738,7 +738,7 @@ namespace LTSM {
         ListReaders names = co_await sendListReaders(id, context);
 
         if(names.empty()) {
-            Application::warning("{}: no readers available", __FUNCTION__);
+            Application::warning("{}: no readers available", NS_FuncNameV);
 
             bool res = PcscLite::readersReset();
 
@@ -762,14 +762,14 @@ namespace LTSM {
 
             // not found, add new
             if(it == PcscLite::readers.end()) {
-                Application::debug(DebugType::Pcsc, "{}: added reader, name: `{}'", __FUNCTION__, name);
+                Application::debug(DebugType::Pcsc, "{}: added reader, name: `{}'", NS_FuncNameV, name);
                 // find unused slot
                 auto rd = std::ranges::find_if(PcscLite::readers, [](auto & rd) {
                     return 0 == rd.name[0];
                 });
 
                 if(rd == PcscLite::readers.end()) {
-                    LTSM::Application::error("{}: failed, {}", __FUNCTION__, "all slots is busy");
+                    LTSM::Application::error("{}: failed, {}", NS_FuncNameV, "all slots is busy");
                     co_return static_cast<uint32_t>(SCARD_E_NO_MEMORY);
                 }
 
@@ -793,21 +793,21 @@ namespace LTSM {
         uint32_t ret = co_await sendGetStatusChange(id, context, timeout, & state, 1);
 
         if(ret == SCARD_E_TIMEOUT) {
-            Application::warning("{}: timeout", __FUNCTION__);
+            Application::warning("{}: timeout", NS_FuncNameV);
             co_return ret;
         }
 
         if(ret != SCARD_S_SUCCESS) {
-            Application::warning("{}: error: {:#010x} ({})", __FUNCTION__, ret, PcscLite::err2str(ret));
+            Application::warning("{}: error: {:#010x} ({})", NS_FuncNameV, ret, PcscLite::err2str(ret));
             co_return ret;
         }
 
         Application::debug(DebugType::Pcsc, "{}: reader: `{}', currentState: {:#010x}, eventState: {:#010x}, atrLen: {}",
-                           __FUNCTION__, readerName, state.dwCurrentState, state.dwEventState, state.cbAtr);
+                           NS_FuncNameV, readerName, state.dwCurrentState, state.dwEventState, state.cbAtr);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::rangeHexString(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: atr: [{}]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: atr: [{}]", NS_FuncNameV, str);
         }
 
         if(state.dwEventState & SCARD_STATE_CHANGED) {
@@ -885,7 +885,7 @@ namespace LTSM {
     }
 
     asio::awaitable<bool> PcscLocal::clientAction(uint32_t cmd, uint32_t len) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: {:#010x}, len: {}", __FUNCTION__, id(), cmd, len);
+        Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: {:#010x}, len: {}", NS_FuncNameV, id(), cmd, len);
 
         switch(cmd) {
             case PcscLite::EstablishContext:
@@ -943,11 +943,11 @@ namespace LTSM {
             case PcscLite::ListReaders:
             case PcscLite::GetStatusChange:
             case PcscLite::CancelTransaction:
-                Application::error("{}: not used cmd: {:#010x}, len: {}", __FUNCTION__, cmd, len);
+                Application::error("{}: not used cmd: {:#010x}, len: {}", NS_FuncNameV, cmd, len);
                 break;
 
             default:
-                Application::error("{}: unknown cmd: {:#010x}, len: {}", __FUNCTION__, cmd, len);
+                Application::error("{}: unknown cmd: {:#010x}, len: {}", NS_FuncNameV, cmd, len);
                 break;
         }
 
@@ -978,11 +978,11 @@ namespace LTSM {
             case PcscLite::GetReaderState:
             case PcscLite::WaitReaderStateChangeStart:
             case PcscLite::WaitReaderStateChangeStop:
-                Application::warning("{}: not implemented, cmd: {:#010x}", __FUNCTION__, cmd);
+                Application::warning("{}: not implemented, cmd: {:#010x}", NS_FuncNameV, cmd);
                 co_return;
 
             default:
-                Application::error("{}: unknown command, cmd: {:#010x}", __FUNCTION__, cmd);
+                Application::error("{}: unknown command, cmd: {:#010x}", NS_FuncNameV, cmd);
                 co_return;
         }
 
@@ -1007,17 +1007,17 @@ namespace LTSM {
                 context = context32_ = ptr->makeContext64(context64_);
 
                 Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context64: {:#018x}, context32: {:#010x}",
-                                   __FUNCTION__, id(), context64_, context32_);
+                                   NS_FuncNameV, id(), context64_, context32_);
 
                 // init readers status
                 co_await ptr->syncReaders(id(), context64_, nullptr);
             } else {
                 Application::error("{}: clientId: {}, error: {:#010x} ({})",
-                                   __FUNCTION__, id(), ret, PcscLite::err2str(ret));
+                                   NS_FuncNameV, id(), ret, PcscLite::err2str(ret));
             }
 
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::EstablishContext, SCARD_E_NO_SERVICE);
             co_return false;
         }
@@ -1034,7 +1034,7 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(! context || context != context32_) {
-            Application::error("{}: clientId: {}, invalid context32: {:#010x}", __FUNCTION__, id(), context);
+            Application::error("{}: clientId: {}, invalid context32: {:#010x}", NS_FuncNameV, id(), context);
             co_await replyError(PcscLite::ReleaseContext, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1042,7 +1042,7 @@ namespace LTSM {
         auto ptr = remote_.lock();
 
         if(! ptr) {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::ReleaseContext, SCARD_E_NO_SERVICE);
             co_return false;
         }
@@ -1052,7 +1052,7 @@ namespace LTSM {
 
             if(ret != SCARD_S_SUCCESS) {
                 Application::error("{}: clientId: {}, context32: {:#010x}, error: {:#010x} ({})",
-                                   __FUNCTION__, id(), context32_, ret, PcscLite::err2str(ret));
+                                   NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
             }
         }
 
@@ -1080,7 +1080,7 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(! context || context != context32_) {
-            Application::error("{}: clientId: {}, invalid context32: {:#010x}", __FUNCTION__, id(), context);
+            Application::error("{}: clientId: {}, invalid context32: {:#010x}", NS_FuncNameV, id(), context);
             co_await replyError(PcscLite::Connect, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1089,14 +1089,14 @@ namespace LTSM {
         auto currentReader = PcscLite::findReaderState(readerName);
 
         if(! currentReader) {
-            Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName);
+            Application::error("{}: failed, reader not found: `{}'", NS_FuncNameV, readerName);
             co_await replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
             co_return false;
         }
 
         if(auto ptr = remote_.lock()) {
             if(! context64_) {
-                Application::error("{}: clientId: {}, invalid context64", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid context64", NS_FuncNameV, id());
                 co_await replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
                 co_return false;
             }
@@ -1108,7 +1108,7 @@ namespace LTSM {
                 handle = handle32_ = ret != SCARD_S_SUCCESS ? 0 : ptr->makeContext64(handle64_);
             }
         } else {
-            Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName);
+            Application::error("{}: failed, reader not found: `{}'", NS_FuncNameV, readerName);
             co_await replyError(PcscLite::Connect, SCARD_E_INVALID_VALUE);
             co_return false;
         }
@@ -1123,10 +1123,10 @@ namespace LTSM {
             }
 
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle64: {:#018x}, handle32: {:#010x}, activeProtocol: {}",
-                               __FUNCTION__, id(), handle64_, handle32_, activeProtocol);
+                               NS_FuncNameV, id(), handle64_, handle32_, activeProtocol);
         } else {
             Application::error("{}: clientId: {}, context32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), context32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(context, readerData,
@@ -1147,21 +1147,21 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::Reconnect, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
 
         if(auto ptr = remote_.lock()) {
             if(! handle64_) {
-                Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
                 co_await replyError(PcscLite::Reconnect, SCARD_F_INTERNAL_ERROR);
                 co_return false;
             }
 
             std::tie(activeProtocol, ret) = co_await ptr->sendReconnect(id(), handle64_, shareMode, prefferedProtocols, initialization);
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Reconnect, SCARD_E_NO_SERVICE);
             co_return false;
         }
@@ -1171,10 +1171,10 @@ namespace LTSM {
             reader_->share = shareMode;
             reader_->protocol = activeProtocol;
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}, activeProtocol: {}",
-                               __FUNCTION__, id(), handle32_, shareMode, prefferedProtocols, initialization, activeProtocol);
+                               NS_FuncNameV, id(), handle32_, shareMode, prefferedProtocols, initialization, activeProtocol);
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(handle, shareMode,
@@ -1192,21 +1192,21 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::Disconnect, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
 
         if(auto ptr = remote_.lock()) {
             if(! handle64_) {
-                Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
                 co_await replyError(PcscLite::Disconnect, SCARD_F_INTERNAL_ERROR);
                 co_return false;
             }
 
             std::tie(ret) = co_await ptr->sendDisconnect(id(), handle64_, disposition);
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Disconnect, SCARD_E_NO_SERVICE);
             co_return false;
         }
@@ -1222,10 +1222,10 @@ namespace LTSM {
             reader_ = nullptr;
 
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}, disposition: {}",
-                               __FUNCTION__, id(), handle32_, disposition);
+                               NS_FuncNameV, id(), handle32_, disposition);
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(handle, disposition, ret);
@@ -1240,14 +1240,14 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::BeginTransaction, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
 
         if(auto ptr = remote_.lock()) {
             if(! handle64_) {
-                Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
                 co_await replyError(PcscLite::BeginTransaction, SCARD_F_INTERNAL_ERROR);
                 co_return false;
             }
@@ -1255,17 +1255,17 @@ namespace LTSM {
             assertm(reader_, "reader not connected");
             std::tie(ret) = co_await ptr->sendBeginTransaction(id(), handle64_);
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::BeginTransaction, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}",
-                               __FUNCTION__, id(), handle32_);
+                               NS_FuncNameV, id(), handle32_);
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(handle, ret);
@@ -1281,31 +1281,31 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::EndTransaction, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
 
         if(auto ptr = remote_.lock()) {
             if(! handle64_) {
-                Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
                 co_await replyError(PcscLite::EndTransaction, SCARD_F_INTERNAL_ERROR);
                 co_return false;
             }
 
             std::tie(ret) = co_await ptr->sendEndTransaction(id(), handle64_, disposition);
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::EndTransaction, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}, disposition: {}",
-                               __FUNCTION__, id(), handle32_, disposition);
+                               NS_FuncNameV, id(), handle32_, disposition);
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(handle, disposition, ret);
@@ -1331,7 +1331,7 @@ namespace LTSM {
         auto data1 = co_await async_recv_buf<binary_buf>(sendLength);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::Transmit, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1339,13 +1339,13 @@ namespace LTSM {
         auto ptr = remote_.lock();
 
         if(! ptr) {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Status, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(! handle64_) {
-            Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+            Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
             co_await replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
             co_return false;
         }
@@ -1355,15 +1355,15 @@ namespace LTSM {
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}, pciProtocol: {:#010x}, pciLength: {}, recv size: {}",
-                               __FUNCTION__, id(), handle32_, ioRecvPciProtocol, ioRecvPciLength, data2.size());
+                               NS_FuncNameV, id(), handle32_, ioRecvPciProtocol, ioRecvPciLength, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(data2, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: recv data: [{}]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: recv data: [{}]", NS_FuncNameV, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         recvLength = data2.size();
@@ -1378,7 +1378,7 @@ namespace LTSM {
 
     void PcscLocal::statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {}, reader: `{}', state: {:#010x}, protocol: {}, atrLen: {}",
-                           __FUNCTION__, id(), name, state, protocol, atr.size());
+                           NS_FuncNameV, id(), name, state, protocol, atr.size());
 
         assertm(reader_, "reader not connected");
         assertm(atr.size() <= sizeof(reader_->atr), "atr length invalid");
@@ -1392,7 +1392,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(atr, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: atr: [{}]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: atr: [{}]", NS_FuncNameV, str);
             }
         }
 
@@ -1414,7 +1414,7 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::Status, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1422,13 +1422,13 @@ namespace LTSM {
         auto ptr = remote_.lock();
 
         if(! ptr) {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Status, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(! handle64_) {
-            Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+            Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
             co_await replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
             co_return false;
         }
@@ -1441,12 +1441,12 @@ namespace LTSM {
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}",
-                               __FUNCTION__, id(), handle32_);
+                               NS_FuncNameV, id(), handle32_);
 
             statusApply(name, state, protocol, atr);
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(handle, ret);
@@ -1467,7 +1467,7 @@ namespace LTSM {
         auto data1 = co_await async_recv_buf<binary_buf>(sendLength);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::Control, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1475,13 +1475,13 @@ namespace LTSM {
         auto ptr = remote_.lock();
 
         if(! ptr) {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Status, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(! handle64_) {
-            Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+            Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
             co_await replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
             co_return false;
         }
@@ -1491,15 +1491,15 @@ namespace LTSM {
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}, controlCode: {:#010x}, bytesReturned: {}",
-                               __FUNCTION__, id(), handle32_, controlCode, data2.size());
+                               NS_FuncNameV, id(), handle32_, controlCode, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(data2, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: recv data: [{}]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: recv data: [{}]", NS_FuncNameV, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         bytesReturned = data2.size();
@@ -1522,7 +1522,7 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::GetAttrib, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1530,13 +1530,13 @@ namespace LTSM {
         auto ptr = remote_.lock();
 
         if(! ptr) {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Status, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(! handle64_) {
-            Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+            Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
             co_await replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
             co_return false;
         }
@@ -1545,15 +1545,15 @@ namespace LTSM {
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32: {:#010x}, attrId: {}, attrLen: {}",
-                               __FUNCTION__, id(), handle32_, attrId, attr.size());
+                               NS_FuncNameV, id(), handle32_, attrId, attr.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(attr, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: attr: [{}]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: attr: [{}]", NS_FuncNameV, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         assertm(attr.size() <= MAX_BUFFER_SIZE, "attr length invalid");
@@ -1581,7 +1581,7 @@ namespace LTSM {
         attr.resize(attrLen);
 
         if(handle != handle32_) {
-            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", __FUNCTION__, id(), handle);
+            Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
             co_await replyError(PcscLite::SetAttrib, SCARD_E_INVALID_HANDLE);
             co_return false;
         }
@@ -1589,13 +1589,13 @@ namespace LTSM {
         auto ptr = remote_.lock();
 
         if(! ptr) {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Status, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(! handle64_) {
-            Application::error("{}: clientId: {}, invalid handle64", __FUNCTION__, id());
+            Application::error("{}: clientId: {}, invalid handle64", NS_FuncNameV, id());
             co_await replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
             co_return false;
         }
@@ -1604,10 +1604,10 @@ namespace LTSM {
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> handle32 {:#010x}",
-                               __FUNCTION__, id(), handle32_);
+                               NS_FuncNameV, id(), handle32_);
         } else {
             Application::error("{}: clientId: {}, handle32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), handle32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
         // revert attr size
@@ -1630,20 +1630,20 @@ namespace LTSM {
         if(auto ptr = remote_.lock()) {
             cancelContext = ptr->findContext32(context);
             Application::debug(DebugType::Pcsc, "{}: clientId: {}, cancel context {:#010x}, remote: {:#010x}",
-                               __FUNCTION__, id(), context, cancelContext);
+                               NS_FuncNameV, id(), context, cancelContext);
             std::tie(ret) = co_await ptr->sendCancel(id(), cancelContext);
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_await replyError(PcscLite::Cancel, SCARD_E_NO_SERVICE);
             co_return false;
         }
 
         if(ret == SCARD_S_SUCCESS) {
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context32 {:#010x}",
-                               __FUNCTION__, id(), context32_);
+                               NS_FuncNameV, id(), context32_);
         } else {
             Application::error("{}: clientId: {}, context32: {:#010x}, error: {:#010x} ({})",
-                               __FUNCTION__, id(), context32_, ret, PcscLite::err2str(ret));
+                               NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
         }
 
         co_await async_send_values(context, ret);
@@ -1663,12 +1663,12 @@ namespace LTSM {
         endian::little_to_native_inplace(ret);
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> protocol version: {}.{}",
-                           __FUNCTION__, id(), versionMajor, versionMinor);
+                           NS_FuncNameV, id(), versionMajor, versionMinor);
 
         // supported only 4.4 protocol or higher
         if(versionMajor * 10 + versionMinor < 44) {
             Application::warning("{}: clientId: {}, unsupported version: version: {}.{}",
-                                 __FUNCTION__, id(), versionMajor, versionMinor);
+                                 NS_FuncNameV, id(), versionMajor, versionMinor);
             ret = SCARD_E_NO_SERVICE;
         }
 
@@ -1680,7 +1680,7 @@ namespace LTSM {
 
         const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> context32: {:#010x}, readers length: {}",
-                           __FUNCTION__, id(), context32_, readersLength);
+                           NS_FuncNameV, id(), context32_, readersLength);
 
         // send all readers
         co_await async_send_buf(asio::buffer(PcscLite::readers.data(), readersLength));
@@ -1690,12 +1690,12 @@ namespace LTSM {
     asio::awaitable<bool> PcscLocal::proxyReaderStateChangeStart(void) {
         // new protocol 4.4: empty params
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context32: {:#010x}, timeout: {}",
-                           __FUNCTION__, id(), context32_);
+                           NS_FuncNameV, id(), context32_);
 
         if(auto ptr = remote_.lock()) {
             co_await ptr->syncReaderTimerStart(id(), context64_);
         } else {
-            Application::error("{}: no service", __FUNCTION__);
+            Application::error("{}: no service", NS_FuncNameV);
             co_return false;
         }
 
@@ -1708,7 +1708,7 @@ namespace LTSM {
 
     asio::awaitable<bool> PcscLocal::proxyReaderStateChangeStop(void) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context32: {:#010x}",
-                           __FUNCTION__, id(), context32_);
+                           NS_FuncNameV, id(), context32_);
 
         if(auto ptr = remote_.lock()) {
             ptr->syncReaderTimerStop();
@@ -1748,16 +1748,16 @@ namespace LTSM {
     }
 
     int PcscSessionBus::start(void) {
-        Application::info("{}: uid: {}, pid: {}, version: {}", __FUNCTION__, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
+        Application::info("{}: uid: {}, pid: {}, version: {}", NS_FuncNameV, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
 
         auto pcsc_path = getenv("PCSCLITE_CSOCK_NAME");
 
         if(! pcsc_path) {
-            Application::error("{}: environment not found: {}", __FUNCTION__, "PCSCLITE_CSOCK_NAME");
+            Application::error("{}: environment not found: {}", NS_FuncNameV, "PCSCLITE_CSOCK_NAME");
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: socket path: `{}'", __FUNCTION__, pcsc_path);
+        Application::info("{}: socket path: `{}'", NS_FuncNameV, pcsc_path);
 
         pcsc_ep_.path(pcsc_path);
         remote_ = std::make_shared<PcscRemote>(asio::local::stream_protocol::socket{ioc_});
@@ -1787,7 +1787,7 @@ namespace LTSM {
         dbus_conn_->leaveEventLoop();
         sdbus_job.join();
 
-        Application::notice("{}: PCSC session shutdown", __FUNCTION__);
+        Application::notice("{}: PCSC session shutdown", NS_FuncNameV);
 
         std::filesystem::remove(pcsc_path);
 
@@ -1795,17 +1795,17 @@ namespace LTSM {
     }
 
     int32_t PcscSessionBus::getVersion(void) {
-        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", NS_FuncNameV);
         return LTSM_SESSION_PCSC_VERSION;
     }
 
     void PcscSessionBus::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", NS_FuncNameV, getpid());
         asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
     }
 
     void PcscSessionBus::setDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
+        Application::debug(DebugType::Dbus, "{}: level: {}", NS_FuncNameV, level);
         setDebugLevel(level);
     }
 
@@ -1828,7 +1828,7 @@ namespace LTSM {
 
     asio::awaitable<void> PcscSessionBus::handlerLocalAccept(PcscLocal & client) {
 
-        Application::debug(DebugType::App, "{}: clientId: {}", __FUNCTION__, client.id());
+        Application::debug(DebugType::App, "{}: clientId: {}", NS_FuncNameV, client.id());
         bool success = true;
 
         while(success) {
@@ -1839,12 +1839,12 @@ namespace LTSM {
 
                 if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
                     Application::error("{}: {} failed, code: {}, error: {}",
-                                       __FUNCTION__, "handlerClientWaitCommand", ec.value(), ec.message());
+                                       NS_FuncNameV, "handlerClientWaitCommand", ec.value(), ec.message());
                 }
 
                 success = false;
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 success = false;
             }
 
@@ -1863,7 +1863,7 @@ namespace LTSM {
         });
 
         if(it != clients_.end()) {
-            Application::debug(DebugType::Dbus, "{}: clientId: {}, destroy", __FUNCTION__, it->id());
+            Application::debug(DebugType::Dbus, "{}: clientId: {}, destroy", NS_FuncNameV, it->id());
 
             remote_->transactionUnlock(it->id());
             clients_.erase(it);
@@ -1891,7 +1891,7 @@ namespace LTSM {
             auto ec = err.code();
 
             if(ec != asio::error::operation_aborted) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "handlerLocalAccept", ec.value(), ec.message());
+                Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "handlerLocalAccept", ec.value(), ec.message());
             }
         }
 
@@ -1901,7 +1901,7 @@ namespace LTSM {
     }
 
     bool PcscSessionBus::connectChannel(const std::string & path) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, path);
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, path);
 
         if(remote_->isConnected()) {
             return false;
@@ -1913,14 +1913,14 @@ namespace LTSM {
         try {
             connected = wait.get();
         } catch(const std::exception & ex) {
-            Application::error("{}: exception: {}", __FUNCTION__, ex.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, ex.what());
             return false;
         }
 
         if(connected) {
             if(std::filesystem::is_socket(pcsc_ep_.path())) {
                 std::filesystem::remove(pcsc_ep_.path());
-                Application::warning("{}: old socket removed", __FUNCTION__);
+                Application::warning("{}: old socket removed", NS_FuncNameV);
             }
 
             asio::co_spawn(clients_guard_, handlerLocalListener(),
@@ -1933,7 +1933,7 @@ namespace LTSM {
     }
 
     void PcscSessionBus::disconnectChannel(const std::string & clientPath) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath);
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, clientPath);
 
         remote_.reset();
     }

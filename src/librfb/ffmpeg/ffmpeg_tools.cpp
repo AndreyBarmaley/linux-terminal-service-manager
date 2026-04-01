@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 #include "ltsm_application.h"
+#include "ltsm_tools.h"
 #include "ffmpeg_tools.h"
 
 namespace LTSM {
@@ -29,7 +30,7 @@ namespace LTSM {
         switch(format) {
             case AV_PIX_FMT_RGB24:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_RGB24");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_RGB24");
                 }
 
                 *bpp = 24;
@@ -44,7 +45,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_BGR24:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_BGR24");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_BGR24");
                 }
 
                 *bpp = 24;
@@ -59,7 +60,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_RGB0:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_RGB0");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_RGB0");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -79,7 +80,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_0BGR:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_0BGR");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_0BGR");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -99,7 +100,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_BGR0:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_BGR0");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_BGR0");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -119,7 +120,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_0RGB:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_0RGB");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_0RGB");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -139,7 +140,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_RGBA:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_RGBA");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_RGBA");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -159,7 +160,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_ABGR:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_ABGR");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_ABGR");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -179,7 +180,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_BGRA:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_BGRA");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_BGRA");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -200,7 +201,7 @@ namespace LTSM {
 
             case AV_PIX_FMT_ARGB:
                 if(debug) {
-                    Application::info("{}: {}", __FUNCTION__, "AV_PIX_FMT_ARGB");
+                    Application::info("{}: {}", NS_FuncNameV, "AV_PIX_FMT_ARGB");
                 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -233,7 +234,7 @@ namespace LTSM {
             bool bigEndian = true;
 #endif
             Application::info("{}: pixel format, bpp: {}, rmask: {:#010x}, gmask: {:#010x}, bmask: {:#010x}, amask: {:#010x}, be: {}",
-                              __FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
+                              NS_FuncNameV, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
         }
 
         if(24 == bpp) {
@@ -319,7 +320,7 @@ namespace LTSM {
         }
 
         Application::error("{}: unsupported pixel format, bpp: {}, rmask: {:#010x}, gmask: {:#010x}, bmask: {:#010x}, amask: {:#010x}",
-                           __FUNCTION__, bpp, rmask, gmask, bmask, amask);
+                           NS_FuncNameV, bpp, rmask, gmask, bmask, amask);
 
         return AV_PIX_FMT_NONE;
     }

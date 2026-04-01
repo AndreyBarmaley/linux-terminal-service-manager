@@ -194,7 +194,7 @@ namespace LTSM {
             } else if(slower == "all") {
                 types |= DebugType::All;
             } else {
-                Application::warning("{}: unknown debug marker: `{}'", __FUNCTION__, slower);
+                Application::warning("{}: unknown debug marker: `{}'", NS_FuncNameV, slower);
             }
         }
 
@@ -442,7 +442,7 @@ namespace LTSM {
 
                 if(errno != EBADF) {
                     Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                       __FUNCTION__, "inotify read", strerror(errno), errno, _filePath.string());
+                                       NS_FuncNameV, "inotify read", strerror(errno), errno, _filePath.string());
                 }
 
                 break;
@@ -450,7 +450,7 @@ namespace LTSM {
 
             if(len < sizeof(struct inotify_event)) {
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                   __FUNCTION__, "inotify read", strerror(errno), errno, _filePath.string());
+                                   NS_FuncNameV, "inotify read", strerror(errno), errno, _filePath.string());
                 break;
             }
 
@@ -474,7 +474,7 @@ namespace LTSM {
 
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
         if(! std::filesystem::is_regular_file(file)) {
-            Application::error("{}: path not found: `{}'", __FUNCTION__, file);
+            Application::error("{}: path not found: `{}'", NS_FuncNameV, file);
             return false;
         }
 
@@ -486,7 +486,7 @@ namespace LTSM {
 
         if(0 > _inotifyFd) {
             Application::error("{}: {} failed, error: {}, code: {}",
-                               __FUNCTION__, "inotify_init", strerror(errno), errno);
+                               NS_FuncNameV, "inotify_init", strerror(errno), errno);
             return false;
         }
 
@@ -495,7 +495,7 @@ namespace LTSM {
 
         if(0 > _inotifyWd) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file);
+                               NS_FuncNameV, "inotify_add_watch", strerror(errno), errno, file);
 
             inotifyWatchStop();
             return false;
@@ -523,7 +523,7 @@ namespace LTSM {
         _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
 #endif
 
-        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, file);
+        Application::debug(DebugType::App, "{}: path: `{}'", NS_FuncNameV, file);
         return true;
     }
 
@@ -607,7 +607,7 @@ namespace LTSM {
 
         if(! std::filesystem::exists(file, err)) {
             Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                     __FUNCTION__, "exists", err.value(), err.message(), file.string());
+                     NS_FuncNameV, "exists", err.value(), err.message(), file.string());
             return false;
         }
 
@@ -615,19 +615,19 @@ namespace LTSM {
             std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
             if(err) {
                 Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                     __FUNCTION__, "status", err.value(), err.message(), file.string());
+                     NS_FuncNameV, "status", err.value(), err.message(), file.string());
             } else {
-                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, "permission failed", file, getuid());
+                Application::error("{}: {}, path: `{}', uid: {}", NS_FuncNameV, "permission failed", file, getuid());
             }
             return false;
         }
 
 
-        Application::info("{}: path: `{}', uid: {}", __FUNCTION__, file, getuid());
+        Application::info("{}: path: `{}', uid: {}", NS_FuncNameV, file, getuid());
         JsonContentFile jsonFile(file);
 
         if(! jsonFile.isValid() || ! jsonFile.isObject()) {
-            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "json object", file);
+            Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "json object", file);
             return false;
         }
 
@@ -693,7 +693,7 @@ namespace LTSM {
         fd = audit_open();
 
         if(fd < 0) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "audit_open", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "audit_open", strerror(errno), errno);
             throw std::runtime_error(NS_FuncNameS);
         }
     }
@@ -708,7 +708,7 @@ namespace LTSM {
         assert(msg);
 
         if(int seq = audit_log_user_message(fd, type, msg, hostname, addr, tty, static_cast<int>(success)); seq < 0) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "audit_log_user_message", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "audit_log_user_message", strerror(errno), errno);
         }
     }
 #endif
@@ -736,7 +736,7 @@ namespace LTSM {
             close(fd);
         } else {
             const char* devnull = "/dev/null";
-            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, "open failed", file, getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", NS_FuncNameV, "open failed", file, getuid());
 
             if(file != devnull) {
                 redirectStdoutStderrTo(out, err, devnull);
@@ -749,13 +749,13 @@ namespace LTSM {
         pid_t pid = fork();
 
         if(pid < 0) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "fork", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "fork", strerror(errno), errno);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         // parent mode
         if(0 < pid) {
-            Application::debug(DebugType::App, "{}: child pid: {}", __FUNCTION__, pid);
+            Application::debug(DebugType::App, "{}: child pid: {}", NS_FuncNameV, pid);
             return pid;
         }
 
@@ -784,33 +784,33 @@ namespace LTSM {
             appDebugTypes = DebugType::All;
             appLogSync = true;
             Application::setDebugTarget(DebugTarget::SyslogFile, file);
-            Application::debug(DebugType::App, "{}: log redirected", __FUNCTION__);
+            Application::debug(DebugType::App, "{}: log redirected", NS_FuncNameV);
         }
 
         return pid;
     }
 
     int ForkMode::waitPid(int pid) {
-        Application::debug(DebugType::App, "{}: pid: {}", __FUNCTION__, pid);
+        Application::debug(DebugType::App, "{}: pid: {}", NS_FuncNameV, pid);
         // waitpid
         int status;
         int ret = waitpid(pid, &status, 0);
 
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}",
-                               __FUNCTION__, "waitpid", strerror(errno), errno);
+                               NS_FuncNameV, "waitpid", strerror(errno), errno);
             return ret;
         }
 
         if(WIFSIGNALED(status)) {
             Application::warning("{}: process {}, pid: {}, signal: {}",
-                                 __FUNCTION__, "killed", pid, WTERMSIG(status));
+                                 NS_FuncNameV, "killed", pid, WTERMSIG(status));
         } else if(WIFEXITED(status)) {
             Application::info("{}: process {}, pid: {}, return: {}",
-                              __FUNCTION__, "exited", pid, WEXITSTATUS(status));
+                              NS_FuncNameV, "exited", pid, WEXITSTATUS(status));
         } else {
             Application::debug(DebugType::App, "{}: process {}, pid: {}, wstatus: {:#010x}",
-                               __FUNCTION__, "ended", pid, status);
+                               NS_FuncNameV, "ended", pid, status);
         }
 
         return status;

@@ -28,7 +28,7 @@ struct Image {
             fb->blitRegion(fb24, XCB::Region(0, 0, fb->width(), fb->height()), XCB::Point(0, 0));
         }
 
-        Application::info("{}: loading: {}", __FUNCTION__, file);
+        Application::info("{}: loading: {}", NS_FuncNameV, file);
     }
 };
 
@@ -78,7 +78,7 @@ class EncodingTest : public Application {
             srv = std::make_unique<RFB::ServerEncoderBuf>(images.front().fb.get());
 
             Application::info("{}: pixel format, bpp: {}, rmask: {:#010x}, gmask: {:#010x}, bmask: {:#010x}, amask: {:#010x}",
-                              __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
+                              NS_FuncNameV, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
 
             for(auto type : encodings) {
@@ -93,7 +93,7 @@ class EncodingTest : public Application {
                 }
 
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
-                Application::info("{}: encoding: {}, time: {}ms, stream sz: {}Mb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
+                Application::info("{}: encoding: {}, time: {}ms, stream sz: {}Mb", NS_FuncNameV, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
 
                 srv->resetBuffer();
             }

@@ -96,7 +96,7 @@ namespace LTSM::DisplaySession {
                 std::ofstream(log_file_err) << str_err;
 
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
         }
 

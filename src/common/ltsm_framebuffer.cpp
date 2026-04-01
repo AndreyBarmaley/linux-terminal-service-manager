@@ -265,7 +265,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("{}: unknown bpp: {}", __FUNCTION__, bitsPerPixel());
+                Application::error("{}: unknown bpp: {}", NS_FuncNameV, bitsPerPixel());
                 throw std::invalid_argument(NS_FuncNameS);
         }
     }
@@ -406,7 +406,7 @@ namespace LTSM {
                 break;
         }
 
-        Application::error("{}: unknown bpp: {}", __FUNCTION__, bpp);
+        Application::error("{}: unknown bpp: {}", NS_FuncNameV, bpp);
         throw std::invalid_argument(NS_FuncNameS);
     }
 

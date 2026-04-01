@@ -104,7 +104,7 @@ namespace LTSM {
         }
 
         int start(void) {
-            Application::info("{}: get uid: {}, get gid: {}", __FUNCTION__, getuid(), getgid());
+            Application::info("{}: get uid: {}, get gid: {}", NS_FuncNameV, getuid(), getgid());
             std::string socketFormat = "/var/run/ltsm/cups/printer_username";
 
             if(auto deviceURI = getenv("DEVICE_URI")) {
@@ -116,12 +116,12 @@ namespace LTSM {
             std::filesystem::path socketPath = Tools::replace(socketFormat, "username", jobUser);
 
             if(! std::filesystem::is_socket(socketPath)) {
-                Application::error("{}: socket not found: {}", __FUNCTION__, socketPath);
+                Application::error("{}: socket not found: {}", NS_FuncNameV, socketPath);
                 return CUPS_BACKEND_HOLD;
             }
 
             if(0 != access(socketPath.c_str(), W_OK)) {
-                Application::error("{}: write access failed, socket: {}", __FUNCTION__, socketPath);
+                Application::error("{}: write access failed, socket: {}", NS_FuncNameV, socketPath);
                 return CUPS_BACKEND_HOLD;
             }
 

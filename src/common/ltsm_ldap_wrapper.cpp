@@ -89,14 +89,14 @@ namespace LTSM {
 
     LdapWrapper::LdapWrapper() {
         if(int ret = ldap_initialize(& ldap, nullptr); ret != LDAP_SUCCESS) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_initialize", ldap_err2string(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "ldap_initialize", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncNameS);
         }
 
         int protover = 3;
 
         if(int ret = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, & protover); ret != LDAP_SUCCESS) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_set_option", ldap_err2string(ret), ret);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "ldap_set_option", ldap_err2string(ret), ret);
         }
 
         struct berval cred {
@@ -104,11 +104,11 @@ namespace LTSM {
         };
 
         if(int ret = ldap_sasl_bind_s(ldap, nullptr, nullptr, & cred, nullptr, nullptr, nullptr); ret != LDAP_SUCCESS) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "ldap_sasl_bind", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::Ldap, "{}: bind success", __FUNCTION__);
+        Application::debug(DebugType::Ldap, "{}: bind success", NS_FuncNameV);
     }
 
     LdapWrapper::~LdapWrapper() {
@@ -129,16 +129,16 @@ namespace LTSM {
         std::unique_ptr<LDAPMessage, int(*)(LDAPMessage*)> guard_msg{ msg, ldap_msgfree };
 
         if(ret != LDAP_SUCCESS) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_search", ldap_err2string(ret), ret);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "ldap_search", ldap_err2string(ret), ret);
             return {};
         }
 
-        Application::debug(DebugType::Ldap, "{}: found entries: {}", __FUNCTION__, ldap_count_entries(ldap, msg));
+        Application::debug(DebugType::Ldap, "{}: found entries: {}", NS_FuncNameV, ldap_count_entries(ldap, msg));
         std::list<LdapResult> res;
 
         for(LDAPMessage* entry = ldap_first_entry(ldap, msg); entry; entry = ldap_next_entry(ldap, entry)) {
             std::shared_ptr<char[]> dn{ ldap_get_dn(ldap, entry), ldap_memfree };
-            Application::debug(DebugType::Ldap, "{}: dn: `{}'", __FUNCTION__, dn.get());
+            Application::debug(DebugType::Ldap, "{}: dn: `{}'", NS_FuncNameV, dn.get());
 
             BerElement* ber = nullptr;
 
@@ -146,7 +146,7 @@ namespace LTSM {
                 std::unique_ptr<char[], void(*)(void*)> guard_attr{ attr, ldap_memfree };
                 std::unique_ptr<berval*, void(*)(berval**)> vals{ ldap_get_values_len(ldap, entry, attr), ldap_value_free_len };
 
-                Application::debug(DebugType::Ldap, "{}: attr: `{}'", __FUNCTION__, attr);
+                Application::debug(DebugType::Ldap, "{}: attr: `{}'", NS_FuncNameV, attr);
                 res.emplace_back(LdapResult{ dn, std::move(guard_attr), std::move(vals) });
             }
 

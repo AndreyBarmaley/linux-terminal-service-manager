@@ -85,7 +85,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
             break;
         } catch(const system::system_error& err) {
             if(it == attempts) {
-                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}", __FUNCTION__, "connect", path, attempts, err.code().message());
+                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}", NS_FuncNameV, "connect", path, attempts, err.code().message());
                 co_return;
             }
         }
@@ -94,7 +94,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
         co_await timer.async_wait(asio::use_awaitable);
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", __FUNCTION__, path);
+    Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", NS_FuncNameV, path);
     uint16_t cmd, err;
 
     try {
@@ -114,7 +114,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     }
 
     if(cmd != Pkcs11Op::Init) {
-        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
         stop();
         co_return;
@@ -122,7 +122,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
     if(err) {
         auto str = co_await async_recv_buf<std::string>(err);
-        Application::error("{}: recv error: {}", __FUNCTION__, str);
+        Application::error("{}: recv error: {}", NS_FuncNameV, str);
         Q_EMIT pkcs11Error(QString("PKCS11 error: %1").arg(str.c_str()));
         stop();
         co_return;
@@ -132,13 +132,13 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     auto ver = co_await async_recv_le16();
 
     if(ver != 1) {
-        Application::error("{}: {}: failed, ver: {:#06x}", __FUNCTION__, "version", ver);
+        Application::error("{}: {}: failed, ver: {:#06x}", NS_FuncNameV, "version", ver);
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
         stop();
         co_return;
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", __FUNCTION__, ver);
+    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", NS_FuncNameV, ver);
 
     // library info
     PKCS11::LibraryInfo info;
@@ -158,10 +158,10 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     endian::little_to_native_inplace(info.flags);
 
     Application::debug(DebugType::Pkcs11, "{}: cryptoki version: {}.{}",
-                       __FUNCTION__, info.cryptokiVersion.major, info.cryptokiVersion.minor);
+                       NS_FuncNameV, info.cryptokiVersion.major, info.cryptokiVersion.minor);
 
     Application::debug(DebugType::Pkcs11, "{}: library version: {}.{}",
-                       __FUNCTION__, info.libraryVersion.major, info.libraryVersion.minor);
+                       NS_FuncNameV, info.libraryVersion.major, info.libraryVersion.minor);
 
     // update tokens timer
     asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
@@ -188,10 +188,10 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
         auto ec = err.code();
 
         if(ec != asio::error::operation_aborted) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "timer", ec.value(), ec.message());
+            Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "timer", ec.value(), ec.message());
         }
     } catch(const std::exception& err) {
-        Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
+        Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
         asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> { stop(); co_return; }, asio::detached);
     }
 
@@ -215,7 +215,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
 //    auto cmd = co_await async_recv_le16();
 
     if(cmd != Pkcs11Op::GetSlots) {
-        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         throw pkcs11_error(NS_FuncNameS);
     }
 
@@ -223,7 +223,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
 //    uint16_t counts = co_await async_recv_le16();
 
     ListTokens newTokens;
-    Application::debug(DebugType::Pkcs11, "{}: tokens counts: {}", __FUNCTION__, counts);
+    Application::debug(DebugType::Pkcs11, "{}: tokens counts: {}", NS_FuncNameV, counts);
 
     while(counts--) {
         // <ID64> - slot id
@@ -371,11 +371,11 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
     endian::little_to_native_inplace(counts);
 
     if(cmd != Pkcs11Op::GetSlotCertificates) {
-        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         co_return certs;
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: certs counts: {}", __FUNCTION__, counts);
+    Application::debug(DebugType::Pkcs11, "{}: certs counts: {}", NS_FuncNameV, counts);
 
     while(counts--) {
         // <LEN16> - cert id len
@@ -425,11 +425,11 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
     endian::little_to_native_inplace(counts);
 
     if(cmd != Pkcs11Op::GetSlotMechanisms) {
-        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         co_return res;
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: mechs counts: {}", __FUNCTION__, counts);
+    Application::debug(DebugType::Pkcs11, "{}: mechs counts: {}", NS_FuncNameV, counts);
 
     while(counts--) {
         uint64_t id, min, max, flags;
@@ -485,7 +485,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
     endian::little_to_native_inplace(length);
 
     if(cmd != Pkcs11Op::SignData) {
-        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         co_return binary_buf{};
     }
 
@@ -533,7 +533,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const
     endian::little_to_native_inplace(length);
 
     if(cmd != Pkcs11Op::DecryptData) {
-        Application::error("{}: {}: failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         co_return binary_buf{};
     }
 

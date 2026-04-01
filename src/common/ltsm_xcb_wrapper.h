@@ -592,7 +592,7 @@ namespace LTSM {
             explicit ErrorContext(xcb_connection_t*);
             ~ErrorContext();
 
-            bool error(const xcb_generic_error_t* err, const char* func, const char* xcbname) const;
+            bool error(const xcb_generic_error_t* err, std::string_view func, std::string_view xcbname) const;
         };
 
 #endif
@@ -606,7 +606,7 @@ namespace LTSM {
             std::unique_ptr<ErrorContext> _error;
 #endif
           protected:
-            void extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
+            void extendedError(const xcb_generic_error_t* error, std::string_view func, std::string_view name) const;
 
           public:
             Connector() = default;

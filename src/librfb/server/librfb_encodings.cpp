@@ -77,7 +77,7 @@ namespace LTSM {
                 return 1;
 
             default:
-                Application::error("{}: {}", __FUNCTION__, "unknown pixel format");
+                Application::error("{}: {}", NS_FuncNameV, "unknown pixel format");
                 break;
         }
 
@@ -117,7 +117,7 @@ namespace LTSM {
 
     int RFB::EncoderStream::sendRunLength(uint32_t length) {
         if(0 == length) {
-            Application::error("{}: {}", __FUNCTION__, "length is zero");
+            Application::error("{}: {}", NS_FuncNameV, "length is zero");
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -138,7 +138,7 @@ namespace LTSM {
 
         if(uint16sz) {
             if(0xFFFF < zip.size()) {
-                Application::error("{}: {}", __FUNCTION__, "size is large");
+                Application::error("{}: {}", NS_FuncNameV, "size is large");
                 throw rfb_error(NS_FuncNameS);
             }
 
@@ -159,28 +159,28 @@ namespace LTSM {
     }
 
     bool RFB::EncoderWrapper::hasInput(void) const {
-        LTSM::Application::error("{}: disabled", __FUNCTION__);
+        LTSM::Application::error("{}: disabled", NS_FuncNameV);
         throw network_error(NS_FuncNameS);
     }
 
     size_t RFB::EncoderWrapper::hasData(void) const {
-        LTSM::Application::error("{}: disabled", __FUNCTION__);
+        LTSM::Application::error("{}: disabled", NS_FuncNameV);
         throw network_error(NS_FuncNameS);
     }
 
     void RFB::EncoderWrapper::recvRaw(void* ptr, size_t len) const {
-        LTSM::Application::error("{}: disabled", __FUNCTION__);
+        LTSM::Application::error("{}: disabled", NS_FuncNameV);
         throw network_error(NS_FuncNameS);
     }
 
     uint8_t RFB::EncoderWrapper::peekInt8(void) const {
-        LTSM::Application::error("{}: disabled", __FUNCTION__);
+        LTSM::Application::error("{}: disabled", NS_FuncNameV);
         throw network_error(NS_FuncNameS);
     }
 
     // EncodingBase
     RFB::EncodingBase::EncodingBase(int v) : type(v) {
-        Application::info("{}: init encoding: {}", __FUNCTION__, encodingName(type));
+        Application::info("{}: init encoding: {}", NS_FuncNameV, encodingName(type));
     }
 
     int RFB::EncodingBase::getType(void) const {
@@ -248,7 +248,7 @@ namespace LTSM {
     void RFB::EncodingRaw::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
@@ -264,7 +264,7 @@ namespace LTSM {
 
     RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId) {
-        Application::debug(DebugType::Enc, "{}: job id: {}, region: {}", __FUNCTION__, jobId, reg);
+        Application::debug(DebugType::Enc, "{}: job id: {}, region: {}", NS_FuncNameV, jobId, reg);
 
         buf.clear();
         EncoderWrapper wrap(& buf, st);
@@ -276,7 +276,7 @@ namespace LTSM {
     void RFB::EncodingRRE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
@@ -311,7 +311,7 @@ namespace LTSM {
         auto map = fb.pixelMapWeight(reg);
 
         if(map.empty()) {
-            Application::error("{}: {}", __FUNCTION__, "pixels map is empty");
+            Application::error("{}: {}", NS_FuncNameV, "pixels map is empty");
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -322,7 +322,7 @@ namespace LTSM {
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
             Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}, sub rects: {}",
-                               __FUNCTION__, jobId, reg + top, back, goods.size());
+                               NS_FuncNameV, jobId, reg + top, back, goods.size());
 
             sendRects(& wrap, reg, fb, jobId, back, goods);
         }
@@ -331,7 +331,7 @@ namespace LTSM {
             int back = fb.pixel(reg.topLeft());
 
             Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}, {}",
-                               __FUNCTION__, jobId, reg + top, back, "solid");
+                               NS_FuncNameV, jobId, reg + top, back, "solid");
 
             // num sub rects
             wrap.sendIntBE32(1);
@@ -384,7 +384,7 @@ namespace LTSM {
             }
 
             Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}",
-                               __FUNCTION__, jobId, region - reg.topLeft(), pair.pixel());
+                               NS_FuncNameV, jobId, region - reg.topLeft(), pair.pixel());
         }
     }
 
@@ -392,7 +392,7 @@ namespace LTSM {
     void RFB::EncodingHexTile::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
@@ -427,7 +427,7 @@ namespace LTSM {
         auto map = fb.pixelMapWeight(reg);
 
         if(map.empty()) {
-            Application::error("{}: {}", __FUNCTION__, "pixels map is empty");
+            Application::error("{}: {}", NS_FuncNameV, "pixels map is empty");
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -435,7 +435,7 @@ namespace LTSM {
             int back = fb.pixel(reg.topLeft());
 
             Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, {}",
-                               __FUNCTION__, jobId, reg + top, back, "solid");
+                               NS_FuncNameV, jobId, reg + top, back, "solid");
 
             // hextile flags
             wrap.sendInt8(RFB::HEXTILE_BACKGROUND);
@@ -457,12 +457,12 @@ namespace LTSM {
                 // compare with raw
                 if(hextileRawLength < hextileForegroundLength) {
                     Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, {}",
-                                       __FUNCTION__, jobId, reg + top, "raw");
+                                       NS_FuncNameV, jobId, reg + top, "raw");
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
                     Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, sub rects: {}, {}",
-                                       __FUNCTION__, jobId, reg + top, back, goods.size(), "foreground");
+                                       NS_FuncNameV, jobId, reg + top, back, goods.size(), "foreground");
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
                 }
@@ -472,12 +472,12 @@ namespace LTSM {
                 // compare with raw
                 if(hextileRawLength < hextileColoredLength) {
                     Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, {}",
-                                       __FUNCTION__, jobId, reg + top, "raw");
+                                       NS_FuncNameV, jobId, reg + top, "raw");
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
                     Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, sub rects: {}, {}",
-                                       __FUNCTION__, jobId, reg + top, back, goods.size(), "colored");
+                                       NS_FuncNameV, jobId, reg + top, back, goods.size(), "colored");
 
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
                 }
@@ -503,7 +503,7 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
             Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}",
-                               __FUNCTION__, jobId, region- reg.topLeft(), pair.pixel());
+                               NS_FuncNameV, jobId, region- reg.topLeft(), pair.pixel());
         }
     }
 
@@ -524,7 +524,7 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
             Application::trace(DebugType::Enc, "{}: job id: {}, region: {}",
-                               __FUNCTION__, jobId, region - reg.topLeft());
+                               NS_FuncNameV, jobId, region - reg.topLeft());
         }
     }
 
@@ -544,7 +544,7 @@ namespace LTSM {
     void RFB::EncodingTRLE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Size bsz(64, 64);
@@ -588,7 +588,7 @@ namespace LTSM {
             int back = fb.pixel(reg.topLeft());
 
             Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, {}",
-                               __FUNCTION__, jobId, reg + top, back, "solid");
+                               NS_FuncNameV, jobId, reg + top, back, "solid");
 
             // subencoding type: solid tile
             wrap.sendInt8(1);
@@ -603,7 +603,7 @@ namespace LTSM {
             }
 
             Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, palsz: {}, packed: {}",
-                               __FUNCTION__, jobId, reg + top, map.size(), static_cast<int>(fieldWidth));
+                               NS_FuncNameV, jobId, reg + top, map.size(), static_cast<int>(fieldWidth));
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
         } else {
@@ -626,17 +626,17 @@ namespace LTSM {
 
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength) {
                 Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, length: {}, rle plain",
-                                   __FUNCTION__, jobId, reg + top, rleList.size());
+                                   NS_FuncNameV, jobId, reg + top, rleList.size());
 
                 sendRegionPlain(& wrap, reg, fb, rleList);
             } else if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength) {
                 Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, pal size: {}, length: {}, rle palette",
-                                   __FUNCTION__, jobId, reg + top, map.size(), rleList.size());
+                                   NS_FuncNameV, jobId, reg + top, map.size(), rleList.size());
 
                 sendRegionPalette(& wrap, reg, fb, map, rleList);
             } else {
                 Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, raw",
-                                   __FUNCTION__, jobId, reg + top);
+                                   NS_FuncNameV, jobId, reg + top);
 
                 sendRegionRaw(& wrap, reg, fb);
             }
@@ -678,7 +678,7 @@ namespace LTSM {
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto & vec = sb.toVector();
             std::string str = Tools::hexString(vec, 2);
-            Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", __FUNCTION__, jobId, str);
+            Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", NS_FuncNameV, jobId, str);
         }
     }
 
@@ -747,7 +747,7 @@ namespace LTSM {
     void RFB::EncodingZlib::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
@@ -784,13 +784,13 @@ namespace LTSM {
                         zlevel = std::stoi(str.substr(it));
 
                         if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION) {
-                            Application::warning("{}: incorrect value, zlevel: {}", __FUNCTION__, zlevel);
+                            Application::warning("{}: incorrect value, zlevel: {}", NS_FuncNameV, zlevel);
                             zlevel = Z_BEST_SPEED;
                         }
                     } catch(...) {
                     }
 
-                    Application::info("{}: set zlevel: {}", __FUNCTION__, zlevel);
+                    Application::info("{}: set zlevel: {}", NS_FuncNameV, zlevel);
                     zlib = std::make_unique<ZLib::DeflateStream>(zlevel);
                 }
             }
@@ -804,7 +804,7 @@ namespace LTSM {
     void RFB::EncodingLZ4::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         // calculate block size
@@ -870,7 +870,7 @@ namespace LTSM {
         }
 
         if(ret < 0) {
-            Application::error("{}: {} failed, ret: {}", __FUNCTION__, "LZ4_compress_fast_continue", ret);
+            Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_compress_fast_continue", ret);
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -893,7 +893,7 @@ namespace LTSM {
                         jpegQuality = std::stoi(str.substr(it));
 
                         if(10 > jpegQuality || 100 < jpegQuality) {
-                            Application::warning("{}: incorrect value, quality: {}", __FUNCTION__, jpegQuality);
+                            Application::warning("{}: incorrect value, quality: {}", NS_FuncNameV, jpegQuality);
                             jpegQuality = 85;
                         } else {
                             fullscreenUpdate = true;
@@ -901,7 +901,7 @@ namespace LTSM {
                     } catch(...) {
                     }
 
-                    Application::info("{}: set quality: {}", __FUNCTION__, jpegQuality);
+                    Application::info("{}: set quality: {}", NS_FuncNameV, jpegQuality);
                 }
             } else if(startsWith(str, "samp")) {
                 // parce sample
@@ -936,7 +936,7 @@ namespace LTSM {
                         fullscreenUpdate = true;
                     }
 
-                    Application::info("{}: set sample: {}", __FUNCTION__, str.substr(it));
+                    Application::info("{}: set sample: {}", NS_FuncNameV, str.substr(it));
                 }
             }
         }
@@ -947,7 +947,7 @@ namespace LTSM {
     void RFB::EncodingTJPG::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         // calculate block size
@@ -996,7 +996,7 @@ namespace LTSM {
         std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitCompress(), tjDestroy };
 
         if(! jpeg) {
-            Application::error("{}: {} failed", __FUNCTION__, "tjInitCompress");
+            Application::error("{}: {} failed", NS_FuncNameV, "tjInitCompress");
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -1033,9 +1033,9 @@ namespace LTSM {
 #ifdef tjGetErrorCode
             int err = tjGetErrorCode(jpeg.get());
             const char* str = tjGetErrorStr2(jpeg.get());
-            Application::error("{}: {} failed, error: `{}', code: {}", __FUNCTION__, "tjCompress", str, err);
+            Application::error("{}: {} failed, error: `{}', code: {}", NS_FuncNameV, "tjCompress", str, err);
 #else
-            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "tjCompress", tjGetErrorStr());
+            Application::error("{}: {} failed, error: `{}'", NS_FuncNameV, "tjCompress", tjGetErrorStr());
 #endif
             throw rfb_error(NS_FuncNameS);
         }
@@ -1048,7 +1048,7 @@ namespace LTSM {
     void RFB::EncodingQOI::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         // calculate block size

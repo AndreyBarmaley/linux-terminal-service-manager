@@ -95,7 +95,7 @@ namespace LTSM {
                 return hasInput(fd, timeoutMS);
             }
 
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "poll", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "poll", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
 
@@ -126,7 +126,7 @@ namespace LTSM {
                 return hasInput(fd, timeoutMS);
             }
 
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "poll", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "poll", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
 
@@ -148,7 +148,7 @@ namespace LTSM {
         long unsigned int count = 0;
 
         if(0 > ioctlsocket(fd, FIONREAD, & count)) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ioctlsocket", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "ioctlsocket", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
 
@@ -156,7 +156,7 @@ namespace LTSM {
         int count;
 
         if(0 > ioctl(fd, FIONREAD, & count)) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ioctl", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "ioctl", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
 
@@ -313,7 +313,7 @@ namespace LTSM {
 
             // eof
             if(0 == real) {
-                Application::warning("{}: {}", __FUNCTION__, "end stream");
+                Application::warning("{}: {}", NS_FuncNameV, "end stream");
                 throw network_error(NS_FuncNameS);
             }
 
@@ -322,7 +322,7 @@ namespace LTSM {
                 continue;
             }
 
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "recv", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "recv", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
     }
@@ -347,7 +347,7 @@ namespace LTSM {
 
             // eof
             if(0 == real) {
-                Application::warning("{}: {}", __FUNCTION__, "end stream");
+                Application::warning("{}: {}", NS_FuncNameV, "end stream");
                 throw network_error(NS_FuncNameS);
             }
 
@@ -356,7 +356,7 @@ namespace LTSM {
                 continue;
             }
 
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "send", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "send", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
     }
@@ -412,7 +412,7 @@ namespace LTSM {
         uint8_t res = 0;
 
         if(1 != recv(sock, & res, 1, MSG_PEEK)) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "recv", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "recv", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
 
@@ -467,7 +467,7 @@ namespace LTSM {
         uint8_t res = 0;
 
         if(1 != recv(fdin, & res, 1, MSG_PEEK)) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "recv", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "recv", strerror(errno), errno);
             throw network_error(NS_FuncNameS);
         }
 
@@ -480,7 +480,7 @@ namespace LTSM {
     }
 
     void ProxySocket::proxyShutdown(void) {
-        Application::info("{}: client {}, bridge: {}", __FUNCTION__, clientSock, bridgeSock);
+        Application::info("{}: client {}, bridge: {}", NS_FuncNameV, clientSock, bridgeSock);
         loopTransmission = false;
         inetFdClose();
 
@@ -503,7 +503,7 @@ namespace LTSM {
 
         if(err) {
             Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
-                    __FUNCTION__, "remove", err.value(), err.message(), socketPath.string());
+                    NS_FuncNameV, "remove", err.value(), err.message(), socketPath.string());
         }
     }
 
@@ -521,7 +521,7 @@ namespace LTSM {
 
     void ProxySocket::proxyStartEventLoop(void) {
         loopTransmission = true;
-        Application::notice("{}: client: {}, bridge: {}", __FUNCTION__, clientSock, bridgeSock);
+        Application::notice("{}: client: {}, bridge: {}", NS_FuncNameV, clientSock, bridgeSock);
         loopThread = std::thread([this] {
             while(this->loopTransmission) {
                 try {
@@ -601,7 +601,7 @@ namespace LTSM {
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
         if(0 > fd) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr, port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", NS_FuncNameV, "socket", strerror(errno), errno, ipaddr, port);
             return -1;
         }
 
@@ -609,7 +609,7 @@ namespace LTSM {
         int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
 
         if(0 > err) {
-            Application::warning("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr, port);
+            Application::warning("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", NS_FuncNameV, "socket reuseaddr", strerror(errno), err, ipaddr, port);
         }
 
         struct sockaddr_in sockaddr;
@@ -620,17 +620,17 @@ namespace LTSM {
         sockaddr.sin_port = htons(port);
         sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.c_str());
 
-        Application::debug(DebugType::Sock, "{}: bind addr: `{}', port: {}", __FUNCTION__, ipaddr, port);
+        Application::debug(DebugType::Sock, "{}: bind addr: `{}', port: {}", NS_FuncNameV, ipaddr, port);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in))) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "bind", strerror(errno), errno, ipaddr, port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", NS_FuncNameV, "bind", strerror(errno), errno, ipaddr, port);
             return -1;
         }
 
-        Application::debug(DebugType::Sock, "{}: listen: {}, conn: {}", __FUNCTION__, fd, conn);
+        Application::debug(DebugType::Sock, "{}: listen: {}, conn: {}", NS_FuncNameV, fd, conn);
 
         if(0 != ::listen(fd, conn)) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "listen", strerror(errno), errno, ipaddr, port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", NS_FuncNameV, "listen", strerror(errno), errno, ipaddr, port);
             close(fd);
             return -1;
         }
@@ -642,9 +642,9 @@ namespace LTSM {
         int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "accept", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "accept", strerror(errno), errno);
         } else {
-            Application::debug(DebugType::Sock, "{}: conected client, fd: {}", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "{}: conected client, fd: {}", NS_FuncNameV, sock);
         }
 
         return sock;
@@ -654,7 +654,7 @@ namespace LTSM {
         struct in_addr in;
 
         if(0 == inet_aton(ipaddr.c_str(), &in)) {
-            Application::error("{}: invalid ip address: `{}'", __FUNCTION__, ipaddr);
+            Application::error("{}: invalid ip address: `{}'", NS_FuncNameV, ipaddr);
         } else {
             std::vector<char> strbuf(1024, 0);
             struct hostent st = {};
@@ -666,7 +666,7 @@ namespace LTSM {
                     return std::string(res->h_name);
                 }
             } else {
-                Application::error("{}: error: {}, ipaddr: `{}'", __FUNCTION__, hstrerror(h_errno), ipaddr);
+                Application::error("{}: error: {}, ipaddr: `{}'", NS_FuncNameV, hstrerror(h_errno), ipaddr);
             }
         }
 
@@ -692,7 +692,7 @@ namespace LTSM {
                 }
             }
         } else {
-            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, hstrerror(h_errno), hostname);
+            Application::error("{}: error: {}, hostname: `{}'", NS_FuncNameV, hstrerror(h_errno), hostname);
         }
 
         return list;
@@ -715,7 +715,7 @@ namespace LTSM {
                 }
             }
         } else {
-            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, hstrerror(h_errno), hostname);
+            Application::error("{}: error: {}, hostname: `{}'", NS_FuncNameV, hstrerror(h_errno), hostname);
         }
 
         return "";
@@ -732,7 +732,7 @@ namespace LTSM {
                 return std::string(inet_ntoa(in));
             }
         } else {
-            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, "gethostbyname", hostname);
+            Application::error("{}: error: {}, hostname: `{}'", NS_FuncNameV, "gethostbyname", hostname);
         }
 
         return "";
@@ -743,7 +743,7 @@ namespace LTSM {
         int sock = socket(AF_INET, SOCK_STREAM, 0);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr, port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", NS_FuncNameV, "socket", strerror(errno), errno, ipaddr, port);
             return -1;
         }
 
@@ -754,14 +754,14 @@ namespace LTSM {
         sockaddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
         sockaddr.sin_port = htons(port);
 
-        Application::debug(DebugType::Sock, "{}: ipaddr: `{}', port: {}", __FUNCTION__, ipaddr, port);
+        Application::debug(DebugType::Sock, "{}: ipaddr: `{}', port: {}", NS_FuncNameV, ipaddr, port);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in))) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "connect", strerror(errno), errno, ipaddr, port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", NS_FuncNameV, "connect", strerror(errno), errno, ipaddr, port);
             close(sock);
             sock = -1;
         } else {
-            Application::debug(DebugType::Sock, "{}: fd: {}", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "{}: fd: {}", NS_FuncNameV, sock);
         }
 
         return sock;
@@ -772,7 +772,7 @@ namespace LTSM {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path);
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", NS_FuncNameV, "socket", strerror(errno), errno, path);
             return -1;
         }
 
@@ -784,19 +784,19 @@ namespace LTSM {
         const std::string & native = path.native();
 
         if(native.size() > sizeof(sockaddr.sun_path) - 1) {
-            Application::warning("{}: unix path is long, truncated to size: {}", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+            Application::warning("{}: unix path is long, truncated to size: {}", NS_FuncNameV, sizeof(sockaddr.sun_path) - 1);
         }
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
-        Application::debug(DebugType::Sock, "{}: path: {}", __FUNCTION__, sockaddr.sun_path);
+        Application::debug(DebugType::Sock, "{}: path: {}", NS_FuncNameV, sockaddr.sun_path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un))) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "connect", strerror(errno), errno, path);
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", NS_FuncNameV, "connect", strerror(errno), errno, path);
             close(sock);
             sock = -1;
         } else {
-            Application::debug(DebugType::Sock, "{}: fd: {}", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "{}: fd: {}", NS_FuncNameV, sock);
         }
 
         return sock;
@@ -806,7 +806,7 @@ namespace LTSM {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
         if(0 > fd) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path);
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", NS_FuncNameV, "socket", strerror(errno), errno, path);
             return -1;
         }
 
@@ -815,7 +815,7 @@ namespace LTSM {
 
         if(err) {
             Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
-                    __FUNCTION__, "remove", err.value(), err.message(), path.string());
+                    NS_FuncNameV, "remove", err.value(), err.message(), path.string());
         }
 
         struct sockaddr_un sockaddr;
@@ -825,23 +825,23 @@ namespace LTSM {
         const std::string & native = path.native();
 
         if(native.size() > sizeof(sockaddr.sun_path) - 1) {
-            Application::warning("{}: unix path is long, truncated to size: {}", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+            Application::warning("{}: unix path is long, truncated to size: {}", NS_FuncNameV, sizeof(sockaddr.sun_path) - 1);
         }
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
-        Application::debug(DebugType::Sock, "{}: bind path: {}", __FUNCTION__, sockaddr.sun_path);
+        Application::debug(DebugType::Sock, "{}: bind path: {}", NS_FuncNameV, sockaddr.sun_path);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un))) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "bind", strerror(errno), errno, path);
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", NS_FuncNameV, "bind", strerror(errno), errno, path);
             close(fd);
             return -1;
         }
 
-        Application::debug(DebugType::Sock, "{}: listen: {}, conn: {}", __FUNCTION__, fd, conn);
+        Application::debug(DebugType::Sock, "{}: listen: {}, conn: {}", NS_FuncNameV, fd, conn);
 
         if(0 != ::listen(fd, conn)) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "listen", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "listen", strerror(errno), errno);
             close(fd);
             return -1;
         }
@@ -853,9 +853,9 @@ namespace LTSM {
         int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "accept", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "accept", strerror(errno), errno);
         } else {
-            Application::debug(DebugType::Sock, "{}: conected client, fd: {}", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "{}: conected client, fd: {}", NS_FuncNameV, sock);
         }
 
         return sock;
@@ -872,7 +872,7 @@ namespace LTSM {
 
         if(! std::filesystem::is_socket(path, err)) {
             Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                    __FUNCTION__, "is_socket", err.value(), err.message(), path.string());
+                    NS_FuncNameV, "is_socket", err.value(), err.message(), path.string());
             return false;
         }
 
@@ -907,7 +907,7 @@ namespace LTSM {
                Application::isDebugLevel(DebugLevel::Debug)) {
                 // remove end line
                 if(size_t len = strnlen(str, 1024)) {
-                    Application::debug(DebugType::Tls, "{}: {:.{}}", __FUNCTION__, str, static_cast<int>(len - 1));
+                    Application::debug(DebugType::Tls, "{}: {:.{}}", NS_FuncNameV, str, static_cast<int>(len - 1));
                 }
             }
         }
@@ -915,7 +915,7 @@ namespace LTSM {
         /* TLS::Stream */
         Stream::Stream(const NetworkStream* bs) : layer(bs) {
             if(! bs) {
-                Application::error("{}: {}", __FUNCTION__, "tls stream failed");
+                Application::error("{}: {}", NS_FuncNameV, "tls stream failed");
                 throw std::invalid_argument(NS_FuncNameS);
             }
         }
@@ -950,7 +950,7 @@ namespace LTSM {
             }
 
             if(srvmode) {
-                Application::debug(DebugType::Tls, "{}: tls server mode, priority: `{}'", __FUNCTION__, priority);
+                Application::debug(DebugType::Tls, "{}: tls server mode, priority: `{}'", NS_FuncNameV, priority);
                 dhparams.generate(1024);
                 cred = std::make_unique<gnutls::anon_server_credentials>();
 
@@ -960,7 +960,7 @@ namespace LTSM {
 
                 session = std::make_unique<gnutls::server_session>();
             } else {
-                Application::debug(DebugType::Tls, "{}: tls client mode, priority: `{}'", __FUNCTION__, priority);
+                Application::debug(DebugType::Tls, "{}: tls client mode, priority: `{}'", NS_FuncNameV, priority);
                 cred = std::make_unique<gnutls::anon_client_credentials>();
                 session = std::make_unique<gnutls::client_session>();
             }
@@ -983,12 +983,12 @@ namespace LTSM {
 
 
             if(certFile.empty()) {
-                Application::error("{}: {} need", __FUNCTION__, "cert file");
+                Application::error("{}: {} need", NS_FuncNameV, "cert file");
                 return false;
             }
 
             if(keyFile.empty()) {
-                Application::error("{}: {} need", __FUNCTION__, "key file");
+                Application::error("{}: {} need", NS_FuncNameV, "key file");
                 return false;
             }
 
@@ -996,13 +996,13 @@ namespace LTSM {
 
             if(! std::filesystem::exists(certFile, err)) {
                 Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                        __FUNCTION__, "exists", err.value(), err.message(), certFile);
+                        NS_FuncNameV, "exists", err.value(), err.message(), certFile);
                 return false;
             }
 
             if(! std::filesystem::exists(keyFile, err)) {
                 Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                        __FUNCTION__, "exists", err.value(), err.message(), keyFile);
+                        NS_FuncNameV, "exists", err.value(), err.message(), keyFile);
                 return false;
             }
 
@@ -1027,7 +1027,7 @@ namespace LTSM {
 
                 if(err) {
                     Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
-                            __FUNCTION__, "exists", err.value(), err.message(), caFile);
+                            NS_FuncNameV, "exists", err.value(), err.message(), caFile);
                 }
             }
 
@@ -1040,7 +1040,7 @@ namespace LTSM {
 
                 if(err) {
                     Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
-                            __FUNCTION__, "exists", err.value(), err.message(), crlFile);
+                            NS_FuncNameV, "exists", err.value(), err.message(), crlFile);
                 }
             }
 
@@ -1098,7 +1098,7 @@ namespace LTSM {
                 }
             } else if(0 == ret) {
                 // eof
-                Application::warning("{}: {}", __FUNCTION__, "end stream");
+                Application::warning("{}: {}", NS_FuncNameV, "end stream");
                 throw gnutls_error(NS_FuncNameS);
             }
 
@@ -1183,12 +1183,12 @@ namespace LTSM {
 
             while(offset < res.size()) {
                 if(int ret = gnutls_cipher_init(& ctx, GNUTLS_CIPHER_DES_CBC, & key, & iv)) {
-                    Application::error("{}: {} error: {}", __FUNCTION__, "gnutls_cipher_init", gnutls_strerror(ret));
+                    Application::error("{}: {} error: {}", NS_FuncNameV, "gnutls_cipher_init", gnutls_strerror(ret));
                     throw gnutls_error(NS_FuncNameS);
                 }
 
                 if(int ret = gnutls_cipher_encrypt(ctx, res.data() + offset, std::min(_key.size(), res.size() - offset))) {
-                    Application::error("{}: {} error: {}", __FUNCTION__, "gnutls_cipher_encrypt", gnutls_strerror(ret));
+                    Application::error("{}: {} error: {}", NS_FuncNameV, "gnutls_cipher_encrypt", gnutls_strerror(ret));
                     throw gnutls_error(NS_FuncNameS);
                 }
 
@@ -1203,7 +1203,7 @@ namespace LTSM {
             std::vector<uint8_t> res(keysz);
 
             if(int ret = gnutls_rnd(GNUTLS_RND_KEY, res.data(), res.size())) {
-                Application::error("{}: {} error: {}", __FUNCTION__, "gnutls_rnd", gnutls_strerror(ret));
+                Application::error("{}: {} error: {}", NS_FuncNameV, "gnutls_rnd", gnutls_strerror(ret));
                 throw gnutls_error(NS_FuncNameS);
             }
 
@@ -1228,7 +1228,7 @@ namespace LTSM {
             //int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
 
             if(ret < Z_OK) {
-                Application::error("{}: {} failed, error code: {}", __FUNCTION__, "deflateInit2", ret);
+                Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflateInit2", ret);
                 throw zlib_error(NS_FuncNameS);
             }
         }
@@ -1252,7 +1252,7 @@ namespace LTSM {
                 int ret = deflate(& zs, flushPolicy);
 
                 if(ret < Z_OK) {
-                    Application::error("{}: {} failed, error code: {}", __FUNCTION__, "deflate", ret);
+                    Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflate", ret);
                     throw zlib_error(NS_FuncNameS);
                 }
 
@@ -1288,22 +1288,22 @@ namespace LTSM {
         }
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const {
-            Application::error("{}: {}", __FUNCTION__, "disabled");
+            Application::error("{}: {}", NS_FuncNameV, "disabled");
             throw zlib_error(NS_FuncNameS);
         }
 
         bool DeflateStream::hasInput(void) const {
-            Application::error("{}: {}", __FUNCTION__, "disabled");
+            Application::error("{}: {}", NS_FuncNameV, "disabled");
             throw zlib_error(NS_FuncNameS);
         }
 
         size_t DeflateStream::hasData(void) const {
-            Application::error("{}: {}", __FUNCTION__, "disabled");
+            Application::error("{}: {}", NS_FuncNameV, "disabled");
             throw zlib_error(NS_FuncNameS);
         }
 
         uint8_t DeflateStream::peekInt8(void) const {
-            Application::error("{}: {}", __FUNCTION__, "disabled");
+            Application::error("{}: {}", NS_FuncNameV, "disabled");
             throw zlib_error(NS_FuncNameS);
         }
 
@@ -1314,7 +1314,7 @@ namespace LTSM {
             int ret = inflateInit2(& zs, MAX_WBITS);
 
             if(ret < Z_OK) {
-                Application::error("{}: {} failed, error code: {}", __FUNCTION__, "inflateInit2", ret);
+                Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "inflateInit2", ret);
                 throw zlib_error(NS_FuncNameS);
             }
         }
@@ -1339,7 +1339,7 @@ namespace LTSM {
                 int ret = inflate(& zs, flushPolicy);
 
                 if(ret < Z_OK) {
-                    Application::error("{}: {} failed, error code: {}", __FUNCTION__, "inflate", ret);
+                    Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "inflate", ret);
                     throw zlib_error(NS_FuncNameS);
                 }
 
@@ -1362,7 +1362,7 @@ namespace LTSM {
 
         void InflateStream::recvRaw(void* ptr, size_t len) const {
             if(sb.last() < len) {
-                Application::error("{}: stream last: {}, expected: {}", __FUNCTION__, sb.last(), len);
+                Application::error("{}: stream last: {}, expected: {}", NS_FuncNameV, sb.last(), len);
                 throw std::invalid_argument(NS_FuncNameS);
             }
 
@@ -1379,7 +1379,7 @@ namespace LTSM {
 
         uint8_t InflateStream::peekInt8(void) const {
             if(0 == sb.last()) {
-                Application::error("{}: stream empty", __FUNCTION__);
+                Application::error("{}: stream empty", NS_FuncNameV);
                 throw zlib_error(NS_FuncNameS);
             }
 
@@ -1387,7 +1387,7 @@ namespace LTSM {
         }
 
         void InflateStream::sendRaw(const void* ptr, size_t len) {
-            Application::error("{}: {}", __FUNCTION__, "disabled");
+            Application::error("{}: {}", NS_FuncNameV, "disabled");
             throw zlib_error(NS_FuncNameS);
         }
     } // ZLib
@@ -1457,7 +1457,7 @@ namespace LTSM {
 
         std::vector<uint8_t> BaseLayer::recvLayer(void) const {
             if(! layer) {
-                Application::error("{}: {}", __FUNCTION__, "network layer is null");
+                Application::error("{}: {}", NS_FuncNameV, "network layer is null");
                 throw gssapi_error(NS_FuncNameS);
             }
 
@@ -1469,7 +1469,7 @@ namespace LTSM {
 
         void BaseLayer::sendLayer(const void* buf, size_t len) {
             if(! layer) {
-                Application::error("{}: {}", __FUNCTION__, "network layer is null");
+                Application::error("{}: {}", NS_FuncNameV, "network layer is null");
                 throw gssapi_error(NS_FuncNameS);
             }
 
@@ -1488,7 +1488,7 @@ namespace LTSM {
                 return true;
             }
 
-            error(__FUNCTION__, err.func, err.code1, err.code2);
+            error(NS_FuncNameV, err.func, err.code1, err.code2);
             return false;
         }
 
@@ -1497,16 +1497,16 @@ namespace LTSM {
             auto cred = Gss::acquireServiceCredential(service, & err);
 
             if(! cred) {
-                error(__FUNCTION__, err.func, err.code1, err.code2);
+                error(NS_FuncNameV, err.func, err.code1, err.code2);
                 return true;
             }
 
             return Gss::ServiceContext::acceptClient(std::move(cred));
         }
 
-        void Server::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const {
+        void Server::error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const {
             auto err = Gss::error2str(code1, code2);
-            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
+            Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
 
         // GssApi::Client
@@ -1518,7 +1518,7 @@ namespace LTSM {
                 return true;
             }
 
-            error(__FUNCTION__, err.func, err.code1, err.code2);
+            error(NS_FuncNameV, err.func, err.code1, err.code2);
             return false;
         }
 
@@ -1531,15 +1531,15 @@ namespace LTSM {
                     return connectService(service, mutual, std::move(cred));
                 }
 
-                error(__FUNCTION__, err.func, err.code1, err.code2);
+                error(NS_FuncNameV, err.func, err.code1, err.code2);
             }
 
             return connectService(service, mutual);
         }
 
-        void Client::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const {
+        void Client::error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const {
             auto err = Gss::error2str(code1, code2);
-            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
+            Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
     } // GssApi
 

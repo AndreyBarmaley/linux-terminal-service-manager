@@ -76,12 +76,12 @@ namespace LTSM {
         struct passwd* res = nullptr;
 
         if(int ret = getpwnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "getpwnam_r", strerror(errno), errno);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
-            Application::warning("{}: user not found: `{}'", __FUNCTION__, name);
+            Application::warning("{}: user not found: `{}'", NS_FuncNameV, name);
             throw std::runtime_error(NS_FuncNameS);
         }
     }
@@ -92,12 +92,12 @@ namespace LTSM {
         struct passwd* res = nullptr;
 
         if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "getpwuid_r", strerror(errno), errno);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
-            Application::warning("{}: uid not found: {}", __FUNCTION__, uid);
+            Application::warning("{}: uid not found: {}", NS_FuncNameV, uid);
             throw std::runtime_error(NS_FuncNameS);
         }
     }
@@ -128,12 +128,12 @@ namespace LTSM {
         struct group* res = nullptr;
 
         if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "getgrgid_r", strerror(errno), errno);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
-            Application::warning("{}: gid not found: {}", __FUNCTION__, gid);
+            Application::warning("{}: gid not found: {}", NS_FuncNameV, gid);
             throw std::runtime_error(NS_FuncNameS);
         }
     }
@@ -149,12 +149,12 @@ namespace LTSM {
         struct group* res = nullptr;
 
         if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "getgrnam_r", strerror(errno), errno);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
-            Application::warning("{}: group not found: `{}'", __FUNCTION__, name);
+            Application::warning("{}: group not found: `{}'", NS_FuncNameV, name);
             throw std::runtime_error(NS_FuncNameS);
         }
     }
@@ -180,7 +180,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: uid not found: {}", __FUNCTION__, (int) uid);
+        Application::warning("{}: uid not found: {}", NS_FuncNameV, (int) uid);
         return nullptr;
     }
 
@@ -190,7 +190,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: user not found: `{}'", __FUNCTION__, user);
+        Application::warning("{}: user not found: `{}'", NS_FuncNameV, user);
         return nullptr;
     }
 
@@ -200,7 +200,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: user not found: `{}'", __FUNCTION__, user);
+        Application::warning("{}: user not found: `{}'", NS_FuncNameV, user);
         return 0;
     }
 
@@ -210,7 +210,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: uid not found: {}", __FUNCTION__, (int) uid);
+        Application::warning("{}: uid not found: {}", NS_FuncNameV, (int) uid);
         return "";
     }
 
@@ -220,7 +220,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: user not found: `{}'", __FUNCTION__, user);
+        Application::warning("{}: user not found: `{}'", NS_FuncNameV, user);
         return "";
     }
 
@@ -230,7 +230,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: gid not found: {}", __FUNCTION__, (int) gid);
+        Application::warning("{}: gid not found: {}", NS_FuncNameV, (int) gid);
         return nullptr;
     }
 
@@ -240,7 +240,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: group not found: `{}'", __FUNCTION__, group);
+        Application::warning("{}: group not found: `{}'", NS_FuncNameV, group);
         return nullptr;
     }
 
@@ -250,7 +250,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("{}: group not found: `{}'", __FUNCTION__, group);
+        Application::warning("{}: group not found: `{}'", NS_FuncNameV, group);
         return 0;
     }
 
@@ -289,7 +289,7 @@ namespace LTSM {
         std::array<char, 256> buf = {};
 
         if(0 != gethostname(buf.data(), buf.size() - 1)) {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gethostname", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "gethostname", strerror(errno), errno);
             return "localhost";
         }
 
@@ -311,7 +311,7 @@ namespace LTSM {
                 const auto & native = path.native();
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1) {
-                    Application::warning("{}: unix path is long, truncated to size: {}", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+                    Application::warning("{}: unix path is long, truncated to size: {}", NS_FuncNameV, sizeof(sockaddr.sun_path) - 1);
                 }
 
                 std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
@@ -327,13 +327,13 @@ namespace LTSM {
     bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode) {
         if(0 != chown(path.c_str(), uid, gid)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "chown", strerror(errno), errno, path);
+                               NS_FuncNameV, "chown", strerror(errno), errno, path);
             return false;
         }
 
         if(mode && 0 != chmod(path.c_str(), mode)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "chmod", strerror(errno), errno, path);
+                               NS_FuncNameV, "chmod", strerror(errno), errno, path);
             return false;
         }
 
@@ -377,7 +377,7 @@ namespace LTSM {
 
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
-            Application::error("{}: {} failed", __FUNCTION__, "mbstowcs");
+            Application::error("{}: {} failed", NS_FuncNameV, "mbstowcs");
             return {};
         }
 
@@ -397,7 +397,7 @@ namespace LTSM {
 
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
-            Application::error("{}: {} failed", __FUNCTION__, "wcstombs");
+            Application::error("{}: {} failed", NS_FuncNameV, "wcstombs");
             return {};
         }
 
@@ -495,7 +495,7 @@ namespace LTSM {
     std::vector<uint8_t> Tools::base64Decode(std::string_view str) {
 
         if(str.empty() || 0 != (str.length() % 4)) {
-            Application::error("{}: {} failed, data length: {}", __FUNCTION__, "base64", str.length());
+            Application::error("{}: {} failed, data length: {}", NS_FuncNameV, "base64", str.length());
             throw std::runtime_error(NS_FuncNameS);
         }
 
@@ -562,18 +562,12 @@ namespace LTSM {
         return os.str();
     }
 
-    std::string_view Tools::prettyFuncNameView(std::string_view name) {
-        auto it2 = std::find(name.begin(), name.end(), '(');
-        auto it1 = std::find(std::make_reverse_iterator(std::prev(it2)), std::make_reverse_iterator(name.begin()), 0x20);
-        return std::string_view{it1.base(), it2};
-    }
-
     std::string Tools::fileToString(const std::filesystem::path & file) {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
             Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                    __FUNCTION__, "exists", err.value(), err.message(), file.string());
+                    NS_FuncNameV, "exists", err.value(), err.message(), file.string());
             return {};
         }
 
@@ -592,7 +586,7 @@ namespace LTSM {
             return content;
         }
 
-        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file);
+        Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "read", file);
         return {};
     }
 
@@ -711,7 +705,7 @@ namespace LTSM {
         std::string result;
 
         if(! pipe) {
-            Application::error("{}: popen failed: `{}'", __FUNCTION__, cmd);
+            Application::error("{}: popen failed: `{}'", NS_FuncNameV, cmd);
             return result;
         }
 
@@ -868,7 +862,7 @@ namespace LTSM {
             ofs.close();
             return true;
         } else {
-            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "write", file);
+            Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "write", file);
         }
 
         return false;
@@ -887,11 +881,11 @@ namespace LTSM {
                 ifs.read((char*) buf.data(), buf.size());
                 ifs.close();
             } else {
-                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file);
+                Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "read", file);
             }
         } else {
             Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                    __FUNCTION__, "exists", err.value(), err.message(), file.string());
+                    NS_FuncNameV, "exists", err.value(), err.message(), file.string());
         }
 
         return buf;

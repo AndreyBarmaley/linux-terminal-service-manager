@@ -318,7 +318,7 @@ class App : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: xcb max request: {}", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("{}: xcb max request: {}", NS_FuncNameV, _xcbDisplay->getMaxRequest());
 
         // _xcbDisplay->test_randr();
         _xcbDisplay->test_extinfo();

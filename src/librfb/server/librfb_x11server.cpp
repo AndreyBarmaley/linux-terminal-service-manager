@@ -71,12 +71,12 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbRandrScreenSetSizeEvent(const XCB::Size & wsz) {
-        Application::info("{}: size: {}", __FUNCTION__, wsz);
+        Application::info("{}: size: {}", NS_FuncNameV, wsz);
         displayResizeProcessed = true;
     }
 
     void RFB::X11Server::xcbRandrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify) {
-        Application::info("{}: size: {}, sequence: {}", __FUNCTION__, wsz, notify.sequence);
+        Application::info("{}: size: {}, sequence: {}", NS_FuncNameV, wsz, notify.sequence);
         xcbShmInit(0, & wsz);
         displayResizeProcessed = false;
         serverDisplayResizedEvent(wsz);
@@ -108,7 +108,7 @@ namespace LTSM {
             if(auto err = XCB::RootDisplay::hasError()) {
                 xcbDisableMessages(true);
                 rfbMessagesShutdown();
-                Application::error("{}: xcb error, code: {}", __FUNCTION__, err);
+                Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
                 return false;
             }
 
@@ -117,14 +117,14 @@ namespace LTSM {
                     uint16_t opcode = 0;
 
                     if(shm && extShm->isEventError(ev, & opcode)) {
-                        Application::warning("{}: {} error: {:#06x}", __FUNCTION__, "shm", opcode);
+                        Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "shm", opcode);
                         shm.reset();
                     }
                 } else if(auto extFixes = XCB::RootDisplay::getExtensionConst(XCB::Module::XFIXES)) {
                     uint16_t opcode = 0;
 
                     if(extFixes->isEventError(ev, & opcode)) {
-                        Application::warning("{}: {} error: {:#06x}", __FUNCTION__, "xfixes", opcode);
+                        Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "xfixes", opcode);
                     }
                 }
             } else {
@@ -180,7 +180,7 @@ namespace LTSM {
         xcbShmInit();
 
         serverConnectedEvent();
-        Application::info("{}: wait RFB messages...", __FUNCTION__);
+        Application::info("{}: wait RFB messages...", NS_FuncNameV);
 
         // xcb on
         xcbDisableMessages(false);
@@ -228,7 +228,7 @@ namespace LTSM {
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
 
                 if(dt.count() < delayTimeout) {
-                    Application::debug(DebugType::X11Srv, "{}: update time ms: {}", __FUNCTION__, dt.count());
+                    Application::debug(DebugType::X11Srv, "{}: update time ms: {}", NS_FuncNameV, dt.count());
                     std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
                     continue;
                 }
@@ -299,7 +299,7 @@ namespace LTSM {
 
     void RFB::X11Server::serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) {
         if(! clientFormat().compare(serverFormat(), true)) {
-            Application::warning("{}: client/server format not optimal", __FUNCTION__);
+            Application::warning("{}: client/server format not optimal", NS_FuncNameV);
         }
     }
 
@@ -346,12 +346,12 @@ namespace LTSM {
                     int bit = 1 << num;
 
                     if(bit & mask) {
-                        Application::debug(DebugType::X11Srv, "{}: xfb fake input pressed: {}", __FUNCTION__, num + 1);
+                        Application::debug(DebugType::X11Srv, "{}: xfb fake input pressed: {}", NS_FuncNameV, num + 1);
 
                         test->screenInputButton(num + 1, XCB::Point(posx, posy), true);
                         pressedMask |= bit;
                     } else if(bit & pressedMask) {
-                        Application::debug(DebugType::X11Srv, "{}: xfb fake input released: {}", __FUNCTION__, num + 1);
+                        Application::debug(DebugType::X11Srv, "{}: xfb fake input released: {}", NS_FuncNameV, num + 1);
 
                         test->screenInputButton(num + 1, XCB::Point(posx, posy), false);
                         pressedMask &= ~bit;
@@ -359,7 +359,7 @@ namespace LTSM {
                 }
             } else {
                 const XCB::Point pos(posx, posy);
-                Application::debug(DebugType::X11Srv, "{}: xfb fake input move, pos: {}", __FUNCTION__, pos);
+                Application::debug(DebugType::X11Srv, "{}: xfb fake input move, pos: {}", NS_FuncNameV, pos);
                 test->screenInputMove(pos);
             }
         }
@@ -375,7 +375,7 @@ namespace LTSM {
 
     std::vector<uint8_t> RFB::X11Server::extClipboardLocalData(uint16_t type) const {
         if(0 == extClipboardRemoteCaps()) {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -416,7 +416,7 @@ namespace LTSM {
                 paste->setSelectionOwner(*this);
             }
         } else {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
@@ -426,7 +426,7 @@ namespace LTSM {
             const std::scoped_lock guard{ serverLock };
             clientClipboard = buf;
         } else {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
@@ -542,7 +542,7 @@ namespace LTSM {
             auto beg = clientClipboard.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
         } else {
-            Application::error("{}: invalid length: {}, offset: {}", __FUNCTION__, length, offset);
+            Application::error("{}: invalid length: {}, offset: {}", NS_FuncNameV, length, offset);
         }
 
         return {};
@@ -584,16 +584,16 @@ namespace LTSM {
 
         for(const auto & info : screens) {
             Application::info("{}: screen id: {}, region: {}, flags: {:#010x}",
-                              __FUNCTION__, info.id, info.pos(), info.flags);
+                              NS_FuncNameV, info.id, info.pos(), info.flags);
             desktop.join(info.pos());
         }
 
         if(desktop.x != 0 && desktop.y != 0) {
-            Application::error("{}: incorrect desktop size: {}", __FUNCTION__, desktop);
+            Application::error("{}: incorrect desktop size: {}", NS_FuncNameV, desktop);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout,
                                       XCB::RootDisplay::size());
         } else if(! xcbAllowMessages()) {
-            Application::error("{}: xcb disabled", __FUNCTION__);
+            Application::error("{}: xcb disabled", NS_FuncNameV);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::Size{0, 0});
         } else if(XCB::RootDisplay::size() == desktop.toSize()) {
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::NoError,
@@ -627,7 +627,7 @@ namespace LTSM {
                 size_t argbSize = reply->width * reply->height;
                 size_t dataSize = replyCursor.size();
 
-                Application::debug(X11Srv, "{}: data lenth: {}", __FUNCTION__, dataSize);
+                Application::debug(X11Srv, "{}: data lenth: {}", NS_FuncNameV, dataSize);
 
                 if(dataSize == argbSize) {
                     auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
@@ -638,7 +638,7 @@ namespace LTSM {
 #endif
                     sendEncodingRichCursor(cursorFB, reply->xhot, reply->yhot);
                 } else {
-                    Application::warning("{}: size mismatch, data: {}, argb: {}", __FUNCTION__, dataSize, argbSize);
+                    Application::warning("{}: size mismatch, data: {}, argb: {}", NS_FuncNameV, dataSize, argbSize);
                 }
             }
         }
@@ -654,7 +654,7 @@ namespace LTSM {
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
             if(psz && dsz < *psz) {
-                Application::warning("{}: display size: {}, select size: {}", __FUNCTION__, dsz, *psz);
+                Application::warning("{}: display size: {}, select size: {}", NS_FuncNameV, dsz, *psz);
                 dsz = *psz;
             }
 
@@ -662,29 +662,29 @@ namespace LTSM {
             size_t shmsz = dsz.width * dsz.height * bpp;
 
             if(!shm || shm->owner != uid || shm->size < shmsz) {
-                Application::info("{}: size: {}", __FUNCTION__, shmsz);
+                Application::info("{}: size: {}", NS_FuncNameV, shmsz);
                 shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
             }
         }
     }
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
-        Application::debug(DebugType::X11Srv, "{}: region: {}", __FUNCTION__, reg);
+        Application::debug(DebugType::X11Srv, "{}: region: {}", NS_FuncNameV, reg);
         auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
 
         if(! pixmapReply) {
-            Application::error("{}: {}", __FUNCTION__, "xcb copy region empty");
+            Application::error("{}: {}", NS_FuncNameV, "xcb copy region empty");
             throw rfb_error(NS_FuncNameS);
         }
 
         Application::trace(DebugType::X11Srv, "{}: request size: {}, reply: length: {}, bits per pixel: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}",
-                           __FUNCTION__, reg.toSize(), pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
+                           NS_FuncNameV, reg.toSize(), pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
                            pixmapReply->gmask, pixmapReply->bmask);
 
         // fix align
         if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel()) {
             Application::error("{}: region not aligned, reply size: {}, reg size: {}, byte per pixel: {}",
-                               __FUNCTION__, pixmapReply->size(), reg.toSize(), pixmapReply->bytePerPixel());
+                               NS_FuncNameV, pixmapReply->size(), reg.toSize(), pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncNameS);
         }
 

@@ -67,7 +67,7 @@ namespace LTSM {
                 co_return;
             } catch(const system::system_error& ec) {
                 if(it == attempts) {
-                    Application::warning("{}: {} failed, path: {}, attempts: {}", __FUNCTION__, "connect", path, attempts);
+                    Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
                     throw;
                 }
             }
@@ -122,13 +122,13 @@ namespace LTSM {
         auto err = co_await async_recv_le16();
 
         if(cmd != AudioOp::Init) {
-            Application::error("{}: {} failed, cmd: {:#06x}", __FUNCTION__, "id", cmd);
+            Application::error("{}: {} failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
             throw audio_error(NS_FuncNameS);
         }
 
         if(err) {
             auto str = co_await async_recv_buf<std::string>(err);
-            Application::error("{}: recv error: {}", __FUNCTION__, str);
+            Application::error("{}: recv error: {}", NS_FuncNameV, str);
             throw audio_error(NS_FuncNameS);
         }
 
@@ -137,7 +137,7 @@ namespace LTSM {
         // encoding
         auto enc = co_await async_recv_le16();
 
-        Application::info("{}: client proto version: {}, encode type: {:#06x}", __FUNCTION__, ver, enc);
+        Application::info("{}: client proto version: {}, encode type: {:#06x}", NS_FuncNameV, ver, enc);
 
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
@@ -148,13 +148,13 @@ namespace LTSM {
             frag_size_ = opusFrames * opusFrameLength;
 
             encoder_ = std::make_unique<AudioEncoder::Opus>(bit_rate_, channels_, bitsPerSample);
-            Application::info("{}: selected encoder: {}", __FUNCTION__, "OPUS");
+            Application::info("{}: selected encoder: {}", NS_FuncNameV, "OPUS");
 #else
-            Application::error("{}: unsupported encoder: {}", __FUNCTION__, "OPUS");
+            Application::error("{}: unsupported encoder: {}", NS_FuncNameV, "OPUS");
             throw audio_error(NS_FuncNameS);
 #endif
         } else {
-            Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
+            Application::info("{}: selected encoder: {}", NS_FuncNameV, "PCM");
         }
 
         co_await timerWaitEngine();
@@ -175,7 +175,7 @@ namespace LTSM {
                 co_return;
             }
 
-            LTSM::Application::debug(DebugType::Audio, "{}: wait audio engine init...", __FUNCTION__);
+            LTSM::Application::debug(DebugType::Audio, "{}: wait audio engine init...", NS_FuncNameV);
         }
 
         co_return;
@@ -196,11 +196,11 @@ namespace LTSM {
         // wait PipeWire started
         if(pipew_) {
             if(PW_STREAM_STATE_STREAMING == pipew_->streamState()) {
-                LTSM::Application::info("{}: success, engine: {}", __FUNCTION__, "PipeWire");
+                LTSM::Application::info("{}: success, engine: {}", NS_FuncNameV, "PipeWire");
                 // success
                 return true;
             } else {
-                LTSM::Application::warning("{}: stream state: {}", __FUNCTION__, pipew_->streamStateName());
+                LTSM::Application::warning("{}: stream state: {}", NS_FuncNameV, pipew_->streamStateName());
             }
         }
 
@@ -217,7 +217,7 @@ namespace LTSM {
 
         if(pulse_ && pulse_->initContext() && pulse_->streamConnect(false /* not paused */, & bufferAttr)) {
             // success
-            LTSM::Application::info("{}: success, engine: {}", __FUNCTION__, "PulseAudio");
+            LTSM::Application::info("{}: success, engine: {}", NS_FuncNameV, "PulseAudio");
             return true;
         }
 
@@ -234,7 +234,7 @@ namespace LTSM {
         }
 
         auto packets = dataEncode(ptr, len);
-        Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", __FUNCTION__, len, packets.size());
+        Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", NS_FuncNameV, len, packets.size());
 
         asio::co_spawn(strand_, [this, list = std::move(packets)]() -> asio::awaitable<void> {
             boost::container::small_vector<boost::asio::const_buffer, 3> buffers;
@@ -250,7 +250,7 @@ namespace LTSM {
                     co_await async_send_buf(buffers);
                 } catch(const boost::system::system_error& err) {
                     auto ec = err.code();
-                    Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "dataReadyNotify", "write", ec.value(), ec.message());
+                    Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "dataReadyNotify", "write", ec.value(), ec.message());
                     socket().close();
                     co_return;
                 }
@@ -291,7 +291,7 @@ namespace LTSM {
                 res.emplace_back(std::make_unique<AudioPacket>(std::move(buf)));
             }
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", __FUNCTION__, err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             socket().close();
         }
 
@@ -352,31 +352,31 @@ namespace LTSM {
         dbus_conn_->leaveEventLoop();
         sdbus_job.join();
 
-        Application::notice("{}: Audio session shutdown", __FUNCTION__);
+        Application::notice("{}: Audio session shutdown", NS_FuncNameV);
         return EXIT_SUCCESS;
     }
 
     int32_t AudioSessionBus::getVersion(void) {
-        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", NS_FuncNameV);
         return LTSM_SESSION_AUDIO_VERSION;
     }
 
     void AudioSessionBus::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", NS_FuncNameV, getpid());
         asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
     }
 
     void AudioSessionBus::setDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
+        Application::debug(DebugType::Dbus, "{}: level: {}", NS_FuncNameV, level);
         setDebugLevel(level);
     }
 
     bool AudioSessionBus::connectChannel(const std::string & socketPath) {
-        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", NS_FuncNameV, socketPath);
 
         if(std::ranges::any_of(clients_, [&](auto & cli) {
                 return cli->socketPath(socketPath) && cli->socketConnected(); })) {
-            Application::error("{}: socket busy, path: `{}'", __FUNCTION__, socketPath);
+            Application::error("{}: socket busy, path: `{}'", NS_FuncNameV, socketPath);
             return false;
         }
 
@@ -391,9 +391,9 @@ namespace LTSM {
                 clients_.emplace_front(std::move(client));
             } catch(const system::system_error& err) {
                 auto ec = err.code();
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "remoteHandshake", "asio", ec.value(), ec.message());
+                Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "remoteHandshake", "asio", ec.value(), ec.message());
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", __FUNCTION__, "remoteHandshake", err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, "remoteHandshake", err.what());
             }
 
         }, asio::detached);
@@ -402,7 +402,7 @@ namespace LTSM {
     }
 
     void AudioSessionBus::disconnectChannel(const std::string & socketPath) {
-        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", NS_FuncNameV, socketPath);
         std::erase_if(clients_, [&socketPath](auto & cli) {
             return cli->socketPath(socketPath);
         });

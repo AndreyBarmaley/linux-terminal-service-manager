@@ -156,7 +156,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::contextStateCallback(pa_context* ctx, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextStateEvent(pa_context_get_state(ctx));
@@ -164,7 +164,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamStateCallback(pa_stream* stream, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamStateEvent(pa_stream_get_state(stream));
@@ -172,7 +172,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamSuspendedCallback(pa_stream* stream, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamSuspendedEvent(pa_stream_is_suspended(stream));
@@ -180,7 +180,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->sourceInfoEvent(info, eol);
@@ -189,7 +189,7 @@ namespace LTSM {
 
         // notify
         void PulseAudio::BaseStream::contextServerInfoCallback(pa_context* ctx, const pa_server_info* info, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextServerInfoNotify(info);
@@ -197,7 +197,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::contextDrainCallback(pa_context* ctx, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextDrainNotify();
@@ -205,7 +205,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::contextLoadModuleCallback(pa_context* ctx, uint32_t idx, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextLoadModuleNotify(idx);
@@ -213,7 +213,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextSourceInfoNotify(info, eol);
@@ -221,7 +221,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamCorkCallback(pa_stream* stream, int success, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamCorkNotify(success);
@@ -229,7 +229,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamTriggerCallback(pa_stream* stream, int success, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamTriggerNotify(success);
@@ -237,7 +237,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamFlushCallback(pa_stream* stream, int success, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamFlushNotify(success);
@@ -245,7 +245,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamDrainCallback(pa_stream* stream, int success, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamDrainNotify(success);
@@ -253,7 +253,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamOverflowCallback(pa_stream* stream, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamOverflowEvent();
@@ -261,7 +261,7 @@ namespace LTSM {
         }
 
         void PulseAudio::BaseStream::streamUnderflowCallback(pa_stream* stream, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamUnderflowEvent(pa_stream_get_underflow_index(stream));
@@ -270,7 +270,7 @@ namespace LTSM {
 
 #ifdef LTSM_CLIENT
         void PulseAudio::InputStream::streamWriteCallback(pa_stream* stream, const size_t nbytes, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<InputStream*>(userData)) {
                 pulseAudio->streamWriteEvent(nbytes);
@@ -279,7 +279,7 @@ namespace LTSM {
 
 #else
         void PulseAudio::OutputStream::streamReadCallback(pa_stream* stream, const size_t nbytes, void* userData) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
             if(auto pulseAudio = static_cast<OutputStream*>(userData)) {
                 pulseAudio->streamReadEvent(nbytes);
@@ -298,28 +298,28 @@ namespace LTSM {
 
         if(0 == pa_sample_spec_valid(& audioSpec)) {
             Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
-                               __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
+                               NS_FuncNameV, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncNameS);
         }
 
         loop.reset(pa_mainloop_new());
 
         if(! loop) {
-            Application::error("{}: {} failed", __FUNCTION__, "pa_mainloop_new");
+            Application::error("{}: {} failed", NS_FuncNameV, "pa_mainloop_new");
             throw audio_error(NS_FuncNameS);
         }
 
         pa_mainloop_api* api = pa_mainloop_get_api(loop.get());
 
         if(! api) {
-            Application::error("{}: {} failed", __FUNCTION__, "pa_mainloop_get_api");
+            Application::error("{}: {} failed", NS_FuncNameV, "pa_mainloop_get_api");
             throw audio_error(NS_FuncNameS);
         }
 
         ctx.reset(pa_context_new(api, contextName.c_str()));
 
         if(! ctx) {
-            Application::error("{}: {} failed", __FUNCTION__, "pa_context_new");
+            Application::error("{}: {} failed", NS_FuncNameV, "pa_context_new");
             throw audio_error(NS_FuncNameS);
         }
     }
@@ -330,7 +330,7 @@ namespace LTSM {
 
     void PulseAudio::BaseStream::contextDisconnect(void) {
         if(pa_context_get_state(ctx.get()) != PA_CONTEXT_UNCONNECTED) {
-            Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+            Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
             pa_context_disconnect(ctx.get());
         }
 
@@ -344,7 +344,7 @@ namespace LTSM {
         }
 
         if(pa_stream_get_state(stream.get()) != PA_STREAM_UNCONNECTED) {
-            Application::info("{}", __FUNCTION__);
+            Application::info("{}", NS_FuncNameV);
             pa_stream_drop(stream.get());
             pa_stream_disconnect(stream.get());
         }
@@ -366,7 +366,7 @@ namespace LTSM {
         pa_context_set_state_callback(ctx.get(), & contextStateCallback, this);
 
         if(0 > pa_context_connect(ctx.get(), nullptr, PA_CONTEXT_NOFLAGS, nullptr)) {
-            Application::warning("{}: {} failed", __FUNCTION__, "pa_context_connect");
+            Application::warning("{}: {} failed", NS_FuncNameV, "pa_context_connect");
             return false;
         }
 
@@ -374,23 +374,23 @@ namespace LTSM {
         waitNotify.wait(WaitOp::ContextState);
 
         if(PA_CONTEXT_FAILED == pa_context_get_state(ctx.get())) {
-            Application::error("{}: {} failed", __FUNCTION__, "context state");
+            Application::error("{}: {} failed", NS_FuncNameV, "context state");
             return false;
         }
 
         serverInfo = contextServerInfoWait();
 
         if(! serverInfo) {
-            Application::error("{}: {} failed", __FUNCTION__, "server info");
+            Application::error("{}: {} failed", NS_FuncNameV, "server info");
             return false;
         }
 
-        Application::info("{}: server version: {}", __FUNCTION__, serverInfo->server_version);
+        Application::info("{}: server version: {}", NS_FuncNameV, serverInfo->server_version);
         // init stream
         stream.reset(pa_stream_new(ctx.get(), streamName(), & audioSpec, nullptr));
 
         if(! stream) {
-            Application::error("{}: {} failed", __FUNCTION__, "pa_stream_new");
+            Application::error("{}: {} failed", NS_FuncNameV, "pa_stream_new");
             return false;
         }
 
@@ -402,12 +402,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::contextLoadModuleNotify(uint32_t idx) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
         waitNotify.notify(WaitOp::ContextLoadModule, reinterpret_cast<void*>(idx));
     }
 
     uint32_t PulseAudio::BaseStream::contextLoadModuleWait(const std::string & name, const std::string & args) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_context_load_module(ctx.get(), name.c_str(), args.c_str(), & contextLoadModuleCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::ContextLoadModule);
@@ -419,12 +419,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::contextSourceInfoNotify(const pa_source_info* info, int eol) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
         waitNotify.notify(WaitOp::ContextSourceInfo, info);
     }
 
     bool PulseAudio::BaseStream::sourceInfo(const std::string & name) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.c_str(), & sourceInfoCallback, this)) {
             pa_operation_unref(op);
@@ -435,7 +435,7 @@ namespace LTSM {
     }
 
     const pa_source_info* PulseAudio::BaseStream::contextSourceInfoWait(const std::string & name) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.c_str(), & contextSourceInfoCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::ContextSourceInfo);
@@ -447,12 +447,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::contextServerInfoNotify(const pa_server_info* info) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
         waitNotify.notify(WaitOp::ContextServerInfo, info);
     }
 
     const pa_server_info* PulseAudio::BaseStream::contextServerInfoWait(void) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_context_get_server_info(ctx.get(), & contextServerInfoCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::ContextServerInfo);
@@ -464,12 +464,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::contextDrainNotify(void) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
         waitNotify.notify(WaitOp::ContextDrain, nullptr);
     }
 
     void PulseAudio::BaseStream::contextDrainWait(void) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_context_drain(ctx.get(), & contextDrainCallback, this)) {
             waitNotify.wait(WaitOp::ContextDrain);
@@ -478,12 +478,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamCorkNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", NS_FuncNameV, success);
         waitNotify.notify(WaitOp::StreamCork, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamCorkWait(bool pause) {
-        Application::debug(DebugType::Audio, "{}: pause {}", __FUNCTION__, (pause ? "true" : "false"));
+        Application::debug(DebugType::Audio, "{}: pause {}", NS_FuncNameV, (pause ? "true" : "false"));
 
         if(pa_stream_is_corked(stream.get()) == pause) {
             return true;
@@ -499,12 +499,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamTriggerNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", NS_FuncNameV, success);
         waitNotify.notify(WaitOp::StreamTrigger, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamTriggerWait(void) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_stream_trigger(stream.get(), & streamTriggerCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamTrigger);
@@ -516,12 +516,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamFlushNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", NS_FuncNameV, success);
         waitNotify.notify(WaitOp::StreamFlush, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamFlushWait(void) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_stream_flush(stream.get(), & streamFlushCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamFlush);
@@ -533,12 +533,12 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamDrainNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", NS_FuncNameV, success);
         waitNotify.notify(WaitOp::StreamDrain, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamDrainWait(void) {
-        Application::debug(DebugType::Audio, "{}", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}", NS_FuncNameV);
 
         if(auto op = pa_stream_drain(stream.get(), & streamDrainCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamDrain);
@@ -551,9 +551,9 @@ namespace LTSM {
 
     void PulseAudio::BaseStream::contextStateEvent(const pa_context_state_t & state) {
         if(PA_CONTEXT_FAILED == state) {
-            Application::error("{}: state: {}", __FUNCTION__, contextStateName(state));
+            Application::error("{}: state: {}", NS_FuncNameV, contextStateName(state));
         } else {
-            Application::info("{}: state: {}", __FUNCTION__, contextStateName(state));
+            Application::info("{}: state: {}", NS_FuncNameV, contextStateName(state));
         }
 
         if(state == PA_CONTEXT_FAILED || state == PA_CONTEXT_READY) {
@@ -562,11 +562,11 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::sourceInfoEvent(const pa_source_info* info, int eol) {
-        // Application::info("{}: state: {}", __FUNCTION__, sourceStateName(state));
+        // Application::info("{}: state: {}", NS_FuncNameV, sourceStateName(state));
     }
 
     void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state) {
-        Application::info("{}: state: {}", __FUNCTION__, streamStateName(state));
+        Application::info("{}: state: {}", NS_FuncNameV, streamStateName(state));
 
         if(state == PA_STREAM_READY || state == PA_STREAM_FAILED) {
             waitNotify.notify(WaitOp::StreamState, & state);
@@ -574,15 +574,15 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamSuspendedEvent(int state) {
-        Application::info("{}: state: {}", __FUNCTION__, state);
+        Application::info("{}: state: {}", NS_FuncNameV, state);
     }
 
     void PulseAudio::BaseStream::streamOverflowEvent(void) {
-        Application::info("{}: ", __FUNCTION__);
+        Application::info("{}: ", NS_FuncNameV);
     }
 
     void PulseAudio::BaseStream::streamUnderflowEvent(int64_t index) {
-        Application::info("{}: index: {}", __FUNCTION__, index);
+        Application::info("{}: index: {}", NS_FuncNameV, index);
     }
 
     bool PulseAudio::BaseStream::streamSuspended(void) const {
@@ -662,7 +662,7 @@ namespace LTSM {
         bufferAttr.tlength = pa_usec_to_bytes(latency, & audioSpec);
         bufferAttr.minreq = pa_usec_to_bytes(0, & audioSpec);
         Application::debug(DebugType::Audio, "{}: latency: {}ms, buffer max length: {}, target length: {}",
-                           __FUNCTION__, ms, bufferAttr.maxlength, bufferAttr.tlength);
+                           NS_FuncNameV, ms, bufferAttr.maxlength, bufferAttr.tlength);
 
         if(auto op = pa_stream_set_buffer_attr(stream.get(), & bufferAttr, nullptr, nullptr)) {
             pa_operation_unref(op);
@@ -671,7 +671,7 @@ namespace LTSM {
 
     bool PulseAudio::InputStream::streamConnect(bool paused, const pa_buffer_attr* attr) {
         pa_stream_set_write_callback(stream.get(), & streamWriteCallback, this);
-        Application::info("{}: connect to: `{}'", __FUNCTION__, serverInfo->default_sink_name);
+        Application::info("{}: connect to: `{}'", NS_FuncNameV, serverInfo->default_sink_name);
         const pa_buffer_attr bufferAttr = { .maxlength = UINT32_MAX, .tlength = 2048, .prebuf = UINT32_MAX, .minreq = UINT32_MAX, .fragsize = UINT32_MAX };
 
         if(0 != pa_stream_connect_playback(stream.get(), serverInfo->default_sink_name, attr ? attr : & bufferAttr,
@@ -680,7 +680,7 @@ namespace LTSM {
             // old pulse audio servers don't like the ADJUST_LATENCY flag
             if(0 != pa_stream_connect_playback(stream.get(), serverInfo->default_sink_name, attr ? attr : & bufferAttr,
                                                pa_stream_flags_t(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE), nullptr, nullptr)) {
-                Application::error("{}: {} failed", __FUNCTION__, "pa_stream_connect_playback");
+                Application::error("{}: {} failed", NS_FuncNameV, "pa_stream_connect_playback");
                 return false;
             }
         }
@@ -689,7 +689,7 @@ namespace LTSM {
         waitNotify.wait(WaitOp::StreamState);
 
         if(PA_STREAM_FAILED == pa_stream_get_state(stream.get())) {
-            Application::error("{}: {} failed", __FUNCTION__, "stream state");
+            Application::error("{}: {} failed", NS_FuncNameV, "stream state");
             return false;
         }
 
@@ -703,7 +703,7 @@ namespace LTSM {
     }
 
     void PulseAudio::InputStream::streamWriteSilent(size_t len) {
-        Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
+        Application::debug(DebugType::Audio, "{}: data size: {}", NS_FuncNameV, len);
         std::vector<uint8_t> buf(len, 0);
         streamWriteData(buf.data(), buf.size());
     }
@@ -713,7 +713,7 @@ namespace LTSM {
     }
 
     void PulseAudio::InputStream::streamWriteData(const uint8_t* ptr, size_t len) {
-        Application::info("{}: data size: {}", __FUNCTION__, len);
+        Application::info("{}: data size: {}", NS_FuncNameV, len);
         std::scoped_lock guard{ lock };
         pcm.insert(pcm.end(), ptr, ptr + len);
         auto writableSize = pa_stream_writable_size(stream.get());
@@ -736,7 +736,7 @@ namespace LTSM {
         int neg = 0;
 
         if(0 != pa_stream_get_latency(stream.get(), & usec, & neg)) {
-            Application::warning("{}: {} failed", __FUNCTION__, "pa_stream_get_latency");
+            Application::warning("{}: {} failed", NS_FuncNameV, "pa_stream_get_latency");
         }
 
         std::scoped_lock guard{ lock };
@@ -749,10 +749,10 @@ namespace LTSM {
             }
         } else if(auto len = std::min(nbytes, pcm.size())) {
             Application::info("{}: request: {}, last: {}, write: {}, latency: {}, neg: {}",
-                     __FUNCTION__, nbytes, pcm.size(), len, usec, neg);
+                     NS_FuncNameV, nbytes, pcm.size(), len, usec, neg);
 
             if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE)) {
-                Application::error("{}: {} failed", __FUNCTION__, "pa_stream_write");
+                Application::error("{}: {} failed", NS_FuncNameV, "pa_stream_write");
                 throw audio_error(NS_FuncNameS);
             }
 
@@ -794,13 +794,13 @@ namespace LTSM {
     bool PulseAudio::OutputStream::streamConnect(bool paused, const pa_buffer_attr* attr) {
         pa_stream_set_read_callback(stream.get(), & streamReadCallback, this);
         monitorName = std::string(serverInfo->default_sink_name).append(".monitor");
-        Application::info("{}: connect to: `{}'", __FUNCTION__, serverInfo->default_sink_name);
+        Application::info("{}: connect to: `{}'", NS_FuncNameV, serverInfo->default_sink_name);
         const uint32_t fragsz = 1024;
         const pa_buffer_attr bufferAttr = { .maxlength = fragsz, .tlength = UINT32_MAX, .prebuf = UINT32_MAX, .minreq = UINT32_MAX, .fragsize = fragsz };
 
         if(0 != pa_stream_connect_record(stream.get(), monitorName.c_str(), attr ? attr : & bufferAttr,
                                          PA_STREAM_ADJUST_LATENCY)) {
-            Application::error("{}: {} failed", __FUNCTION__, "pa_stream_connect_record");
+            Application::error("{}: {} failed", NS_FuncNameV, "pa_stream_connect_record");
             return false;
         }
 
@@ -808,7 +808,7 @@ namespace LTSM {
         waitNotify.wait(WaitOp::StreamState);
 
         if(PA_STREAM_FAILED == pa_stream_get_state(stream.get())) {
-            Application::error("{}: {} failed", __FUNCTION__, "stream state");
+            Application::error("{}: {} failed", NS_FuncNameV, "stream state");
             return false;
         }
 
@@ -822,7 +822,7 @@ namespace LTSM {
     }
 
     void PulseAudio::OutputStream::streamReadEvent(const size_t & nbytes) {
-        Application::debug(DebugType::Audio, "{}: bytes: {}", __FUNCTION__, nbytes);
+        Application::debug(DebugType::Audio, "{}: bytes: {}", NS_FuncNameV, nbytes);
         const uint8_t* streamData = nullptr;
         size_t streamBytes = 0;
 
@@ -832,7 +832,7 @@ namespace LTSM {
                 pa_stream_drop(stream.get());
             }
         } else {
-            Application::error("{}: {} failed", __FUNCTION__, "pa_stream_peek");
+            Application::error("{}: {} failed", NS_FuncNameV, "pa_stream_peek");
         }
     }
 #endif

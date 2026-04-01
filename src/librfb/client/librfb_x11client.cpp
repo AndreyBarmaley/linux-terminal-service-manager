@@ -41,7 +41,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::X11Cli, "{}, length: {}", __FUNCTION__, buf.size());
+        Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
         sendCutTextEvent(buf.data(), buf.size(), true);
     }
 
@@ -51,11 +51,11 @@ namespace LTSM {
 
     std::vector<uint8_t> RFB::X11Client::extClipboardLocalData(uint16_t type) const {
         if(0 == extClipboardLocalCaps()) {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::X11Cli, "{}", __FUNCTION__);
+        Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
 
         auto ptr = const_cast<RFB::X11Client*>(this);
 
@@ -87,7 +87,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::extClipboardRemoteTypesEvent(uint16_t types) {
-        Application::debug(DebugType::X11Cli, "{}, types: {:#06x}", __FUNCTION__, types);
+        Application::debug(DebugType::X11Cli, "{}, types: {:#06x}", NS_FuncNameV, types);
 
         if(extClipboardRemoteCaps()) {
             clipRemoteTypes = types;
@@ -96,25 +96,25 @@ namespace LTSM {
                 paste->setSelectionOwner(*this);
             }
         } else {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
     void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::X11Cli, "{}, type: {:#06x}, length: {}", __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::X11Cli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
             clientClipboard = buf;
         } else {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
     void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, const uint8_t* buf, uint32_t len) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, length: {}", __FUNCTION__, atom, len);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, length: {}", NS_FuncNameV, atom, len);
 
         if(auto ptr = const_cast<RFB::X11Client*>(this)) {
             if(extClipboardRemoteCaps()) {
@@ -127,7 +127,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const {
-        Application::debug(DebugType::X11Cli, "{}", __FUNCTION__);
+        Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
         clipLocalTypes = 0;
 
         if(extClipboardRemoteCaps()) {
@@ -151,7 +151,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::selectionChangedEvent(void) const {
-        Application::debug(DebugType::X11Cli, "{}", __FUNCTION__);
+        Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
         auto ptr = const_cast<RFB::X11Client*>(this);
 
         if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
@@ -160,13 +160,13 @@ namespace LTSM {
     }
 
     std::vector<xcb_atom_t> RFB::X11Client::selectionSourceTargets(void) const {
-        Application::debug(DebugType::X11Cli, "{}", __FUNCTION__);
+        Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
         return ExtClip::typesToX11Atoms(extClipboardRemoteCaps() ?
                                         clipRemoteTypes : ExtClipCaps::TypeText, *this);
     }
 
     bool RFB::X11Client::selectionSourceReady(xcb_atom_t atom) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}", __FUNCTION__, atom);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}", NS_FuncNameV, atom);
         auto targets = selectionSourceTargets();
 
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
@@ -205,7 +205,7 @@ namespace LTSM {
     }
 
     size_t RFB::X11Client::selectionSourceSize(xcb_atom_t atom) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}", __FUNCTION__, atom);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}", NS_FuncNameV, atom);
         auto targets = selectionSourceTargets();
 
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
@@ -217,7 +217,7 @@ namespace LTSM {
     }
 
     std::vector<uint8_t> RFB::X11Client::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, offset: {}, length: {}", __FUNCTION__, atom, offset, length);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, offset: {}, length: {}", NS_FuncNameV, atom, offset, length);
 
         auto targets = selectionSourceTargets();
 
@@ -231,14 +231,14 @@ namespace LTSM {
             auto beg = clientClipboard.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
         } else {
-            Application::error("{}: invalid length: {}, offset: {}", __FUNCTION__, length, offset);
+            Application::error("{}: invalid length: {}, offset: {}", NS_FuncNameV, length, offset);
         }
 
         return {};
     }
 
     void RFB::X11Client::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::X11Cli, "{}: data length: {}", __FUNCTION__, buf.size());
+        Application::debug(DebugType::X11Cli, "{}: data length: {}", NS_FuncNameV, buf.size());
 
         const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);
@@ -249,7 +249,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::xcbDisplayConnectedEvent(void) {
-        Application::debug(DebugType::X11Cli, "{}", __FUNCTION__);
+        Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
         ExtClip::x11AtomsUpdate(*this);
 
         // init selection copy

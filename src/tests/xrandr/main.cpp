@@ -164,7 +164,7 @@ class TestApp : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: xcb max request: {}", __FUNCTION__, xcb->getMaxRequest());
+        Application::info("{}: xcb max request: {}", NS_FuncNameV, xcb->getMaxRequest());
         // xcb->test_extinfo();
 
 	// events loop
@@ -179,16 +179,16 @@ class TestApp : public Application {
 
         XCB::Size nsz(1024, 600);
 
-        Application::info("{}: INFO =====================>", __FUNCTION__);
+        Application::info("{}: INFO =====================>", NS_FuncNameV);
         xcb->test_randr_info_outputs();
 
-        //Application::info("{}: CREATE ===================>", __FUNCTION__);
+        //Application::info("{}: CREATE ===================>", NS_FuncNameV);
         //xcb->test_randr_create_mode(nsz);
 
-        //Application::info("{}: INFO =====================>", __FUNCTION__);
+        //Application::info("{}: INFO =====================>", NS_FuncNameV);
         //xcb->test_randr_info_outputs();
 
-        //Application::info("{}: CHANGE====================>", __FUNCTION__);
+        //Application::info("{}: CHANGE====================>", NS_FuncNameV);
 
 /*
         auto randr = static_cast<const XCB::ModuleRandr*>(getExtension(XCB::Module::RANDR));
@@ -219,9 +219,9 @@ class TestApp : public Application {
 	auto outputs = randr->getOutputs();
 	auto modes = randr->getModesInfo();
 
-        Application::info("{}: CRTCs: {}", __FUNCTION__, crtcs.size());
-        Application::info("{}: OUTPUTs: {}", __FUNCTION__, outputs.size());
-        Application::info("{}: MODEs: {}", __FUNCTION__, modes.size());
+        Application::info("{}: CRTCs: {}", NS_FuncNameV, crtcs.size());
+        Application::info("{}: OUTPUTs: {}", NS_FuncNameV, outputs.size());
+        Application::info("{}: MODEs: {}", NS_FuncNameV, modes.size());
 
 /*
 	const xcb_randr_output_t* outputId = nullptr;
@@ -230,7 +230,7 @@ class TestApp : public Application {
         for(const auto & id : outputs) {
             if(auto info = randr->getOutputInfo(id)) {
 		if(info->connected) {
-    		    Application::info("{}: connected: {}", __FUNCTION__, id);
+    		    Application::info("{}: connected: {}", NS_FuncNameV, id);
 		    outputId = & id;
 		    break;
 		}
@@ -244,7 +244,7 @@ class TestApp : public Application {
             try {
                 _modRandr->cvtCreateMode(monitor.toSize());
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 return false;
             }
             // rescan modes
@@ -278,22 +278,22 @@ class TestApp : public Application {
         //xcb->test_randr_change_events(nsz);
 
 
-    	Application::info("{}: ----------------------------------", __FUNCTION__);
+    	Application::info("{}: ----------------------------------", NS_FuncNameV);
 	xcb->setRandrScreenSize(XCB::Size(1264, 862), & sequence);
-    	Application::info("{}: seq: {}", __FUNCTION__, sequence);
+    	Application::info("{}: seq: {}", NS_FuncNameV, sequence);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-    	Application::info("{}: ----------------------------------", __FUNCTION__);
+    	Application::info("{}: ----------------------------------", NS_FuncNameV);
 
 
 	xcb->setRandrScreenSize(XCB::Size(1032, 768), & sequence);
-    	Application::info("{}: seq: {}", __FUNCTION__, sequence);
+    	Application::info("{}: seq: {}", NS_FuncNameV, sequence);
     	std::this_thread::sleep_for(std::chrono::seconds(1));
-    	Application::info("{}: ----------------------------------", __FUNCTION__);
+    	Application::info("{}: ----------------------------------", NS_FuncNameV);
 
 	xcb->setRandrScreenSize(XCB::Size(1120, 798), & sequence);
-    	Application::info("{}: seq: {}", __FUNCTION__, sequence);
+    	Application::info("{}: seq: {}", NS_FuncNameV, sequence);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-    	Application::info("{}: ----------------------------------", __FUNCTION__);
+    	Application::info("{}: ----------------------------------", NS_FuncNameV);
 
 	shutdown = true;
 	events.join();

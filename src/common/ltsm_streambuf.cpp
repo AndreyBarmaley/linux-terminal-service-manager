@@ -354,7 +354,7 @@ namespace LTSM {
 
     void StreamBufRef::getRaw(void* ptr, size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
         }
 
@@ -364,13 +364,13 @@ namespace LTSM {
     }
 
     void StreamBufRef::putRaw(const void* ptr, size_t len) {
-        Application::error("{}: {}", __FUNCTION__, "disabled");
+        Application::error("{}: {}", NS_FuncNameV, "disabled");
         throw streambuf_error(NS_FuncNameS);
     }
 
     std::vector<uint8_t> StreamBufRef::read(size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
         }
 
@@ -385,7 +385,7 @@ namespace LTSM {
 
     void StreamBufRef::skip(size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
         }
 
@@ -398,7 +398,7 @@ namespace LTSM {
 
     uint8_t StreamBufRef::peek(void) const {
         if(it1 == it2) {
-            Application::error("{}: {}", __FUNCTION__, "end stream");
+            Application::error("{}: {}", NS_FuncNameV, "end stream");
             throw std::out_of_range(NS_FuncNameS);
         }
 
@@ -501,7 +501,7 @@ namespace LTSM {
 
     void StreamBuf::getRaw(void* ptr, size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
         }
 
@@ -522,7 +522,7 @@ namespace LTSM {
 
     std::vector<uint8_t> StreamBuf::read(size_t len) const {
         if(len > last()) {
-            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
         }
 
@@ -537,7 +537,7 @@ namespace LTSM {
 
     void StreamBuf::skip(size_t len) const {
         if(len > last()) {
-            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
         }
 
@@ -556,7 +556,7 @@ namespace LTSM {
 
     uint8_t StreamBuf::peek(void) const {
         if(it == vec.end()) {
-            Application::error("{}: {}", __FUNCTION__, "end stream");
+            Application::error("{}: {}", NS_FuncNameV, "end stream");
             throw std::out_of_range(NS_FuncNameS);
         }
 
@@ -614,7 +614,7 @@ namespace LTSM {
 
             // eof
             if(0 == real) {
-                Application::warning("{}: {}", __FUNCTION__, "end stream");
+                Application::warning("{}: {}", NS_FuncNameV, "end stream");
                 throw streambuf_error(NS_FuncNameS);
             }
 
@@ -623,7 +623,7 @@ namespace LTSM {
                 continue;
             }
 
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "read", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "read", strerror(errno), errno);
             throw streambuf_error(NS_FuncNameS);
         }
     }
@@ -644,7 +644,7 @@ namespace LTSM {
 
             // eof
             if(0 == real) {
-                Application::warning("{}: {}", __FUNCTION__, "end stream");
+                Application::warning("{}: {}", NS_FuncNameV, "end stream");
                 throw streambuf_error(NS_FuncNameS);
             }
 
@@ -653,7 +653,7 @@ namespace LTSM {
                 continue;
             }
 
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "write", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "write", strerror(errno), errno);
             throw streambuf_error(NS_FuncNameS);
         }
     }

@@ -74,13 +74,13 @@ namespace LTSM {
 
         if(err) {
             Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                            __FUNCTION__, "read_symlink", err.value(), err.message(), path);
+                            NS_FuncNameV, "read_symlink", err.value(), err.message(), path);
             throw fuse_error(NS_FuncNameS);
         }
 
         // check scope
         if(! startsWith(linkto.string(), dir)) {
-            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
+            Application::warning("{}: {}, path: `{}'", NS_FuncNameV, "link skipped", path);
             throw fuse_error(NS_FuncNameS);
         }
 
@@ -88,7 +88,7 @@ namespace LTSM {
 
         if(0 > ::stat(linkto.c_str(), & st2)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "stat", strerror(errno), errno, path);
+                               NS_FuncNameV, "stat", strerror(errno), errno, path);
             throw fuse_error(NS_FuncNameS);
         }
 
@@ -106,7 +106,7 @@ namespace LTSM {
 
             if(0 > ::stat(path.c_str(), & st)) {
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                   __FUNCTION__, "stat", strerror(errno), errno, path);
+                                   NS_FuncNameV, "stat", strerror(errno), errno, path);
                 continue;
             }
 
@@ -126,7 +126,7 @@ namespace LTSM {
 
                 default:
                     Application::warning("{}: {}, mode: {:#018x}, path: `{}'",
-                                         __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path);
+                                         NS_FuncNameV, "special skipped", static_cast<uint64_t>(st.st_mode), path);
                     continue;
             }
 
@@ -165,11 +165,11 @@ namespace LTSM {
 // createClientFuseConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url,
+    Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
-        Application::error("{}: {}, mode: {}", __FUNCTION__, "fuse mode failed", Channel::Connector::modeString(mode));
+        Application::error("{}: {}, mode: {}", NS_FuncNameV, "fuse mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncNameS);
     }
 
@@ -180,7 +180,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseCon
 LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(uint8_t ch, const std::string & url, const ConnectorMode & mod,
         const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("{}: channelId: {}", __FUNCTION__, cid);
+    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
     // start threads
     setRunning(true);
 }
@@ -227,10 +227,10 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto fuseCmd = sb.readIntLE16();
-            Application::debug(DebugType::Fuse, "{}: cmd: {:#06x}", __FUNCTION__, fuseCmd);
+            Application::debug(DebugType::Fuse, "{}: cmd: {:#06x}", NS_FuncNameV, fuseCmd);
 
             if(! fuseInit && fuseCmd != FuseOp::Init) {
-                Application::error("{}: {} failed, cmd: {:#06x}", __FUNCTION__, "initialize", fuseCmd);
+                Application::error("{}: {} failed, cmd: {:#06x}", NS_FuncNameV, "initialize", fuseCmd);
                 throw channel_error(NS_FuncNameS);
             }
 
@@ -258,7 +258,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
                     break;
 
                 default:
-                    Application::error("{}: {} failed, cmd: {:#06x}, recv size: {}", __FUNCTION__, "fuse", fuseCmd, recv.size());
+                    Application::error("{}: {} failed, cmd: {:#06x}, recv size: {}", NS_FuncNameV, "fuse", fuseCmd, recv.size());
                     throw channel_error(NS_FuncNameS);
             }
         }
@@ -267,7 +267,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
             throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error & err) {
-        Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
+        Application::warning("{}: underflow data: {}, func: {}", NS_FuncNameV, sb.last(), err.what());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -295,10 +295,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
     auto mountPoint = sb.readString(len);
 
     if(! owner->createChannelAllow(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
-        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mount point", mountPoint);
+        Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "mount point", mountPoint);
         fuseInit = false;
     } else {
-        Application::info("{}: version: {:#06x}, mount point: `{}'", __FUNCTION__, fuseVer, mountPoint);
+        Application::info("{}: version: {:#06x}, mount point: `{}'", NS_FuncNameV, fuseVer, mountPoint);
         shareRoot.assign(mountPoint);
         fuseInit = true;
     }
@@ -325,17 +325,17 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
 }
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpQuit(const StreamBufRef & sb) {
-    Application::error("{}: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", NS_FuncNameV);
     return false;
 }
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpLookup(const StreamBufRef & sb) {
-    Application::error("{}: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", NS_FuncNameV);
     return false;
 }
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpGetAttr(const StreamBufRef & sb) {
-    Application::error("{}: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", NS_FuncNameV);
     return false;
 }
 
@@ -357,11 +357,11 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
     if(0 > ret)
     {
         Application::error("{}: {} failed, error: {}, code: {}, fd: {}",
-                    __FUNCTION__, "fstat", strerror(error), error, fdh);
+                    NS_FuncNameV, "fstat", strerror(error), error, fdh);
     }
     else
     {
-        Application::debug(DebugType::Fuse, "{}: fd: {}", __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "{}: fd: {}", NS_FuncNameV, fdh);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
@@ -388,11 +388,11 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
     if(0 > ret)
     {
         Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                    __FUNCTION__, "stat", strerror(error), error, path);
+                    NS_FuncNameV, "stat", strerror(error), error, path);
     }
     else
     {
-        Application::debug(DebugType::Fuse, "{}: path: `{}'", __FUNCTION__, path);
+        Application::debug(DebugType::Fuse, "{}: path: `{}'", NS_FuncNameV, path);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
@@ -404,7 +404,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
 */
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpReadDir(const StreamBufRef & sb) {
-    Application::error("{}: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", NS_FuncNameV);
     return false;
 }
 
@@ -435,9 +435,9 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
 
     if(0 > ret) {
         Application::error("{}: {} failed, error: {}, code: {}, path: `{}', flags: {:#010x}",
-                           __FUNCTION__, "open", strerror(error), error, path, flags);
+                           NS_FuncNameV, "open", strerror(error), error, path, flags);
     } else {
-        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: {:#010x}, fdh: {}", __FUNCTION__, path, flags, ret);
+        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: {:#010x}, fdh: {}", NS_FuncNameV, path, flags, ret);
         opens.push_front(ret);
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);
@@ -466,9 +466,9 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
 
     if(0 > ret) {
         Application::error("{}: {} failed, error: {}, code: {}, fd: {}",
-                           __FUNCTION__, "close", strerror(error), error, fdh);
+                           NS_FuncNameV, "close", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "{}: fd: {}", __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "{}: fd: {}", NS_FuncNameV, fdh);
         opens.remove(fdh);
     }
 
@@ -499,7 +499,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.writeIntLE16(FuseOp::Read);
         reply.writeIntLE32(error);
         Application::error("{}: {} failed, error: {}, code: {}, offset: {}",
-                           __FUNCTION__, "lseek", strerror(error), error, offset);
+                           NS_FuncNameV, "lseek", strerror(error), error, offset);
         owner->sendLtsmChannelData(cid, reply.rawbuf());
         return true;
     }
@@ -515,9 +515,9 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
 
     if(0 > rsz) {
         Application::error("{}: {} failed, error: {}, code: {}, fd: {}",
-                           __FUNCTION__, "read", strerror(error), error, fdh);
+                           NS_FuncNameV, "read", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "{}: request block size: {}, send block size: {}, offset: {}", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "{}: request block size: {}, send block size: {}, offset: {}", NS_FuncNameV, blocksz, rsz, offset);
 
         if(rsz < buf.size()) {
             buf.resize(rsz);

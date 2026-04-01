@@ -141,11 +141,11 @@ using namespace std::chrono_literals;
 // createClientPcscConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url,
+    Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
-        Application::error("{}: {}, mode: {}", __FUNCTION__, "pcsc mode failed", Channel::Connector::modeString(mode));
+        Application::error("{}: {}, mode: {}", NS_FuncNameV, "pcsc mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncNameS);
     }
 
@@ -156,7 +156,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscCon
 LTSM::Channel::ConnectorClientPcsc::ConnectorClientPcsc(uint8_t ch, const std::string & url, const ConnectorMode & mod,
         const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
-    Application::info("{}: channelId: {}", __FUNCTION__, cid);
+    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
     // start threads
     setRunning(true);
 }
@@ -177,7 +177,7 @@ void LTSM::Channel::ConnectorClientPcsc::setSpeed(const Channel::Speed & speed) 
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) {
-    Application::trace(DebugType::Pcsc, "{}: data size: {}", __FUNCTION__, recv.size());
+    Application::trace(DebugType::Pcsc, "{}: data size: {}", NS_FuncNameV, recv.size());
     StreamBufRef sb;
 
     if(last.empty()) {
@@ -209,7 +209,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
                 //
             } else {
                 Application::error("{}: {} failed, cmd: {:#06x}, recv size: {}",
-                                   __FUNCTION__, "pcsc init", pcscInit, recv.size());
+                                   NS_FuncNameV, "pcsc init", pcscInit, recv.size());
                 throw channel_error(NS_FuncNameS);
             }
         }
@@ -218,7 +218,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
             throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error & err) {
-        Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
+        Application::warning("{}: underflow data: {}, func: {}", NS_FuncNameV, sb.last(), err.what());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -229,7 +229,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamBufRef & sb) {
-    Application::debug(DebugType::Pcsc, "{}: cmd: {} ({:#06x})", __FUNCTION__, PcscLite::commandName(cmd), cmd);
+    Application::debug(DebugType::Pcsc, "{}: cmd: {} ({:#06x})", NS_FuncNameV, PcscLite::commandName(cmd), cmd);
 
     switch(cmd) {
         case PcscLite::EstablishContext:
@@ -282,7 +282,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamB
     }
 
     Application::error("{}: {} failed, cmd: {:#06x}, last size: {}",
-                       __FUNCTION__, "pcsc", cmd, sb.last());
+                       NS_FuncNameV, "pcsc", cmd, sb.last());
     throw channel_error(NS_FuncNameS);
 }
 
@@ -292,14 +292,14 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
     }
 
     uint32_t scope = sb.readIntLE32();
-    Application::debug(DebugType::Pcsc, "{}: << dwScope: {}", __FUNCTION__, scope);
+    Application::debug(DebugType::Pcsc, "{}: << dwScope: {}", NS_FuncNameV, scope);
     SCARDCONTEXT hContext = 0;
     uint32_t ret = SCardEstablishContext(scope, nullptr, nullptr, & hContext);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> context: {:#018x}", __FUNCTION__, hContext);
+        Application::debug(DebugType::Pcsc, "{}: >> context: {:#018x}", NS_FuncNameV, hContext);
     } else {
-        Application::error("{}: error: {:#010x} ({})", __FUNCTION__, ret, pcsc_stringify_error(ret));
+        Application::error("{}: error: {:#010x} ({})", NS_FuncNameV, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -314,13 +314,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef &
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}", __FUNCTION__, hContext);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}", NS_FuncNameV, hContext);
     uint32_t ret = SCardReleaseContext(hContext);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "{}: >> success", NS_FuncNameV);
     } else {
-        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -341,7 +341,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
         return {};
 
     if(ret != SCARD_S_SUCCESS) {
-        LTSM::Application::error("{}: context: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        LTSM::Application::error("{}: context: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hContext, ret, pcsc_stringify_error(ret));
         return {};
     }
 
@@ -365,7 +365,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
         return readers;
     }
 
-    LTSM::Application::error("{}: context: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+    LTSM::Application::error("{}: context: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hContext, ret, pcsc_stringify_error(ret));
     return {};
 }
 
@@ -375,15 +375,15 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}", __FUNCTION__, hContext);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}", NS_FuncNameV, hContext);
     auto readers = getListReaders(hContext);
     // reply
     StreamBuf reply(256);
     reply.writeIntLE32(readers.size());
-    Application::debug(DebugType::Pcsc, "{}: >> readers count: {}", __FUNCTION__, readers.size());
+    Application::debug(DebugType::Pcsc, "{}: >> readers count: {}", NS_FuncNameV, readers.size());
 
     for(const auto & reader : readers) {
-        Application::debug(DebugType::Pcsc, "{}: >> reader: `{}'", __FUNCTION__, reader);
+        Application::debug(DebugType::Pcsc, "{}: >> reader: `{}'", NS_FuncNameV, reader);
         reply.writeIntLE32(reader.size()).write(reader);
     }
 
@@ -406,7 +406,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
 
     auto readerName = sb.readString(len);
     Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}, readerName: `{}', shareMode: {}, prefferedProtocols: {}",
-                       __FUNCTION__, hContext, readerName, shareMode, prefferedProtocols);
+                       NS_FuncNameV, hContext, readerName, shareMode, prefferedProtocols);
     SCARDHANDLE hCard = 0;
     DWORD activeProtocol = 0;
 #ifdef __WIN32__
@@ -416,9 +416,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
 #endif
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> handle: {:#018x}, activeProtocol: {}", __FUNCTION__, hCard, activeProtocol);
+        Application::debug(DebugType::Pcsc, "{}: >> handle: {:#018x}, activeProtocol: {}", NS_FuncNameV, hCard, activeProtocol);
     } else {
-        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -437,14 +437,14 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) 
     uint32_t prefferedProtocols = sb.readIntLE32();
     uint32_t initialization = sb.readIntLE32();
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, shareMode: {}, prefferedProtocols: {}, initialization: {}",
-                       __FUNCTION__, hCard, shareMode, prefferedProtocols, initialization);
+                       NS_FuncNameV, hCard, shareMode, prefferedProtocols, initialization);
     DWORD activeProtocol = 0;
     uint32_t ret = SCardReconnect(hCard, shareMode, prefferedProtocols, initialization, & activeProtocol);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> activeProtocol: {}", __FUNCTION__, activeProtocol);
+        Application::debug(DebugType::Pcsc, "{}: >> activeProtocol: {}", NS_FuncNameV, activeProtocol);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -461,13 +461,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t disposition = sb.readIntLE32();
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, disposition: {}",
-                       __FUNCTION__, hCard, disposition);
+                       NS_FuncNameV, hCard, disposition);
     uint32_t ret = SCardDisconnect(hCard, disposition);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "{}: >> success", NS_FuncNameV);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -483,13 +483,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
 
     SCARDHANDLE hCard = sb.readIntLE64();
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}",
-                       __FUNCTION__, hCard);
+                       NS_FuncNameV, hCard);
     uint32_t ret = SCardBeginTransaction(hCard);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "{}: >> success", NS_FuncNameV);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -506,13 +506,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t disposition = sb.readIntLE32();
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, disposition: {}",
-                       __FUNCTION__, hCard, disposition);
+                       NS_FuncNameV, hCard, disposition);
     uint32_t ret = SCardEndTransaction(hCard, disposition);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "{}: >> success", NS_FuncNameV);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -540,7 +540,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
 
     auto sendBuffer = sb.read(sendLength);
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, dwProtocol: {}, pciLength: {}, send size: {}, recv size: {}",
-                       __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
+                       NS_FuncNameV, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
 
     std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
     uint32_t ret = SCardTransmit(hCard, & ioSendPci, sendBuffer.data(), sendBuffer.size(),
@@ -548,9 +548,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> dwProtocol: {}, pciLength: {}, recv size: {}",
-                           __FUNCTION__, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, recvLength);
+                           NS_FuncNameV, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, recvLength);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -570,7 +570,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}", __FUNCTION__, hCard);
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}", NS_FuncNameV, hCard);
     DWORD state = 0;
     DWORD protocol = 0;
     char readerName[MAX_READERNAME] = {};
@@ -585,9 +585,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> readerName: `{:.{}}', state: {:#010x}, protocol: {}, atrLen: {}",
-                           __FUNCTION__, readerName, readerNameLen, state, protocol, atrLen);
+                           NS_FuncNameV, readerName, readerNameLen, state, protocol, atrLen);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -645,7 +645,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         }
     }
 
-    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}, timeout: {}, states count: {}", __FUNCTION__, hContext, timeout, statesCount);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}, timeout: {}, states count: {}", NS_FuncNameV, hContext, timeout, statesCount);
 #ifdef __WIN32__
     uint32_t ret = SCardGetStatusChangeA(hContext, timeout, states.data(), states.size());
 #else
@@ -653,9 +653,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
 #endif
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> statesCount: {}", __FUNCTION__, statesCount);
+        Application::debug(DebugType::Pcsc, "{}: >> statesCount: {}", NS_FuncNameV, statesCount);
     } else {
-        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -671,7 +671,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         reply.writeIntLE32(state.cbAtr);
 
         Application::debug(DebugType::Pcsc, "{}: >> reader: `{}', currentState: {:#010x}, eventState: {:#010x}, atrLen: {}",
-                           __FUNCTION__, state.szReader, state.dwCurrentState, state.dwEventState, state.cbAtr);
+                           NS_FuncNameV, state.szReader, state.dwCurrentState, state.dwEventState, state.cbAtr);
 
         if(szReader) {
             reply.write(*szReader);
@@ -701,16 +701,16 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
 
     auto sendBuffer = sb.read(sendLength);
     Application::debug(DebugType::Pcsc, "{}: handle: << {:#018x}, controlCode: {:#010x}, send size: {}, recv size: {}",
-                       __FUNCTION__, hCard, controlCode, sendLength, recvLength);
+                       NS_FuncNameV, hCard, controlCode, sendLength, recvLength);
     DWORD bytesReturned = 0;
     std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
     uint32_t ret = SCardControl(hCard, controlCode, sendBuffer.data(), sendLength,
                                 recvBuffer.data(), recvLength, & bytesReturned);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> bytesReturned: {}", __FUNCTION__, bytesReturned);
+        Application::debug(DebugType::Pcsc, "{}: >> bytesReturned: {}", NS_FuncNameV, bytesReturned);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -730,13 +730,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb) {
     }
 
     SCARDHANDLE hContext = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}", __FUNCTION__, hContext);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#018x}", NS_FuncNameV, hContext);
     uint32_t ret = SCardCancel(hContext);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "{}: >> success", NS_FuncNameV);
     } else {
-        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -752,15 +752,15 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) 
 
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t attrId = sb.readIntLE32();
-    Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, attrId: {}", __FUNCTION__, hCard, attrId);
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, attrId: {}", NS_FuncNameV, hCard, attrId);
     std::vector<BYTE> attrBuf(MAX_BUFFER_SIZE);
     DWORD attrLen = MAX_BUFFER_SIZE;
     uint32_t ret = SCardGetAttrib(hCard, attrId, attrBuf.data(), & attrLen);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> attrLen: {}", __FUNCTION__, attrLen);
+        Application::debug(DebugType::Pcsc, "{}: >> attrLen: {}", NS_FuncNameV, attrLen);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -789,13 +789,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb) 
 
     auto attrBuf = sb.read(attrLen);
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, attrId: {}, attrLen: {}",
-                       __FUNCTION__, hCard, attrId, attrLen);
+                       NS_FuncNameV, hCard, attrId, attrLen);
     uint32_t ret = SCardSetAttrib(hCard, attrId, attrBuf.data(), attrLen);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "{}: >> success", NS_FuncNameV);
     } else {
-        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#018x}, error: {:#010x} ({})", NS_FuncNameV, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply

@@ -240,7 +240,7 @@ namespace LTSM {
         try {
             return std::stoi(content, nullptr, 0);
         } catch(const std::invalid_argument &) {
-            Application::error("{}: not number: `{}'", __FUNCTION__, content);
+            Application::error("{}: not number: `{}'", NS_FuncNameV, content);
         }
 
         return 0;
@@ -256,7 +256,7 @@ namespace LTSM {
         try {
             return std::stod(content, nullptr);
         } catch(const std::invalid_argument &) {
-            Application::error("{}: not number: `{}'", __FUNCTION__, content);
+            Application::error("{}: not number: `{}'", NS_FuncNameV, content);
         }
 
         return 0;
@@ -276,7 +276,7 @@ namespace LTSM {
         try {
             return static_cast<bool>(std::stoi(content, nullptr, 0));
         } catch(const std::invalid_argument &) {
-            Application::error("{}: not boolean: `{}'", __FUNCTION__, content);
+            Application::error("{}: not boolean: `{}'", NS_FuncNameV, content);
         }
 
         return false;
@@ -865,15 +865,15 @@ namespace LTSM {
         } while(counts == JSMN_ERROR_NOMEM);
 
         if(counts == JSMN_ERROR_INVAL) {
-            Application::error("{}: {}, `{:.{}}'", __FUNCTION__, "invalid character inside JSON content", str, len);
+            Application::error("{}: {}, `{:.{}}'", NS_FuncNameV, "invalid character inside JSON content", str, len);
             clear();
             return false;
         } else if(counts == JSMN_ERROR_PART) {
-            Application::error("{}: {}, `{:.{}}'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", str, len);
+            Application::error("{}: {}, `{:.{}}'", NS_FuncNameV, "the content is not a full JSON packet, more bytes expected", str, len);
             clear();
             return false;
         } else if(counts < 0) {
-            Application::error("{}: {}", __FUNCTION__, "unknown error");
+            Application::error("{}: {}", NS_FuncNameV, "unknown error");
             clear();
             return false;
         }
@@ -961,7 +961,7 @@ namespace LTSM {
         while(counts-- && itval != end()) {
             if(!(*itkey).isKey()) {
                 auto str = stringToken(*itkey);
-                Application::error("{}: not key, index: {}, `{}'", __FUNCTION__, std::distance(begin(), itkey), str);
+                Application::error("{}: not key, index: {}, `{}'", NS_FuncNameV, std::distance(begin(), itkey), str);
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
@@ -997,7 +997,7 @@ namespace LTSM {
         auto val = stringToken(*it);
 
         if(!(*it).isValue()) {
-            Application::error("{}: not value, index: {}, value: `{}'", __FUNCTION__, std::distance(begin(), it), val);
+            Application::error("{}: not value, index: {}, value: `{}'", NS_FuncNameV, std::distance(begin(), it), val);
         }
 
         size_t dotpos = val.find(".");
@@ -1042,7 +1042,7 @@ namespace LTSM {
         auto val = stringToken(tok);
 
         if(! tok.isValue()) {
-            Application::error("{}: not value, index: {}, value: `{}'", __FUNCTION__, std::distance(begin(), it), val);
+            Application::error("{}: not value, index: {}, value: `{}'", NS_FuncNameV, std::distance(begin(), it), val);
         }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);
@@ -1050,7 +1050,7 @@ namespace LTSM {
 
     JsonObject JsonContent::toObject(void) const {
         if(! isObject()) {
-            Application::error("{}: not json object", __FUNCTION__);
+            Application::error("{}: not json object", NS_FuncNameV);
             throw json_error(NS_FuncNameS);
         }
 
@@ -1062,7 +1062,7 @@ namespace LTSM {
 
     JsonArray JsonContent::toArray(void) const {
         if(! isArray()) {
-            Application::error("{}: not json array", __FUNCTION__);
+            Application::error("{}: not json array", NS_FuncNameV);
             throw json_error(NS_FuncNameS);
         }
 

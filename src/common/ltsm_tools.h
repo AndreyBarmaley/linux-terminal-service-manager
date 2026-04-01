@@ -173,7 +173,15 @@ namespace LTSM {
         std::list<std::string> readDir(const std::filesystem::path &, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
-        std::string_view prettyFuncNameView(std::string_view);
+        constexpr std::string_view prettyFuncNameView(std::string_view name) {
+            const auto it2 = std::find(name.begin(), name.end(), '(');
+            const auto it1 = std::find(std::make_reverse_iterator(std::prev(it2)), std::make_reverse_iterator(name.begin()), 0x20);
+            const auto it0 = it1.base();
+            if(std::string_view{it0, it0 + 6} == "LTSM::") {
+                return std::string_view{it0 + 6, it2};
+            }
+            return std::string_view{it0, it2};
+        }
 
         std::string randomHexString(size_t len);
         std::string quotedString(std::string_view);

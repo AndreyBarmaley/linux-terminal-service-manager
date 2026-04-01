@@ -386,7 +386,7 @@ namespace LTSM {
         class Server : public BaseLayer, public Gss::ServiceContext {
           protected:
             // Gss::ServiceContext interface
-            void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const override;
+            void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const override;
             std::vector<uint8_t> recvToken(void) const override {
                 return recvLayer();
             }
@@ -406,7 +406,7 @@ namespace LTSM {
         class Client : public BaseLayer, public Gss::ClientContext {
           protected:
             // Gss::ServiceContext interface
-            void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const override;
+            void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const override;
             std::vector<uint8_t> recvToken(void) const override {
                 return recvLayer();
             }
