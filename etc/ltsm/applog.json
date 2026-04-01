@@ -3,43 +3,36 @@
 	"debug:level": "debug",
 	"debug:types": [ "app", "dbus" ],
 	"debug:target": "syslog",
-	"debug:syslog": "local6"
     },
     "ltsm_connector": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus" ],
 	"debug:target": "syslog",
-	"debug:syslog": "local6"
     },
     "ltsm_helper": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "pkcs11", "ldap" ],
 	"debug:target": "syslog",
-	"debug:syslog": "local6"
     },
     "ltsm_session_audio": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "audio" ],
 	"debug:target": "syslog",
-	"debug:syslog": "user"
     },
     "ltsm_session_pcsc": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "pcsc" ],
 	"debug:target": "syslog",
-	"debug:syslog": "user"
     },
     "ltsm_session_fuse": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "fuse" ],
 	"debug:target": "syslog",
-	"debug:syslog": "user"
     },
     "ltsm_session_display": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus" ],
 	"debug:target": "syslog",
-	"debug:syslog": "user"
     },
     "ltsm_client": {
 	"debug:level": "info",

@@ -31,7 +31,7 @@ namespace LTSM {
     AudioDecoder::Opus::Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample)
         : sampleLength(audioChannels * (bitsPerSample >> 3)) {
         if(bitsPerSample != sizeof(opus_int16) * 8) {
-            Application::error("{}: {} failed", __FUNCTION__, "bitsPerSample");
+            Application::error("{}: {} failed", NS_FuncNameV, "bitsPerSample");
             throw audio_error(NS_FuncNameS);
         }
 
@@ -39,7 +39,7 @@ namespace LTSM {
         ctx.reset(opus_decoder_create(samplesPerSec, audioChannels, & error));
 
         if(! ctx || error != OPUS_OK) {
-            Application::error("{}: {} failed, error: {}, sampleRate: {}, audioChannels: {}", __FUNCTION__,
+            Application::error("{}: {} failed, error: {}, sampleRate: {}, audioChannels: {}", NS_FuncNameV,
                                "opus_decoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncNameS);
         }
@@ -49,26 +49,26 @@ namespace LTSM {
         int frames = opus_decoder_get_nb_samples(ctx.get(), ptr, len);
 
         if(0 > frames) {
-            Application::error("{}: {} failed, error: {}, data size: {}", __FUNCTION__, "opus_decoder_get_nb_samples", frames, len);
+            Application::error("{}: {} failed, error: {}, data size: {}", NS_FuncNameV, "opus_decoder_get_nb_samples", frames, len);
             throw audio_error(NS_FuncNameS);
         }
 
         if(0 == frames) {
-            Application::warning("{}: {} failed, empty frames", __FUNCTION__, "opus_decoder_get_nb_samples");
+            Application::warning("{}: {} failed, empty frames", NS_FuncNameV, "opus_decoder_get_nb_samples");
             return {};
         }
 
-        Application::debug(DebugType::Audio, "{}: frames {}", __FUNCTION__, frames);
+        Application::debug(DebugType::Audio, "{}: frames {}", NS_FuncNameV, frames);
 
         std::vector<uint8_t> tmp(frames * sampleLength);
         int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
 
         if(nSamples < 0) {
-            Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_decode", nSamples);
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "opus_decode", nSamples);
             tmp.clear();
         } else {
             tmp.resize(nSamples * sampleLength);
-            Application::trace(DebugType::Audio, "{}: decode samples: {}, size: {}", __FUNCTION__, nSamples, tmp.size());
+            Application::trace(DebugType::Audio, "{}: decode samples: {}, size: {}", NS_FuncNameV, nSamples, tmp.size());
         }
 
         return tmp;

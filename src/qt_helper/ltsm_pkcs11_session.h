@@ -34,7 +34,7 @@
 
 #include "ltsm_async_socket.h"
 #include "ltsm_pkcs11_wrapper.h"
-#include "avast_asio_async_mutex.hpp"
+#include "ltsm_async_mutex.h"
 
 struct Pkcs11Token {
     uint64_t slotId;
@@ -84,7 +84,7 @@ class Pkcs11Client : public QThread, protected boost::base_from_member<boost::as
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
     boost::asio::cancellation_signal update_tokens_;
 
-    mutable avast::asio::async_mutex send_lock_;
+    mutable LTSM::async_mutex send_lock_;
 
     QString templatePath;
     ListTokens tokens;

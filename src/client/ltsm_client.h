@@ -82,6 +82,7 @@ namespace LTSM {
         XCB::Size windowSize;
         std::mutex renderLock;
 
+        std::chrono::time_point<std::chrono::steady_clock> appStart;
         std::chrono::time_point<std::chrono::steady_clock> keyPress;
         std::chrono::time_point<std::chrono::steady_clock> dropStart;
 
@@ -90,7 +91,7 @@ namespace LTSM {
 
         int xcbDpi = 0;
         int port = 5900;
-        int frameRate = 16;
+        int frameRate = 0;
         int windowFlags = SDL_WINDOW_SHOWN;
 
         //        BinaryBuf clipboardBufRemote;
@@ -168,6 +169,10 @@ namespace LTSM {
                                 const Channel::ConnectorMode &) const override;
         bool clientLtsmSupported(void) const override {
             return ltsmSupport;
+        }
+
+        uint32_t frameRateOption(void) const override {
+            return frameRate;
         }
 
         int start(void);

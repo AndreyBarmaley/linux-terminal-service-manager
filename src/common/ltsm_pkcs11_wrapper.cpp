@@ -135,28 +135,28 @@ namespace LTSM {
     PKCS11::Library::Library(const std::string & name) :
         dll{ nullptr, dlclose } {
         if(name.empty()) {
-            Application::error("{}: failed, name empty", __FUNCTION__);
+            Application::error("{}: failed, name empty", NS_FuncNameV);
             throw pkcs11_error(NS_FuncNameS);
         }
 
         dll.reset(dlopen(name.c_str(), RTLD_LAZY));
 
         if(! dll) {
-            Application::error("{}: {} failed, name: {}", __FUNCTION__, "dlopen", name);
+            Application::error("{}: {} failed, name: {}", NS_FuncNameV, "dlopen", name);
             throw pkcs11_error(NS_FuncNameS);
         }
 
         auto pfGetFunctionList = (CK_C_GetFunctionList) dlsym(dll.get(), "C_GetFunctionList");
 
         if(! pfGetFunctionList) {
-            Application::error("{}: {} symbol not found", __FUNCTION__, "C_GetFunctionList");
+            Application::error("{}: {} symbol not found", NS_FuncNameV, "C_GetFunctionList");
             throw pkcs11_error(NS_FuncNameS);
         }
 
         auto ret = pfGetFunctionList(& pFunctionList);
 
         if(ret != CKR_OK) {
-            Application::error("{}: {} failed, code: {:#016x}, rv: `{}'", __FUNCTION__, "C_GetFunctionList", ret,
+            Application::error("{}: {} failed, code: {:#018x}, rv: `{}'", NS_FuncNameV, "C_GetFunctionList", ret,
                                rvString(ret));
             throw pkcs11_error(NS_FuncNameS);
         }
@@ -164,7 +164,7 @@ namespace LTSM {
         ret = pFunctionList->C_Initialize(nullptr);
 
         if(ret != CKR_OK) {
-            Application::error("{}: {} failed, code: {:#016x}, rv: `{}'", __FUNCTION__, "C_Initialize", ret, rvString(ret));
+            Application::error("{}: {} failed, code: {:#018x}, rv: `{}'", NS_FuncNameV, "C_Initialize", ret, rvString(ret));
             throw pkcs11_error(NS_FuncNameS);
         }
     }
@@ -207,7 +207,7 @@ namespace LTSM {
             return info;
         }
 
-        Application::error("{}: {} failed, code: {:#016x}, rv: `{}'", __FUNCTION__, "C_GetInfo", ret, rvString(ret));
+        Application::error("{}: {} failed, code: {:#018x}, rv: `{}'", NS_FuncNameV, "C_GetInfo", ret, rvString(ret));
         return nullptr;
     }
 
@@ -215,22 +215,22 @@ namespace LTSM {
         CK_ULONG pulCount = 0;
 
         if(auto ret = lib->func()->C_GetSlotList(tokenPresentOnly, nullptr, & pulCount); ret != CKR_OK) {
-            Application::error("{}: {} failed, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_GetSlotList", ret, rvString(ret));
+            Application::error("{}: {} failed, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_GetSlotList", ret, rvString(ret));
             return {};
         }
 
         if(0 == pulCount) {
-            Application::debug(DebugType::Pkcs11, "{}: empty {}", __FUNCTION__, "slots");
+            Application::debug(DebugType::Pkcs11, "{}: empty {}", NS_FuncNameV, "slots");
             return {};
         }
 
-        Application::debug(DebugType::Pkcs11, "{}: connected slots: {}", __FUNCTION__, pulCount);
+        Application::debug(DebugType::Pkcs11, "{}: connected slots: {}", NS_FuncNameV, pulCount);
         std::vector<SlotId> slots(pulCount);
 
         if(auto ret = lib->func()->C_GetSlotList(tokenPresentOnly, slots.data(), & pulCount); ret != CKR_OK) {
-            Application::error("{}: {} failed, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_GetSlotList", ret, rvString(ret));
+            Application::error("{}: {} failed, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_GetSlotList", ret, rvString(ret));
             return {};
         }
 
@@ -244,19 +244,19 @@ namespace LTSM {
     }
 
     void PKCS11::Library::sessionClose(CK_SESSION_HANDLE sid) {
-        Application::debug(DebugType::Pkcs11, "{}: session: {}", __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: {}", NS_FuncNameV, sid);
         auto ret = pFunctionList->C_CloseSession(sid);
 
         if(ret != CKR_OK) {
-            Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_CloseSession", sid, ret, rvString(ret));
+            Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_CloseSession", sid, ret, rvString(ret));
         }
 
         sessions.remove(sid);
     }
 
     CK_SESSION_HANDLE PKCS11::Library::sessionOpen(const SlotId & id, bool rwmode) {
-        Application::debug(DebugType::Pkcs11, "{}: slot: {}", __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: {}", NS_FuncNameV, id);
         CK_FLAGS flags = CKF_SERIAL_SESSION;
 
         if(rwmode) {
@@ -267,12 +267,12 @@ namespace LTSM {
         auto ret = pFunctionList->C_OpenSession(id, flags, nullptr, nullptr, & sid);
 
         if(ret != CKR_OK) {
-            Application::error("{}: {} failed, slot: {}, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_OpenSession", id, ret, rvString(ret));
+            Application::error("{}: {} failed, slot: {}, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_OpenSession", id, ret, rvString(ret));
             return CK_INVALID_HANDLE;
         }
 
-        Application::debug(DebugType::Pkcs11, "{}: session: {}", __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: {}", NS_FuncNameV, sid);
         sessions.push_front(sid);
         return sid;
     }
@@ -284,13 +284,13 @@ namespace LTSM {
     // Slot
     PKCS11::Slot::Slot(const SlotId & val, const LibraryPtr & lib) : weak(lib), id(val) {
         if(! lib) {
-            Application::error("{}: lib failed", __FUNCTION__);
+            Application::error("{}: lib failed", NS_FuncNameV);
             throw pkcs11_error(NS_FuncNameS);
         }
     }
 
     bool PKCS11::Slot::getSlotInfo(SlotInfo & info) const {
-        Application::debug(DebugType::Pkcs11, "{}: slot: {}", __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: {}", NS_FuncNameV, id);
         auto lib = weak.lock();
 
         if(! lib) {
@@ -303,8 +303,8 @@ namespace LTSM {
             return true;
         }
 
-        Application::error("{}: {} failed, slot: {}, code: {:#016x}, rv: `{}'",
-                           __FUNCTION__, "C_GetSlotInfo", id, ret, rvString(ret));
+        Application::error("{}: {} failed, slot: {}, code: {:#018x}, rv: `{}'",
+                           NS_FuncNameV, "C_GetSlotInfo", id, ret, rvString(ret));
         return false;
     }
 
@@ -319,7 +319,7 @@ namespace LTSM {
     }
 
     bool PKCS11::Slot::getTokenInfo(TokenInfo & info) const {
-        Application::debug(DebugType::Pkcs11, "{}: slot: {}", __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: {}", NS_FuncNameV, id);
         auto lib = weak.lock();
 
         if(! lib) {
@@ -332,8 +332,8 @@ namespace LTSM {
             return true;
         }
 
-        Application::error("{}: {} failed, slot: {}, code: {:#016x}, rv: `{}'",
-                           __FUNCTION__, "C_GetTokenInfo", id, ret, rvString(ret));
+        Application::error("{}: {} failed, slot: {}, code: {:#018x}, rv: `{}'",
+                           NS_FuncNameV, "C_GetTokenInfo", id, ret, rvString(ret));
         return false;
     }
 
@@ -348,7 +348,7 @@ namespace LTSM {
     }
 
     PKCS11::MechList PKCS11::Slot::getMechanisms(void) const {
-        Application::debug(DebugType::Pkcs11, "{}: slot: {}", __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: {}", NS_FuncNameV, id);
         auto lib = weak.lock();
 
         if(! lib)
@@ -357,21 +357,21 @@ namespace LTSM {
         CK_ULONG pulCount = 0;
 
         if(auto ret = lib->func()->C_GetMechanismList(id, nullptr, & pulCount); ret != CKR_OK) {
-            Application::error("{}: {} failed, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_GetMechanismList", ret, rvString(ret));
+            Application::error("{}: {} failed, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_GetMechanismList", ret, rvString(ret));
             return {};
         }
 
         if(0 == pulCount) {
-            Application::debug(DebugType::Pkcs11, "{}: empty {}", __FUNCTION__, "mechanisms");
+            Application::debug(DebugType::Pkcs11, "{}: empty {}", NS_FuncNameV, "mechanisms");
             return {};
         }
 
         MechList mechs(pulCount);
 
         if(auto ret = lib->func()->C_GetMechanismList(id, mechs.data(), & pulCount); ret != CKR_OK) {
-            Application::error("{}: {} failed, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_GetMechanismList", ret, rvString(ret));
+            Application::error("{}: {} failed, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_GetMechanismList", ret, rvString(ret));
             return {};
         }
 
@@ -379,7 +379,7 @@ namespace LTSM {
     }
 
     PKCS11::MechInfoPtr PKCS11::Slot::getMechInfo(const MechType & mech) const {
-        Application::debug(DebugType::Pkcs11, "{}: slot: {}, mech: {}", __FUNCTION__, id, mechString(mech));
+        Application::debug(DebugType::Pkcs11, "{}: slot: {}, mech: {}", NS_FuncNameV, id, mechString(mech));
         auto lib = weak.lock();
 
         if(! lib) {
@@ -393,8 +393,8 @@ namespace LTSM {
             return info;
         }
 
-        Application::error("{}: {} failed, mech: {}, code: {:#016x}, rv: `{}'",
-                           __FUNCTION__, "C_GetMechanismInfo", mech, ret, rvString(ret));
+        Application::error("{}: {} failed, mech: {}, code: {:#018x}, rv: `{}'",
+                           NS_FuncNameV, "C_GetMechanismInfo", mech, ret, rvString(ret));
         return nullptr;
     }
 
@@ -429,10 +429,10 @@ namespace LTSM {
                 month = std::stoi(std::string(ref.data() + 4, ref.data() + 6));
                 day = std::stoi(std::string(ref.data() + 6, ref.data() + 8));
             } catch(const std::invalid_argument &) {
-                Application::error("{}: invalid value `{:.{}}'", __FUNCTION__, (const char*) ref.data(), 8);
+                Application::error("{}: invalid value `{:.{}}'", NS_FuncNameV, (const char*) ref.data(), 8);
             }
         } else {
-            Application::error("{}: invalid size: {}", __FUNCTION__, ref.size());
+            Application::error("{}: invalid size: {}", NS_FuncNameV, ref.size());
         }
     }
 
@@ -465,7 +465,7 @@ namespace LTSM {
     }
 
     PKCS11::SessionInfoPtr PKCS11::Session::getInfo(void) const {
-        Application::debug(DebugType::Pkcs11, "{}: session: {}", __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: {}", NS_FuncNameV, sid);
 
         if(auto lib = weak.lock()) {
             auto info = std::make_unique<SessionInfo>();
@@ -475,15 +475,15 @@ namespace LTSM {
                 return info;
             }
 
-            Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_GetSessionInfo", sid, ret, rvString(ret));
+            Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_GetSessionInfo", sid, ret, rvString(ret));
         }
 
         return nullptr;
     }
 
     PKCS11::RawData PKCS11::Session::generateRandom(size_t len) const {
-        Application::debug(DebugType::Pkcs11, "{}: session: {}", __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: {}", NS_FuncNameV, sid);
 
         if(auto lib = weak.lock()) {
             RawData res;
@@ -494,8 +494,8 @@ namespace LTSM {
                 auto ret = lib->func()->C_GenerateRandom(sid, tmp.data(), tmp.size());
 
                 if(ret != CKR_OK) {
-                    Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                       __FUNCTION__, "C_GenerateRandom", sid, ret, rvString(ret));
+                    Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                       NS_FuncNameV, "C_GenerateRandom", sid, ret, rvString(ret));
                     return {};
                 }
 
@@ -513,7 +513,7 @@ namespace LTSM {
         auto info = getTokenInfo();
 
         if(! info->flagLoginRequired()) {
-            Application::debug(DebugType::Pkcs11, "{}: not login required, session: {}", __FUNCTION__, sid);
+            Application::debug(DebugType::Pkcs11, "{}: not login required, session: {}", NS_FuncNameV, sid);
             return true;
         }
 
@@ -525,8 +525,8 @@ namespace LTSM {
                 return true;
             }
 
-            Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                               __FUNCTION__, "C_Login", sid, ret, rvString(ret));
+            Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                               NS_FuncNameV, "C_Login", sid, ret, rvString(ret));
         }
 
         return false;
@@ -541,8 +541,8 @@ namespace LTSM {
             auto ret = lib->func()->C_Logout(sid);
 
             if(ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Logout", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Logout", sid, ret, rvString(ret));
             }
         }
 
@@ -552,8 +552,8 @@ namespace LTSM {
     PKCS11::ObjectList PKCS11::Session::findTokenObjects(size_t maxObjects, const CK_ATTRIBUTE* attrs, size_t counts) const {
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_FindObjectsInit(sid, const_cast<CK_ATTRIBUTE*>(attrs), counts); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_FindObjectsInit", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_FindObjectsInit", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -561,15 +561,15 @@ namespace LTSM {
             CK_ULONG objectCount = 0;
 
             if(auto ret = lib->func()->C_FindObjects(sid, res.data(), res.size(), & objectCount); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_FindObjects", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_FindObjects", sid, ret, rvString(ret));
             }
 
-            Application::debug(DebugType::Pkcs11, "{}: objects count: {}", __FUNCTION__, objectCount);
+            Application::debug(DebugType::Pkcs11, "{}: objects count: {}", NS_FuncNameV, objectCount);
 
             if(auto ret = lib->func()->C_FindObjectsFinal(sid); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_FindObjectsFinal", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_FindObjectsFinal", sid, ret, rvString(ret));
             }
 
             res.resize(objectCount);
@@ -692,7 +692,7 @@ namespace LTSM {
         }
 
         if(sizeof(CK_BBOOL) != it->ulValueLen) {
-            Application::error("{}: invalid bool, type: {:#016x}", __FUNCTION__, type);
+            Application::error("{}: invalid bool, type: {:#018x}", NS_FuncNameV, type);
             return false;
         }
 
@@ -702,8 +702,8 @@ namespace LTSM {
     bool PKCS11::Session::getAttributes(const ObjectHandle & handle, const CK_ATTRIBUTE* attribs, size_t counts) const {
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, const_cast<CK_ATTRIBUTE*>(attribs), counts); ret != CKR_OK) {
-                Application::error("{}: {} failed, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_GetAttributeValue", ret, rvString(ret));
+                Application::error("{}: {} failed, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_GetAttributeValue", ret, rvString(ret));
                 return false;
             }
 
@@ -721,8 +721,8 @@ namespace LTSM {
             const CK_ULONG countAttribs = sizeof(attribs) / sizeof(CK_ATTRIBUTE);
 
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, attribs, countAttribs); ret != CKR_OK) {
-                Application::error("{}: {} failed, type: {:#016x}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_GetAttributeValue", attrType, ret, rvString(ret));
+                Application::error("{}: {} failed, type: {:#018x}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_GetAttributeValue", attrType, ret, rvString(ret));
                 return -1;
             }
 
@@ -746,8 +746,8 @@ namespace LTSM {
             const CK_ULONG countAttribs = sizeof(attribs) / sizeof(CK_ATTRIBUTE);
 
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, attribs, countAttribs); ret != CKR_OK) {
-                Application::error("{}: {} failed, type: {:#016x}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_GetAttributeValue", attrType, ret, rvString(ret));
+                Application::error("{}: {} failed, type: {:#018x}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_GetAttributeValue", attrType, ret, rvString(ret));
                 return {};
             }
 
@@ -758,10 +758,10 @@ namespace LTSM {
     }
 
     PKCS11::RawData PKCS11::Session::digestData(const void* ptr, size_t len, const MechType & type) const {
-        Application::debug(DebugType::Pkcs11, "{}: session: {}, mech: {}", __FUNCTION__, sid, mechString(type));
+        Application::debug(DebugType::Pkcs11, "{}: session: {}, mech: {}", NS_FuncNameV, sid, mechString(type));
 
         if(! ptr || len == 0) {
-            Application::warning("{}: data empty", __FUNCTION__);
+            Application::warning("{}: data empty", NS_FuncNameV);
             return {};
         }
 
@@ -769,24 +769,24 @@ namespace LTSM {
             CK_MECHANISM mech = { type, nullptr, 0 };
 
             if(auto ret = lib->func()->C_DigestInit(sid, & mech); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_DigestInit", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_DigestInit", sid, ret, rvString(ret));
                 return {};
             }
 
             CK_ULONG hashLen = 0;
 
             if(auto ret = lib->func()->C_Digest(sid, (CK_BYTE_PTR) ptr, len, nullptr, & hashLen); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Digest", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Digest", sid, ret, rvString(ret));
                 return {};
             }
 
             RawData hash(hashLen);
 
             if(auto ret = lib->func()->C_Digest(sid, (CK_BYTE_PTR) ptr, len, hash.data(), & hashLen); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Digest", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Digest", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -837,14 +837,14 @@ namespace LTSM {
     PKCS11::RawData PKCS11::Session::signData(const RawDataRef & certId, const void* data, size_t length,
             const MechType & mechType) const {
         if(! islogged) {
-            Application::error("{}: not logged session", __FUNCTION__);
+            Application::error("{}: not logged session", NS_FuncNameV);
             return {};
         }
 
         auto mechInfo = getMechInfo(mechType);
 
         if(! mechType) {
-            Application::error("{}: unknown mech type: {:#016x}", __FUNCTION__, mechType);
+            Application::error("{}: unknown mech type: {:#018x}", NS_FuncNameV, mechType);
             return {};
         }
 
@@ -852,14 +852,14 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString());
+            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "private key", certId.toHexString());
             return {};
         }
 
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_SignInit(sid, & mech, privateHandle); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_SignInit", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_SignInit", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -868,16 +868,16 @@ namespace LTSM {
 
             // get result size
             if(auto ret = lib->func()->C_Sign(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Sign", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Sign", sid, ret, rvString(ret));
                 return {};
             }
 
             buf.resize(bufLength);
 
             if(auto ret = lib->func()->C_Sign(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Sign", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Sign", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -897,7 +897,7 @@ namespace LTSM {
             auto mechInfo = getMechInfo(mechType);
             if(! mechType)
             {
-                Application::error("{}: unknown mech type: {:#016x}", __FUNCTION__, mechType);
+                Application::error("{}: unknown mech type: {:#018x}", NS_FuncNameV, mechType);
                 return false;
             }
 
@@ -906,7 +906,7 @@ namespace LTSM {
 
             if(! publicHandle)
             {
-                Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString());
+                Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "public key", certId.toHexString());
                 return false;
             }
 
@@ -914,15 +914,15 @@ namespace LTSM {
             {
                 if(auto ret = lib->func()->C_VerifyInit(sid, & mech, publicHandle); ret != CKR_OK)
                 {
-                    Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                        __FUNCTION__, "C_VerifyInit", sid, ret, rvString(ret));
+                    Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                        NS_FuncNameV, "C_VerifyInit", sid, ret, rvString(ret));
                     return false;
                 }
 
                 if(auto ret = lib->func()->C_Verify(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK)
                 {
-                    Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                        __FUNCTION__, "C_Verify", sid, ret, rvString(ret));
+                    Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                        NS_FuncNameV, "C_Verify", sid, ret, rvString(ret));
                     return false;
                 }
 
@@ -937,7 +937,7 @@ namespace LTSM {
         auto mechInfo = getMechInfo(mechType);
 
         if(! mechType) {
-            Application::error("{}: unknown mech type: {:#016x}", __FUNCTION__, mechType);
+            Application::error("{}: unknown mech type: {:#018x}", NS_FuncNameV, mechType);
             return {};
         }
 
@@ -945,14 +945,14 @@ namespace LTSM {
         CK_OBJECT_HANDLE publicHandle = findPublicKey(certId);
 
         if(! publicHandle) {
-            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString());
+            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "public key", certId.toHexString());
             return {};
         }
 
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_EncryptInit(sid, & mech, publicHandle); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_EncryptInit", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_EncryptInit", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -961,16 +961,16 @@ namespace LTSM {
 
             // get result size
             if(auto ret = lib->func()->C_Encrypt(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Encrypt", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Encrypt", sid, ret, rvString(ret));
                 return {};
             }
 
             buf.resize(bufLength);
 
             if(auto ret = lib->func()->C_Encrypt(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Encrypt", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Encrypt", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -987,14 +987,14 @@ namespace LTSM {
     PKCS11::RawData PKCS11::Session::decryptData(const RawDataRef & certId, const void* data, size_t length,
             const MechType & mechType) const {
         if(! islogged) {
-            Application::error("{}: not logged session", __FUNCTION__);
+            Application::error("{}: not logged session", NS_FuncNameV);
             return {};
         }
 
         auto mechInfo = getMechInfo(mechType);
 
         if(! mechType) {
-            Application::error("{}: unknown mech type: {:#016x}", __FUNCTION__, mechType);
+            Application::error("{}: unknown mech type: {:#018x}", NS_FuncNameV, mechType);
             return {};
         }
 
@@ -1002,14 +1002,14 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString());
+            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "private key", certId.toHexString());
             return {};
         }
 
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_DecryptInit(sid, & mech, privateHandle); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_DecryptInit", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_DecryptInit", sid, ret, rvString(ret));
                 return {};
             }
 
@@ -1018,16 +1018,16 @@ namespace LTSM {
 
             // get result size
             if(auto ret = lib->func()->C_Decrypt(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Decrypt", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Decrypt", sid, ret, rvString(ret));
                 return {};
             }
 
             buf.resize(bufLength);
 
             if(auto ret = lib->func()->C_Decrypt(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK) {
-                Application::error("{}: {} failed, session: {}, code: {:#016x}, rv: `{}'",
-                                   __FUNCTION__, "C_Decrypt", sid, ret, rvString(ret));
+                Application::error("{}: {} failed, session: {}, code: {:#018x}, rv: `{}'",
+                                   NS_FuncNameV, "C_Decrypt", sid, ret, rvString(ret));
                 return {};
             }
 

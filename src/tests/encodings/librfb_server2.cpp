@@ -132,7 +132,7 @@ namespace LTSM {
     void RFB::ServerEncoderBuf::sendFrameBufferUpdate(const FrameBuffer & fb) {
         auto & reg = fb.region();
 
-        Application::debug(DebugType::App, "{}: region: {}", __FUNCTION__, reg);
+        Application::debug(DebugType::App, "{}: region: {}", NS_FuncNameV, reg);
 
         std::scoped_lock guard{ sendLock };
 
@@ -157,11 +157,11 @@ namespace LTSM {
             threads = 1;
         } else if(std::thread::hardware_concurrency() < threads) {
             threads = std::thread::hardware_concurrency();
-            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: {}", __FUNCTION__, threads);
+            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: {}", NS_FuncNameV, threads);
         }
 
         if(encoder) {
-            Application::info("{}: using encoding threads: {}", __FUNCTION__, threads);
+            Application::info("{}: using encoding threads: {}", NS_FuncNameV, threads);
             encoder->setThreads(threads);
         }
     }

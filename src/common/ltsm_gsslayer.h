@@ -123,7 +123,7 @@ namespace Gss {
 
         virtual std::vector<uint8_t> recvToken(void) const = 0;
         virtual void sendToken(const void*, size_t) = 0;
-        virtual void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const = 0;
+        virtual void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const = 0;
 
         std::vector<uint8_t> recvMessage(void);
         bool sendMessage(const void*, size_t, bool encrypt = true);

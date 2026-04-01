@@ -53,7 +53,7 @@ namespace LTSM::DisplaySession {
         while(ifs) {
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
             if(auto ver = bs.read_be16(); ver != 0x0100) {
-                Application::error("{}: invalid xauth format, ver: {:#04x}", __FUNCTION__, ver);
+                Application::error("{}: invalid xauth format, ver: {:#06x}", NS_FuncNameV, ver);
                 throw std::runtime_error(NS_FuncNameS);
             }
 
@@ -71,13 +71,13 @@ namespace LTSM::DisplaySession {
 
             if(display == std::to_string(displayNum)) {
                 Application::debug(DebugType::App, "{}: {} found, display {}",
-                                   __FUNCTION__, "xcb cookie", displayNum);
+                                   NS_FuncNameV, "xcb cookie", displayNum);
                 return cookie;
             }
         }
 
         Application::error("{}: {} found, display: {}",
-                           __FUNCTION__, "xcb cookie not", displayNum);
+                           NS_FuncNameV, "xcb cookie not", displayNum);
 
         throw std::runtime_error(NS_FuncNameS);
     }
@@ -125,7 +125,7 @@ namespace LTSM::DisplaySession {
             return res;
         }
 
-        Application::error("{}: {} not found", __FUNCTION__, "XDG_RUNTIME_DIR");
+        Application::error("{}: {} not found", NS_FuncNameV, "XDG_RUNTIME_DIR");
         return "";
     }
 
@@ -195,21 +195,21 @@ namespace LTSM::DisplaySession {
         const uint32_t x11Timeout = configGetInteger("xvfb:timeout", 3500);
 
         if(! waitX11DisplayStarting(display_num_, mcookie_, x11Timeout)) {
-            Application::error("{}: {} failed", __FUNCTION__, "X11 connect");
+            Application::error("{}: {} failed", NS_FuncNameV, "X11 connect");
             throw std::runtime_error(NS_FuncNameS);
         }
 
         clearSessionDbusAddress(display_num_);
 
         if(! startX11Session()) {
-            Application::error("{}: {} failed", __FUNCTION__, "X11 session");
+            Application::error("{}: {} failed", NS_FuncNameV, "X11 session");
             throw std::runtime_error(NS_FuncNameS);
         }
 
         dbus_address_ = waitSessionDbusAddress(display_num_, x11Timeout);
 
         if(dbus_address_.empty()) {
-            Application::error("{}: {} failed", __FUNCTION__, "dbus session");
+            Application::error("{}: {} failed", NS_FuncNameV, "dbus session");
             throw std::runtime_error(NS_FuncNameS);
         }
 
@@ -243,7 +243,7 @@ namespace LTSM::DisplaySession {
         }
 
         if(! std::filesystem::exists(xorgBin)) {
-            Application::error("{}: path not found: `{}'", __FUNCTION__, xorgBin);
+            Application::error("{}: path not found: `{}'", NS_FuncNameV, xorgBin);
             return false;
         }
 
@@ -304,7 +304,7 @@ namespace LTSM::DisplaySession {
         bp::environment sessionEnvs = boost::this_process::environment();
 
         if(! std::filesystem::exists(sessionBin)) {
-            Application::error("{}: path not found: `{}'", __FUNCTION__, sessionBin);
+            Application::error("{}: path not found: `{}'", NS_FuncNameV, sessionBin);
             return false;
         }
 
@@ -318,10 +318,10 @@ namespace LTSM::DisplaySession {
 
         if(getenv("LTSM_LOGIN_MODE")) {
             // helper login
-            auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper");
+            auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/ltsm_helper");
 
             if(! std::filesystem::exists(helperBin)) {
-                Application::error("{}: path not found: `{}'", __FUNCTION__, helperBin);
+                Application::error("{}: path not found: `{}'", NS_FuncNameV, helperBin);
                 return false;
             }
 
@@ -337,7 +337,7 @@ namespace LTSM::DisplaySession {
                     ofs << "Xft.dpi: " << dpi << std::endl;
                 }
             } catch(const std::exception & err) {
-                Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
+                Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
             }
         }
 
@@ -370,12 +370,12 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", NS_FuncNameV, getpid());
         stop();
     }
 
     void DBusAdaptor::setDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
+        Application::debug(DebugType::Dbus, "{}: level: {}", NS_FuncNameV, level);
         setDebugLevel(level);
     }
 
@@ -391,7 +391,7 @@ namespace LTSM::DisplaySession {
     }
 
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
+        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", NS_FuncNameV, cmd, Tools::join(args, ", "));
 
         bp::environment env = boost::this_process::environment();
 
@@ -407,14 +407,14 @@ namespace LTSM::DisplaySession {
             return childs_.back().id();
 
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return -1;
     }
 
     StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
+        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", NS_FuncNameV, cmd, Tools::join(args, ", "));
 
         bp::environment env = boost::this_process::environment();
 
@@ -435,7 +435,7 @@ namespace LTSM::DisplaySession {
             return StatusStdout{proc.exit_code(), std::move(res)};
 
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return StatusStdout{ -1, {} };
@@ -447,7 +447,7 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
-        Application::debug(DebugType::Dbus, "{}: layout: {}", __FUNCTION__, layout);
+        Application::debug(DebugType::Dbus, "{}: layout: {}", NS_FuncNameV, layout);
         runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
     }
 
@@ -470,14 +470,14 @@ namespace LTSM::DisplaySession {
 
         // xorg stopped
         if(ps_xorg_.isValid() && ! ps_xorg_.isRunning()) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg", ps_xorg_.pid());
+            Application::warning("{}: {} exited, pid: {}, session shutdown", NS_FuncNameV, "xorg", ps_xorg_.pid());
             boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             return;
         }
 
         // session stopped
         if(ps_sess_.isValid() && ! ps_sess_.isRunning()) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "session", ps_sess_.pid());
+            Application::warning("{}: {} exited, pid: {}, session shutdown", NS_FuncNameV, "session", ps_sess_.pid());
             boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             return;
         }
@@ -563,7 +563,7 @@ namespace LTSM::DisplaySession {
         dbus_conn_->leaveEventLoop();
         sdbus_job.join();
 
-        Application::notice("{}: Display session shutdown", __FUNCTION__);
+        Application::notice("{}: Display session shutdown", NS_FuncNameV);
 
         return EXIT_SUCCESS;
     }
@@ -616,7 +616,7 @@ int main(int argc, char** argv) {
             std::filesystem::create_directory(ltsmDir);
         }
     } else {
-        Application::error("{}: {} not found", __FUNCTION__, "HOME");
+        Application::error("{}: {} not found", NS_FuncNameV, "HOME");
         return EXIT_FAILURE;
     }
 

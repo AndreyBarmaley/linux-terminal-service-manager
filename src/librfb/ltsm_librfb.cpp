@@ -265,12 +265,12 @@ namespace LTSM {
         bitpos = 7;
     }
 
-    void Tools::StreamBitsPack::pushValue(int val, size_t field) {
+    void Tools::StreamBitsPack::pushValue(uint32_t val, const Field & field) {
         // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
-        size_t mask = 1ul << (field - 1);
+        uint32_t mask = 1u << (static_cast<int>(field) - 1);
 
         while(mask) {
-            pushBit(val & mask);
+            pushBit(static_cast<bool>(val & mask));
             mask >>= 1;
         }
     }
@@ -286,7 +286,7 @@ namespace LTSM {
         }
 
         if(len < toVector().size()) {
-            Application::error("{}: {}", __FUNCTION__, "incorrect data size");
+            Application::error("{}: {}", NS_FuncNameV, "incorrect data size");
             throw std::out_of_range(NS_FuncNameS);
         }
 
@@ -295,7 +295,7 @@ namespace LTSM {
 
     bool Tools::StreamBitsUnpack::popBit(void) {
         if(vecbuf.empty()) {
-            Application::error("{}: {}", __FUNCTION__, "empty data");
+            Application::error("{}: {}", NS_FuncNameV, "empty data");
             throw std::invalid_argument(NS_FuncNameS);
         }
 

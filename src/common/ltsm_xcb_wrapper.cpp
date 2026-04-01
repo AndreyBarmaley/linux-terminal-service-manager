@@ -66,12 +66,12 @@ namespace LTSM {
             return xcb_rectangle_t{reg.x, reg.y, reg.width, reg.height};
         }
 
-        void error(const xcb_generic_error_t* err, const char* func, const char* xcbname) {
-            Application::error("{}: {} failed, error code: {}, major: {:#02x}, minor: {:#04x}, sequence: {}",
+        void error(const xcb_generic_error_t* err, std::string_view func, std::string_view xcbname) {
+            Application::error("{}: {} failed, error code: {}, major: {:#04x}, minor: {:#06x}, sequence: {}",
                                func, xcbname, err->error_code, err->major_code, err->minor_code, err->sequence);
         }
 
-        void error(xcb_connection_t* conn, const xcb_generic_error_t* err, const char* func, const char* xcbname) {
+        void error(xcb_connection_t* conn, const xcb_generic_error_t* err, std::string_view func, std::string_view xcbname) {
 #ifdef LTSM_WITH_XCB_ERRORS
 
             if(! conn || ! ErrorContext(conn).error(err, func, xcbname))
@@ -95,7 +95,7 @@ namespace LTSM {
                 auto xcbReply = XCB::getReplyFunc2(xcb_intern_atom, conn, create ? 0 : 1, name.size(), name.data());
 
                 if(const auto & err = xcbReply.error()) {
-                    error(conn, err.get(), __FUNCTION__, "xcb_intern_atom");
+                    error(conn, err.get(), NS_FuncNameV, "xcb_intern_atom");
                     return XCB_ATOM_NONE;
                 }
 
@@ -114,7 +114,7 @@ namespace LTSM {
                 auto xcbReply = XCB::getReplyFunc2(xcb_get_atom_name, conn, atom);
 
                 if(const auto & err = xcbReply.error()) {
-                    error(conn, err.get(), __FUNCTION__, "xcb_get_atom_name");
+                    error(conn, err.get(), NS_FuncNameV, "xcb_get_atom_name");
                     return "NONE";
                 }
 
@@ -132,7 +132,7 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_get_property, conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
             if(const auto & err = xcbReply.error()) {
-                error(conn, err.get(), __FUNCTION__, "xcb_get_property");
+                error(conn, err.get(), NS_FuncNameV, "xcb_get_property");
             }
 
             return PropertyReply(std::move(xcbReply.first));
@@ -151,7 +151,7 @@ struct fmt::formatter<LTSM::XCB::AtomName> {
 
     template <typename FormatContext>
     auto format(const LTSM::XCB::AtomName& at, FormatContext& ctx) const {
-        return fmt::format_to(ctx.out(), "atom[{:#08x}, {}]", at.atom, at.name);
+        return fmt::format_to(ctx.out(), "atom[{:#010x}, {}]", at.atom, at.name);
     }
 };
 
@@ -192,7 +192,7 @@ namespace LTSM {
                 }
 
                 if(auto ptr = conn.lock()) {
-                    error(ptr.get(), err, __FUNCTION__, "");
+                    error(ptr.get(), err, NS_FuncNameV, "");
                 }
 
                 return true;
@@ -213,20 +213,20 @@ namespace LTSM {
         ext = xcb_get_extension_data(ptr.get(), & xcb_xfixes_id);
 
         if(! ext || ! ext->present) {
-            Application::error("{}: extension not found: {}", __FUNCTION__, "XFIXES");
+            Application::error("{}: extension not found: {}", NS_FuncNameV, "XFIXES");
             throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, ptr.get(), XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_query_version");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_query_version");
             throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
             Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
-                               __FUNCTION__, reply->major_version, reply->minor_version);
+                               NS_FuncNameV, reply->major_version, reply->minor_version);
         }
     }
 
@@ -237,12 +237,12 @@ namespace LTSM {
             auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, 1, & rect);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_create_region");
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rect: {}, resource id: {:#08x}",
-                               __FUNCTION__, rect, res);
+            Application::debug(DebugType::Xcb, "{}: rect: {}, resource id: {:#010x}",
+                               NS_FuncNameV, rect, res);
 
             return std::make_unique<FixesRegionId>(conn, res);
         }
@@ -257,11 +257,11 @@ namespace LTSM {
             auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, counts, rects);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_create_region");
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rects: {}, resource id: {:#08x}", __FUNCTION__, counts, res);
+            Application::debug(DebugType::Xcb, "{}: rects: {}, resource id: {:#010x}", NS_FuncNameV, counts, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -275,11 +275,11 @@ namespace LTSM {
             auto cookie = xcb_xfixes_intersect_region_checked(ptr.get(), reg1, reg2, res);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_intersect_region");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_intersect_region");
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: reg1 id: {:#08x}, reg2 id: {:#08x}, resource id: {:#08x}", __FUNCTION__, reg1, reg2, res);
+            Application::debug(DebugType::Xcb, "{}: reg1 id: {:#010x}, reg2 id: {:#010x}, resource id: {:#010x}", NS_FuncNameV, reg1, reg2, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -293,11 +293,11 @@ namespace LTSM {
             auto cookie = xcb_xfixes_union_region_checked(ptr.get(), reg1, reg2, res);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_union_region");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_union_region");
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: reg1 id: {:#08x}, reg2 id: {:#08x}, resource id: {:#08x}", __FUNCTION__, reg1, reg2, res);
+            Application::debug(DebugType::Xcb, "{}: reg1 id: {:#010x}, reg2 id: {:#010x}, resource id: {:#010x}", NS_FuncNameV, reg1, reg2, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -309,7 +309,7 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, ptr.get(), reg);
 
             if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_fetch_region");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_fetch_region");
             }
 
             if(const auto & reply = xcbReply.reply()) {
@@ -330,7 +330,7 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, ptr.get(), reg);
 
             if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_fetch_region");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_fetch_region");
             }
 
             if(const auto & reply = xcbReply.reply()) {
@@ -363,7 +363,7 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_image, ptr.get());
 
             if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_image");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_get_cursor_image");
             }
 
             return xcbReply;
@@ -377,7 +377,7 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_name, ptr.get(), cur);
 
             if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_name");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_get_cursor_name");
             }
 
             if(const auto & reply = xcbReply.reply()) {
@@ -398,20 +398,20 @@ namespace LTSM {
         ext = xcb_get_extension_data(ptr.get(), & xcb_damage_id);
 
         if(! ext || ! ext->present) {
-            Application::error("{}: extension not found: {}", __FUNCTION__, "DAMAGE");
+            Application::error("{}: extension not found: {}", NS_FuncNameV, "DAMAGE");
             throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_damage_query_version, ptr.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_query_version");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_damage_query_version");
             throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
             Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
-                               __FUNCTION__, reply->major_version, reply->minor_version);
+                               NS_FuncNameV, reply->major_version, reply->minor_version);
         }
     }
 
@@ -424,11 +424,11 @@ namespace LTSM {
         auto cookie = xcb_damage_create_checked(ptr.get(), xid, win, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_create");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_damage_create");
             throw xcb_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::Xcb, "{}: resource id: {:#08x}", __FUNCTION__, xid);
+        Application::debug(DebugType::Xcb, "{}: resource id: {:#010x}", NS_FuncNameV, xid);
     }
 
     XCB::ModuleWindowDamage::~ModuleWindowDamage() {
@@ -443,8 +443,8 @@ namespace LTSM {
 
     bool XCB::ModuleWindowDamage::addRegion(const xcb_rectangle_t & reg) const {
         if(addRegions(& reg, 1)) {
-            Application::debug(DebugType::Xcb, "{}: damage: {:#08x}, window: {:#08x}, region: {}",
-                               __FUNCTION__, xid, win, reg);
+            Application::debug(DebugType::Xcb, "{}: damage: {:#010x}, window: {:#010x}, region: {}",
+                               NS_FuncNameV, xid, win, reg);
 
             return true;
         }
@@ -482,8 +482,8 @@ namespace LTSM {
             xcb_damage_subtract_checked(ptr.get(), xid, regid, XCB_XFIXES_REGION_NONE);
             xcb_xfixes_destroy_region(ptr.get(), regid);
 
-            Application::debug(DebugType::Xcb, "{}: damage: {:#08x}, window: {:#08x}, region: {}",
-                               __FUNCTION__, xid, win, reg);
+            Application::debug(DebugType::Xcb, "{}: damage: {:#010x}, window: {:#010x}, region: {}",
+                               NS_FuncNameV, xid, win, reg);
 
             return true;
         }
@@ -496,20 +496,20 @@ namespace LTSM {
         ext = xcb_get_extension_data(ptr.get(), & xcb_test_id);
 
         if(! ext || ! ext->present) {
-            Application::error("{}: extension not found: {}", __FUNCTION__, "XTEST");
+            Application::error("{}: extension not found: {}", NS_FuncNameV, "XTEST");
             throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_test_get_version, ptr.get(), XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_test_query_version");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_test_query_version");
             throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
             Application::debug(DebugType::Xcb, "{}: extension, version: {}.{}",
-                               __FUNCTION__, reply->major_version, reply->minor_version);
+                               NS_FuncNameV, reply->major_version, reply->minor_version);
         }
 
         std::ranges::fill(keycodes, NULL_KEYCODE);
@@ -526,7 +526,7 @@ namespace LTSM {
             auto cookie = xcb_test_fake_input_checked(ptr.get(), type, detail, XCB_CURRENT_TIME, win, posx, posy, 0);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_test_fake_input");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_test_fake_input");
                 return false;
             }
 
@@ -590,20 +590,20 @@ namespace LTSM {
         ext = xcb_get_extension_data(ptr.get(), & xcb_randr_id);
 
         if(! ext || ! ext->present) {
-            Application::error("{}: extension not found: {}", __FUNCTION__, "RANDR");
+            Application::error("{}: extension not found: {}", NS_FuncNameV, "RANDR");
             throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_query_version, ptr.get(), XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_query_version");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_query_version");
             throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
             Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
-                               __FUNCTION__, reply->major_version, reply->minor_version);
+                               NS_FuncNameV, reply->major_version, reply->minor_version);
         }
 
         // create randr notify
@@ -621,14 +621,14 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return {};
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_screen_resources");
             return {};
         }
 
@@ -645,14 +645,14 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return {};
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_screen_resources");
             return {};
         }
 
@@ -665,18 +665,18 @@ namespace LTSM {
         return {};
     }
 
-    std::unique_ptr<XCB::RandrCrtcInfo> XCB::ModuleRandr::getCrtcInfo(const xcb_randr_crtc_t & id) const {
+    std::unique_ptr<XCB::RandrCrtcInfo> XCB::ModuleRandr::getCrtcInfo(const xcb_randr_crtc_t & id, const xcb_timestamp_t & configTime) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return nullptr;
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, XCB_CURRENT_TIME);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, configTime);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_crtc_info");
             return nullptr;
         }
 
@@ -698,36 +698,24 @@ namespace LTSM {
         return nullptr;
     }
 
-    std::vector<xcb_randr_output_t> XCB::ModuleRandr::getCrtcOutputs(const xcb_randr_crtc_t & id, RandrCrtcInfo* info) const {
+    std::vector<xcb_randr_output_t> XCB::ModuleRandr::getCrtcOutputs(const xcb_randr_crtc_t & id) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return {};
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, XCB_CURRENT_TIME);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_crtc_info");
             return {};
         }
 
         if(const auto & reply = xcbReply.reply()) {
             xcb_randr_output_t* ptr = xcb_randr_get_crtc_info_outputs(reply.get());
             int len = xcb_randr_get_crtc_info_outputs_length(reply.get());
-
-            if(info) {
-                info->mode = reply->mode;
-                info->timestamp = reply->timestamp;
-                info->x = reply->x;
-                info->y = reply->y;
-                info->width = reply->width;
-                info->height = reply->height;
-                info->rotation = reply->rotation;
-                info->status = reply->status;
-            }
-
             return std::vector<xcb_randr_output_t>(ptr, ptr + len);
         }
 
@@ -738,14 +726,14 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return {};
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_screen_resources");
             return {};
         }
 
@@ -758,121 +746,88 @@ namespace LTSM {
         return {};
     }
 
-    std::unique_ptr<XCB::RandrOutputInfo> XCB::ModuleRandr::getOutputInfo(const xcb_randr_output_t & id) const {
+    XCB::RandrOutputInfo::RandrOutputInfo(const xcb_randr_get_output_info_reply_t & reply) {
+        connected = reply.connection == XCB_RANDR_CONNECTION_CONNECTED;
+        crtc = reply.crtc;
+        mm_width = reply.mm_width;
+        mm_height = reply.mm_height;
+
+        if(auto ptr = xcb_randr_get_output_info_name(&reply)) {
+            int len = xcb_randr_get_output_info_name_length(&reply);
+            name.assign(reinterpret_cast<const char*>(ptr), len);
+        }
+
+        if(auto ptr = xcb_randr_get_output_info_modes(&reply)) {
+            int len = xcb_randr_get_output_info_modes_length(&reply);
+            modes.assign(ptr, ptr + len);
+        }
+
+        if(auto ptr = xcb_randr_get_output_info_crtcs(&reply)) {
+            int len = xcb_randr_get_output_info_crtcs_length(&reply);
+            crtcs.assign(ptr, ptr + len);
+        }
+    }
+
+    bool XCB::RandrOutputInfo::modeValid(const xcb_randr_mode_t & mode) const {
+        return std::ranges::any_of(modes, [&](auto & val) {
+            return mode == val;
+        });
+    }
+
+    bool XCB::RandrOutputInfo::crtcValid(const xcb_randr_crtc_t & crtc) const {
+        return std::ranges::any_of(crtcs, [&](auto & val) {
+            return crtc == val;
+        });
+    }
+
+    std::unique_ptr<XCB::RandrOutputInfo> XCB::ModuleRandr::getOutputInfo(const xcb_randr_output_t & id, const xcb_timestamp_t & configTime) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return nullptr;
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, configTime);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_output_info");
             return nullptr;
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            auto ptr = xcb_randr_get_output_info_name(reply.get());
-            int len = xcb_randr_get_output_info_name_length(reply.get());
-
-            auto res = std::make_unique<RandrOutputInfo>();
-
-            res->name.assign(reinterpret_cast<const char*>(ptr), len);
-            res->connected = reply->connection == XCB_RANDR_CONNECTION_CONNECTED;
-            res->crtc = reply->crtc;
-            res->mm_width = reply->mm_width;
-            res->mm_height = reply->mm_height;
-
-            return res;
+            return std::make_unique<RandrOutputInfo>(*reply);
         }
 
         return nullptr;
     }
 
-    std::vector<xcb_randr_mode_t> XCB::ModuleRandr::getOutputModes(const xcb_randr_output_t & id, RandrOutputInfo* info) const {
-        auto ptr = conn.lock();
+    std::list<XCB::RandrOutputInfoPtr> XCB::ModuleRandr::getOutputsInfo(bool connected) const {
+        std::list<XCB::RandrOutputInfoPtr> res;
 
-        if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
-            return {};
-        }
-
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
-
-        if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
-            return {};
-        }
-
-        if(const auto & reply = xcbReply.reply()) {
-            if(info) {
-                auto ptr = xcb_randr_get_output_info_name(reply.get());
-                int len = xcb_randr_get_output_info_name_length(reply.get());
-                info->name.assign(reinterpret_cast<const char*>(ptr), len);
-                info->connected = reply->connection == XCB_RANDR_CONNECTION_CONNECTED;
-                info->crtc = reply->crtc;
-                info->mm_width = reply->mm_width;
-                info->mm_height = reply->mm_height;
+        for(const auto & id : getOutputs()) {
+            if(auto ptr = getOutputInfo(id)) {
+                if(! connected || ptr->connected) {
+                    res.emplace_back(std::move(ptr));
+                }
             }
-
-            xcb_randr_mode_t* ptr = xcb_randr_get_output_info_modes(reply.get());
-            int len = xcb_randr_get_output_info_modes_length(reply.get());
-
-            return std::vector<xcb_randr_mode_t>(ptr, ptr + len);
         }
 
-        return {};
-    }
-
-    std::vector<xcb_randr_crtc_t> XCB::ModuleRandr::getOutputCrtcs(const xcb_randr_output_t & id, RandrOutputInfo* info) const {
-        auto ptr = conn.lock();
-
-        if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
-            return {};
-        }
-
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
-
-        if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
-            return {};
-        }
-
-        if(const auto & reply = xcbReply.reply()) {
-            if(info) {
-                auto ptr = xcb_randr_get_output_info_name(reply.get());
-                int len = xcb_randr_get_output_info_name_length(reply.get());
-                info->name.assign(reinterpret_cast<const char*>(ptr), len);
-                info->connected = reply->connection == XCB_RANDR_CONNECTION_CONNECTED;
-                info->crtc = reply->crtc;
-                info->mm_width = reply->mm_width;
-                info->mm_height = reply->mm_height;
-            }
-
-            xcb_randr_mode_t* ptr = xcb_randr_get_output_info_crtcs(reply.get());
-            int len = xcb_randr_get_output_info_crtcs_length(reply.get());
-
-            return std::vector<xcb_randr_mode_t>(ptr, ptr + len);
-        }
-
-        return {};
+        return res;
     }
 
     std::unique_ptr<XCB::RandrScreenInfo> XCB::ModuleRandr::getScreenInfo(void) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return nullptr;
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_screen_info");
             return nullptr;
         }
 
@@ -890,33 +845,24 @@ namespace LTSM {
         return nullptr;
     }
 
-    std::vector<xcb_randr_screen_size_t> XCB::ModuleRandr::getScreenSizes(RandrScreenInfo* info) const {
+    std::vector<xcb_randr_screen_size_t> XCB::ModuleRandr::getScreenSizes(void) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return {};
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_get_screen_info");
             return {};
         }
 
         if(const auto & reply = xcbReply.reply()) {
             xcb_randr_screen_size_t* ptr = xcb_randr_get_screen_info_sizes(reply.get());
             int len = xcb_randr_get_screen_info_sizes_length(reply.get());
-
-            if(info) {
-                info->timestamp = reply->timestamp;
-                info->config_timestamp = reply->config_timestamp;
-                info->sizeID = reply->sizeID;
-                info->rotation = reply->rotation;
-                info->rate = reply->rate;
-            }
-
             return std::vector<xcb_randr_screen_size_t>(ptr, ptr + len);
         }
 
@@ -927,21 +873,25 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
-            return 0;
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
+            throw xcb_error(NS_FuncNameS);
+        }
+
+        if(0 >= vertRef) {
+            Application::error("{}: vertRef incorrect", NS_FuncNameV);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto cvt = "/usr/bin/cvt";
-
         std::error_code err;
 
         if(! std::filesystem::exists(cvt, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                    __FUNCTION__, "exists", err.value(), err.message());
-            return 0;
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                               NS_FuncNameV, "exists", err.value(), err.message(), cvt);
+            throw xcb_error(NS_FuncNameS);
         }
 
-        std::string cmd = Tools::runcmd(fmt::format("{} {} {}", cvt, sz.width, sz.height));
+        std::string cmd = Tools::runcmd(fmt::format("{} {} {} {}", cvt, sz.width, sz.height, vertRef));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
         std::erase_if(params, [](auto & val) {
             return val.empty();
@@ -949,8 +899,8 @@ namespace LTSM {
 
         // params: Modeline "1024x600_60.00"   49.00  1024 1072 1168 1312  600 603 613 624 -hsync +vsync
         if(params.size() != 13) {
-            Application::error("{}: incorrect cvt format, params: {}", __FUNCTION__, params.size());
-            return 0;
+            Application::error("{}: incorrect cvt format, params: {}", NS_FuncNameV, params.size());
+            throw xcb_error(NS_FuncNameS);
         }
 
         xcb_randr_mode_info_t mode_info;
@@ -987,8 +937,8 @@ namespace LTSM {
             mode_info.vtotal = std::stoi(*it);
             it = std::next(it);
         } catch(const std::exception &) {
-            Application::error("{}: unknown format outputs from cvt", __FUNCTION__);
-            return 0;
+            Application::error("{}: unknown format outputs from cvt", NS_FuncNameV);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(*it == "-hsync") {
@@ -1010,34 +960,34 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_randr_create_mode, ptr.get(), screen, mode_info, name.size(), name.data());
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_create_mode");
-            return 0;
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_create_mode");
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: id: {:#08x}, mode: {}", __FUNCTION__, reply->mode, Size(mode_info.width, mode_info.height));
+            Application::debug(DebugType::Xcb, "{}: id: {:#010x}, mode: {}", NS_FuncNameV, reply->mode, Size(mode_info.width, mode_info.height));
             return reply->mode;
         }
 
-        return 0;
+        throw xcb_error(NS_FuncNameS);
     }
 
     bool XCB::ModuleRandr::destroyMode(const xcb_randr_mode_t & mode) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
         auto cookie = xcb_randr_destroy_mode_checked(ptr.get(), mode);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_destroy_mode");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_destroy_mode");
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: id: {:#08x}", __FUNCTION__, mode);
+        Application::debug(DebugType::Xcb, "{}: id: {:#010x}", NS_FuncNameV, mode);
         return true;
     }
 
@@ -1045,25 +995,18 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
-        }
-
-        auto modes = getOutputModes(output);
-
-        // mode present
-        if(std::ranges::any_of(modes, [&](auto & val) { return val == mode; })) {
-            return true;
         }
 
         auto cookie = xcb_randr_add_output_mode_checked(ptr.get(), output, mode);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_add_output_mode");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_add_output_mode");
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: id: {:#08x}, output: {:#08x}", __FUNCTION__, mode, output);
+        Application::debug(DebugType::Xcb, "{}: output: {:#010x}, mode: {:#010x}", NS_FuncNameV, output, mode);
         return true;
     }
 
@@ -1071,54 +1014,67 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
-        }
-
-        auto modes = getOutputModes(output);
-
-        // mode not found
-        if(std::ranges::none_of(modes, [&](auto & val) { return val == mode; })) {
-            return true;
         }
 
         auto cookie = xcb_randr_delete_output_mode_checked(ptr.get(), output, mode);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_delete_output_mode");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_delete_output_mode");
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: id: {:#08x}, output: {:#08x}", __FUNCTION__, mode, output);
+        Application::debug(DebugType::Xcb, "{}: output: {:#010x}, mode: {:#010x}", NS_FuncNameV, output, mode);
         return true;
     }
 
-    bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode) const {
+    bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode, const xcb_timestamp_t & configTime, uint16_t* sequence) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
-        if(auto info = getScreenInfo()) {
-            // check output mode present
-            for(const auto & output : outputs) {
-                auto modes = getOutputModes(output);
+        bool success = true;
 
-                if(std::ranges::none_of(modes, [&](auto & val) { return mode == val; })) {
-                    Application::error("{}: output mode not found, mode: {}, output: {}", __FUNCTION__, mode, output);
-                    return false;
+        for(const auto & output : outputs) {
+            auto outputInfo = getOutputInfo(output);
+
+            if(! outputInfo) {
+                success = false;
+                continue;
+            }
+
+            // check output mode present
+            if(! outputInfo->modeValid(mode)) {
+                Application::error("{}: output mode not found, mode: {}, output: {}", NS_FuncNameV, mode, output);
+                success = false;
+                continue;
+            }
+
+            auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, configTime,
+                                          posx, posy, mode, XCB_RANDR_ROTATION_ROTATE_0, 1, & output);
+
+            if(const auto & err = xcbReply.error()) {
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_set_crtc_config");
+                success = false;
+            }
+
+            if(const auto & reply = xcbReply.reply()) {
+                if(reply->status == XCB_RANDR_SET_CONFIG_SUCCESS) {
+                    if(sequence) {
+                        *sequence = reply->sequence;
+                    }
+                } else {
+                    Application::warning("{}: {} failed, status: {}",
+                                         NS_FuncNameV, "xcb_randr_set_crtc_config", reply->status);
+                    success = false;
                 }
             }
 
-            auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
-                                          posx, posy, mode, XCB_RANDR_ROTATION_ROTATE_0, outputs.size(), outputs.data());
-
-            if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
-                return false;
-            }
+            return success;
         }
 
         return false;
@@ -1128,158 +1084,43 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
-        if(auto info = getScreenInfo()) {
-            auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
-                                          0, 0, 0, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr);
+        auto xcbReply = getReplyFunc2(xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, XCB_CURRENT_TIME,
+                                      0, 0, XCB_NONE, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr);
 
-            if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
-                return false;
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    bool XCB::ModuleRandr::setScreenSize(uint16_t width, uint16_t height, uint16_t dpi) const {
-        auto ptr = conn.lock();
-
-        if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
-            return false;
-        }
-
-        // align size
-        if(auto alignW = width % 8) {
-            width += 8 - alignW;
-        }
-
-        Application::debug(DebugType::Xcb,  "{}: size: {}, dpi: {}", __FUNCTION__, Size(width, height), dpi);
-
-        uint32_t mm_width = width * 25.4 / dpi;
-        uint32_t mm_height = height * 25.4 / dpi;
-
-        auto cookie = xcb_randr_set_screen_size_checked(ptr.get(), screen, width, height, mm_width, mm_height);
-
-        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, " xcb_randr_set_screen_size");
+        if(const auto & err = xcbReply.error()) {
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_randr_set_crtc_config");
             return false;
         }
 
         return true;
     }
 
-    bool XCB::ModuleRandr::setScreenSizeCompat(uint16_t szw, uint16_t szh, uint16_t* sequence) const {
+    bool XCB::ModuleRandr::setScreenSize(const Size & sz, uint16_t dpi) const {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
         // align size
-        if(auto alignW = szw % 8) {
-            szw += 8 - alignW;
+        Application::debug(DebugType::Xcb,  "{}: size: {}, dpi: {}", NS_FuncNameV, sz, dpi);
+
+        uint32_t mm_width = sz.width * 25.4 / dpi;
+        uint32_t mm_height = sz.height * 25.4 / dpi;
+
+        auto cookie = xcb_randr_set_screen_size_checked(ptr.get(), screen, sz.width, sz.height, mm_width, mm_height);
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
+            error(ptr.get(), err.get(), NS_FuncNameV, " xcb_randr_set_screen_size");
+            return false;
         }
 
-        auto screenSizes = getScreenSizes();
-        auto its = std::ranges::find_if(screenSizes, [&](auto & ss) {
-            return ss.width == szw && ss.height == szh;
-        });
-
-        xcb_randr_mode_t mode = 0;
-        xcb_randr_output_t output = 0;
-
-        // not found
-        if(its == screenSizes.end()) {
-            // add new mode
-            auto outputs = getOutputs();
-            auto ito = std::ranges::find_if(outputs, [this](auto & id) {
-                auto info = this->getOutputInfo(id);
-                return info && info->connected;
-            });
-
-            if(ito == outputs.end()) {
-                Application::error("{}: {} failed, outputs count: {}", __FUNCTION__, "getOutputs", outputs.size());
-                return false;
-            }
-
-            output = *ito;
-            const Size sz{szw, szh};
-            mode = cvtCreateMode(sz);
-
-            if(0 == mode) {
-                return false;
-            }
-
-            if(! addOutputMode(output, mode)) {
-                Application::error("{}: {} failed, mode: {}", __FUNCTION__, "addOutputMode", sz);
-                destroyMode(mode);
-                return false;
-            }
-
-            // fixed size
-            auto modes = getModesInfo();
-            auto itm = std::ranges::find_if(modes, [=](auto & val) {
-                return val.id == mode;
-            });
-
-            if(itm == modes.end()) {
-                Application::error("{}: {} failed, mode: {}", __FUNCTION__, "getModesInfo", sz);
-                deleteOutputMode(output, mode);
-                destroyMode(mode);
-                return false;
-            }
-
-            szw = (*itm).width;
-            szh = (*itm).height;
-
-            // rescan info
-            screenSizes = getScreenSizes();
-            its = std::ranges::find_if(screenSizes, [&](auto & ss) {
-                return ss.width == szw && ss.height == szh;
-            });
-
-            if(its == screenSizes.end()) {
-                Application::error("{}: {} failed, mode: {}", __FUNCTION__, "getScreenSizes", Size(szw, szh));
-                deleteOutputMode(output, mode);
-                destroyMode(mode);
-                return false;
-            }
-        }
-
-        auto sizeID = std::distance(screenSizes.begin(), its);
-
-        if(auto screenInfo = getScreenInfo()) {
-            auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, ptr.get(), screen, screenInfo->timestamp,
-                                           screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
-
-            if(const auto & err = xcbReply2.error()) {
-                Application::debug(DebugType::Xcb, "{}: set size: {}, timestamp: {}, config_timestamp: {}, id: {}, rotation: {}, rate: {}",
-                        __FUNCTION__, Size(szw, szh), screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
-
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
-                return false;
-            }
-
-            if(const auto & reply = xcbReply2.reply()) {
-                if(sequence) {
-                    *sequence = reply->sequence;
-                }
-
-                Application::debug(DebugType::Xcb, "{}: set size: {}, id: {}, sequence: {}", __FUNCTION__, Size(szw, szh), sizeID, reply->sequence);
-            }
-
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     // XCB::ModuleShm
@@ -1287,20 +1128,20 @@ namespace LTSM {
         ext = xcb_get_extension_data(ptr.get(), & xcb_shm_id);
 
         if(! ext || ! ext->present) {
-            Application::error("{}: extension not found: {}", __FUNCTION__, "SHM");
+            Application::error("{}: extension not found: {}", NS_FuncNameV, "SHM");
             throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_shm_query_version, ptr.get());
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_shm_query_version");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_shm_query_version");
             throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
             Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
-                               __FUNCTION__, reply->major_version, reply->minor_version);
+                               NS_FuncNameV, reply->major_version, reply->minor_version);
         }
     }
 
@@ -1329,19 +1170,16 @@ namespace LTSM {
     }
 
     XCB::ShmIdShared XCB::ModuleShm::createShm(size_t shmsz, int mode, bool readOnly, uid_t owner) const {
-        Application::debug(DebugType::Xcb, "{}: size: {}, mode: {:#08x}, read only: {}, owner: {}", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
+        Application::debug(DebugType::Xcb, "{}: size: {}, mode: {:#010x}, read only: {}, owner: {}", NS_FuncNameV, shmsz, mode, (int) readOnly, owner);
 
         const size_t pagesz = 4096;
 
         // shmsz: align page 4096
-        if(auto align = shmsz % pagesz) {
-            shmsz += pagesz - align;
-        }
-
+        shmsz = Tools::alignUp(shmsz, 4096);
         int shmId = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
 
         if(shmId == -1) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmget", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "shmget", strerror(errno), errno);
             return nullptr;
         }
 
@@ -1349,7 +1187,7 @@ namespace LTSM {
 
         // man shmat: check result
         if(shmAddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno) {
-            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmaddr", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "shmaddr", strerror(errno), errno);
             return nullptr;
         }
 
@@ -1357,12 +1195,12 @@ namespace LTSM {
             shmid_ds info;
 
             if(-1 == shmctl(shmId, IPC_STAT, & info)) {
-                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmctl", strerror(errno), errno);
+                Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "shmctl", strerror(errno), errno);
             } else {
                 info.shm_perm.uid = owner;
 
                 if(-1 == shmctl(shmId, IPC_SET, & info)) {
-                    Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmctl", strerror(errno), errno);
+                    Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "shmctl", strerror(errno), errno);
                 }
             }
         }
@@ -1370,7 +1208,7 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return nullptr;
         }
 
@@ -1379,12 +1217,12 @@ namespace LTSM {
         auto cookie = xcb_shm_attach_checked(ptr.get(), res, shmId, 0);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_shm_attach");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_shm_attach");
             return nullptr;
         }
 
-        Application::debug(DebugType::Xcb, "{}: resource id: {:#08x}", __FUNCTION__, res);
-        return std::make_shared<ShmId>(conn, shmId, shmAddr, res);
+        Application::debug(DebugType::Xcb, "{}: resource id: {:#010x}", NS_FuncNameV, res);
+        return std::make_shared<ShmId>(conn, shmId, shmAddr, shmsz, owner, res);
     }
 
     // XCB::ModuleXkb
@@ -1393,33 +1231,33 @@ namespace LTSM {
         ext = xcb_get_extension_data(ptr.get(), & xcb_xkb_id);
 
         if(! ext || ! ext->present) {
-            Application::error("{}: extension not found: {}", __FUNCTION__, "XKB");
+            Application::error("{}: extension not found: {}", NS_FuncNameV, "XKB");
             throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, ptr.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_use_extension");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xkb_use_extension");
             throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
             Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
-                               __FUNCTION__, reply->serverMajor, reply->serverMinor);
+                               NS_FuncNameV, reply->serverMajor, reply->serverMinor);
         }
 
         devid = xkb_x11_get_core_keyboard_device_id(ptr.get());
 
         if(0 > devid) {
-            Application::error("{}: {} failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
+            Application::error("{}: {} failed", NS_FuncNameV, "xkb_x11_get_core_keyboard_device_id");
             throw xcb_error(NS_FuncNameS);
         }
 
         ctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
 
         if(! ctx) {
-            Application::error("{}: {} failed", __FUNCTION__, "xkb_context_new");
+            Application::error("{}: {} failed", NS_FuncNameV, "xkb_context_new");
             throw xcb_error(NS_FuncNameS);
         }
 
@@ -1450,7 +1288,7 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
@@ -1461,15 +1299,15 @@ namespace LTSM {
             state.reset(xkb_x11_state_new_from_device(map.get(), ptr.get(), devid));
 
             if(! state) {
-                Application::error("{}: {} failed", __FUNCTION__, "xkb_x11_state_new_from_device");
+                Application::error("{}: {} failed", NS_FuncNameV, "xkb_x11_state_new_from_device");
                 return false;
             }
 
-            Application::debug(DebugType::Xcb, "{}: keyboard updated, device id: {}", __FUNCTION__, devid);
+            Application::debug(DebugType::Xcb, "{}: keyboard updated, device id: {}", NS_FuncNameV, devid);
             return true;
         }
 
-        Application::error("{}: {} failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
+        Application::error("{}: {} failed", NS_FuncNameV, "xkb_x11_keymap_new_from_device");
         return false;
     }
 
@@ -1477,7 +1315,7 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return {};
         }
 
@@ -1487,7 +1325,7 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_xkb_get_names, ptr.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xkb_get_names");
             return res;
         }
 
@@ -1512,14 +1350,14 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return -1;
         }
 
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, ptr.get(), XCB_XKB_ID_USE_CORE_KBD);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xkb_get_names");
             return -1;
         }
 
@@ -1545,14 +1383,14 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
         auto cookie = xcb_xkb_latch_lock_state_checked(ptr.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_latch_lock_state");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xkb_latch_lock_state");
             return false;
         }
 
@@ -1570,7 +1408,7 @@ namespace LTSM {
                                                 XCB_WINDOW_CLASS_INPUT_OUTPUT, screen.root_visual, mask, values);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_create_window");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_create_window");
             throw xcb_error(NS_FuncNameS);
         }
 
@@ -1581,7 +1419,7 @@ namespace LTSM {
                             Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
 
         selectionAtom = AtomName(ptr.get(), atom != XCB_ATOM_NONE ? atom : Atom::clipboard);
-        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection: {}", __FUNCTION__, selectionWin, selectionAtom);
+        Application::debug(DebugType::Xcb, "{}: window id: {:#010x}, selection: {}", NS_FuncNameV, selectionWin, selectionAtom);
     }
 
     XCB::ModulePasteSelection::~ModulePasteSelection() {
@@ -1614,11 +1452,11 @@ namespace LTSM {
         auto prop = AtomName(ptr.get(), ev->property);
 
         if(warn) {
-            Application::warning("{}: EVENT[ sequence: {}, time: {}, owner: {:#08x}, requestor: {:#08x}, selection {}, target {}, property {} ]",
-                                 __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor, sel, tgt, prop);
+            Application::warning("{}: EVENT[ sequence: {}, time: {}, owner: {:#010x}, requestor: {:#010x}, selection {}, target {}, property {} ]",
+                                 NS_FuncNameV, ev->sequence, ev->time, ev->owner, ev->requestor, sel, tgt, prop);
         } else {
-            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, owner: {:#08x}, requestor: {:#08x}, selection {}, target {}, property {} ]",
-                               __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor, ev->selection, sel, tgt, prop);
+            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, owner: {:#010x}, requestor: {:#010x}, selection {}, target {}, property {} ]",
+                               NS_FuncNameV, ev->sequence, ev->time, ev->owner, ev->requestor, ev->selection, sel, tgt, prop);
         }
     }
 
@@ -1639,7 +1477,7 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return false;
         }
 
@@ -1655,7 +1493,7 @@ namespace LTSM {
         if(XCB_WINDOW_NONE == win) {
             requestsIncr.clear();
         } else {
-            std::erase_if(requestsIncr, [=](auto & req) {
+            std::erase_if(requestsIncr, [ = ](auto & req) {
                 return req.ev.requestor == win;
             });
         }
@@ -1665,30 +1503,30 @@ namespace LTSM {
     }
 
     void XCB::ModulePasteSelection::destroyNotifyEvent(const xcb_destroy_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection {}, EVENT[ sequence: {}, event: {:#08x}, window: {:#08x}]",
-                           __FUNCTION__, selectionWin, selectionAtom, ev->sequence, ev->event, ev->window);
+        Application::debug(DebugType::Xcb, "{}: owner: {:#010x}, selection {}, EVENT[ sequence: {}, event: {:#010x}, window: {:#010x}]",
+                           NS_FuncNameV, selectionWin, selectionAtom, ev->sequence, ev->event, ev->window);
 
         if(ev->window) {
             if(removeRequestors(ev->window)) {
-                Application::warning("{}: destroy requestor: {:#08x}", __FUNCTION__, ev->window);
+                Application::warning("{}: destroy requestor: {:#010x}", NS_FuncNameV, ev->window);
             }
         }
     }
 
     void XCB::ModulePasteSelection::selectionClearEvent(const xcb_selection_clear_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection {}, EVENT[ sequence: {}, time: {}, owner: {:#08x}, selection: {:#08x} ]",
-                           __FUNCTION__, selectionWin, selectionAtom, ev->sequence, ev->time, ev->owner, ev->selection);
+        Application::debug(DebugType::Xcb, "{}: owner: {:#010x}, selection {}, EVENT[ sequence: {}, time: {}, owner: {:#010x}, selection: {:#010x} ]",
+                           NS_FuncNameV, selectionWin, selectionAtom, ev->sequence, ev->time, ev->owner, ev->selection);
 
         if(ev->owner == selectionWin && ev->selection == selectionAtom.atom && requestsIncr.size()) {
             if(removeRequestors(XCB_WINDOW_NONE)) {
-                Application::warning("{}: clear all requestsIncr", __FUNCTION__);
+                Application::warning("{}: clear all requestsIncr", NS_FuncNameV);
             }
         }
     }
 
     void XCB::ModulePasteSelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection {}, EVENT[ sequence: {}, window: {:#08x}, atom: {:#08x}, time: {}, state: {:#02x} ]",
-                           __FUNCTION__, selectionWin, selectionAtom, ev->sequence, ev->window, ev->atom, ev->time, ev->state);
+        Application::debug(DebugType::Xcb, "{}: owner: {:#010x}, selection {}, EVENT[ sequence: {}, window: {:#010x}, atom: {:#010x}, time: {}, state: {:#04x} ]",
+                           NS_FuncNameV, selectionWin, selectionAtom, ev->sequence, ev->window, ev->atom, ev->time, ev->state);
 
         if(ev->state != XCB_PROPERTY_DELETE) {
             return;
@@ -1698,7 +1536,7 @@ namespace LTSM {
             return;
         }
 
-        auto it = std::ranges::find_if(requestsIncr, [=](auto & req) {
+        auto it = std::ranges::find_if(requestsIncr, [ = ](auto & req) {
             return req.ev.requestor == ev->window && req.ev.property == ev->atom && req.ev.time < ev->time;
         });
 
@@ -1709,7 +1547,7 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
@@ -1729,7 +1567,7 @@ namespace LTSM {
 
                 if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
                     discardRequestor(ptr, it->ev);
-                    Application::error("{}: invalid request, failed {}", __FUNCTION__, "xcb_change_property");
+                    Application::error("{}: invalid request, failed {}", NS_FuncNameV, "xcb_change_property");
                     remove = true;
                 } else {
                     // incremental continue
@@ -1737,7 +1575,7 @@ namespace LTSM {
                 }
             } else {
                 discardRequestor(ptr, it->ev);
-                Application::error("{}: invalid buffer, failed {}", __FUNCTION__, "selectionSourceData");
+                Application::error("{}: invalid buffer, failed {}", NS_FuncNameV, "selectionSourceData");
                 remove = true;
             }
         } else {
@@ -1761,44 +1599,44 @@ namespace LTSM {
     }
 
     void XCB::ModulePasteSelection::selectionRequestEvent(const xcb_selection_request_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection {}", __FUNCTION__, selectionWin, selectionAtom);
+        Application::debug(DebugType::Xcb, "{}: owner: {:#010x}, selection {}", NS_FuncNameV, selectionWin, selectionAtom);
 
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
         if(! source) {
             sendNotifyDiscard(ptr, ev);
-            Application::error("{}: source empty", __FUNCTION__);
+            Application::error("{}: source empty", NS_FuncNameV);
             return;
         }
 
         if(ev->selection != selectionAtom.atom) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
-            Application::warning("{}: invalid request, unknown {}", __FUNCTION__, "selection");
+            Application::warning("{}: invalid request, unknown {}", NS_FuncNameV, "selection");
             return;
         }
 
         if(ev->owner != selectionWin) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
-            Application::warning("{}: invalid request, unknown {}", __FUNCTION__, "owner");
+            Application::warning("{}: invalid request, unknown {}", NS_FuncNameV, "owner");
             return;
         }
 
         if(ev->requestor == XCB_WINDOW_NONE) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
-            Application::warning("{}: invalid request, unknown {}", __FUNCTION__, "requestor");
+            Application::warning("{}: invalid request, unknown {}", NS_FuncNameV, "requestor");
             return;
         }
 
         if(ev->requestor == skipRequestorWin) {
-            Application::debug(DebugType::Xcb, "{}: skip requestor: {:#08x}", __FUNCTION__, skipRequestorWin);
+            Application::debug(DebugType::Xcb, "{}: skip requestor: {:#010x}", NS_FuncNameV, skipRequestorWin);
             sendNotifyDiscard(ptr, ev);
             return;
         }
@@ -1806,13 +1644,13 @@ namespace LTSM {
         if(ev->property == XCB_ATOM_NONE) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
-            Application::warning("{}: invalid request, unknown {}", __FUNCTION__, "property");
+            Application::warning("{}: invalid request, unknown {}", NS_FuncNameV, "property");
             return;
         }
 
         if(! source) {
             sendNotifyDiscard(ptr, ev);
-            Application::error("{}: invalid request, unknown {}", __FUNCTION__, "source");
+            Application::error("{}: invalid request, unknown {}", NS_FuncNameV, "source");
             return;
         }
 
@@ -1849,20 +1687,20 @@ namespace LTSM {
         if(std::ranges::none_of(targets, [&](auto & atom) { return atom == ev->target; })) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
-            Application::warning("{}: invalid request, unknown {} atom", __FUNCTION__, "target");
+            Application::warning("{}: invalid request, unknown {} atom", NS_FuncNameV, "target");
             return;
         }
 
         if(! source->selectionSourceReady(ev->target)) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
-            Application::error("{}: target not ready", __FUNCTION__);
+            Application::error("{}: target not ready", NS_FuncNameV);
             return;
         }
 
         eventRequestDebug(ptr, ev);
 
-        auto it = std::ranges::find_if(requestsIncr, [=](auto & req) {
+        auto it = std::ranges::find_if(requestsIncr, [ = ](auto & req) {
             return req.ev.requestor == ev->requestor && req.ev.selection == ev->selection &&
                    req.ev.target == ev->target && req.ev.property == ev->property;
         });
@@ -1909,12 +1747,12 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
-        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection {}",
-                                __FUNCTION__, selectionWin, selectionAtom);
+        Application::debug(DebugType::Xcb, "{}: window id: {:#010x}, selection {}",
+                           NS_FuncNameV, selectionWin, selectionAtom);
 
         source = std::addressof(src);
         selectionTime = 0;
@@ -1934,7 +1772,7 @@ namespace LTSM {
                                                 XCB_WINDOW_CLASS_INPUT_OUTPUT, screen.root_visual, mask, values);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_create_window");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_create_window");
             throw xcb_error(NS_FuncNameS);
         }
 
@@ -1954,7 +1792,7 @@ namespace LTSM {
 
         xfixesWin = screen.root;
 
-        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection {}", __FUNCTION__, selectionWin, selectionAtom);
+        Application::debug(DebugType::Xcb, "{}: window id: {:#010x}, selection {}", NS_FuncNameV, selectionWin, selectionAtom);
     }
 
     XCB::ModuleCopySelection::~ModuleCopySelection() {
@@ -1970,17 +1808,17 @@ namespace LTSM {
         auto prop = AtomName(ptr.get(), ev->property);
 
         if(warn) {
-            Application::warning("{}: EVENT[ sequence: {}, time: {}, requestor: {:#08x}, selection {}, target {}, property {} ]",
-                                 __FUNCTION__, ev->sequence, ev->time, ev->requestor, sel, tgt, prop);
+            Application::warning("{}: EVENT[ sequence: {}, time: {}, requestor: {:#010x}, selection {}, target {}, property {} ]",
+                                 NS_FuncNameV, ev->sequence, ev->time, ev->requestor, sel, tgt, prop);
         } else {
-            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, requestor: {:#08x}, selection {}, target {}, property {} ]",
-                               __FUNCTION__, ev->sequence, ev->time, ev->requestor, sel, tgt, prop);
+            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, requestor: {:#010x}, selection {}, target {}, property {} ]",
+                               NS_FuncNameV, ev->sequence, ev->time, ev->requestor, sel, tgt, prop);
         }
     }
 
     void XCB::ModuleCopySelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: {}, EVENT[ sequence: {}, window: {:#08x}, atom: {:#08x}, time: {}, state: {:#02x} ]",
-                           __FUNCTION__, selectionWin, selectionAtom, ev->sequence, ev->window, ev->atom, ev->time, ev->state);
+        Application::debug(DebugType::Xcb, "{}: owner: {:#010x}, selection: {}, EVENT[ sequence: {}, window: {:#010x}, atom: {:#010x}, time: {}, state: {:#04x} ]",
+                           NS_FuncNameV, selectionWin, selectionAtom, ev->sequence, ev->window, ev->atom, ev->time, ev->state);
 
         if(ev->state != XCB_PROPERTY_NEW_VALUE) {
             return;
@@ -1997,14 +1835,14 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
         auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, selectionWin, selectionProp, XCB_GET_PROPERTY_TYPE_ANY, 0, ~0);
 
         if(const auto & err = xcbReply.error()) {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
+            error(ptr.get(), err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             auto ptr = static_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
             auto len = xcb_get_property_value_length(reply.get());
@@ -2021,25 +1859,25 @@ namespace LTSM {
     }
 
     void XCB::ModuleCopySelection::selectionNotifyEvent(const xcb_selection_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: {}", __FUNCTION__, selectionWin, selectionAtom);
+        Application::debug(DebugType::Xcb, "{}: owner: {:#010x}, selection: {}", NS_FuncNameV, selectionWin, selectionAtom);
 
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
         if(ev->selection != selectionAtom.atom) {
             eventNotifyWarning(ptr, ev);
-            Application::warning("{}: invalid notify, unknown {}", __FUNCTION__, "selection");
+            Application::warning("{}: invalid notify, unknown {}", NS_FuncNameV, "selection");
             return;
         }
 
         if(ev->property != selectionProp) {
             if(ev->property != XCB_ATOM_NONE) {
                 eventNotifyWarning(ptr, ev);
-                Application::warning("{}: invalid notify, unknown {}", __FUNCTION__, "property");
+                Application::warning("{}: invalid notify, unknown {}", NS_FuncNameV, "property");
             }
 
             return;
@@ -2047,12 +1885,12 @@ namespace LTSM {
 
         if(ev->requestor != selectionWin) {
             eventNotifyWarning(ptr, ev);
-            Application::warning("{}: invalid notify, unknown {}", __FUNCTION__, "requestor");
+            Application::warning("{}: invalid notify, unknown {}", NS_FuncNameV, "requestor");
             return;
         }
 
         if(! recipient) {
-            Application::error("{}: invalid notify, unknown {}", __FUNCTION__, "recipient");
+            Application::error("{}: invalid notify, unknown {}", NS_FuncNameV, "recipient");
             return;
         }
 
@@ -2062,7 +1900,7 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, selectionWin, selectionProp, XCB_ATOM_ATOM, 0, ~0);
 
             if(const auto & err = xcbReply.error()) {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_get_property");
             } else if(const auto & reply = xcbReply.reply()) {
                 auto ptr = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get()));
                 auto len = xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
@@ -2070,7 +1908,7 @@ namespace LTSM {
                 if(ptr) {
                     recipient->selectionReceiveTargets(ptr, ptr + len);
                 } else {
-                    Application::warning("{}: property empty", __FUNCTION__);
+                    Application::warning("{}: property empty", NS_FuncNameV);
                 }
             }
         } else if(selectionTrgt == ev->target) {
@@ -2080,7 +1918,7 @@ namespace LTSM {
                 auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, selectionWin, selectionProp, info->type, 0, ~0);
 
                 if(const auto & err = xcbReply.error()) {
-                    error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
+                    error(ptr.get(), err.get(), NS_FuncNameV, "xcb_get_property");
                 } else if(const auto & reply = xcbReply.reply()) {
                     auto buf = xcb_get_property_value(reply.get());
                     auto len = xcb_get_property_value_length(reply.get());
@@ -2089,12 +1927,12 @@ namespace LTSM {
                     if(buf && len) {
                         if(Atom::incr == typeAtom.atom) {
                             auto psize = static_cast<const uint32_t*>(buf);
-                            Application::debug(DebugType::Xcb, "{}: incr size: {}", __FUNCTION__, *psize);
+                            Application::debug(DebugType::Xcb, "{}: incr size: {}", NS_FuncNameV, *psize);
                             sourceIncr = std::make_unique<WindowSource>(*ev, *psize);
                         } else {
                             if(selectionTrgt != typeAtom.atom) {
                                 eventNotifyWarning(ptr, ev);
-                                Application::warning("{}: reply not correct, type {}, format: {}", __FUNCTION__, typeAtom, reply->format);
+                                Application::warning("{}: reply not correct, type {}, format: {}", NS_FuncNameV, typeAtom, reply->format);
                             }
 
                             recipient->selectionReceiveData(reply->type, static_cast<const uint8_t*>(buf), len);
@@ -2103,16 +1941,16 @@ namespace LTSM {
                         eventNotifyWarning(ptr, ev);
 
                         Application::warning("{}: reply empty, type {}, format: {}",
-                                __FUNCTION__, typeAtom, reply->format);
+                                             NS_FuncNameV, typeAtom, reply->format);
                     }
                 }
             } else {
                 eventNotifyWarning(ptr, ev);
-                Application::warning("{}: {} failed", __FUNCTION__, "getPropertyInfo");
+                Application::warning("{}: {} failed", NS_FuncNameV, "getPropertyInfo");
             }
         } else {
             eventNotifyWarning(ptr, ev);
-            Application::warning("{}: invalid notify, unknown {}", __FUNCTION__, "target");
+            Application::warning("{}: invalid notify, unknown {}", NS_FuncNameV, "target");
         }
 
         xcb_delete_property(ptr.get(), selectionWin, selectionProp);
@@ -2142,40 +1980,40 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
         auto selAtom = AtomName(ptr.get(), ev->selection);
-        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#08x}, owner: {:#08x}, selection {}, time: {}, selection time: {} ]",
-                           __FUNCTION__, ev->sequence, ev->window, ev->owner, selAtom, ev->timestamp, ev->selection_timestamp);
+        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#010x}, owner: {:#010x}, selection {}, time: {}, selection time: {} ]",
+                           NS_FuncNameV, ev->sequence, ev->window, ev->owner, selAtom, ev->timestamp, ev->selection_timestamp);
     }
 
     void XCB::ModuleCopySelection::xfixesSelectionWindowDestroyEvent(const xcb_xfixes_selection_notify_event_t* ev) {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
         auto selAtom = AtomName(ptr.get(), ev->selection);
-        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#08x}, owner: {:#08x}, selection {}, time: {}, selection time: {} ]",
-                           __FUNCTION__, ev->sequence, ev->window, ev->owner, selAtom, ev->timestamp, ev->selection_timestamp);
+        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#010x}, owner: {:#010x}, selection {}, time: {}, selection time: {} ]",
+                           NS_FuncNameV, ev->sequence, ev->window, ev->owner, selAtom, ev->timestamp, ev->selection_timestamp);
     }
 
     void XCB::ModuleCopySelection::xfixesSetSelectionOwnerEvent(const xcb_xfixes_selection_notify_event_t* ev) {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
         if(ev->selection == selectionAtom.atom) {
             auto selAtom = AtomName(ptr.get(), ev->selection);
-            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#08x}, owner: {:#08x}, selection {}, time: {}, selection time: {} ]",
-                               __FUNCTION__, ev->sequence, ev->window, ev->owner, selAtom, ev->timestamp, ev->selection_timestamp);
+            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#010x}, owner: {:#010x}, selection {}, time: {}, selection time: {} ]",
+                               NS_FuncNameV, ev->sequence, ev->window, ev->owner, selAtom, ev->timestamp, ev->selection_timestamp);
 
             if(sourceIncr) {
                 sourceIncr.reset();
@@ -2191,12 +2029,12 @@ namespace LTSM {
         auto ptr = conn.lock();
 
         if(! ptr) {
-            Application::warning("{}: weak_ptr invalid", __FUNCTION__);
+            Application::warning("{}: weak_ptr invalid", NS_FuncNameV);
             return;
         }
 
-        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection: {}, target: {:#08x}",
-                __FUNCTION__, selectionWin, selectionAtom, target);
+        Application::debug(DebugType::Xcb, "{}: window id: {:#010x}, selection: {}, target: {:#010x}",
+                           NS_FuncNameV, selectionWin, selectionAtom, target);
 
         selectionTrgt = target;
         recipient = std::addressof(rcpt);
@@ -2229,7 +2067,7 @@ namespace LTSM {
         }
     }
 
-    bool XCB::ErrorContext::error(const xcb_generic_error_t* err, const char* func, const char* xcbname) const {
+    bool XCB::ErrorContext::error(const xcb_generic_error_t* err, std::string_view func, std::string_view xcbname) const {
         if(! ctx) {
             return false;
         }
@@ -2239,7 +2077,7 @@ namespace LTSM {
         const char* minor = xcb_errors_get_name_for_minor_code(ctx, err->major_code, err->minor_code);
         const char* error = xcb_errors_get_name_for_error(ctx, err->error_code, & extension);
 
-        Application::error("{}: {} failed, error: {}, extension: {}, major: {}, minor: {}, resource: {:#08x}, sequence: {}",
+        Application::error("{}: {} failed, error: {}, extension: {}, major: {}, minor: {}, resource: {:#010x}, sequence: {}",
                            func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
                            err->resource_id, err->sequence);
 
@@ -2311,14 +2149,14 @@ namespace LTSM {
 
         if(int err = xcb_connection_has_error(_conn.get())) {
             Application::error("{}: {} failed, addr: `{}', error: `{}'",
-                               __FUNCTION__, "xcb_connect", displayAddr, Connector::errorString(err));
+                               NS_FuncNameV, "xcb_connect", displayAddr, Connector::errorString(err));
             return false;
         }
 
         _setup = xcb_get_setup(_conn.get());
 
         if(! _setup) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_setup");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_setup");
             return false;
         }
 
@@ -2387,7 +2225,7 @@ namespace LTSM {
         return Atom::getName(_conn.get(), atom);
     }
 
-    void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func, const char* xcbname) const {
+    void XCB::Connector::extendedError(const xcb_generic_error_t* err, std::string_view func, std::string_view xcbname) const {
 #ifdef LTSM_WITH_XCB_ERRORS
 
         if(! _error || ! _error->error(err, func, xcbname))
@@ -2413,7 +2251,7 @@ namespace LTSM {
         auto cookie = xcb_configure_window_checked(_conn.get(), win, mask, values);
 
         if(auto err = checkRequest(cookie)) {
-            extendedError(err.get(), __FUNCTION__, "xcb_configure_window");
+            extendedError(err.get(), NS_FuncNameV, "xcb_configure_window");
             return false;
         }
 
@@ -2426,7 +2264,7 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_query_tree, _conn.get(), win);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_query_tree");
+            extendedError(err.get(), NS_FuncNameV, "xcb_query_tree");
         } else if(const auto & reply = xcbReply.reply()) {
             xcb_window_t* ptr = xcb_query_tree_children(reply.get());
             int len = xcb_query_tree_children_length(reply.get());
@@ -2441,7 +2279,7 @@ namespace LTSM {
         auto cookie = xcb_delete_property_checked(_conn.get(), win, prop);
 
         if(auto err = checkRequest(cookie)) {
-            extendedError(err.get(), __FUNCTION__, "xcb_delete_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_delete_property");
             return false;
         }
 
@@ -2453,7 +2291,7 @@ namespace LTSM {
         std::list<xcb_atom_t> res;
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_list_properties");
+            extendedError(err.get(), NS_FuncNameV, "xcb_list_properties");
         } else if(const auto & reply = xcbReply.reply()) {
             auto beg = xcb_list_properties_atoms(reply.get());
             auto end = beg + xcb_list_properties_atoms_length(reply.get());
@@ -2470,7 +2308,7 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         }
 
         return XCB::PropertyReply(std::move(xcbReply.first));
@@ -2485,12 +2323,12 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_ATOM, offset, 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_ATOM) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "atom", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "atom", typeAtom, propAtom);
             } else if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get()))) {
                 return *res;
             }
@@ -2504,12 +2342,12 @@ namespace LTSM {
         std::list<xcb_atom_t> res;
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_ATOM) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "atom", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "atom", typeAtom, propAtom);
             } else {
                 auto beg = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
@@ -2527,12 +2365,12 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_WINDOW) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "window", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "window", typeAtom, propAtom);
             } else if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get()))) {
                 return *res;
             }
@@ -2546,12 +2384,12 @@ namespace LTSM {
         std::list<xcb_window_t> res;
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_WINDOW) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "window", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "window", typeAtom, propAtom);
             } else {
                 auto beg = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(xcb_window_t);
@@ -2569,19 +2407,19 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_CARDINAL, offset, 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_CARDINAL) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "cardinal", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "cardinal", typeAtom, propAtom);
             } else if(reply->format == 32) {
                 if(auto res = static_cast<uint32_t*>(xcb_get_property_value(reply.get()))) {
                     return *res;
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
+                Application::warning("{}: unknown format: {}, property: {}", NS_FuncNameV, reply->format, name2);
             }
         }
 
@@ -2593,12 +2431,12 @@ namespace LTSM {
         std::list<uint32_t> res;
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_CARDINAL) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "cardinal", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "cardinal", typeAtom, propAtom);
             } else if(reply->format == 32) {
                 auto beg = static_cast<uint32_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(uint32_t);
@@ -2608,7 +2446,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
+                Application::warning("{}: unknown format: {}, property: {}", NS_FuncNameV, reply->format, name2);
             }
         }
 
@@ -2619,12 +2457,12 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_INTEGER, offset, 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_INTEGER) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "integer", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "integer", typeAtom, propAtom);
             } else if(reply->format == 8) {
                 if(auto res = static_cast<int8_t*>(xcb_get_property_value(reply.get()))) {
                     return *res;
@@ -2643,7 +2481,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
+                Application::warning("{}: unknown format: {}, property: {}", NS_FuncNameV, reply->format, name2);
             }
         }
 
@@ -2655,12 +2493,12 @@ namespace LTSM {
         std::list<int> res;
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             if(reply->type != XCB_ATOM_INTEGER) {
                 auto typeAtom = AtomName(_conn.get(), reply->type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "integer", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "integer", typeAtom, propAtom);
             } else if(reply->format == 8) {
                 auto beg = static_cast<int8_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(int8_t);
@@ -2691,7 +2529,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
+                Application::warning("{}: unknown format: {}, property: {}", NS_FuncNameV, reply->format, name2);
             }
         }
 
@@ -2705,7 +2543,7 @@ namespace LTSM {
             if(type != Atom::utf8String) {
                 auto typeAtom = AtomName(_conn.get(), type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "string", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "string", typeAtom, propAtom);
                 return "";
             }
 
@@ -2715,7 +2553,7 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, type, 0, ~0);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
             auto len = xcb_get_property_value_length(reply.get());
@@ -2736,7 +2574,7 @@ namespace LTSM {
             if(type != Atom::utf8String) {
                 auto typeAtom = AtomName(_conn.get(), type);
                 auto propAtom = AtomName(_conn.get(), prop);
-                Application::warning("{}: type not {}, type {}, property {}", __FUNCTION__, "string", typeAtom, propAtom);
+                Application::warning("{}: type not {}, type {}, property {}", NS_FuncNameV, "string", typeAtom, propAtom);
                 return res;
             }
 
@@ -2746,7 +2584,7 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, type, 0, ~0);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         } else if(const auto & reply = xcbReply.reply()) {
             auto beg = static_cast<const char*>(xcb_get_property_value(reply.get()));
             auto end = beg + xcb_get_property_value_length(reply.get());
@@ -2773,7 +2611,7 @@ namespace LTSM {
     }
 
     void XCB::Connector::bell(uint8_t percent) const {
-        Application::notice("{}: beep", __FUNCTION__);
+        Application::notice("{}: beep", NS_FuncNameV);
 
         xcb_bell(_conn.get(), percent);
         xcb_flush(_conn.get());
@@ -2794,7 +2632,7 @@ namespace LTSM {
         _screen = xcb_setup_roots_iterator(_setup).data;
 
         if(! _screen) {
-            Application::error("{}: {} failed", __FUNCTION__, "root screen");
+            Application::error("{}: {} failed", NS_FuncNameV, "root screen");
             return false;
         }
 
@@ -2807,7 +2645,7 @@ namespace LTSM {
         }
 
         if(! _format) {
-            Application::error("{}: {} failed", __FUNCTION__, "init format");
+            Application::error("{}: {} failed", NS_FuncNameV, "init format");
             return false;
         }
 
@@ -2822,7 +2660,7 @@ namespace LTSM {
         }
 
         if(! _visual) {
-            Application::error("{}: {} failed", __FUNCTION__, "init visual");
+            Application::error("{}: {} failed", NS_FuncNameV, "init visual");
             return false;
         }
 
@@ -2834,7 +2672,7 @@ namespace LTSM {
             try {
                 _modTest = std::make_unique<ModuleTest>(_conn, _screen->root);
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModuleTest");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModuleTest");
             }
         }
 
@@ -2842,7 +2680,7 @@ namespace LTSM {
             try {
                 _modShm = std::make_unique<ModuleShm>(_conn);
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModuleShm");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModuleShm");
             }
         }
 
@@ -2850,7 +2688,7 @@ namespace LTSM {
             try {
                 _modWinDamage = std::make_unique<ModuleWindowDamage>(_conn, _screen->root);
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModuleWindowDamage");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModuleWindowDamage");
             }
         }
 
@@ -2858,7 +2696,7 @@ namespace LTSM {
             try {
                 _modRandr = std::make_unique<ModuleRandr>(_conn, _screen->root);
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModuleRandr");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModuleRandr");
             }
         }
 
@@ -2866,7 +2704,7 @@ namespace LTSM {
             try {
                 _modXkb = std::make_unique<ModuleXkb>(_conn);
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModuleXkb");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModuleXkb");
             }
         }
 
@@ -2874,7 +2712,7 @@ namespace LTSM {
             try {
                 _modSelectionPaste = std::make_unique<ModulePasteSelection>(_conn, *_screen);
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModulePasteSelection");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModulePasteSelection");
             }
         }
 
@@ -2886,7 +2724,7 @@ namespace LTSM {
                     _modSelectionPaste->setSkipRequestor(_modSelectionCopy->selectionWindow());
                 }
             } catch(const std::exception & err) {
-                Application::warning("{}: {} failed", __FUNCTION__, "ModuleCopySelection");
+                Application::warning("{}: {} failed", NS_FuncNameV, "ModuleCopySelection");
             }
         }
 
@@ -3080,14 +2918,6 @@ namespace LTSM {
             return false;
         }
 
-        // disconnected current CRTCs
-        for(const auto & outputId : _modRandr->getOutputs()) {
-            if(auto info = _modRandr->getOutputInfo(outputId);
-               info && info->connected == XCB_RANDR_CONNECTION_CONNECTED) {
-                _modRandr->crtcDisconnect(info->crtc);
-            }
-        }
-
         Region screenArea;
 
         for(const auto & monitor : monitors) {
@@ -3104,69 +2934,147 @@ namespace LTSM {
             screenArea.y = 0;
         }
 
-        if(auto alignW = screenArea.width % 8) {
-            screenArea.width += 8 - alignW;
+        screenArea.width = Tools::alignUp(screenArea.width, 8);
+
+        // disconnected current CRTCs
+        for(const auto & info : _modRandr->getOutputsInfo(true /* connected */)) {
+            _modRandr->crtcDisconnect(info->crtc);
         }
 
-        if(! _modRandr->setScreenSize(screenArea.width, screenArea.height)) {
-            return false;
-        }
-
-        Application::debug(DebugType::Xcb, "{}: screen area: {}", __FUNCTION__, screenArea);
+        Application::debug(DebugType::Xcb, "{}: screen area: {}", NS_FuncNameV, screenArea);
 
         auto outputs = _modRandr->getOutputs();
         auto crtcs = _modRandr->getCrtcs();
+        auto modes = _modRandr->getModesInfo();
 
         size_t maxmonitors = std::min(outputs.size(), monitors.size());
         maxmonitors = std::min(maxmonitors, crtcs.size());
 
         for(size_t it = 0; it < maxmonitors; ++it) {
             auto & monitor = monitors[it];
-            auto modes = _modRandr->getModesInfo();
 
             auto itm = std::ranges::find_if(modes, [&](auto & info) {
                 return info.width == monitor.width && info.height == monitor.height;
             });
 
-            const xcb_randr_mode_t mode = itm != modes.end() ? itm->id : _modRandr->cvtCreateMode(monitor.toSize());
+            if(itm == modes.end()) {
+                try {
+                    _modRandr->cvtCreateMode(monitor.toSize(), 20);
+                } catch(const std::exception & err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    continue;
+                }
 
-            if(_modRandr->addOutputMode(outputs[it], mode))
-                _modRandr->crtcConnectOutputsMode(crtcs[it], monitor.x, monitor.y, { outputs[it] }, mode);
+                // rescan modes
+                modes = _modRandr->getModesInfo();
+                itm = std::ranges::find_if(modes, [&](auto & info) {
+                    return info.width == monitor.width && info.height == monitor.height;
+                });
+            }
+
+            const auto & mode = itm->id;
+
+            if(_modRandr->addOutputMode(outputs[it], mode)) {
+                _modRandr->crtcConnectOutputsMode(crtcs[it], monitor.x, monitor.y, { outputs[it] }, mode, XCB_CURRENT_TIME);
+            } else {
+                Application::error("{}: {} failed", NS_FuncNameV, "addOutputMode");
+            }
         }
 
-        //
-        return true;
+        return _modRandr->setScreenSize(screenArea.toSize());
     }
 
     bool XCB::RootDisplay::setRandrScreenSize(const XCB::Size & sz, uint16_t* sequence) {
-        if(_modRandr) {
-            auto area = region();
-
-            if(area.toSize() == sz) {
-                return true;
-            }
-
-            xcbRandrScreenSetSizeEvent(sz);
-
-            // clear all damages
-            rootDamageSubtrack(area);
-
-            bool res = _modRandr->setScreenSizeCompat(sz.width, sz.height, sequence);
-
-            if(! res) {
-                // failed changes - update all screen
-                if(createFullScreenDamage()) {
-                    xcb_flush(_conn.get());
-                }
-            }
-
-            updateGeometrySize();
-
-            // so, new damage after rand notify
-            return res;
+        if(! _modRandr) {
+            return false;
         }
 
-        return false;
+        const Region monitor(0, 0, Tools::alignUp(sz.width, 8), sz.height);
+
+        Application::debug(DebugType::Xcb, "{}: size: {}", NS_FuncNameV, monitor.toSize());
+
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn.get(), _screen->root);
+
+        if(const auto & err = xcbReply.error()) {
+            error(_conn.get(), err.get(), NS_FuncNameV, "xcb_randr_get_screen_resources");
+            return false;
+        }
+
+        const auto & resources = xcbReply.reply();
+
+        auto outputs = _modRandr->getOutputs();
+        auto crtcs = _modRandr->getCrtcs();
+        auto modes = _modRandr->getModesInfo();
+
+        if(outputs.empty()) {
+            Application::error("{}: {} failed", NS_FuncNameV, "getOutputs");
+            return false;
+        }
+
+        if(crtcs.empty()) {
+            Application::error("{}: {} failed", NS_FuncNameV, "getCrtcs");
+            return false;
+        }
+
+        Region prevMonitor;
+        xcb_randr_mode_t prevMode = 0;
+
+        if(auto info = _modRandr->getOutputInfo(outputs[0], resources->config_timestamp)) {
+            Application::debug(DebugType::Xcb, "{}: output: {} - modes: {}, crtcs: {}, name: `{}', crtc: {}, connected: {}", NS_FuncNameV,
+                               outputs[0], info->modes.size(), info->crtcs.size(), info->name, info->crtc, (int) info->connected);
+        }
+
+        if(auto info = _modRandr->getCrtcInfo(crtcs[0], resources->config_timestamp)) {
+            Application::debug(DebugType::Xcb, "{}: crtc: {} - mode: {}, time: {}, x: {}, y: {}, width: {}, height: {}, status: {}", NS_FuncNameV,
+                               crtcs[0], info->mode, info->timestamp, info->x, info->y, info->width, info->height, (int) info->status);
+            prevMode = info->mode;
+            prevMonitor = XCB::Region(info->x, info->y, info->width, info->height);
+        }
+
+        auto itm = std::ranges::find_if(modes, [&](auto & info) {
+            return info.width == monitor.width && info.height == monitor.height;
+        });
+
+        if(itm == modes.end()) {
+            try {
+                _modRandr->cvtCreateMode(monitor.toSize(), 20);
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                return false;
+            }
+
+            // rescan modes
+            modes = _modRandr->getModesInfo();
+            itm = std::ranges::find_if(modes, [&](auto & info) {
+                return info.width == monitor.width && info.height == monitor.height;
+            });
+        } else {
+            Application::debug(DebugType::Xcb, "{}: mode found: {}, size: {}", NS_FuncNameV, itm->id, monitor.toSize());
+        }
+
+        // disconnected current CRTCs
+        for(const auto & info : _modRandr->getOutputsInfo(true /* connected */)) {
+            _modRandr->crtcDisconnect(info->crtc);
+        }
+
+        if(! _modRandr->setScreenSize(monitor.toSize())) {
+            return false;
+        }
+
+        const auto & mode = itm->id;
+
+        if(_modRandr->addOutputMode(outputs[0], mode)) {
+            if(_modRandr->crtcConnectOutputsMode(crtcs[0], monitor.x, monitor.y,
+                { outputs[0] }, mode, resources->config_timestamp, sequence)) {
+                return true;
+            }
+        }
+
+        // restore
+        _modRandr->setScreenSize(prevMonitor.toSize());
+
+        return _modRandr->crtcConnectOutputsMode(crtcs[0], prevMonitor.x, prevMonitor.y,
+                    { outputs[0] }, prevMode, resources->config_timestamp, sequence);
     }
 
     size_t XCB::RootDisplay::bitsPerPixel(void) const {
@@ -3222,7 +3130,7 @@ namespace LTSM {
     }
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, ShmIdShared shm) const {
-        Application::debug(DebugType::Xcb, "{}: region: {}", __FUNCTION__, reg);
+        Application::debug(DebugType::Xcb, "{}: region: {}", NS_FuncNameV, reg);
         const uint32_t planeMask = 0xFFFFFFFF;
 
         if(shm && 0 < shm->id) {
@@ -3231,7 +3139,15 @@ namespace LTSM {
             PixmapInfoReply res;
 
             if(const auto & err = xcbReply.error()) {
-                extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
+                // после быстрого изменения размера здесь ошибка
+                // xcb_shm_get_image failed, error: Match, extension: none, major: Shm, minor: GetImage
+                //
+                if(err->error_code == 8 && err->major_code == 0x82 && err->minor_code == 0x04) {
+                    throw xcb_error_busy(NS_FuncNameS);
+                }
+
+                // error code: 8, major: 0x82, minor: 0x04
+                extendedError(err.get(), NS_FuncNameV, "xcb_shm_get_image");
             } else if(const auto & reply = xcbReply.reply()) {
                 auto visptr = visual(reply->visual);
                 auto bpp = bppFromDepth(reply->depth);
@@ -3248,14 +3164,14 @@ namespace LTSM {
         PixmapInfoReply res;
 
         if(pitch == 0) {
-            Application::error("{}: copy root image error, empty size: {}, bpp: {}", __FUNCTION__, reg.toSize(), bitsPerPixel());
+            Application::error("{}: copy root image error, empty size: {}, bpp: {}", NS_FuncNameV, reg.toSize(), bitsPerPixel());
             return res;
         }
 
         uint32_t maxReqLength = xcb_get_maximum_request_length(_conn.get());
         uint16_t allowRows = std::min(static_cast<uint16_t>(maxReqLength / pitch), reg.height);
 
-        Application::debug(DebugType::Xcb, "{}: max request size: {}, allow rows: {}", __FUNCTION__, maxReqLength, allowRows);
+        Application::debug(DebugType::Xcb, "{}: max request size: {}, allow rows: {}", NS_FuncNameV, maxReqLength, allowRows);
 
         for(int32_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows) {
             // last rows
@@ -3266,7 +3182,14 @@ namespace LTSM {
             auto xcbReply = getReplyFunc2(xcb_get_image, _conn.get(), XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 
             if(const auto & err = xcbReply.error()) {
-                extendedError(err.get(), __FUNCTION__, "xcb_get_image");
+                // после быстрого изменения размера здесь ошибка
+                // xcb_get_image failed, error code: 8, major: 0x49, minor: 0x00
+                //
+                if(err->error_code == 8 && err->major_code == 0x49 && err->minor_code == 0) {
+                    throw xcb_error_busy(NS_FuncNameS);
+                }
+
+                extendedError(err.get(), NS_FuncNameV, "xcb_get_image");
                 break;
             }
 
@@ -3276,7 +3199,7 @@ namespace LTSM {
                     auto bitsPerPixel = bppFromDepth(reply->depth);
 
                     if(! visptr) {
-                        Application::error("{}: unknown visual id: {:#08x}", __FUNCTION__, reply->visual);
+                        Application::error("{}: unknown visual id: {:#010x}", NS_FuncNameV, reply->visual);
                         break;
                     }
 
@@ -3287,7 +3210,7 @@ namespace LTSM {
 
                 auto data = xcb_get_image_data(reply.get());
                 auto length = xcb_get_image_data_length(reply.get());
-                Application::debug(DebugType::Xcb, "{}: receive length: {}", __FUNCTION__, length);
+                Application::debug(DebugType::Xcb, "{}: receive length: {}", NS_FuncNameV, length);
 
                 info->pixels.insert(info->pixels.end(), data, data + length);
             }
@@ -3332,20 +3255,20 @@ namespace LTSM {
 
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height) {
                 Application::warning("{}: damage discard, region: {}, level: {}, sequence: {}, timestamp: {}",
-                                     __FUNCTION__, dn->area, dn->level, dn->sequence, dn->timestamp);
+                                     NS_FuncNameV, dn->area, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, dn->area, dn->level, dn->sequence, dn->timestamp);
+            //            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
+            //                               NS_FuncNameV, dn->area, dn->level, dn->sequence, dn->timestamp);
 
             xcbDamageNotifyEvent(dn->area);
         } else if(isXFixesSelectionNotify(ev)) {
             auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
             auto selAtom = AtomName(_conn.get(), sn->selection);
-            Application::debug(DebugType::Xcb, "{}: selection notify, subtype: {}, window: {:#08x}, owner: {:#08x}, selection {}, time1: {}, time2: {}",
-                               __FUNCTION__, sn->subtype, sn->window, sn->owner, selAtom, sn->timestamp, sn->selection_timestamp);
+            Application::debug(DebugType::Xcb, "{}: selection notify, subtype: {}, window: {:#010x}, owner: {:#010x}, selection {}, time1: {}, time2: {}",
+                               NS_FuncNameV, sn->subtype, sn->window, sn->owner, selAtom, sn->timestamp, sn->selection_timestamp);
 
             if(_modSelectionCopy) {
                 _modSelectionCopy->xfixesSelectionNotifyEvent(sn);
@@ -3354,8 +3277,8 @@ namespace LTSM {
             auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
             auto nameAtom = AtomName(_conn.get(), cn->name);
 
-            Application::debug(DebugType::Xcb, "{}: cursor notify, serial: {:#08x}, name {}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, cn->cursor_serial, nameAtom, cn->sequence, cn->timestamp);
+            Application::debug(DebugType::Xcb, "{}: cursor notify, serial: {:#010x}, name {}, sequence: {}, timestamp: {}",
+                               NS_FuncNameV, cn->cursor_serial, nameAtom, cn->sequence, cn->timestamp);
 
             xcbFixesCursorChangedEvent();
         } else if(isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE)) {
@@ -3367,24 +3290,24 @@ namespace LTSM {
 
                 if(cc.width != wsz.width || cc.height != wsz.height) {
                     Application::warning("{}: crtc change discard, size: {}, current: {}, sequence: {}, timestamp: {}",
-                                         __FUNCTION__, Size(cc.width, cc.height), wsz, rn->sequence, cc.timestamp);
+                                         NS_FuncNameV, Size(cc.width, cc.height), wsz, rn->sequence, cc.timestamp);
                     xcb_discard_reply(_conn.get(), rn->sequence);
                     return GenericEvent();
                 }
 
-                Application::debug(DebugType::Xcb, "{}: crtc change notify, size: {}, crtc: {:#08x}, mode: {}, rotation: {:#04x}, sequence: {}, timestamp: {}",
-                                   __FUNCTION__, Size(cc.width, cc.height), cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
+                Application::debug(DebugType::Xcb, "{}: crtc change notify, size: {}, crtc: {:#010x}, mode: {}, rotation: {:#06x}, sequence: {}, timestamp: {}",
+                                   NS_FuncNameV, Size(cc.width, cc.height), cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
-                if(createFullScreenDamage()) {
-                    xcb_flush(_conn.get());
-                }
+                //if(createFullScreenDamage()) {
+                //    xcb_flush(_conn.get());
+                //}
 
                 xcbRandrScreenChangedEvent(wsz, *rn);
             }
         } else if(isXkbNotify(ev, XCB_XKB_MAP_NOTIFY)) {
             auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, min keycode: {}, max keycode: {}, changed: {:#04x}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
+            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, min keycode: {}, max keycode: {}, changed: {:#06x}, sequence: {}, timestamp: {}",
+                               NS_FuncNameV, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
 
             /*
                         if(auto setup = const_cast<xcb_setup_t*>(xcb_get_setup(_conn.get())))
@@ -3396,8 +3319,8 @@ namespace LTSM {
             _modXkb->resetMapState();
         } else if(isXkbNotify(ev, XCB_XKB_NEW_KEYBOARD_NOTIFY)) {
             auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
-            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, devid: {}, old devid: {}, min keycode: {}, max keycode: {}, changed: {:#04x}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
+            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, devid: {}, old devid: {}, min keycode: {}, max keycode: {}, changed: {:#06x}, sequence: {}, timestamp: {}",
+                               NS_FuncNameV, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
 
             if(kn->deviceID == _modXkb->devid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES)) {
                 /*
@@ -3407,13 +3330,13 @@ namespace LTSM {
                                     setup->max_keycode = kn->maxKeyCode;
                                 }
                 */
-                Application::debug(DebugType::Xcb, "{}: reset map, devid: {}", __FUNCTION__, kn->deviceID);
+                Application::debug(DebugType::Xcb, "{}: reset map, devid: {}", NS_FuncNameV, kn->deviceID);
                 _modXkb->resetMapState();
             }
         } else if(isXkbNotify(ev, XCB_XKB_STATE_NOTIFY)) {
             auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
-            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, xkb type: {:#02x}, devid: {}, mods: {:#02x}, group: {}, changed: {:#04x}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
+            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, xkb type: {:#04x}, devid: {}, mods: {:#04x}, group: {}, changed: {:#06x}, sequence: {}, timestamp: {}",
+                               NS_FuncNameV, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
 
             xkb_state_update_mask(_modXkb->state.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
                                   sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
@@ -3482,36 +3405,36 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_keyboard_mapping");
             return empty;
         }
 
         const auto & reply = xcbReply.reply();
 
         if(! reply) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_keyboard_mapping");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_keyboard_mapping");
             return empty;
         }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
 
         if(! keysyms) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_keyboard_mapping_keysyms");
             return empty;
         }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
 
         if(1 > keysymsPerKeycode) {
-            Application::error("{}: {} failed", __FUNCTION__, "keysyms_per_keycode");
+            Application::error("{}: {} failed", NS_FuncNameV, "keysyms_per_keycode");
             return empty;
         }
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::trace(DebugType::Xcb, "{}: keysym: {:#08x}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
-                           __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
+        Application::trace(DebugType::Xcb, "{}: keysym: {:#010x}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
+                           NS_FuncNameV, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         // shifted/unshifted
         int groupsCount = keysymsPerKeycode >> 1;
@@ -3523,7 +3446,7 @@ namespace LTSM {
 
                 if(index + 1 >= keysymsLength) {
                     Application::error("{}: index out of range {}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
-                                       __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+                                       NS_FuncNameV, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
                     return empty;
                 }
 
@@ -3535,7 +3458,7 @@ namespace LTSM {
         }
 
         if(_modXkb) {
-            Application::warning("{}: keysym not found {:#08x}, group names: [{}]", __FUNCTION__, keysym, Tools::join(_modXkb->getNames(), ","));
+            Application::warning("{}: keysym not found {:#010x}, group names: [{}]", NS_FuncNameV, keysym, Tools::join(_modXkb->getNames(), ","));
         }
 
         return empty;
@@ -3545,28 +3468,28 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_keyboard_mapping");
             return NULL_KEYCODE;
         }
 
         const auto & reply = xcbReply.reply();
 
         if(! reply) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_keyboard_mapping");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_keyboard_mapping");
             return NULL_KEYCODE;
         }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
 
         if(! keysyms) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_keyboard_mapping_keysyms");
             return NULL_KEYCODE;
         }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
 
         if(1 > keysymsPerKeycode) {
-            Application::error("{}: {} failed", __FUNCTION__, "keysyms_per_keycode");
+            Application::error("{}: {} failed", NS_FuncNameV, "keysyms_per_keycode");
             return NULL_KEYCODE;
         }
 
@@ -3574,15 +3497,15 @@ namespace LTSM {
         int groupsCount = keysymsPerKeycode >> 1;
 
         if(0 > group || groupsCount <= group) {
-            Application::error("{}: unknown group: {}, groups count: {}", __FUNCTION__, group, groupsCount);
+            Application::error("{}: unknown group: {}, groups count: {}", NS_FuncNameV, group, groupsCount);
             return NULL_KEYCODE;
         }
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::debug(DebugType::Xcb, "{}: keysym: {:#08x}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
-                           __FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+        Application::debug(DebugType::Xcb, "{}: keysym: {:#010x}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
+                           NS_FuncNameV, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         for(int ii = 0; ii < keycodesCount; ++ii) {
             auto keycode = _setup->min_keycode + ii;
@@ -3590,7 +3513,7 @@ namespace LTSM {
 
             if(index + 1 >= keysymsLength) {
                 Application::error("{}: index out of range {}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
-                                   __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+                                   NS_FuncNameV, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
                 return NULL_KEYCODE;
             }
 
@@ -3605,7 +3528,7 @@ namespace LTSM {
             }
         }
 
-        Application::warning("{}: keysym not found {:#08x}, curent group: {}", __FUNCTION__, keysym, group);
+        Application::warning("{}: keysym not found {:#010x}, curent group: {}", NS_FuncNameV, keysym, group);
         return NULL_KEYCODE;
     }
 
@@ -3613,42 +3536,42 @@ namespace LTSM {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
 
         if(const auto & err = xcbReply.error()) {
-            extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
+            extendedError(err.get(), NS_FuncNameV, "xcb_get_keyboard_mapping");
             return 0;
         }
 
         const auto & reply = xcbReply.reply();
 
         if(! reply) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_keyboard_mapping");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_keyboard_mapping");
             return 0;
         }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
 
         if(! keysyms) {
-            Application::error("{}: {} failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb_get_keyboard_mapping_keysyms");
             return 0;
         }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
 
         if(1 > keysymsPerKeycode) {
-            Application::error("{}: {} failed", __FUNCTION__, "keysyms_per_keycode");
+            Application::error("{}: {} failed", NS_FuncNameV, "keysyms_per_keycode");
             return 0;
         }
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::debug(DebugType::Xcb, "{}: keycode: {:#02x}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
-                           __FUNCTION__, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
+        Application::debug(DebugType::Xcb, "{}: keycode: {:#04x}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
+                           NS_FuncNameV, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         int index = (keycode - _setup->min_keycode) * keysymsPerKeycode + group * 2;
 
         if(index + 1 >= keysymsLength) {
             Application::error("{}: index out of range {}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
-                               __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+                               NS_FuncNameV, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
             return 0;
         }
 
@@ -3693,7 +3616,7 @@ namespace LTSM {
                 {
                     if(pressed)
                     {
-                        Application::debug(DebugType::Xcb, "{}: keysym {:#08x} was found the another group {}, switched it", __FUNCTION__, keysym, keysymGroup);
+                        Application::debug(DebugType::Xcb, "{}: keysym {:#010x} was found the another group {}, switched it", NS_FuncNameV, keysym, keysymGroup);
                     }
 
                     if(_modXkb)
@@ -3736,7 +3659,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("{}: unknown depth: {}", __FUNCTION__, depth());
+                Application::error("{}: unknown depth: {}", NS_FuncNameV, depth());
                 throw xcb_error(NS_FuncNameS);
         }
 
@@ -3744,12 +3667,12 @@ namespace LTSM {
         auto cookie = xcb_change_window_attributes(_conn.get(), _screen->root, XCB_CW_BACK_PIXEL, colors);
 
         if(auto err = checkRequest(cookie)) {
-            extendedError(err.get(), __FUNCTION__, "xcb_change_window_attributes");
+            extendedError(err.get(), NS_FuncNameV, "xcb_change_window_attributes");
         } else {
             cookie = xcb_clear_area_checked(_conn.get(), 0, _screen->root, reg.x, reg.y, reg.width, reg.height);
 
             if(auto err = checkRequest(cookie)) {
-                extendedError(err.get(), __FUNCTION__, "xcb_clear_area");
+                extendedError(err.get(), NS_FuncNameV, "xcb_clear_area");
             }
         }
     }

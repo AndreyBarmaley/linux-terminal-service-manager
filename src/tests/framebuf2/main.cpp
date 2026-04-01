@@ -25,14 +25,14 @@ class FakeStream : public RFB::EncoderStream {
   public:
     FakeStream(const XCB::RootDisplay* xcb) {
         if(! xcb) {
-            Application::error("{}: xcb failed", __FUNCTION__);
+            Application::error("{}: xcb failed", NS_FuncNameV);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         auto visual = xcb->visual();
 
         if(! visual) {
-            Application::error("{}: xcb visual failed", __FUNCTION__);
+            Application::error("{}: xcb visual failed", NS_FuncNameV);
             throw std::runtime_error(NS_FuncNameS);
         }
 
@@ -99,13 +99,9 @@ class EncodingTest : public Application {
         auto dsz = xcb->size();
         auto reg = XCB::Region{{0, 0}, dsz};
         auto bpp = xcb->bitsPerPixel() >> 3;
-        auto pitch = dsz.width * bpp;
+        auto pitch = Tools::alignUp(dsz.width * bpp, 8);
 
-        if(auto align8 = pitch % 8) {
-            pitch += 8 - align8;
-        }
-
-        Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", NS_FuncNameV, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
@@ -124,19 +120,19 @@ class EncodingTest : public Application {
             auto map1 = fb.pixelMapPalette(reg);
             auto dt1 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp1);
 
-            Application::info("{}: pixelMapPalette: {}", __FUNCTION__, dt1.count());
+            Application::info("{}: pixelMapPalette: {}", NS_FuncNameV, dt1.count());
 
             auto tp2 = std::chrono::steady_clock::now();
             auto map2 = fb.pixelMapWeight(reg);
             auto dt2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp2);
 
-            Application::info("{}: pixelMapWeight: {}", __FUNCTION__, dt2.count());
+            Application::info("{}: pixelMapWeight: {}", NS_FuncNameV, dt2.count());
 
             auto tp3 = std::chrono::steady_clock::now();
             auto map3 = fb.toRLE(reg);
             auto dt3 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp3);
 
-            Application::info("{}: toRLE: {}", __FUNCTION__, dt3.count());
+            Application::info("{}: toRLE: {}", NS_FuncNameV, dt3.count());
         }
 
         return 0;

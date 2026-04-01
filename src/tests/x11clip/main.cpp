@@ -32,7 +32,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
   protected:
     void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override {
         auto name = getAtomName(atom);
-        Application::info("{}: atom: `{}', size: {}", __FUNCTION__, name.data(), len);
+        Application::info("{}: atom: `{}', size: {}", NS_FuncNameV, name.data(), len);
 
         if(! file.empty()) {
             Tools::binaryToFile(ptr, len, file);
@@ -50,7 +50,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
     }
 
     void selectionChangedEvent(void) const override {
-        Application::info("{}", __FUNCTION__);
+        Application::info("{}", NS_FuncNameV);
         copy->convertSelection(targets, *this);
     }
 
@@ -101,7 +101,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
     }
 
     size_t selectionSourceSize(xcb_atom_t atom) const override {
-        Application::info("{}, atom: `{}'", __FUNCTION__, getAtomName(atom).data());
+        Application::info("{}, atom: `{}'", NS_FuncNameV, getAtomName(atom).data());
 
         if(atom == target) {
             return buf.size();
@@ -111,7 +111,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
     }
 
     std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override {
-        Application::info("{}, atom: `{}', offset: {}, length: {}", __FUNCTION__, getAtomName(atom).data(), offset, length);
+        Application::info("{}, atom: `{}', offset: {}, length: {}", NS_FuncNameV, getAtomName(atom).data(), offset, length);
 
         if(atom == target) {
             if(offset + length <= buf.size()) {

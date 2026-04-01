@@ -58,7 +58,7 @@ struct fmt::formatter<xcb_rectangle_t> {
     }
 
     template <typename FormatContext>
-    auto format(const xcb_rectangle_t& rt, FormatContext& ctx) const {
+    auto format(const xcb_rectangle_t & rt, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "[{}, {}, {}, {}]", rt.x, rt.y, rt.width, rt.height);
     }
 };
@@ -156,9 +156,12 @@ namespace LTSM {
             std::weak_ptr<xcb_connection_t> conn;
             int shm = -1;
             uint8_t* addr = nullptr;
+            size_t size = 0;
+            int owner = 0;
             xcb_shm_seg_t id = 0;
 
-            ShmId(const std::weak_ptr<xcb_connection_t> & ptr, int s, uint8_t* a, const xcb_shm_seg_t & v) : conn(ptr), shm(s), addr(a), id(v) {}
+            ShmId(const std::weak_ptr<xcb_connection_t> & ptr, int s, uint8_t* a, size_t sz, int own, const xcb_shm_seg_t & v)
+                : conn(ptr), shm(s), addr(a), size(sz), owner(own), id(v) {}
 
             ShmId() = default;
             ~ShmId();
@@ -254,15 +257,21 @@ namespace LTSM {
             AtomName(xcb_connection_t* conn, xcb_atom_t at);
             AtomName() = default;
         };
-    
+
         struct RandrOutputInfo {
-            bool connected = false;
+            std::vector<xcb_randr_mode_t> modes;
+            std::vector<xcb_randr_crtc_t> crtcs;
+            std::string name;
             xcb_randr_crtc_t crtc = 0;
             uint32_t mm_width = 0;
             uint32_t mm_height = 0;
-            std::string name;
+            bool connected = false;
 
             RandrOutputInfo() = default;
+            RandrOutputInfo(const xcb_randr_get_output_info_reply_t &);
+
+            bool modeValid(const xcb_randr_mode_t &) const;
+            bool crtcValid(const xcb_randr_crtc_t &) const;
         };
 
         struct RandrCrtcInfo {
@@ -522,6 +531,8 @@ namespace LTSM {
             }
         };
 
+        using RandrOutputInfoPtr = std::unique_ptr<RandrOutputInfo>;
+
         /// ModuleRandr
         struct ModuleRandr : ModuleExtension {
             xcb_window_t screen;
@@ -531,29 +542,28 @@ namespace LTSM {
 
             std::vector<xcb_randr_output_t> getOutputs(void) const;
             std::vector<xcb_randr_crtc_t> getCrtcs(void) const;
-            std::vector<xcb_randr_output_t> getCrtcOutputs(const xcb_randr_crtc_t &, RandrCrtcInfo* = nullptr) const;
+            std::vector<xcb_randr_output_t> getCrtcOutputs(const xcb_randr_crtc_t &) const;
             std::vector<xcb_randr_mode_info_t> getModesInfo(void) const;
-            std::vector<xcb_randr_mode_t> getOutputModes(const xcb_randr_output_t &, RandrOutputInfo* = nullptr) const;
-            std::vector<xcb_randr_crtc_t> getOutputCrtcs(const xcb_randr_output_t &, RandrOutputInfo* = nullptr) const;
-            std::vector<xcb_randr_screen_size_t> getScreenSizes(RandrScreenInfo* = nullptr) const;
+            std::vector<xcb_randr_screen_size_t> getScreenSizes(void) const;
+            std::list<RandrOutputInfoPtr> getOutputsInfo(bool connected = false) const;
 
-            std::unique_ptr<RandrCrtcInfo> getCrtcInfo(const xcb_randr_crtc_t &) const;
-            std::unique_ptr<RandrOutputInfo> getOutputInfo(const xcb_randr_output_t &) const;
+            std::unique_ptr<RandrCrtcInfo> getCrtcInfo(const xcb_randr_crtc_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
+            std::unique_ptr<RandrOutputInfo> getOutputInfo(const xcb_randr_output_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
             std::unique_ptr<RandrScreenInfo> getScreenInfo(void) const;
 
-            bool setScreenSizeCompat(uint16_t width, uint16_t height, uint16_t* sequence = nullptr) const;
-            bool setScreenSize(uint16_t width, uint16_t height, uint16_t dpi = 96) const;
+            bool setScreenSize(const Size &, uint16_t dpi = 96) const;
 
             xcb_randr_mode_t cvtCreateMode(const Size &, int vertRef = 60) const;
             bool destroyMode(const xcb_randr_mode_t &) const;
             bool addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
             bool deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
-            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &) const;
+            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &, const xcb_timestamp_t &, uint16_t* = nullptr) const;
             bool crtcDisconnect(const xcb_randr_crtc_t &) const;
         };
 
         struct ModuleShm : ModuleExtension {
             explicit ModuleShm(const ConnectionShared &);
+            ~ModuleShm() = default;
 
             ShmIdShared createShm(size_t shmsz, int mode, bool readOnly, uid_t owner = 0) const;
         };
@@ -582,7 +592,7 @@ namespace LTSM {
             explicit ErrorContext(xcb_connection_t*);
             ~ErrorContext();
 
-            bool error(const xcb_generic_error_t* err, const char* func, const char* xcbname) const;
+            bool error(const xcb_generic_error_t* err, std::string_view func, std::string_view xcbname) const;
         };
 
 #endif
@@ -596,7 +606,7 @@ namespace LTSM {
             std::unique_ptr<ErrorContext> _error;
 #endif
           protected:
-            void extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
+            void extendedError(const xcb_generic_error_t* error, std::string_view func, std::string_view name) const;
 
           public:
             Connector() = default;

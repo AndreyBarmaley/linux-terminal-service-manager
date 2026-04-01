@@ -43,29 +43,24 @@ namespace LTSM::Connector {
             if(0 < displayNum()) {
                 busConnectorTerminated(displayNum(), getpid());
                 clientDisconnectedEvent(displayNum());
-                Application::info("{}: connector shutdown, display: {}", __FUNCTION__, displayNum());
+                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
             }
 
         } catch(const std::exception & err) {
-            Application::warning("{}: connector error: {}", __FUNCTION__, err.what());
+            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
         }
     }
 
     int ConnectorLtsm::communication(void) {
         if(0 >= busGetServiceVersion()) {
-            Application::error("{}: bus service failure", __FUNCTION__);
+            Application::error("{}: bus service failure", NS_FuncNameV);
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: remote addr: {}", __FUNCTION__, _remoteaddr);
+        Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
 
         _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
-        _frameRate = config().getInteger("vnc:frame:rate", 16);
-
-        if(_frameRate <= 0) {
-            Application::warning("{}: invalid value for: `{}'", __FUNCTION__, "vnc:frame:rate");
-            _frameRate = 16;
-        }
+        _frameRate = config().getInteger("vnc:frame:rate", 0);
 
         return rfbCommunication();
     }
@@ -78,13 +73,13 @@ namespace LTSM::Connector {
         xcbDisableMessages(true);
         waitUpdateProcess();
         _shmUid = userUid;
-        Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", __FUNCTION__, display,
+        Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
                             userName, userUid);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
         if(newDisplay < 0) {
-            Application::error("{}: {} failed", __FUNCTION__, "user session request");
+            Application::error("{}: {} failed", NS_FuncNameV, "user session request");
             throw std::runtime_error(NS_FuncNameS);
         }
 
@@ -93,7 +88,7 @@ namespace LTSM::Connector {
             std::this_thread::sleep_for(100ms);
 
             if(! xcbConnect(newDisplay, *this)) {
-                Application::error("{}: {} failed", __FUNCTION__, "xcb connect");
+                Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
                 throw std::runtime_error(NS_FuncNameS);
             }
 
@@ -106,12 +101,12 @@ namespace LTSM::Connector {
 
         // fix new session size
         if(xcbDisplay()->size() != clientRegion.toSize()) {
-            Application::warning("{}: remote request desktop size: {}, display: {}", __FUNCTION__,
+            Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
                                  clientRegion.toSize(), displayNum());
 
             if(0 < xcbDisplay()->setRandrScreenSize(clientRegion)) {
                 Application::info("{}: change session size: {}, display: {}",
-                        __FUNCTION__, clientRegion.toSize(), displayNum());
+                        NS_FuncNameV, clientRegion.toSize(), displayNum());
             }
         } else {
             // full update
@@ -139,7 +134,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
-            Application::notice("{}: dbus signal, display: {}", __FUNCTION__, display);
+            Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
             xcbDisableMessages(true);
             waitUpdateProcess();
             rfbMessagesShutdown();
@@ -148,7 +143,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onSendBellSignal(const int32_t & display) {
         if(display == displayNum()) {
-            Application::info("{}: dbus signal, display: {}", __FUNCTION__, display);
+            Application::info("{}: dbus signal, display: {}", NS_FuncNameV, display);
             std::thread([this] { this->sendBellEvent(); }).detach();
         }
     }
@@ -182,25 +177,25 @@ namespace LTSM::Connector {
         int screen = busStartLoginSession(getpid(), 24, _remoteaddr, "ltsm");
 
         if(screen <= 0) {
-            Application::error("{}: login session request: failure", __FUNCTION__);
+            Application::error("{}: login session request: failure", NS_FuncNameV);
             throw proto_error(NS_FuncNameS);
         }
 
-        Application::info("{}: login session request success, display: {}", __FUNCTION__, screen);
+        Application::info("{}: login session request success, display: {}", NS_FuncNameV, screen);
 
         if(! xcbConnect(screen, *this)) {
-            Application::error("{}: xcb connect: failed", __FUNCTION__);
+            Application::error("{}: xcb connect: failed", NS_FuncNameV);
             throw proto_error(NS_FuncNameS);
         }
 
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual) {
-            Application::error("{}: xcb visual empty", __FUNCTION__);
+            Application::error("{}: xcb visual empty", NS_FuncNameV);
             throw proto_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", NS_FuncNameV, xcbDisplay()->getMaxRequest());
         // init server format
         _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
@@ -224,7 +219,6 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz) {
-        xcbShmInit(_shmUid);
         busDisplayResized(displayNum(), sz.width, sz.height);
     }
 
@@ -277,20 +271,18 @@ namespace LTSM::Connector {
                 return secInfo;
             }
 
-            std::filesystem::path file(keytab);
             std::error_code err;
-
             if(std::filesystem::is_regular_file(keytab, err)) {
-                Application::info("{}: set KRB5_KTNAME=`{}'", __FUNCTION__, keytab);
+                Application::info("{}: set KRB5_KTNAME=`{}'", NS_FuncNameV, keytab);
                 setenv("KRB5_KTNAME", keytab.c_str(), 1);
 
                 if(auto debug = config().getString("vnc:kerberos:trace"); ! debug.empty()) {
-                    Application::info("{}: set KRB5_TRACE=`{}'", __FUNCTION__, debug);
+                    Application::info("{}: set KRB5_TRACE=`{}'", NS_FuncNameV, debug);
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {} failed, code: {}, error: {}",
-                                __FUNCTION__, "is_regular_file", err.value(), err.message());
+                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                                NS_FuncNameV, "is_regular_file", err.value(), err.message(), keytab);
                 secInfo.authKrb5 = false;
             }
         }
@@ -349,7 +341,7 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::systemClientVariables(const JsonObject & jo) {
-        Application::debug(DebugType::App, "{}: count: {}", __FUNCTION__, jo.size());
+        Application::debug(DebugType::App, "{}: count: {}", NS_FuncNameV, jo.size());
 
         if(auto env = jo.getObject("environments")) {
             busSetSessionEnvironments(displayNum(), env->toStdMap<std::string>());
@@ -376,9 +368,9 @@ namespace LTSM::Connector {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
             _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
             _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
-            _frameRate = opts->getInteger("frame:rate", _frameRate);
+            _frameRate = opts->getInteger("frame:rate", 0);
 
-            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"));
+            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), _frameRate);
 
             if(_x11NoDamage && ! XCB::RootDisplay::hasError()) {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
@@ -390,7 +382,7 @@ namespace LTSM::Connector {
         auto cursorId = jo.getInteger("cursor");
 
         if(cursorId) {
-            Application::debug(DebugType::App, "{}: cursor id: {:#08x}", __FUNCTION__, cursorId);
+            Application::debug(DebugType::App, "{}: cursor id: {:#010x}", NS_FuncNameV, cursorId);
             cursorFailed(cursorId);
         }
     }
@@ -421,7 +413,7 @@ namespace LTSM::Connector {
                 }
             }
 
-            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#08x}, keycode: {}", __FUNCTION__, (int) pressed, scancode, keycode);
+            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#010x}, keycode: {}", NS_FuncNameV, (int) pressed, scancode, keycode);
 
             serverRecvKeyEvent(pressed, xksym);
             X11Server::serverScreenUpdateRequest();
@@ -433,18 +425,18 @@ namespace LTSM::Connector {
 
         if(xcbAllowMessages()) {
             if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
-                Application::debug(DebugType::App, "{}: layout: {}", __FUNCTION__, layout);
+                Application::debug(DebugType::App, "{}: layout: {}", NS_FuncNameV, layout);
                 auto names = xkb->getNames();
                 auto it = std::ranges::find_if(names, [&](auto & str) {
                     return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
                 });
 
                 if(it != names.end()) {
-                    //Application::debug(DebugType::Input, "{}: group: `s'", __FUNCTION__, it->c_str());
+                    //Application::debug(DebugType::Input, "{}: group: `s'", NS_FuncNameV, it->c_str());
                     xkb->switchLayoutGroup(std::distance(names.begin(), it));
                 } else {
                     Application::error("{}: layout not found: {}, names: [{}]",
-                                       __FUNCTION__, layout, Tools::join(names));
+                                       NS_FuncNameV, layout, Tools::join(names));
                 }
             }
         }
@@ -455,15 +447,15 @@ namespace LTSM::Connector {
             auto fa = jo.getArray("files");
 
             if(! fa) {
-                Application::error("{}: incorrect format message", __FUNCTION__);
+                Application::error("{}: incorrect format message", NS_FuncNameV);
                 return;
             }
 
-            Application::debug(DebugType::App, "{}: files count: {}", __FUNCTION__, fa->size());
+            Application::debug(DebugType::App, "{}: files count: {}", NS_FuncNameV, fa->size());
 
             // check transfer disabled
             if(config().getBoolean("transfer:file:disabled", false)) {
-                Application::error("{}: administrative disable", __FUNCTION__);
+                Application::error("{}: administrative disable", NS_FuncNameV);
                 busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
                               NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
                 return;
@@ -488,13 +480,13 @@ namespace LTSM::Connector {
                 size_t fsize = jo2->getInteger("size");
 
                 if(std::ranges::any_of(_transferPlanned, [&](auto & st) { return fname == std::get<0>(st); })) {
-                    Application::warning("{}: found planned and skipped, file: {}", __FUNCTION__, fname);
+                    Application::warning("{}: found planned and skipped, file: {}", NS_FuncNameV, fname);
                     continue;
                 }
 
                 // check max size
                 if(fmax && fsize > fmax) {
-                    Application::warning("{}: file size exceeds and skipped, file: {}", __FUNCTION__, fname);
+                    Application::warning("{}: file size exceeds and skipped, file: {}", NS_FuncNameV, fname);
                     busSendNotify(displayNum(), "Transfer Skipped",
                                   fmt::format("the file size exceeds, the allowed limit: {}M, file: {}", prettyMb, fname),
                                   NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
@@ -509,9 +501,9 @@ namespace LTSM::Connector {
             size_t freeChannels = countFreeChannels();
 
             if(_transferPlanned.empty()) {
-                Application::warning("{}: file list empty", __FUNCTION__);
+                Application::warning("{}: file list empty", NS_FuncNameV);
             } else if(! freeChannels) {
-                Application::warning("{}: no free channels", __FUNCTION__);
+                Application::warning("{}: no free channels", NS_FuncNameV);
             } else {
                 std::scoped_lock<std::mutex> guard{_lockTransfer};
 
@@ -564,7 +556,7 @@ namespace LTSM::Connector {
         // filepath - client file path
         // tmpfile - server tmpfile
         // dstdir - server target directory
-        Application::debug(DebugType::App, "{}: display: {}", __FUNCTION__, display);
+        Application::debug(DebugType::App, "{}: display: {}", NS_FuncNameV, display);
 
         if(display == displayNum()) {
             std::scoped_lock<std::mutex> guard{_lockTransfer};
@@ -573,7 +565,7 @@ namespace LTSM::Connector {
             });
 
             if(it == _transferPlanned.end()) {
-                Application::error("{}: transfer not found, file: {}", __FUNCTION__, filepath);
+                Application::error("{}: transfer not found, file: {}", NS_FuncNameV, filepath);
                 return;
             }
 
@@ -640,7 +632,7 @@ namespace LTSM::Connector {
         auto code = jo.getInteger("code");
         auto err = jo.getString("error");
         Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'",
-                 __FUNCTION__, channel, displayNum(), code, err);
+                 NS_FuncNameV, channel, displayNum(), code, err);
 
         if(isUserSession())
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),

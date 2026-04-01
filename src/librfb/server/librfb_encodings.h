@@ -100,7 +100,7 @@ namespace LTSM {
 
             void sendRawRegionPixels(EncoderStream*, EncoderStream*, const XCB::Region &, const FrameBuffer &);
 
-            static std::list<XCB::RegionPixel> rreProcessing(const XCB::Region &, const FrameBuffer &, int skipPixel);
+            static std::list<XCB::RegionPixel> rreProcessing(const XCB::Region &, const FrameBuffer &, uint32_t skipPixel);
 
           public:
             EncodingBase(int v);
@@ -111,6 +111,7 @@ namespace LTSM {
             virtual bool setEncodingOptions(const std::forward_list<std::string> &) {
                 return false;
             }
+            virtual void setFps(uint32_t) {}
             virtual const char* getTypeName(void) const = 0;
 
             int getType(void) const;
@@ -179,7 +180,7 @@ namespace LTSM {
 
           protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
-            void sendRegionPacked(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, size_t field,
+            void sendRegionPacked(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, const Tools::StreamBitsPack::Field &,
                                   const PixelMapPalette &);
             void sendRegionPlain(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelLengthList &);
             void sendRegionPalette(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapPalette &,

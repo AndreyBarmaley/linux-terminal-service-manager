@@ -193,10 +193,8 @@ elseif(UNIX)
     target_sources(${CUR_TARGET} PRIVATE ltsm_xcb_wrapper.cpp)
 
     if(LTSM_WITH_XCB_ERRORS)
-        target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_BUILD_XCB_ERRORS)
+        target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_XCB_ERRORS)
         target_sources(${CUR_TARGET} PRIVATE libxcb-errors/xcb_errors.c libxcb-errors/extensions.c)
-    else()
-        set(LTSM_BUILD_XCB_ERRORS OFF)
     endif()
 
 elseif(MINGW)

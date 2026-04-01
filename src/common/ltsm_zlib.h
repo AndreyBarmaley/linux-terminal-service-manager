@@ -45,7 +45,7 @@ namespace LTSM::Tools {
                 res.resize(dstsz);
                 return res;
             } else {
-                Application::error("{}: {} failed, error: {}", __FUNCTION__, "compress", ret);
+                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "compress", ret);
                 throw std::runtime_error(NS_FuncNameS);
             }
         }
@@ -74,7 +74,7 @@ namespace LTSM::Tools {
                 res.resize(dstsz);
                 return res;
             } else {
-                Application::error("{}: {} failed, error: {}", __FUNCTION__, "uncompress", ret);
+                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "uncompress", ret);
                 throw std::runtime_error(NS_FuncNameS);
             }
         }

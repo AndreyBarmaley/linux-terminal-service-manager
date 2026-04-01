@@ -47,11 +47,11 @@ using namespace std::chrono_literals;
 // createClientPkcs11Connector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url,
+    Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
-        Application::error("{}: {}, mode: {}", __FUNCTION__, "pkcs11 mode failed", Channel::Connector::modeString(mode));
+        Application::error("{}: {}, mode: {}", NS_FuncNameV, "pkcs11 mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncNameS);
     }
 
@@ -62,7 +62,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11C
 LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("{}: channelId: {}", __FUNCTION__, cid);
+    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
     // start threads
     setRunning(true);
 }
@@ -83,7 +83,7 @@ void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed
 }
 
 void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv) {
-    Application::debug(DebugType::Pkcs11, "{}: size: {}", __FUNCTION__, recv.size());
+    Application::debug(DebugType::Pkcs11, "{}: size: {}", NS_FuncNameV, recv.size());
     StreamBufRef sb;
 
     if(last.empty()) {
@@ -106,7 +106,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto pkcs11Cmd = sb.readIntLE16();
-            Application::debug(DebugType::Pkcs11, "{}: cmd: {:#04x}", __FUNCTION__, pkcs11Cmd);
+            Application::debug(DebugType::Pkcs11, "{}: cmd: {:#06x}", NS_FuncNameV, pkcs11Cmd);
 
             if(Pkcs11Op::Init == pkcs11Cmd) {
                 pkcs11Init(sb);
@@ -121,7 +121,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             } else if(Pkcs11Op::DecryptData == pkcs11Cmd) {
                 pkcs11DecryptData(sb);
             } else {
-                Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
+                Application::error("{}: {} failed, cmd: {:#06x}, recv size: {}", NS_FuncNameV, "audio", pkcs11Cmd, recv.size());
                 throw channel_error(NS_FuncNameS);
             }
         }
@@ -130,7 +130,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error &) {
-        Application::warning("{}: underflow data: {}", __FUNCTION__, sb.last());
+        Application::warning("{}: underflow data: {}", NS_FuncNameV, sb.last());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);

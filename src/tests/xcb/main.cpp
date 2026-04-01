@@ -36,7 +36,7 @@ class X11Test : public XCB::RootDisplay {
             Application::info("allowed depth:{}, visuals:{}", dIter.data->depth, dIter.data->visuals_len);
 
             for(auto vIter = xcb_depth_visuals_iterator(dIter.data); vIter.rem; xcb_visualtype_next(& vIter))
-                Application::info("visual id: {:#02x}, class: {:#02x}, bits per rgb value: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}, color entries: {}",
+                Application::info("visual id: {:#04x}, class: {:#04x}, bits per rgb value: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}, color entries: {}",
                                   vIter.data->visual_id, vIter.data->_class, vIter.data->bits_per_rgb_value, vIter.data->red_mask, vIter.data->green_mask, vIter.data->blue_mask, vIter.data->colormap_entries);
         }
 
@@ -52,7 +52,7 @@ class X11Test : public XCB::RootDisplay {
         }
 
         // reply info dump
-        Application::info("get_image: request size [{}, {}], reply length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
+        Application::info("get_image: request size [{}, {}], reply length: {}, bits per pixel: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}",
                           damage.width, damage.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
 
         return true;
@@ -91,7 +91,7 @@ class X11Test : public XCB::RootDisplay {
                             auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
                             xcb_randr_output_change_t oc = rn->u.oc;
                             // window, output, crtc, mode, rotation, connection, subpixel
-                	    Application::info("randr output change, connection: {:#02x}", oc.connection);
+                	    Application::info("randr output change, connection: {:#04x}", oc.connection);
                         }
                         else
                         if(XCB::Connector::isRandrScreenNotify(ev))
@@ -181,7 +181,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(auto info : modes) {
             if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
-                Application::info("mode {:#08x}, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
+                Application::info("mode {:#010x}, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
             }
         }
 
@@ -267,16 +267,16 @@ class X11Test : public XCB::RootDisplay {
                         Application::info("property: {}, `{}'", type, getAtomName(type));
 
                         auto win = getPropertyWindow(_screen->root, active);
-                        Application::info("property change for window id: {:#08x}", win);
+                        Application::info("property change for window id: {:#010x}", win);
 
                         auto str1 = getPropertyString(win, XCB_ATOM_WM_CLASS);
                         //auto str2 = getPropertyString(win, XCB_ATOM_WM_CLASS, str1.size() + 1);
-                        Application::info("win: {:#08x}, wmclass: `{}', {}", win, str1, str1.size());
+                        Application::info("win: {:#010x}, wmclass: `{}', {}", win, str1, str1.size());
                         /*
                                                 auto list = getPropertyStringList(win, XCB_ATOM_WM_CLASS);
                             	                Application::info("list: {}", list.size());
                             	                if(1 < list.size())
-                                                    Application::info("win: {:#08x}, wmclass: `{}', `{}'", win, list.front(), list.back());
+                                                    Application::info("win: {:#010x}, wmclass: `{}', `{}'", win, list.front(), list.back());
                         */
                     }
                 }
@@ -318,7 +318,7 @@ class App : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: xcb max request: {}", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("{}: xcb max request: {}", NS_FuncNameV, _xcbDisplay->getMaxRequest());
 
         // _xcbDisplay->test_randr();
         _xcbDisplay->test_extinfo();

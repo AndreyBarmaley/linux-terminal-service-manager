@@ -62,11 +62,11 @@ namespace LTSM {
     };
 
     struct PixelMapPalette : INTMAP<uint32_t /* pixel */, uint32_t /* index */> {
-        int findColorIndex(const uint32_t &) const;
+        uint32_t findColorIndex(const uint32_t &) const;
     };
 
     struct PixelMapWeight : INTMAP<uint32_t /* pixel */, uint32_t /* weight */> {
-        int maxWeightPixel(void) const;
+        uint32_t maxWeightPixel(void) const;
     };
 
     class PixelFormat {
@@ -142,12 +142,12 @@ namespace LTSM {
             return redShift == 0 || blueShift == 0 || greenShift == 0;
         }
 
-        uint8_t red(int pixel) const;
-        uint8_t green(int pixel) const;
-        uint8_t blue(int pixel) const;
-        uint8_t alpha(int pixel) const;
+        uint8_t red(uint32_t pixel) const;
+        uint8_t green(uint32_t pixel) const;
+        uint8_t blue(uint32_t pixel) const;
+        uint8_t alpha(uint32_t pixel) const;
 
-        Color color(int pixel) const;
+        Color color(uint32_t pixel) const;
         uint32_t pixel(const Color & col) const;
 
         uint32_t convertFrom(const PixelFormat & pf, uint32_t pixel) const;

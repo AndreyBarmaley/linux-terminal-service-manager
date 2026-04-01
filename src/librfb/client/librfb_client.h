@@ -153,6 +153,8 @@ namespace LTSM {
                 return serverLtsmVersion;
             }
 
+            virtual uint32_t frameRateOption(void) const { return 16; }
+
             virtual void decoderInitEvent(DecodingBase*) { /* empty */ }
         };
 

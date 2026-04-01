@@ -28,7 +28,7 @@ void signalHandler(int sig) {
     if(sig == SIGTERM || sig == SIGINT) {
         Run::process = false;
     } else {
-        Application::warning("{}: receive signal: {}", __FUNCTION__, sig);
+        Application::warning("{}: receive signal: {}", NS_FuncNameV, sig);
     }
 }
 
@@ -39,14 +39,14 @@ class FakeStream : public RFB::EncoderStream {
   public:
     FakeStream(const XCB::RootDisplay* xcb) {
         if(! xcb) {
-            Application::error("{}: xcb failed", __FUNCTION__);
+            Application::error("{}: xcb failed", NS_FuncNameV);
             throw std::runtime_error(NS_FuncNameS);
         }
 
         auto visual = xcb->visual();
 
         if(! visual) {
-            Application::error("{}: xcb visual failed", __FUNCTION__);
+            Application::error("{}: xcb visual failed", NS_FuncNameV);
             throw std::runtime_error(NS_FuncNameS);
         }
 
@@ -179,14 +179,10 @@ class EncodingTest : public Application {
         auto dsz = xcb->size();
         auto reg = XCB::Region{{0, 0}, dsz};
         auto bpp = xcb->bitsPerPixel() >> 3;
-        auto pitch = dsz.width * bpp;
+        auto pitch = Tools::alignUp(dsz.width * bpp, 8);
 
-        if(auto align8 = pitch % 8) {
-            pitch += 8 - align8;
-        }
-
-        Application::info("{}: settings - fps: {}, threads: {}, iterations: {}", __FUNCTION__, frameRate, threadsCount, countLoop);
-        Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("{}: settings - fps: {}, threads: {}, iterations: {}", NS_FuncNameV, frameRate, threadsCount, countLoop);
+        Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", NS_FuncNameV, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
@@ -300,7 +296,7 @@ class EncodingTest : public Application {
                     enc.encodeTime(pixmapReply->data(), reg);
                 }
             } else {
-                Application::error("{}: {}", __FUNCTION__, "xcb copy region failed");
+                Application::error("{}: {}", NS_FuncNameV, "xcb copy region failed");
                 throw std::runtime_error(NS_FuncNameS);
             }
 

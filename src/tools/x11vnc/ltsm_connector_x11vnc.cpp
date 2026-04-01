@@ -48,7 +48,7 @@ namespace LTSM {
         auto jc = JsonContentFile(_config->getString("keymapfile"));
 
         if(! jc.isObject()) {
-            Application::error("{}: invalid keymap file", __FUNCTION__);
+            Application::error("{}: invalid keymap file", NS_FuncNameV);
             return false;
         }
 
@@ -119,7 +119,7 @@ namespace LTSM {
     bool Connector::X11VNC::xcbConnect(void) {
         // FIXM XAUTH
         std::string xauthFile = _config->getString("authfile");
-        Application::debug(DebugType::App, "{}: xauthfile: `{}'", __FUNCTION__, xauthFile);
+        Application::debug(DebugType::App, "{}: xauthfile: `{}'", NS_FuncNameV, xauthFile);
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         size_t screen = _config->getInteger("display", 0);
@@ -132,13 +132,13 @@ namespace LTSM {
         }
 
         Application::info("{}: display: {}, size: {}, depth: {}",
-                __FUNCTION__, screen, xcbDisplay()->size(), xcbDisplay()->depth());
+                NS_FuncNameV, screen, xcbDisplay()->size(), xcbDisplay()->depth());
         Application::debug(DebugType::App, "{}: xcb max request: {}",
-                __FUNCTION__, xcbDisplay()->getMaxRequest());
+                NS_FuncNameV, xcbDisplay()->getMaxRequest());
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual) {
-            Application::error("{}: xcb visual empty", __FUNCTION__);
+            Application::error("{}: xcb visual empty", NS_FuncNameV);
             return false;
         }
 
@@ -150,7 +150,7 @@ namespace LTSM {
 
     void Connector::X11VNC::serverHandshakeVersionEvent(void) {
         if(! xcbConnect()) {
-            Application::error("{}: {}", __FUNCTION__, "xcb connect failed");
+            Application::error("{}: {}", NS_FuncNameV, "xcb connect failed");
             throw rfb_error(NS_FuncNameS);
         }
     }

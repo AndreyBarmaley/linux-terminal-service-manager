@@ -96,7 +96,7 @@ namespace LTSM::DisplaySession {
                 std::ofstream(log_file_err) << str_err;
 
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
         }
 
@@ -107,7 +107,7 @@ namespace LTSM::DisplaySession {
 
         SessionProcess(const std::string & cmd, const Args&... args)
             : filename_(std::filesystem::path(cmd).filename()) {
-            proc_ = bp::child(cmd, args..., bp::std_out > proc_out_, bp::std_err > proc_err_);
+            proc_ = bp::child(cmd, args..., bp::std_in < bp::null, bp::std_out > proc_out_, bp::std_err > proc_err_);
         }
 
         ~SessionProcess() {

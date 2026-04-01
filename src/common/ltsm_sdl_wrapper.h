@@ -118,7 +118,7 @@ namespace LTSM {
             ~Window();
 
             bool isValid(void) const;
-            bool resize(int newsz_w, int newsz_h);
+            bool resize(uint16_t newsz_w, uint16_t newsz_h);
 
             uint32_t pixelFormat(void) const;
             std::pair<int, int> geometry(void) const;

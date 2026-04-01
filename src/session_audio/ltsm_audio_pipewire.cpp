@@ -103,12 +103,12 @@ namespace LTSM {
         pw_init(nullptr, nullptr);
 
         Application::info("{}: pipewire headers version: {}, library version: {}",
-                          __FUNCTION__, pw_get_headers_version(), pw_get_library_version());
+                          NS_FuncNameV, pw_get_headers_version(), pw_get_library_version());
 
         loop_.reset(pw_thread_loop_new("LtsmPipeWireLoop", nullptr));
 
         if(! loop_) {
-            Application::error("%s: %s failed", __FUNCTION__, "pw_thread_loop_new");
+            Application::error("%s: %s failed", NS_FuncNameV, "pw_thread_loop_new");
             throw audio_error(NS_FuncNameS);
         }
 
@@ -120,7 +120,7 @@ namespace LTSM {
                      );
 
         if(! props) {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_properties_new");
+            Application::error("{}: {} failed", NS_FuncNameV, "pw_properties_new");
             throw audio_error(NS_FuncNameS);
         }
 
@@ -135,12 +135,12 @@ namespace LTSM {
         );
 
         if(! stream_) {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_stream_new_simple");
+            Application::error("{}: {} failed", NS_FuncNameV, "pw_stream_new_simple");
             throw audio_error(NS_FuncNameS);
         }
 
         if(0 != pw_thread_loop_start(loop_.get())) {
-            Application::error("%s: %s failed", __FUNCTION__, "pw_thread_loop_start");
+            Application::error("%s: %s failed", NS_FuncNameV, "pw_thread_loop_start");
             throw audio_error(NS_FuncNameS);
         }
     }
@@ -165,42 +165,42 @@ namespace LTSM {
         uint32_t media_subtype;
 
         if(int ret = spa_format_parse(param, &media_type, &media_subtype); 0 > ret) {
-            Application::error("{}: {} failed, code: {}", __FUNCTION__, "pw_stream_connect", ret);
+            Application::error("{}: {} failed, code: {}", NS_FuncNameV, "pw_stream_connect", ret);
             return;
         }
 
         if(media_type != SPA_MEDIA_TYPE_audio) {
             const char* type_name = spa_debug_type_find_name(spa_type_media_type, media_type);
-            Application::warning("{}: unsupported media type: {}({:#08x})", __FUNCTION__, type_name, media_type);
+            Application::warning("{}: unsupported media type: {}({:#010x})", NS_FuncNameV, type_name, media_type);
             return;
         }
 
         if(media_subtype != SPA_MEDIA_SUBTYPE_raw) {
             const char* subtype_name = spa_debug_type_find_name(spa_type_media_subtype, media_subtype);
-            Application::warning("{}: unsupported media subtype: {}({:#08x})", __FUNCTION__, subtype_name, media_subtype);
+            Application::warning("{}: unsupported media subtype: {}({:#010x})", NS_FuncNameV, subtype_name, media_subtype);
             return;
         }
 
         spa_audio_info_raw raw;
 
         if(int ret = spa_format_audio_raw_parse(param, & raw); 0 > ret) {
-            Application::error("{}: {} failed, code: {}", __FUNCTION__, "spa_format_audio_raw_parse", ret);
+            Application::error("{}: {} failed, code: {}", NS_FuncNameV, "spa_format_audio_raw_parse", ret);
             return;
         }
 
         if(raw.format != format_) {
             const char* format_name = spa_debug_type_find_name(spa_type_audio_format, raw.format);
-            Application::warning("{}: unsupported audio format: {}", __FUNCTION__, format_name);
+            Application::warning("{}: unsupported audio format: {}", NS_FuncNameV, format_name);
             return;
         }
 
         if(raw.rate != rate_) {
-            Application::warning("{}: unsupported audio format, rate: {}", __FUNCTION__, raw.rate);
+            Application::warning("{}: unsupported audio format, rate: {}", NS_FuncNameV, raw.rate);
             return;
         }
 
         if(raw.channels != channels_) {
-            Application::warning("{}: unsupported audio format, channels: {}", __FUNCTION__, raw.channels);
+            Application::warning("{}: unsupported audio format, channels: {}", NS_FuncNameV, raw.channels);
             return;
         }
         
@@ -211,7 +211,7 @@ namespace LTSM {
         // unconnected connecting paused error unconnected
         // unconnected connecting paused streaming paused unconnected
         Application::info("{}: old: {}, new: {}, error: {}",
-                          __FUNCTION__, pw_stream_state_as_string(old), pw_stream_state_as_string(state), error);
+                          NS_FuncNameV, pw_stream_state_as_string(old), pw_stream_state_as_string(state), error);
     }
 
     bool PipeWire::BaseStream::streamConnect(bool pause) {
@@ -242,11 +242,11 @@ namespace LTSM {
                                     params, 1);
 
         if(0 > ret) {
-            Application::error("{}: {} failed, code: {}", __FUNCTION__, "pw_stream_connect", ret);
+            Application::error("{}: {} failed, code: {}", NS_FuncNameV, "pw_stream_connect", ret);
             return false;
         }
 
-        Application::debug(DebugType::Audio, "{}: success", __FUNCTION__);
+        Application::debug(DebugType::Audio, "{}: success", NS_FuncNameV);
 
         return true;
     }
@@ -263,7 +263,7 @@ namespace LTSM {
         const PwThreadLoopLocker lock{ loop_.get() };
 
         if(int ret = pw_stream_set_active(stream_.get(), active); 0 > ret) {
-            Application::error("{}: {} failed, code: {}", __FUNCTION__, "pw_stream_set_active", ret);
+            Application::error("{}: {} failed, code: {}", NS_FuncNameV, "pw_stream_set_active", ret);
             return false;
         }
 
@@ -309,7 +309,7 @@ namespace LTSM {
 
             pw_stream_queue_buffer(stream_.get(), buf);
         } else {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_stream_dequeue_buffer");
+            Application::error("{}: {} failed", NS_FuncNameV, "pw_stream_dequeue_buffer");
         }
     }
 
@@ -324,12 +324,12 @@ namespace LTSM {
 
                         if(ptr && len) {
                             Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
-                                               __FUNCTION__, buf->size, len, buf->requested);
+                                               NS_FuncNameV, buf->size, len, buf->requested);
                         }
             */
             pw_stream_queue_buffer(stream_.get(), buf);
         } else {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_stream_dequeue_buffer");
+            Application::error("{}: {} failed", NS_FuncNameV, "pw_stream_dequeue_buffer");
         }
     }
 }

@@ -102,25 +102,12 @@ namespace LTSM {
         }
 
         Region Region::align(size_t val) const {
-            Region res(x, y, width, height);
+            Region res;
 
-            if(auto alignX = x % val) {
-                res.x -= alignX;
-                res.width += alignX;
-            }
-
-            if(auto alignY = y % val) {
-                res.y -= alignY;
-                res.height += alignY;
-            }
-
-            if(auto alignW = res.width % val) {
-                res.width += val - alignW;
-            }
-
-            if(auto alignH = res.height % val) {
-                res.height += val - alignH;
-            }
+            res.x = Tools::alignDown(x, val);
+            res.y = Tools::alignDown(y, val);
+            res.width = Tools::alignUp(width + (x - res.x), val);
+            res.height = Tools::alignUp(height + (y - res.y), val);
 
             return res;
         }

@@ -127,7 +127,7 @@ namespace LTSM {
 
             void setEncodingDebug(int v);
             void setEncodingThreads(int v);
-            void setEncodingOptions(const std::forward_list<std::string> &);
+            void setEncodingOptions(const std::forward_list<std::string> &, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;
             bool isClientVideoSupported(void) const;
@@ -204,6 +204,10 @@ namespace LTSM {
             }
 
             virtual void encoderInitEvent(EncodingBase*) { /* empty */ }
+
+            virtual uint32_t frameRateOption(void) const {
+                return 16;
+            }
 
             // server encoder events
             virtual void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) { /* empty */ }

@@ -187,8 +187,10 @@ namespace LTSM {
         struct StreamBitsPack : StreamBits {
             explicit StreamBitsPack(size_t rez = 32);
 
+            enum class Field : int { Val1 = 1, Val2 = 2, Val4 = 4 };
+
             void pushBit(bool v);
-            void pushValue(int val, size_t field);
+            void pushValue(uint32_t val, const Field &);
             void pushAlign(void);
         };
 

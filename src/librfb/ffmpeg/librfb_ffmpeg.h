@@ -123,9 +123,10 @@ namespace LTSM {
 
             const AVPixelFormat localFormat{AV_PIX_FMT_YUV420P};
 
-            //int bitrate = 1024;
-            int fps = 25;
-            int pts = 0;
+            // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
+            int fps = 16;
+            // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
+            int64_t pts = 0;
 
           protected:
             void initContext(const XCB::Size &);
@@ -138,6 +139,7 @@ namespace LTSM {
             ~EncodingFFmpeg() = default;
 
             const char* getTypeName(void) const override;
+            void setFps(uint32_t) override;
         };
 
 #endif // ENCODING_FFMPEG
@@ -170,6 +172,9 @@ namespace LTSM {
 
             std::mutex lockUpdate;
 
+            // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
+            const int fps;
+
           protected:
             void initLocalContext(const XCB::Size &);
             void initRemoteContext(const XCB::Size &);
@@ -179,7 +184,7 @@ namespace LTSM {
             void resizedEvent(const XCB::Size &) override;
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
-            DecodingFFmpeg(int type);
+            DecodingFFmpeg(int type, int fps = 25);
             ~DecodingFFmpeg() = default;
         };
 

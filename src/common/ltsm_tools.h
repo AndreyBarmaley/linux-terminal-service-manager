@@ -31,6 +31,7 @@
 #include <pwd.h>
 #endif
 
+#include <bit>
 #include <list>
 #include <chrono>
 #include <vector>
@@ -172,7 +173,15 @@ namespace LTSM {
         std::list<std::string> readDir(const std::filesystem::path &, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
-        std::string_view prettyFuncNameView(std::string_view);
+        constexpr std::string_view prettyFuncNameView(std::string_view name) {
+            const auto it2 = std::find(name.begin(), name.end(), '(');
+            const auto it1 = std::find(std::make_reverse_iterator(std::prev(it2)), std::make_reverse_iterator(name.begin()), 0x20);
+            const auto it0 = it1.base();
+            if(std::string_view{it0, it0 + 6} == "LTSM::") {
+                return std::string_view{it0 + 6, it2};
+            }
+            return std::string_view{it0, it2};
+        }
 
         std::string randomHexString(size_t len);
         std::string quotedString(std::string_view);
@@ -276,6 +285,18 @@ namespace LTSM {
         template<typename Cont>
         inline std::string hexString(const Cont & cont, size_t width = 8, std::string_view sep = ",", bool prefix = true) {
             return rangeHexString(std::cbegin(cont), std::cend(cont), width, sep, prefix);
+        }
+
+        template <typename T>
+        constexpr T alignUp(T n, size_t alignment) {
+            if (!std::has_single_bit(alignment)) return 0;
+            return (n + alignment - 1) & ~(alignment - 1);
+        }
+
+        template <typename T>
+        constexpr T alignDown(T n, size_t alignment) {
+            if (!std::has_single_bit(alignment)) return n;
+            return n & ~(alignment - 1);
         }
 
         // BaseSpinLock

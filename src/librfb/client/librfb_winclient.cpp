@@ -37,7 +37,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::WinCli, "{}, length: {}", __FUNCTION__, buf.size());
+        Application::debug(DebugType::WinCli, "{}, length: {}", NS_FuncNameV, buf.size());
         sendCutTextEvent(buf.data(), buf.size(), true);
     }
 
@@ -47,11 +47,11 @@ namespace LTSM {
 
     std::vector<uint8_t> RFB::WinClient::extClipboardLocalData(uint16_t type) const {
         if(0 == extClipboardLocalCaps()) {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::WinCli, "{}", __FUNCTION__);
+        Application::debug(DebugType::WinCli, "{}", NS_FuncNameV);
 
         /*
                 auto ptr = const_cast<RFB::WinClient*>(this);
@@ -84,7 +84,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardRemoteTypesEvent(uint16_t types) {
-        Application::debug(DebugType::WinCli, "{}, types: {:#04x}", __FUNCTION__, types);
+        Application::debug(DebugType::WinCli, "{}, types: {:#06x}", NS_FuncNameV, types);
 
         if(extClipboardRemoteCaps()) {
             clipRemoteTypes = types;
@@ -92,25 +92,25 @@ namespace LTSM {
             //if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))
             //        paste->setSelectionOwner(*this);
         } else {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
     void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::WinCli, "{}, type: {:#04x}, length: {}", __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::WinCli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
             clientClipboard = buf;
         } else {
-            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
     void RFB::WinClient::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::WinCli, "{}: data length: {}", __FUNCTION__, buf.size());
+        Application::debug(DebugType::WinCli, "{}: data length: {}", NS_FuncNameV, buf.size());
 
         const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);

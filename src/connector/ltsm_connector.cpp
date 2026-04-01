@@ -147,9 +147,9 @@ namespace LTSM::Connector {
                         getuid(), getgid(), getpid(), LTSM::service_version);
 
         if(auto home = homeRuntime(); 0 == chdir(home.c_str())) {
-            Application::info("{}: working dir: `{}'", __FUNCTION__, home);
+            Application::info("{}: working dir: `{}'", NS_FuncNameV, home);
         } else {
-            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "chdir", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "chdir", strerror(errno), errno);
         }
     }
 
@@ -166,7 +166,7 @@ namespace LTSM::Connector {
 
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
         std::string xauthFile = busDisplayAuthFile(screen);
-        Application::info("{}: display: {}, xauthfile: {}", __FUNCTION__, screen, xauthFile);
+        Application::info("{}: display: {}, xauthfile: {}", NS_FuncNameV, screen, xauthFile);
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
@@ -178,7 +178,7 @@ namespace LTSM::Connector {
         });
 
         if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, socketPath);
+            Application::error("{}: checkUnixSocket failed, `{}'", NS_FuncNameV, socketPath);
             return false;
         }
 
@@ -210,8 +210,8 @@ namespace LTSM::Connector {
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
-            Application::error("{}: {} failed, code: {}, error: {}",
-                            __FUNCTION__, "exists", err.value(), err.message());
+            Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                            NS_FuncNameV, "exists", err.value(), err.message(), fileName);
             fileName.clear();
         }
 
@@ -220,7 +220,7 @@ namespace LTSM::Connector {
 
     void DBusProxy::onClearRenderPrimitives(const int32_t & display) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
             for(const auto & ptr : _renderPrimitives) {
                 if(auto prim = ptr.get()) {
@@ -235,7 +235,7 @@ namespace LTSM::Connector {
     void DBusProxy::onAddRenderRect(const int32_t & display,
                                     const TupleRegion & rect, const TupleColor & color, const bool & fill) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
@@ -245,7 +245,7 @@ namespace LTSM::Connector {
     void DBusProxy::onAddRenderText(const int32_t & display, const std::string & text,
                                     const TuplePosition & pos, const TupleColor & color) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
                                      _systemfont.width * text.size(), _systemfont.height);
@@ -258,7 +258,7 @@ namespace LTSM::Connector {
     void DBusProxy::onPingConnector(const int32_t & display) {
         if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "{}: display: {}",
-                               __FUNCTION__, display);
+                               NS_FuncNameV, display);
 
             std::thread([this, display]() {
                 this->busConnectorAlive(display);

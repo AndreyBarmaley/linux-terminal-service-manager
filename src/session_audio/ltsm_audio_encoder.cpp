@@ -38,7 +38,7 @@ namespace LTSM {
                                       & error));
 
         if(! ctx || error != OPUS_OK) {
-            Application::error("{}: {} failed, error: {}, sampleRate: {}, audioChannels: {}", __FUNCTION__,
+            Application::error("{}: {} failed, error: {}, sampleRate: {}, audioChannels: {}", NS_FuncNameV,
                                "opus_encoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncNameS);
         }
@@ -47,14 +47,14 @@ namespace LTSM {
                 error = opus_encoder_ctl(ctx.get(), OPUS_SET_BITRATE(bitRate));
                 if(error != OPUS_OK)
                 {
-                    Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encoder_ctl", error);
+                    Application::error("{}: {} failed, error: {}", NS_FuncNameV, "opus_encoder_ctl", error);
                     throw audio_error(NS_FuncNameS);
                 }
         */
     }
 
     void AudioEncoder::Opus::push(const uint8_t* ptr, size_t len) {
-        Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
+        Application::debug(DebugType::Audio, "{}: data size: {}", NS_FuncNameV, len);
 
         if(len) {
             last.insert(last.end(), ptr, ptr + len);
@@ -81,7 +81,7 @@ namespace LTSM {
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
 
         if(nBytes < 0) {
-            Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encode", nBytes);
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "opus_encode", nBytes);
             throw audio_error(NS_FuncNameS);
         }
 
