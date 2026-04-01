@@ -3052,24 +3052,18 @@ namespace LTSM {
             Application::debug(DebugType::Xcb, "{}: mode found: {}, size: {}", __FUNCTION__, itm->id, monitor.toSize());
         }
 
-        if(!_modRandr->setScreenSize(prevMonitor.toSize())) {
-            return false;
-        }
-
         // disconnected current CRTCs
         for(const auto & info : _modRandr->getOutputsInfo(true /* connected */)) {
             _modRandr->crtcDisconnect(info->crtc);
         }
 
+        if(! _modRandr->setScreenSize(monitor.toSize())) {
+            return false;
+        }
+
         const auto & mode = itm->id;
 
         if(_modRandr->addOutputMode(outputs[0], mode)) {
-            if(auto info = _modRandr->getOutputInfo(outputs[0])) {
-                auto & modes = info->modes;
-                std::sort(modes.begin(), modes.end());
-                Application::debug(DebugType::Xcb, "{}: modes: {}, [{}]", __FUNCTION__, modes.size(), Tools::join(modes, ","));
-            }
-
             if(_modRandr->crtcConnectOutputsMode(crtcs[0], monitor.x, monitor.y,
                 { outputs[0] }, mode, resources->config_timestamp, sequence)) {
                 return true;
