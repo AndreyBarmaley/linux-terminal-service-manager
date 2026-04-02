@@ -67,7 +67,7 @@ namespace LTSM {
             }
         }
         std::cout << std::endl <<
-                  prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
+                  prog << " version: " << LTSM_CLIENT_VERSION << std::endl;
         std::cout << std::endl <<
         "usage: " << prog <<
         ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] " <<
@@ -261,7 +261,7 @@ namespace LTSM {
         }
     }
 
-    Vnc2SDL::Vnc2SDL(int argc, const char** argv)
+    ClientApp::ClientApp(int argc, const char** argv)
         : Application("ltsm_client") {
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
@@ -358,7 +358,7 @@ namespace LTSM {
         appStart = std::chrono::steady_clock::now();
     }
 
-    void Vnc2SDL::loadConfig(const std::filesystem::path & config) {
+    void ClientApp::loadConfig(const std::filesystem::path & config) {
         if(! std::filesystem::is_regular_file(config)) {
             return;
         }
@@ -392,7 +392,7 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::parseCommand(std::string_view cmd, std::string_view arg) {
+    void ClientApp::parseCommand(std::string_view cmd, std::string_view arg) {
         if(cmd == "--nocaps") {
             capslockEnable = false;
         } else if(cmd == "--noltsm") {
@@ -661,19 +661,19 @@ namespace LTSM {
         }
     }
 
-    bool Vnc2SDL::windowFullScreen(void) const {
+    bool ClientApp::windowFullScreen(void) const {
         return windowFlags & SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
 
-    bool Vnc2SDL::windowResizable(void) const {
+    bool ClientApp::windowResizable(void) const {
         return windowFlags & SDL_WINDOW_RESIZABLE;
     }
 
-    bool Vnc2SDL::isAlwaysRunning(void) const {
+    bool ClientApp::isAlwaysRunning(void) const {
         return alwaysRunning;
     }
 
-    const char* Vnc2SDL::pkcs11Library(void) const {
+    const char* ClientApp::pkcs11Library(void) const {
 #ifdef LTSM_PKCS11_AUTH
         return pkcs11Auth.c_str();
 #else
@@ -681,7 +681,7 @@ namespace LTSM {
 #endif
     }
 
-    int Vnc2SDL::start(void) {
+    int ClientApp::start(void) {
         auto ipaddr = TCPSocket::resolvHostname(host);
         int sockfd = TCPSocket::connect(ipaddr, port);
 
@@ -876,7 +876,7 @@ namespace LTSM {
         return 0;
     }
 
-    bool Vnc2SDL::sdlMouseEvent(const SDL::GenericEvent & ev) {
+    bool ClientApp::sdlMouseEvent(const SDL::GenericEvent & ev) {
         // left 0x01, middle 0x02, right 0x04, scrollUp: 0x08,
         // scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
         switch(ev.type()) {
@@ -992,7 +992,7 @@ namespace LTSM {
         return "unknown";
     }
 
-    bool Vnc2SDL::sdlWindowEvent(const SDL::GenericEvent & ev) {
+    bool ClientApp::sdlWindowEvent(const SDL::GenericEvent & ev) {
         if(auto we = ev.window()) {
             Application::debug(DebugType::App, "{}: window event: {}", NS_FuncNameV, sdlWindowEventName(we->event));
 
@@ -1028,7 +1028,7 @@ namespace LTSM {
         return false;
     }
 
-    bool Vnc2SDL::sdlKeyboardEvent(const SDL::GenericEvent & ev) {
+    bool ClientApp::sdlKeyboardEvent(const SDL::GenericEvent & ev) {
         if(auto ke = ev.key()) {
             // pressed
             if(ke->state == SDL_PRESSED) {
@@ -1106,7 +1106,7 @@ namespace LTSM {
 
     enum LocalEvent { Resize = 776, ResizeCont = 777 };
 
-    bool Vnc2SDL::sdlUserEvent(const SDL::GenericEvent & ev) {
+    bool ClientApp::sdlUserEvent(const SDL::GenericEvent & ev) {
         if(auto ue = ev.user()) {
             // resize event
             if(ue->code == LocalEvent::Resize ||
@@ -1140,7 +1140,7 @@ namespace LTSM {
         return false;
     }
 
-    bool Vnc2SDL::sdlDropFileEvent(const SDL::GenericEvent & ev) {
+    bool ClientApp::sdlDropFileEvent(const SDL::GenericEvent & ev) {
         if(auto de = ev.drop()) {
             std::unique_ptr<char, void(*)(void*)> drop{ de->file, SDL_free };
             dropFiles.emplace_front(drop.get());
@@ -1151,12 +1151,12 @@ namespace LTSM {
         return false;
     }
 
-    bool Vnc2SDL::sdlQuitEvent(void) {
+    bool ClientApp::sdlQuitEvent(void) {
         RFB::ClientDecoder::rfbMessagesShutdown();
         return true;
     }
 
-    bool Vnc2SDL::sdlEventProcessing(void) {
+    bool ClientApp::sdlEventProcessing(void) {
         const std::scoped_lock guard{ renderLock };
 
         if(! SDL_PollEvent(& sdlEvent)) {
@@ -1192,7 +1192,7 @@ namespace LTSM {
         return false;
     }
 
-    bool Vnc2SDL::pushEventWindowResize(const XCB::Size & nsz) {
+    bool ClientApp::pushEventWindowResize(const XCB::Size & nsz) {
 
         if(windowSize == nsz) {
             Application::warning("{}: the window has the same size: {}", NS_FuncNameV, nsz);
@@ -1225,7 +1225,7 @@ namespace LTSM {
         return true;
     }
 
-    void Vnc2SDL::clientRecvDecodingDesktopSizeEvent(int status, int err,
+    void ClientApp::clientRecvDecodingDesktopSizeEvent(int status, int err,
             const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens) {
         needUpdate = false;
 
@@ -1267,13 +1267,13 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::clientRecvFBUpdateEvent(void) {
+    void ClientApp::clientRecvFBUpdateEvent(void) {
         if(! needUpdate) {
             needUpdate = true;
         }
     }
 
-    void Vnc2SDL::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
+    void ClientApp::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
         Application::info("{}: size: {}", NS_FuncNameV, wsz);
         const std::scoped_lock guard{ renderLock };
         bool eventResize = false;
@@ -1302,11 +1302,11 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel) {
+    void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) {
         fillPixel({dst, XCB::Size{1, 1}}, pixel);
     }
 
-    void Vnc2SDL::fillPixel(const XCB::Region & dst, uint32_t pixel) {
+    void ClientApp::fillPixel(const XCB::Region & dst, uint32_t pixel) {
         const std::scoped_lock guard{ renderLock };
 
         if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height) {
@@ -1332,7 +1332,7 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::updateRawPixels(const XCB::Region & wrt, const void* data,
+    void ClientApp::updateRawPixels(const XCB::Region & wrt, const void* data,
                                   uint32_t pitch, const PixelFormat & pf) {
         uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
@@ -1357,7 +1357,7 @@ namespace LTSM {
         updateRawPixels3(wrt, sfframe.get());
     }
 
-    void Vnc2SDL::updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
+    void ClientApp::updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
         // lock part
         const std::scoped_lock guard{ renderLock };
 
@@ -1375,7 +1375,7 @@ namespace LTSM {
         updateRawPixels3(wrt, sfframe.get());
     }
 
-    void Vnc2SDL::updateRawPixels3(const XCB::Region & wrt, SDL_Surface* sfframe) {
+    void ClientApp::updateRawPixels3(const XCB::Region & wrt, SDL_Surface* sfframe) {
         if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height) {
             sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
                                               clientPf.bitsPerPixel(),
@@ -1397,24 +1397,24 @@ namespace LTSM {
         }
     }
 
-    const PixelFormat & Vnc2SDL::clientFormat(void) const {
+    const PixelFormat & ClientApp::clientFormat(void) const {
         return clientPf;
     }
 
-    XCB::Size Vnc2SDL::clientSize(void) const {
+    XCB::Size ClientApp::clientSize(void) const {
         return windowSize;
     }
 
-    int Vnc2SDL::clientPrefferedVideoEncoding(void) const {
+    int ClientApp::clientPrefferedVideoEncoding(void) const {
         return videoEncoding;
     }
 
-    int Vnc2SDL::clientPrefferedAudioEncoding(void) const {
+    int ClientApp::clientPrefferedAudioEncoding(void) const {
         return audioEncoding;
     }
 
     /*
-        void Vnc2SDL::clientRecvCutTextEvent(std::vector<uint8_t> && buf)
+        void ClientApp::clientRecvCutTextEvent(std::vector<uint8_t> && buf)
         {
             bool zeroInserted = false;
 
@@ -1440,7 +1440,7 @@ namespace LTSM {
             }
         }
     */
-    void Vnc2SDL::clientRecvRichCursorEvent(const XCB::Region & reg,
+    void ClientApp::clientRecvRichCursorEvent(const XCB::Region & reg,
                                             std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {
         uint32_t key = Tools::crc32b(pixels);
         auto it = cursors.find(key);
@@ -1491,12 +1491,12 @@ namespace LTSM {
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void Vnc2SDL::clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) {
+    void ClientApp::clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) {
         auto it = cursors.find(cursorId);
 
         if(cursors.end() == it) {
             if(pixels.empty()) {
-                Application::error("{}: cursor not found, id: {:#010x}", NS_FuncNameV, cursorId);
+                Application::warning("{}: cursor not found, id: {:#010x}", NS_FuncNameV, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }
@@ -1554,7 +1554,7 @@ namespace LTSM {
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void Vnc2SDL::clientRecvLtsmHandshakeEvent(int flags) {
+    void ClientApp::clientRecvLtsmHandshakeEvent(int flags) {
         std::vector<std::string> names;
         int group = 0;
 
@@ -1571,14 +1571,14 @@ namespace LTSM {
     }
 
 #ifdef __UNIX__
-    void Vnc2SDL::xcbXkbGroupChangedEvent(int group) {
+    void ClientApp::xcbXkbGroupChangedEvent(int group) {
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb) {
             sendSystemKeyboardChange(extXkb->getNames(), group);
         }
     }
 #endif
 
-    json_plain Vnc2SDL::clientEnvironments(void) const {
+    json_plain ClientApp::clientEnvironments(void) const {
         JsonObjectStream jo;
 #ifdef __UNIX__
         // locale
@@ -1606,7 +1606,7 @@ namespace LTSM {
         return jo.flush();
     }
 
-    json_plain Vnc2SDL::clientOptions(void) const {
+    json_plain ClientApp::clientOptions(void) const {
         JsonArrayStream opts;
         opts.push(videoEncodingOptions);
         opts.push(audioEncodingOptions);
@@ -1625,7 +1625,7 @@ namespace LTSM {
         jo.push("hostname", "localhost");
         jo.push("ipaddr", "127.0.0.1");
         jo.push("platform", SDL_GetPlatform());
-        jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
+        jo.push("ltsm:client", LTSM_CLIENT_VERSION);
         jo.push("x11:nodamage", xcbNoDamage);
         jo.push("x11:dpi", xcbDpi);
         jo.push("enc:opts", opts.flush());
@@ -1686,7 +1686,7 @@ namespace LTSM {
         return jo.flush();
     }
 
-    void Vnc2SDL::systemLoginSuccess(const JsonObject & jo) {
+    void ClientApp::systemLoginSuccess(const JsonObject & jo) {
         if(jo.getBoolean("action", false)) {
             if(! primarySize.isEmpty() && primarySize != windowSize) {
                 sendSetDesktopSize(primarySize);
@@ -1698,13 +1698,13 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::clientRecvBellEvent(void) {
+    void ClientApp::clientRecvBellEvent(void) {
 #ifdef __UNIX__
         bell(75);
 #endif
     }
 
-    bool Vnc2SDL::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
+    bool ClientApp::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
                                      const Channel::ConnectorMode & mode) const {
         if(type == Channel::ConnectorType::Fuse) {
             if(std::ranges::none_of(shareFolders, [&](auto & val) { return val == content; })) {
@@ -1716,7 +1716,7 @@ namespace LTSM {
         return true;
     }
 
-    void Vnc2SDL::windowResizedEvent(int width, int height) {
+    void ClientApp::windowResizedEvent(int width, int height) {
         auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
         // skip: starting window resized
         if(time.count() > 3) {
@@ -1793,9 +1793,9 @@ int main(int argc, const char** argv)
     while(programRestarting) {
         try {
 #ifdef __WIN32__
-            Vnc2SDL app(argc, (const char**) argv);
+            ClientApp app(argc, (const char**) argv);
 #else
-            Vnc2SDL app(argc, argv);
+            ClientApp app(argc, argv);
 #endif
 
             if(! app.isAlwaysRunning()) {

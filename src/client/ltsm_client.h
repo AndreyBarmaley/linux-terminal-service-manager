@@ -20,8 +20,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  **************************************************************************/
 
-#ifndef _LTSM_CLIENT_
-#define _LTSM_CLIENT_
+#ifndef _LTSM_CLIENT_APP_
+#define _LTSM_CLIENT_APP_
 
 #include <chrono>
 #include <string>
@@ -42,7 +42,7 @@
 #include "librfb_winclient.h"
 #endif
 
-#define LTSM_VNC2SDL_VERSION 20250816
+#define LTSM_CLIENT_VERSION 20260312
 
 namespace LTSM {
     struct ColorCursor {
@@ -51,7 +51,7 @@ namespace LTSM {
         std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
     };
 
-    class Vnc2SDL : public Application,
+    class ClientApp : public Application,
 #ifdef LTSM_WITH_X11
         public RFB::X11Client
 #else
@@ -146,7 +146,7 @@ namespace LTSM {
         void loadConfig(const std::filesystem::path &);
 
       public:
-        Vnc2SDL(int argc, const char** argv);
+        ClientApp(int argc, const char** argv);
 
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                                 const std::vector<RFB::ScreenInfo> &) override;
@@ -180,4 +180,4 @@ namespace LTSM {
     };
 }
 
-#endif // _LTSM_VNC2SDL_
+#endif // _LTSM_CLIENT_APP_
