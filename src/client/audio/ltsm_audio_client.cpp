@@ -296,9 +296,11 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
         silent.reset();
     }
 
+    std::span<const uint8_t> span{sb.data(), len};
+
     if(! decoder) {
-        player->streamWrite({sb.data(), len});
-    } else if(auto buf = decoder->decode(sb.data(), len); !buf.empty()) {
+        player->streamWrite(span);
+    } else if(auto buf = decoder->decode(span); !buf.empty()) {
         Application::debug(DebugType::Audio, "{}: decode size: {}", NS_FuncNameV, buf.size());
 
         if(auto env = getenv("LTSM_AUDIO_SAVE_FILE")) {
