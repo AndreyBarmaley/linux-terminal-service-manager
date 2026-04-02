@@ -23,6 +23,7 @@
 #ifndef _LTSM_ZLIB_
 #define _LTSM_ZLIB_
 
+#include <span>
 #include <vector>
 #include <iterator>
 
@@ -31,16 +32,14 @@
 #include "ltsm_application.h"
 
 namespace LTSM::Tools {
-    template<typename Cont>
-    std::vector<uint8_t> zlibCompress(const Cont & cont) {
-        auto data = std::data(cont);
-        auto size = std::size(cont);
+    std::vector<uint8_t> zlibCompress(std::span<const uint8_t> cont) {
+        const auto & data = reinterpret_cast<const Bytef*>(cont.data());
+        const auto & size = cont.size();
 
         if(data && size) {
             uLong dstsz = ::compressBound(size);
             std::vector<uint8_t> res(dstsz);
-            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz,
-                                 reinterpret_cast<const Bytef*>(data), size);
+            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz, data, size);
             if(ret == Z_OK) {
                 res.resize(dstsz);
                 return res;

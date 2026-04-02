@@ -1486,7 +1486,7 @@ namespace LTSM::Manager {
             }
             try {
                 auto json = jos.flush();
-                auto base64 = Tools::base64Encode(Tools::zlibCompress(json));
+                auto base64 = Tools::base64Encode(Tools::zlibCompress({(const uint8_t*) json.data(), json.size()}));
                 sess->environments.emplace("LTSM_CLIENT_OPTS", std::move(base64));
             } catch(const std::exception & err) {
                 Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());

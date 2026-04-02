@@ -1241,16 +1241,16 @@ namespace LTSM {
         sendIntBE16(reg.height);
         sendIntBE32(ENCODING_LTSM_CURSOR);
         // cursor id
-        auto rawPtr = fb.rawPtr();
-        auto cursorId = Tools::crc32b(rawPtr.data(), rawPtr.size());
+        auto fbSpan = fb.span();
+        auto cursorId = Tools::crc32b(fbSpan);
         sendIntBE32(cursorId);
 
         // cursor rgba data
         if(std::ranges::none_of(cursorSended, [&cursorId](auto & curid) { return curid == cursorId; })) {
             try {
-                auto zlib = Tools::zlibCompress(rawPtr);
+                auto zlib = Tools::zlibCompress(fbSpan);
                 // raw size
-                sendIntBE32(rawPtr.size());
+                sendIntBE32(fbSpan.size());
                 // compress size
                 sendIntBE32(zlib.size());
                 sendData(zlib);

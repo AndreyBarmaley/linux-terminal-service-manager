@@ -33,6 +33,7 @@
 
 #include <bit>
 #include <list>
+#include <span>
 #include <chrono>
 #include <vector>
 #include <string>
@@ -248,13 +249,8 @@ namespace LTSM {
             return ~res;
         }
 
-        template<typename Cont>
-        inline uint32_t crc32b(const Cont & cont) {
+        inline uint32_t crc32b(std::span<const uint8_t> cont) {
             return rangeCrc32b(cont.begin(), cont.end());
-        }
-
-        inline uint32_t crc32b(const uint8_t* ptr, size_t len) {
-            return rangeCrc32b(ptr, ptr + len);
         }
 
         std::wstring string2wstring(const std::string &);

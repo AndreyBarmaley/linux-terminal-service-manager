@@ -241,7 +241,7 @@ namespace LTSM {
         size_t pitchSize(void) const;
         uint8_t* pitchData(size_t row) const;
 
-        RawPtr<uint8_t> rawPtr(void)const;
+        std::span<const uint8_t> span(void) const;
 
         const XCB::Region & region(void) const {
             return fbreg;

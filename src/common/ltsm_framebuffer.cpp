@@ -793,8 +793,8 @@ namespace LTSM {
         return owner ? fbptr->pitch : bytePerPixel() * fbreg.width;
     }
 
-    RawPtr<uint8_t> FrameBuffer::rawPtr(void) const {
-        return RawPtr<uint8_t>(pitchData(0), pitchSize() * height());
+    std::span<const uint8_t> FrameBuffer::span(void) const {
+        return {pitchData(0), pitchSize() * height()};
     }
 } // LTSM
 

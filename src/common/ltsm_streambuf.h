@@ -51,28 +51,6 @@ namespace LTSM {
         bool operator!= (const ByteArray &) const;
     };
 
-    /// @brief: raw array wrapper
-    template<typename T>
-    struct RawPtr : ByteArray, std::pair<T*, size_t> {
-        RawPtr(T* ptr, size_t len) : std::pair<T*, size_t>(ptr, len) {}
-
-        template<size_t N>
-        explicit RawPtr(T(&arr)[N]) : std::pair<T*, size_t>(arr, N) {}
-
-
-        size_t size(void) const override {
-            return std::pair<T*, size_t>::second * sizeof(T);
-        }
-
-        uint8_t* data(void) override {
-            return (uint8_t*) std::pair<T*, size_t>::first;
-        }
-
-        const uint8_t* data(void) const override {
-            return (const uint8_t*) std::pair<T*, size_t>::first;
-        }
-    };
-
     /// @brief: extend binary vector
     struct BinaryBuf : ByteArray, std::vector<uint8_t> {
         BinaryBuf() = default;
@@ -222,13 +200,6 @@ namespace LTSM {
         /// @brief: read all data from stream to vector
         const MemoryStream & operator>>(std::vector<uint8_t> &) const;
 
-        /// @brief: fixed data to array
-        template<typename T>
-        const MemoryStream & operator>>(const RawPtr<T> & v) const {
-            readTo(v.first, v.size());
-            return *this;
-        }
-
         template<size_t N>
         const MemoryStream & operator>>(uint8_t (&arr)[N]) const {
             readTo(arr, N);
@@ -284,13 +255,6 @@ namespace LTSM {
         MemoryStream & operator<<(const uint64_t &);
         MemoryStream & operator<<(std::string_view);
         MemoryStream & operator<<(const std::vector<uint8_t> &);
-
-        /// @brief: fixed data from array
-        template<typename T>
-        MemoryStream & operator<<(const RawPtr<T> & v) {
-            putRaw(v.data(), v.size());
-            return *this;
-        }
 
         template<size_t N>
         MemoryStream & operator<<(const uint8_t (&arr)[N]) {
