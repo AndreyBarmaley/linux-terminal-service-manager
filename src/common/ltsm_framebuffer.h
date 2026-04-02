@@ -24,8 +24,8 @@
 #ifndef _LTSM_FRAMEBUFFER_
 #define _LTSM_FRAMEBUFFER_
 
+#include <span>
 #include <list>
-#include <tuple>
 #include <memory>
 
 #include "ltsm_global.h"
