@@ -23,6 +23,7 @@
 #ifndef _LTSM_XCB_WRAPPER_
 #define _LTSM_XCB_WRAPPER_
 
+#include <span>
 #include <list>
 #include <mutex>
 #include <memory>
@@ -83,7 +84,7 @@ namespace LTSM {
 
         template<typename ReplyType>
         struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)> {
-            explicit GenericReply(ReplyType* ptr) : std::unique_ptr<ReplyType, void(*)(void*)>(ptr, std::free) {}
+            explicit GenericReply(ReplyType* ptr = nullptr) : std::unique_ptr<ReplyType, void(*)(void*)>(ptr, std::free) {}
         };
 
         struct PropertyReply : GenericReply<xcb_get_property_reply_t> {
@@ -96,7 +97,6 @@ namespace LTSM {
             }
 
             PropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
-
             PropertyReply(GenericReply<xcb_get_property_reply_t> && ptr) noexcept : GenericReply<xcb_get_property_reply_t>(std::move(ptr)) {}
         };
 
@@ -533,6 +533,17 @@ namespace LTSM {
 
         using RandrOutputInfoPtr = std::unique_ptr<RandrOutputInfo>;
 
+        struct RandrScreenResources : GenericReply<xcb_randr_get_screen_resources_reply_t> {
+            RandrScreenResources() = default;
+            RandrScreenResources(GenericReply<xcb_randr_get_screen_resources_reply_t> && ptr) noexcept
+                : GenericReply<xcb_randr_get_screen_resources_reply_t>(std::move(ptr)) {}
+
+            std::span<const xcb_randr_output_t> getOutputs(void) const;
+            std::span<const xcb_randr_crtc_t> getCrtcs(void) const;
+            std::span<const xcb_randr_mode_info_t> getModesInfo(void) const;
+            bool findMode(const Size&, xcb_randr_mode_t* = nullptr) const;
+        };
+
         /// ModuleRandr
         struct ModuleRandr : ModuleExtension {
             xcb_window_t screen;
@@ -540,25 +551,24 @@ namespace LTSM {
             explicit ModuleRandr(const ConnectionShared &, xcb_window_t);
             ~ModuleRandr();
 
-            std::vector<xcb_randr_output_t> getOutputs(void) const;
-            std::vector<xcb_randr_crtc_t> getCrtcs(void) const;
-            std::vector<xcb_randr_output_t> getCrtcOutputs(const xcb_randr_crtc_t &) const;
-            std::vector<xcb_randr_mode_info_t> getModesInfo(void) const;
-            std::vector<xcb_randr_screen_size_t> getScreenSizes(void) const;
-            std::list<RandrOutputInfoPtr> getOutputsInfo(bool connected = false) const;
+            RandrScreenResources getScreenResources(void) const;
+            xcb_randr_mode_t cvtCreateMode(const Size &, int vertRef = 60) const;
 
             std::unique_ptr<RandrCrtcInfo> getCrtcInfo(const xcb_randr_crtc_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
             std::unique_ptr<RandrOutputInfo> getOutputInfo(const xcb_randr_output_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
             std::unique_ptr<RandrScreenInfo> getScreenInfo(void) const;
 
             bool setScreenSize(const Size &, uint16_t dpi = 96) const;
-
-            xcb_randr_mode_t cvtCreateMode(const Size &, int vertRef = 60) const;
             bool destroyMode(const xcb_randr_mode_t &) const;
             bool addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
             bool deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
-            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &, const xcb_timestamp_t &, uint16_t* = nullptr) const;
-            bool crtcDisconnect(const xcb_randr_crtc_t &) const;
+            bool crtcDisconnect(const xcb_randr_crtc_t &, const xcb_timestamp_t & = XCB_CURRENT_TIME) const;
+
+            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, const xcb_randr_mode_t &, const Point &,
+                std::span<const xcb_randr_output_t> outputs, const xcb_timestamp_t &, uint16_t* sequence = nullptr) const;
+
+            bool setDisplaySize(const XCB::Region &, const xcb_randr_crtc_t &,
+                const xcb_randr_output_t &, const RandrScreenResources &, uint16_t* sequence = nullptr) const;
         };
 
         struct ModuleShm : ModuleExtension {
