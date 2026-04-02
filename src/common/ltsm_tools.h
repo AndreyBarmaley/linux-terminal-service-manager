@@ -178,10 +178,10 @@ namespace LTSM {
             const auto it2 = std::find(name.begin(), name.end(), '(');
             const auto it1 = std::find(std::make_reverse_iterator(std::prev(it2)), std::make_reverse_iterator(name.begin()), 0x20);
             const auto it0 = it1.base();
-            if(std::string_view{it0, it0 + 6} == "LTSM::") {
-                return std::string_view{it0 + 6, it2};
-            }
-            return std::string_view{it0, it2};
+            std::string_view ltsm{"LTSM::"};
+            std::string_view str{it0, it2};
+            return std::string_view{
+                str.starts_with(ltsm) ? it0 + ltsm.size() : it0, it2};
         }
 
         std::string randomHexString(size_t len);
