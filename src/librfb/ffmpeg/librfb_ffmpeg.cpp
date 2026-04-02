@@ -171,7 +171,7 @@ namespace LTSM {
     */
 
     void RFB::EncodingFFmpeg::setFps(uint32_t val) {
-        if(val) {
+        if(val != fps) {
             std::scoped_lock guard{ lockUpdate };
             fps = val;
             Application::info("{}: set FPS: {}", NS_FuncNameV, fps);
