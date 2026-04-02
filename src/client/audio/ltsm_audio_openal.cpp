@@ -229,7 +229,7 @@ namespace LTSM {
         return sourceState == AL_PLAYING;
     }
 
-    bool OpenAL::Playback::streamWrite(const uint8_t* buf, size_t len) const {
+    bool OpenAL::Playback::streamWrite(std::span<const uint8_t> buf) const {
         ALuint bufId = findFreeBufferId();
 
         if(0 == bufId) {
@@ -245,7 +245,7 @@ namespace LTSM {
             }
         }
 
-        alBufferData(bufId, fmtFormat, buf, len, fmtFrequency);
+        alBufferData(bufId, fmtFormat, buf.data(), buf.size(), fmtFrequency);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "alBufferData", alcErrorName(err));
@@ -260,11 +260,11 @@ namespace LTSM {
         }
 
         if(playAfterBytes) {
-            if(playAfterBytes <= len) {
+            if(playAfterBytes <= buf.size()) {
                 playAfterBytes = 0;
                 playStart();
             } else {
-                playAfterBytes -= len;
+                playAfterBytes -= buf.size();
             }
         }
 

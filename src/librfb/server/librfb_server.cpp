@@ -1311,9 +1311,9 @@ namespace LTSM {
         return clientVideoSupported;
     }
 
-    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, const uint8_t* buf, size_t len) {
+    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::span<const uint8_t> buf) {
         if(clientLtsmSupported) {
-            sendLtsmProto(*this, sendLock, channel, buf, len);
+            sendLtsmProto(*this, sendLock, channel, buf);
         }
     }
 

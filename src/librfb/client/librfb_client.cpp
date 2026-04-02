@@ -1020,8 +1020,8 @@ namespace LTSM {
         }
     }
 
-    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, const uint8_t* buf, size_t len) {
-        sendLtsmProto(*this, sendLock, channel, buf, len);
+    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::span<const uint8_t> buf) {
+        sendLtsmProto(*this, sendLock, channel, buf);
     }
 
     void RFB::ClientDecoder::recvChannelSystem(const std::vector<uint8_t> & buf) {

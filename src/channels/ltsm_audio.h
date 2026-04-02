@@ -26,6 +26,7 @@
 
 #define LTSM_SESSION_AUDIO_VERSION 20250905
 
+#include <span>
 #include <cstdint>
 #include <stdexcept>
 
@@ -65,7 +66,7 @@ namespace LTSM {
         virtual bool playStart(void) const { return false; }
         virtual bool playStop(void) const { return false; }
         virtual bool isPlaying(void) const { return false; }
-        virtual bool streamWrite(const uint8_t*, size_t) const = 0;
+        virtual bool streamWrite(std::span<const uint8_t>) const = 0;
     };
 
     struct audio_error : public std::runtime_error {

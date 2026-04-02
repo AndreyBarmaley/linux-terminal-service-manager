@@ -186,7 +186,7 @@ namespace LTSM {
             void sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
             void sendEncodingLtsmData(const uint8_t*, size_t);
-            void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override final;
+            void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) override final;
 
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);

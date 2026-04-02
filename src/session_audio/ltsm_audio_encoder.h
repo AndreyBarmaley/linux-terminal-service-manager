@@ -24,6 +24,7 @@
 #ifndef _LTSM_AUDIO_ENCODER_
 #define _LTSM_AUDIO_ENCODER_
 
+#include <span>
 #include <vector>
 #include <memory>
 
@@ -38,7 +39,7 @@ namespace LTSM {
             BaseEncoder() = default;
             virtual ~BaseEncoder() = default;
 
-            virtual void push(const uint8_t* ptr, size_t len) = 0;
+            virtual void push(std::span<const uint8_t>) = 0;
             virtual std::vector<uint8_t> encode(void) = 0;
         };
 
@@ -59,7 +60,7 @@ namespace LTSM {
           public:
             Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample);
 
-            void push(const uint8_t* ptr, size_t len) override;
+            void push(std::span<const uint8_t>) override;
             std::vector<uint8_t> encode(void) override;
         };
 

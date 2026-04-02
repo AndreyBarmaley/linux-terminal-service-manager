@@ -268,7 +268,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     if(silent) {
         if(std::chrono::steady_clock::now() - *silent < 3s) {
             std::vector<uint8_t> buf(len, 0);
-            player->streamWrite(buf.data(), buf.size());
+            player->streamWrite(buf);
         } else if(player->isPlaying()) {
             Application::info("{}: play stop", NS_FuncNameV);
             player->playStop();
@@ -276,7 +276,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     } else {
         silent = std::make_unique<TimePoint>(std::chrono::steady_clock::now());
         std::vector<uint8_t> buf(len, 0);
-        player->streamWrite(buf.data(), buf.size());
+        player->streamWrite(buf);
     }
 }
 
@@ -297,7 +297,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
     }
 
     if(! decoder) {
-        player->streamWrite(sb.data(), len);
+        player->streamWrite({sb.data(), len});
     } else if(auto buf = decoder->decode(sb.data(), len); !buf.empty()) {
         Application::debug(DebugType::Audio, "{}: decode size: {}", NS_FuncNameV, buf.size());
 
@@ -305,7 +305,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
             Tools::binaryToFile(buf.data(), buf.size(), env, true);
         }
 
-        player->streamWrite(buf.data(), buf.size());
+        player->streamWrite(buf);
     }
 
     sb.skip(len);

@@ -53,11 +53,11 @@ namespace LTSM {
         */
     }
 
-    void AudioEncoder::Opus::push(const uint8_t* ptr, size_t len) {
-        Application::debug(DebugType::Audio, "{}: data size: {}", NS_FuncNameV, len);
+    void AudioEncoder::Opus::push(std::span<const uint8_t> span) {
+        Application::debug(DebugType::Audio, "{}: data size: {}", NS_FuncNameV, span.size());
 
-        if(len) {
-            last.insert(last.end(), ptr, ptr + len);
+        if(! span.empty()) {
+            last.insert(last.end(), span.begin(), span.end());
         }
     }
 

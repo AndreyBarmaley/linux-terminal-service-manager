@@ -24,6 +24,7 @@
 #ifndef _LTSM_AUDIO_SESSION_
 #define _LTSM_AUDIO_SESSION_
 
+#include <span>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -79,8 +80,8 @@ namespace LTSM {
         boost::asio::awaitable<void> timerWaitEngine(void);
 
         bool engineInit(void);
-        void dataReadyNotify(const uint8_t* ptr, size_t len);
-        std::list<AudioPacketPtr> dataEncode(const uint8_t* ptr, size_t len);
+        void dataReadyNotify(std::span<const uint8_t>);
+        std::list<AudioPacketPtr> dataEncode(std::span<const uint8_t>);
 
         bool socketPath(std::string_view path) const {
             return socket().local_endpoint().path() == path;

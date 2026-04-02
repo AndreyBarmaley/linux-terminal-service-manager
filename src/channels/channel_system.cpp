@@ -309,14 +309,6 @@ size_t LTSM::ChannelClient::countFreeChannels(void) const {
     return 0xFF - used;
 }
 
-void LTSM::ChannelClient::sendLtsmChannelData(uint8_t channel, std::string_view str) {
-    sendLtsmChannelData(channel, reinterpret_cast<const uint8_t*>(str.data()), str.size());
-}
-
-void LTSM::ChannelClient::sendLtsmChannelData(uint8_t channel, const std::vector<uint8_t> & vec) {
-    sendLtsmChannelData(channel, vec.data(), vec.size());
-}
-
 void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> && buf) {
     if(channel == static_cast<uint8_t>(ChannelType::Reserved)) {
         Application::error("{}: reserved channel blocked", NS_FuncNameV);
@@ -995,11 +987,17 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
 }
 
 void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLock,
-                                        uint8_t channel, const uint8_t* buf, size_t len) {
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, len);
+                                        uint8_t channel, std::span<const uint8_t> buf) {
+    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
+
+    if(buf.empty()) {
+        Application::warning("{}: empty data", NS_FuncNameV);
+        return;
+    }
+
+    assert(0xFFFF >= buf.size());
 
     const std::scoped_lock guard{sendLock};
-
     ns.sendInt8(RFB::PROTOCOL_LTSM);
 
     // version
@@ -1007,26 +1005,16 @@ void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLoc
     //channel
     ns.sendInt8(channel);
 
-    if(len == 0 || ! buf) {
-        Application::error("{}: empty data", NS_FuncNameV);
-        throw std::invalid_argument(NS_FuncNameS);
-    }
-
-    if(0xFFFF < len) {
-        Application::error("{}: data size large", NS_FuncNameV);
-        throw std::invalid_argument(NS_FuncNameS);
-    }
-
     // data
-    ns.sendIntBE16(len);
+    ns.sendIntBE16(buf.size());
 
     if(channelDebug == channel) {
-        auto str = Tools::rangeHexString(buf, buf + len, 2);
+        auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           NS_FuncNameV, channel, len, str);
+                           NS_FuncNameV, channel, buf.size(), str);
     }
 
-    ns.sendRaw(buf, len);
+    ns.sendRaw(buf.data(), buf.size());
     ns.sendFlush();
 }
 
@@ -1480,7 +1468,7 @@ void LTSM::Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
             continue;
         } else {
             auto & buf = st->getBuf();
-            owner->sendLtsmChannelData(st->cid(), buf.data(), buf.size());
+            owner->sendLtsmChannelData(st->cid(), buf);
         }
     }
 
