@@ -366,7 +366,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        sendCutTextEvent(buf.data(), buf.size(), true);
+        sendCutTextEvent(buf, true);
     }
 
     uint16_t RFB::X11Server::extClipboardLocalTypes(void) const {
@@ -431,13 +431,13 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, const uint8_t* buf, uint32_t len) const {
+    void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const {
         if(auto ptr = const_cast<RFB::X11Server*>(this)) {
             if(extClipboardRemoteCaps()) {
                 const std::scoped_lock guard{ serverLock };
-                ptr->clientClipboard.assign(buf, buf + len);
+                ptr->clientClipboard.assign(buf.begin(), buf.end());
             } else {
-                ptr->sendCutTextEvent(buf, len, false);
+                ptr->sendCutTextEvent(buf, false);
             }
         }
     }

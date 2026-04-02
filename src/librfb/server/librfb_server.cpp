@@ -925,7 +925,7 @@ namespace LTSM {
         sendFlush();
     }
 
-    void RFB::ServerEncoder::sendCutTextEvent(const uint8_t* buf, uint32_t len, bool ext) {
+    void RFB::ServerEncoder::sendCutTextEvent(std::span<const uint8_t> buf, bool ext) {
         std::scoped_lock guard{ sendLock };
 
         // RFB: 6.5.4
@@ -943,13 +943,13 @@ namespace LTSM {
 
             // A negative value of length indicates that the extended message format
             // is used and abs(length) is the total number of following bytes.
-            sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - len + 1);
+            sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - buf.size() + 1);
         } else {
-            Application::debug(DebugType::Rfb, "{}: length text: {}", NS_FuncNameV, len);
-            sendIntBE32(len);
+            Application::debug(DebugType::Rfb, "{}: length text: {}", NS_FuncNameV, buf.size());
+            sendIntBE32(buf.size());
         }
 
-        sendRaw(buf, len);
+        sendRaw(buf.data(), buf.size());
         sendFlush();
     }
 
@@ -1284,7 +1284,7 @@ namespace LTSM {
         sendFlush();
     }
 
-    void RFB::ServerEncoder::sendEncodingLtsmData(const uint8_t* ptr, size_t len) {
+    void RFB::ServerEncoder::sendEncodingLtsmData(std::span<const uint8_t> buf) {
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::SERVER_FB_UPDATE);
         // padding
@@ -1298,8 +1298,8 @@ namespace LTSM {
         sendIntBE32(ENCODING_LTSM);
         // raw data
         sendIntBE32(1);
-        sendIntBE32(len);
-        sendRaw(ptr, len);
+        sendIntBE32(buf.size());
+        sendRaw(buf.data(), buf.size());
         sendFlush();
     }
 

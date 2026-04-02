@@ -674,7 +674,7 @@ namespace LTSM {
         sendFlush();
     }
 
-    void RFB::ClientDecoder::sendCutTextEvent(const uint8_t* buf, uint32_t len, bool ext) {
+    void RFB::ClientDecoder::sendCutTextEvent(std::span<const uint8_t> buf, bool ext) {
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_CUT_TEXT);
         // padding
@@ -689,13 +689,13 @@ namespace LTSM {
 
             // A negative value of length indicates that the extended message format
             // is used and abs(length) is the total number of following bytes.
-            sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - len + 1);
+            sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - buf.size() + 1);
         } else {
-            Application::debug(DebugType::Rfb, "{}: length text: {}", NS_FuncNameV, len);
-            sendIntBE32(len);
+            Application::debug(DebugType::Rfb, "{}: length text: {}", NS_FuncNameV, buf.size());
+            sendIntBE32(buf.size());
         }
 
-        sendRaw(buf, len);
+        sendRaw(buf.data(), buf.size());
         sendFlush();
     }
 

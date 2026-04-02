@@ -124,7 +124,7 @@ namespace LTSM {
 
             void sendKeyEvent(bool pressed, uint32_t keysym);
             void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
-            void sendCutTextEvent(const uint8_t*, uint32_t, bool ext);
+            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
             void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) override;
 
             static std::list<int> supportedEncodings(bool extclip = false);

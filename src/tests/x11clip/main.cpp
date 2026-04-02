@@ -30,12 +30,12 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
     std::filesystem::path file;
 
   protected:
-    void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override {
+    void selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const override {
         auto name = getAtomName(atom);
-        Application::info("{}: atom: `{}', size: {}", NS_FuncNameV, name.data(), len);
+        Application::info("{}: atom: `{}', size: {}", NS_FuncNameV, name.data(), buf.size());
 
         if(! file.empty()) {
-            Tools::binaryToFile(ptr, len, file);
+            Tools::binaryToFile(buf.data(), buf.size(), file);
         }
     }
 

@@ -146,7 +146,7 @@ namespace LTSM {
             bool sendFrameBufferUpdate(const FrameBuffer &);
             void sendColourMap(int first);
             void sendBellEvent(void);
-            void sendCutTextEvent(const uint8_t* buf, uint32_t len, bool ext);
+            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
             void sendContinuousUpdates(bool enable);
             bool sendUpdateSafe(const XCB::Region &);
             void sendEncodingLtsmSupported(void);
@@ -185,7 +185,7 @@ namespace LTSM {
             void sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
             void sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
-            void sendEncodingLtsmData(const uint8_t*, size_t);
+            void sendEncodingLtsmData(std::span<const uint8_t>);
             void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) override final;
 
             void clientDisconnectedEvent(int display);

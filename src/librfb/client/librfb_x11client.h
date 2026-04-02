@@ -49,7 +49,7 @@ namespace LTSM {
             std::vector<uint8_t> selectionSourceData(xcb_atom_t, size_t offset, uint32_t length) const override;
 
             // selection recipient
-            void selectionReceiveData(xcb_atom_t, const uint8_t* ptr, uint32_t len) const override;
+            void selectionReceiveData(xcb_atom_t, std::span<const uint8_t>) const override;
             void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override;
             void selectionChangedEvent(void) const override;
 

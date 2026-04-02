@@ -470,7 +470,7 @@ namespace LTSM {
         /// SelectionRecipient interface
         class SelectionRecipient {
           public:
-            virtual void selectionReceiveData(xcb_atom_t, const uint8_t* ptr, uint32_t len) const = 0;
+            virtual void selectionReceiveData(xcb_atom_t, std::span<const uint8_t>) const = 0;
             virtual void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const = 0;
             virtual void selectionChangedEvent(void) const = 0;
 
