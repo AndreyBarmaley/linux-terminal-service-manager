@@ -810,8 +810,7 @@ namespace LTSM {
                                     if(auto ptr = SDL_GetClipboardText())
                                     {
                                         const std::scoped_lock guard{ this->clipboardLock };
-                                        auto clipboardBufSdl = RawPtr<uint8_t>(reinterpret_cast<uint8_t*>(ptr),
-                                                                               SDL_strlen(ptr));
+                                        auto clipboardBufSdl = std::string_view{ ptr };
 
                                         if(clipboardBufRemote != clipboardBufSdl &&
                                                 clipboardBufLocal != clipboardBufSdl)

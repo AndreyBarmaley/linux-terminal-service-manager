@@ -177,7 +177,7 @@ namespace PcscLite {
 namespace LTSM {
     /// PcscRemote
     uint32_t PcscRemote::makeContext64(uint64_t remote) {
-        uint32_t context = Tools::crc32b((const uint8_t*) & remote, sizeof(remote));
+        uint32_t context = Tools::crc32b({(const uint8_t*) & remote, sizeof(remote)});
         context &= 0x7FFFFFFF;
         map_context_.emplace(context, remote);
         return context;

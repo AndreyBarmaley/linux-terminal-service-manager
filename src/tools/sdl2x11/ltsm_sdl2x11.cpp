@@ -69,8 +69,8 @@ namespace LTSM {
         void xcbXkbGroupChangedEvent(int group) override {
         }
 
-        void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override {
-            SDL_SetClipboardText(std::string(ptr, ptr + len).c_str());
+        void selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const override {
+            SDL_SetClipboardText(std::string(buf.begin(), buf.end()).c_str());
         }
 
         void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override {

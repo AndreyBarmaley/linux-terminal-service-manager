@@ -42,7 +42,7 @@ namespace LTSM {
 
     void RFB::X11Client::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        sendCutTextEvent(buf.data(), buf.size(), true);
+        sendCutTextEvent(buf, true);
     }
 
     uint16_t RFB::X11Client::extClipboardLocalTypes(void) const {
@@ -113,15 +113,15 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, const uint8_t* buf, uint32_t len) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, length: {}", NS_FuncNameV, atom, len);
+    void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const {
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, length: {}", NS_FuncNameV, atom, buf.size());
 
         if(auto ptr = const_cast<RFB::X11Client*>(this)) {
             if(extClipboardRemoteCaps()) {
                 const std::scoped_lock guard{ clientLock };
-                ptr->clientClipboard.assign(buf, buf + len);
+                ptr->clientClipboard.assign(buf.begin(), buf.end());
             } else {
-                ptr->sendCutTextEvent(buf, len, false);
+                ptr->sendCutTextEvent(buf, false);
             }
         }
     }

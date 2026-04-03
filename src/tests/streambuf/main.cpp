@@ -103,7 +103,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt16(sb.readInt16());
         }
 
-        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf.data(), bufsz));
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b({buf.data(), bufsz}));
         std::cout << "passed" << std::endl;
     }
 
@@ -118,7 +118,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt32(sb.readInt32());
         }
 
-        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf.data(), bufsz));
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b({buf.data(), bufsz}));
         std::cout << "passed" << std::endl;
     }
 
@@ -133,7 +133,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt64(sb.readInt64());
         }
 
-        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf.data(), bufsz));
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b({buf.data(), bufsz}));
         std::cout << "passed" << std::endl;
     }
 
@@ -157,39 +157,6 @@ void testStreamBufInterface(const BinaryBuf & buf) {
 
         assert(sb2.tell() == len);
         assert(sb2.last() == buf.size() - len);
-        std::cout << "passed" << std::endl;
-    }
-}
-
-void testRawPtrInterface(const BinaryBuf & buf) {
-    uint8_t tmp[100] = {};
-    RawPtr ptr(tmp);
-
-    size_t len = std::min(buf.size(), ptr.size());
-    std::copy_n(buf.data(), len, ptr.data());
-
-    std::cout << "== test RawPtr interface" << std::endl;
-
-    std::cout << "test ::data/size: ";
-    assert(Tools::crc32b(ptr.data(), len) == Tools::crc32b(buf.data(), len));
-    std::cout << "passed" << std::endl;
-
-    if(true) {
-        StreamBuf sb;
-        sb << ptr;
-
-        std::cout << "test ::stream <<: ";
-        assert(sb.last() == ptr.size());
-        assert(Tools::crc32b(ptr.data(), len) == Tools::crc32b(sb.rawbuf()));
-        std::cout << "passed" << std::endl;
-    }
-
-    if(true) {
-        StreamBufRef sb(buf.data(), buf.size());
-        sb >> ptr;
-
-        std::cout << "test ::stream >>: ";
-        assert(Tools::crc32b(ptr.data(), len) == Tools::crc32b(buf.data(), len));
         std::cout << "passed" << std::endl;
     }
 }
@@ -272,7 +239,6 @@ int main() {
     std::cout << "fill random, buf size: " << buf.size() << ", crc32b: " << Tools::hex(Tools::crc32b(buf)) << std::endl;
 
     testStreamBufInterface(buf);
-    testRawPtrInterface(buf);
     testByteOrderInterface(buf);
 
     return 0;

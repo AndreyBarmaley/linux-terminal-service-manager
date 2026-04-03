@@ -398,29 +398,6 @@ namespace LTSM {
         return nullptr;
     }
 
-    // RawDataRef
-    std::string PKCS11::RawDataRef::toString(void) const {
-        if(size()) {
-            auto beg = data();
-            auto end = std::ranges::find(beg, beg + size(), 0);
-            return std::string(beg, end);
-        }
-
-        return "";
-    }
-
-    std::string PKCS11::RawDataRef::toHexString(std::string_view sep, bool pref) const {
-        return Tools::rangeHexString(data(), data() + size(), 2, sep, pref);
-    }
-
-    bool PKCS11::RawDataRef::operator== (const RawDataRef & raw) const {
-        if(size() != raw.size()) {
-            return false;
-        }
-
-        return std::equal(data(), data() + size(), raw.data());
-    }
-
     // Date
     PKCS11::Date::Date(const RawDataRef & ref) {
         if(ref.data() && ref.size() == 8) {
@@ -852,7 +829,7 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "private key", certId.toHexString());
+            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "private key", toHexString(certId));
             return {};
         }
 
@@ -906,7 +883,7 @@ namespace LTSM {
 
             if(! publicHandle)
             {
-                Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "public key", certId.toHexString());
+                Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "public key", toHexString(certId));
                 return false;
             }
 
@@ -945,7 +922,7 @@ namespace LTSM {
         CK_OBJECT_HANDLE publicHandle = findPublicKey(certId);
 
         if(! publicHandle) {
-            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "public key", certId.toHexString());
+            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "public key", toHexString(certId));
             return {};
         }
 
@@ -1002,7 +979,7 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "private key", certId.toHexString());
+            Application::error("{}: {} not found, id: `{}'", NS_FuncNameV, "private key", toHexString(certId));
             return {};
         }
 

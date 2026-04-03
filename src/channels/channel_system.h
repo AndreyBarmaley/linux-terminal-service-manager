@@ -24,6 +24,7 @@
 #ifndef _CHANNEL_SYSTEM_
 #define _CHANNEL_SYSTEM_
 
+#include <span>
 #include <list>
 #include <mutex>
 #include <atomic>
@@ -569,7 +570,7 @@ namespace LTSM {
         bool channelPlannedCreate(uint8_t, const Channel::Planned &);
 
         void recvLtsmProto(const NetworkStream &);
-        void sendLtsmProto(NetworkStream &, std::mutex &, uint8_t channel, const uint8_t*, size_t);
+        void sendLtsmProto(NetworkStream &, std::mutex &, uint8_t channel, std::span<const uint8_t>);
 
         virtual void recvChannelSystem(const std::vector<uint8_t> &) = 0;
         void recvChannelData(uint8_t channel, std::vector<uint8_t> &&);
@@ -621,9 +622,6 @@ namespace LTSM {
         ChannelClient() = default;
         virtual ~ChannelClient() = default;
 
-        void sendLtsmChannelData(uint8_t channel, std::string_view);
-        void sendLtsmChannelData(uint8_t channel, const std::vector<uint8_t> &);
-
         void sendSystemCursorFailed(int cursorId);
         void sendSystemKeyboardEvent(bool pressed, int scancode, int keycode);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
@@ -636,7 +634,8 @@ namespace LTSM {
 
         void recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
 
-        virtual void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) = 0;
+        virtual void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) = 0;
+
         virtual bool serverSide(void) const {
             return false;
         }
@@ -647,6 +646,10 @@ namespace LTSM {
 
         virtual const char* pkcs11Library(void) const {
             return nullptr;
+        }
+
+        inline void sendLtsmChannelData(uint8_t channel, std::string_view str) {
+            sendLtsmChannelData(channel, std::span<const uint8_t>{(const uint8_t*) str.data(), str.size()});
         }
     };
 

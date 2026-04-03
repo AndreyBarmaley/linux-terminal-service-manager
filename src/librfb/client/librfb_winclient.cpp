@@ -38,7 +38,7 @@ namespace LTSM {
 
     void RFB::WinClient::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
         Application::debug(DebugType::WinCli, "{}, length: {}", NS_FuncNameV, buf.size());
-        sendCutTextEvent(buf.data(), buf.size(), true);
+        sendCutTextEvent(buf, true);
     }
 
     uint16_t RFB::WinClient::extClipboardLocalTypes(void) const {

@@ -61,7 +61,7 @@ namespace LTSM {
             Playback(const AudioFormat &, ALuint autoPlayAfterSec = 0);
             ~Playback();
 
-            bool streamWrite(const uint8_t*, size_t) const override;
+            bool streamWrite(std::span<const uint8_t>) const override;
             bool playStart(void) const override;
             bool playStop(void) const override;
             bool isPlaying(void) const override;

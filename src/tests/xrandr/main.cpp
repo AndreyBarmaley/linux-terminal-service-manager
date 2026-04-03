@@ -73,7 +73,8 @@ class X11Test : public XCB::RootDisplay {
     bool test_randr_info_modes(void) {
         auto randr = static_cast<const XCB::ModuleRandr*>(getExtension(XCB::Module::RANDR));
 
-	auto modes = randr->getModesInfo();
+	auto res = randr->getScreenResources();
+	auto modes = res.getModesInfo();
     	Application::info("modes: {}", modes.size());
 
         for(const auto & info : modes) {
@@ -85,7 +86,9 @@ class X11Test : public XCB::RootDisplay {
 
     bool test_randr_info_outputs(void) {
         auto randr = static_cast<const XCB::ModuleRandr*>(getExtension(XCB::Module::RANDR));
-        auto outputs = randr->getOutputs();
+
+	auto res = randr->getScreenResources();
+        auto outputs = res.getOutputs();
 
         Application::info("outputs: {}", outputs.size());
 
@@ -104,21 +107,9 @@ class X11Test : public XCB::RootDisplay {
             //}
 
 
-        for(const auto & size : randr->getScreenSizes()) {
-            Application::info("screen size: {}, {}", size.width, size.height);
-        }
-
-        return true;
-    }
-
-    bool test_randr_create_mode(const XCB::Size & nsz) {
-        auto randr = static_cast<const XCB::ModuleRandr*>(getExtension(XCB::Module::RANDR));
-        auto sizes = randr->getScreenSizes();
-
-        if(std::ranges::any_of(sizes, [&](auto & st) { return st.width == nsz.width && st.height == nsz.height; })) {
-            Application::warning("mode present, size: {}, {}", nsz.width, nsz.height);
-            return false;
-        }
+//        for(const auto & size : randr->getScreenSizes()) {
+//            Application::info("screen size: {}, {}", size.width, size.height);
+//        }
 
         return true;
     }
@@ -215,9 +206,10 @@ class TestApp : public Application {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto randr = static_cast<const XCB::ModuleRandr*>(xcb->getExtension(XCB::Module::RANDR));
 
-	auto crtcs = randr->getCrtcs();
-	auto outputs = randr->getOutputs();
-	auto modes = randr->getModesInfo();
+	auto res = randr->getScreenResources();
+	auto crtcs = res.getCrtcs();
+	auto outputs = res.getOutputs();
+	auto modes = res.getModesInfo();
 
         Application::info("{}: CRTCs: {}", NS_FuncNameV, crtcs.size());
         Application::info("{}: OUTPUTs: {}", NS_FuncNameV, outputs.size());

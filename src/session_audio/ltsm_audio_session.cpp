@@ -187,7 +187,7 @@ namespace LTSM {
         if(! pipew_) {
             try {
                 pipew_ = std::make_unique<PipeWire::AudioCapture>(def_format_pipew, bit_rate_, channels_,
-                         std::bind(& AudioClient::dataReadyNotify, this, std::placeholders::_1, std::placeholders::_2));
+                         std::bind(& AudioClient::dataReadyNotify, this, std::placeholders::_1));
                 pipew_->streamConnect(false /* pause */);
             } catch(const std::exception & err) {
             }
@@ -227,14 +227,14 @@ namespace LTSM {
         return false;
     }
 
-    void AudioClient::dataReadyNotify(const uint8_t* ptr, size_t len) {
+    void AudioClient::dataReadyNotify(std::span<const uint8_t> span) {
         // this thread - from audio engine callback
         if(! socket().is_open()) {
             return;
         }
 
-        auto packets = dataEncode(ptr, len);
-        Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", NS_FuncNameV, len, packets.size());
+        auto packets = dataEncode(span);
+        Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", NS_FuncNameV, span.size(), packets.size());
 
         asio::co_spawn(strand_, [this, list = std::move(packets)]() -> asio::awaitable<void> {
             boost::container::small_vector<boost::asio::const_buffer, 3> buffers;
@@ -259,26 +259,26 @@ namespace LTSM {
     }
 
     std::list<AudioPacketPtr>
-    AudioClient::dataEncode(const uint8_t* ptr, size_t len) {
+    AudioClient::dataEncode(std::span<const uint8_t> span) {
 
         std::list<AudioPacketPtr> res;
 
-        const bool silent = std::ranges::all_of(ptr, ptr + len, [](auto & val) {
+        const bool silent = std::ranges::all_of(span, [](auto & val) {
             return val == 0;
         });
 
         if(silent) {
-            res.emplace_back(std::make_unique<AudioPacket>(len));
+            res.emplace_back(std::make_unique<AudioPacket>(span.size()));
             return res;
         }
 
         if(! encoder_) {
-            res.emplace_back(std::make_unique<AudioPacket>(std::vector<uint8_t> {ptr, ptr + len}));
+            res.emplace_back(std::make_unique<AudioPacket>(std::vector<uint8_t>{span.begin(), span.end()}));
             return res;
         }
 
         // encode data
-        encoder_->push(ptr, len);
+        encoder_->push(span);
 
         try {
             while(true) {
@@ -393,7 +393,7 @@ namespace LTSM {
                 auto ec = err.code();
                 Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "remoteHandshake", "asio", ec.value(), ec.message());
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", NS_FuncNameV, "remoteHandshake", err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
 
         }, asio::detached);

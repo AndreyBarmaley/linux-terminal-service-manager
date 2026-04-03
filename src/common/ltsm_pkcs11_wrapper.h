@@ -25,6 +25,7 @@
 
 #include <p11-kit/pkcs11.h>
 
+#include <span>
 #include <list>
 #include <vector>
 #include <memory>
@@ -35,6 +36,7 @@
 #include <initializer_list>
 
 #include "ltsm_compat.h"
+#include "ltsm_tools.h"
 
 namespace LTSM {
     struct pkcs11_error : public std::runtime_error {
@@ -230,32 +232,12 @@ namespace LTSM {
         using ObjectHandle = CK_OBJECT_HANDLE;
         using ObjectList = std::vector<ObjectHandle>;
         using RawData = std::vector<uint8_t>;
-
-        struct RawDataRef : std::pair<const uint8_t*, size_t> {
-            RawDataRef() : std::pair<const uint8_t*, size_t>(nullptr, 0) {}
-
-            RawDataRef(const uint8_t* ptr, size_t len) : std::pair<const uint8_t*, size_t>(ptr, len) {}
-
-            RawDataRef(const std::vector<uint8_t> & v) : std::pair<const uint8_t*, size_t>(v.data(), v.size()) {}
-
-            inline const uint8_t* data(void) const {
-                return first;
-            }
-
-            inline size_t size(void) const {
-                return second;
-            }
-
-            std::string toString(void) const;
-            std::string toHexString(std::string_view sep = ",", bool pref = true) const;
-            RawData copy(void) const {
-                return RawData(first, first + second);
-            }
-
-            bool operator==(const RawDataRef &) const;
-        };
-
+        using RawDataRef = std::span<const uint8_t>;
         using ObjectIdRef = RawDataRef;
+
+        inline std::string toHexString(RawDataRef buf) {
+            return Tools::rangeHexString(buf.begin(), buf.end(), 2, ",", true);
+        }
 
         class Date {
             /*

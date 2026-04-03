@@ -20,25 +20,20 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <fcntl.h>
 #include <unistd.h>
 
-#include <thread>
-#include <chrono>
-#include <fstream>
-#include <cstring>
 #include <iostream>
-#include <algorithm>
 #include <exception>
-#include <filesystem>
 
+#include <boost/asio.hpp>
 #include "cups/backend.h"
 
 #include "ltsm_tools.h"
-#include "ltsm_sockets.h"
-#include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 /*
     CUPS_BACKEND_OK, CUPS_BACKEND_FAILED, CUPS_BACKEND_AUTH_REQUIRED, CUPS_BACKEND_HOLD,
@@ -46,64 +41,48 @@ using namespace std::chrono_literals;
 */
 
 namespace LTSM {
-    const size_t blocksz = 4096;
-
     auto backendType = "direct";
     auto backendName = "ltsm";
     auto backendDescription = "LTSM Virtual Print";
 
     class CupsBackend : public Application {
-        int jobId = 0;
-        int jobNumPage = 0;
+        int jobFd_ = STDIN_FILENO;
+        int jobId_ = 0;
+        int jobNumPage_ = 0;
+        int cupsStatus_ = CUPS_BACKEND_CANCEL;
 
-        std::string jobUser;
-        std::string jobTitle;
-        std::string jobOpts;
-        std::string jobFile;
+        std::string_view jobUser_;
+        std::string_view jobTitle_;
+        std::string_view jobOpts_;
 
       public:
-
-        CupsBackend(int argc, const char** argv) : Application("ltsm_cups") {
+        CupsBackend(asio::io_context & ctx, int argc, const char** argv) : Application("ltsm_cups") {
             setDebugTarget(DebugTarget::Syslog);
             setDebugLevel(DebugLevel::Info);
 
             // job from stdin
             if(argc == 6) {
-                jobId = std::stoi(argv[1]);
-                jobUser = argv[2];
-                jobTitle = argv[3];
-                jobNumPage = std::stoi(argv[4]);
-                jobOpts = argv[5];
+                jobId_ = std::stoi(argv[1]);
+                jobUser_ = argv[2];
+                jobTitle_ = argv[3];
+                jobNumPage_ = std::stoi(argv[4]);
+                jobOpts_ = argv[5];
             } else {
-                jobId = std::stoi(argv[1]);
-                jobUser = argv[2];
-                jobTitle = argv[3];
-                jobNumPage = std::stoi(argv[4]);
-                jobOpts = argv[5];
-                jobFile = argv[6];
-            }
-        }
+                jobId_ = std::stoi(argv[1]);
+                jobUser_ = argv[2];
+                jobTitle_ = argv[3];
+                jobNumPage_ = std::stoi(argv[4]);
+                jobOpts_ = argv[5];
+                jobFd_ = open(argv[6], O_RDONLY);
 
-        int readWriteStream(std::istream* is, int fd, size_t delay) {
-            std::vector<uint8_t> buf(blocksz);
-
-            while(*is) {
-                is->read(reinterpret_cast<char*>(buf.data()), buf.size());
-
-                try {
-                    DescriptorStream::writeFromTo(buf.data(), is->gcount(), fd);
-                } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                    return CUPS_BACKEND_HOLD;
+                if(0 > jobFd_) {
+                    Application::error("{}: {} failed, path: '{}'", NS_FuncNameV, "open", argv[6]);
+                    throw std::runtime_error(NS_FuncNameS);
                 }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(delay));
             }
-
-            return CUPS_BACKEND_OK;
         }
 
-        int start(void) {
+        asio::awaitable<void> start(void) {
             Application::info("{}: get uid: {}, get gid: {}", NS_FuncNameV, getuid(), getgid());
             std::string socketFormat = "/var/run/ltsm/cups/printer_username";
 
@@ -112,37 +91,38 @@ namespace LTSM {
                     socketFormat = ptr + 3;
                 }
             }
+            auto socket_path = Tools::replace(socketFormat, "username", jobUser_);
 
-            std::filesystem::path socketPath = Tools::replace(socketFormat, "username", jobUser);
+            Application::debug(DebugType::App, "{}: job - id: {}, user: {}, title: '{}', opts: '{}', socket: '{}'",
+                NS_FuncNameV, jobId_, jobUser_, jobTitle_, jobOpts_, socket_path);
 
-            if(! std::filesystem::is_socket(socketPath)) {
-                Application::error("{}: socket not found: {}", NS_FuncNameV, socketPath);
-                return CUPS_BACKEND_HOLD;
+            auto executor = co_await asio::this_coro::executor;
+            std::array<char, 4094> buf;
+
+            // open dst socket
+            asio::local::stream_protocol::socket dst_sock{executor};
+
+            co_await dst_sock.async_connect(
+                asio::local::stream_protocol::endpoint(socket_path), asio::use_awaitable);
+
+            try {
+                // open src stream
+                asio::posix::stream_descriptor src_stream{executor, jobFd_};
+                for(;;) {
+                    size_t rlen = co_await src_stream.async_read_some(asio::buffer(buf), asio::use_awaitable);
+                    co_await asio::async_write(dst_sock, asio::buffer(buf.data(), rlen), asio::use_awaitable);
+                }
+            } catch(const system::system_error& err) {
+                if(err.code() == asio::error::eof) {
+                    cupsStatus_ = CUPS_BACKEND_OK;
+                    co_return;
+                }
+                throw;
             }
+        }
 
-            if(0 != access(socketPath.c_str(), W_OK)) {
-                Application::error("{}: write access failed, socket: {}", NS_FuncNameV, socketPath);
-                return CUPS_BACKEND_HOLD;
-            }
-
-            auto sock = UnixSocket::connect(socketPath);
-
-            if(0 > sock) {
-                return CUPS_BACKEND_HOLD;
-            }
-
-            // wait for data from the stdin
-            if(jobFile.empty()) {
-                return readWriteStream(& std::cin, sock, 75);
-            }
-
-            std::ifstream ifs(jobFile, std::ifstream::in | std::ifstream::binary);
-
-            if(! ifs.is_open()) {
-                return CUPS_BACKEND_CANCEL;
-            }
-
-            return readWriteStream(& ifs, sock, 75);
+        int status(void) const {
+            return cupsStatus_;
         }
     };
 }
@@ -159,11 +139,16 @@ int main(int argc, const char** argv) {
         return CUPS_BACKEND_FAILED;
     }
 
+    asio::io_context ctx;
+
     try {
-        return LTSM::CupsBackend(argc, argv).start();
+        LTSM::CupsBackend backend(ctx, argc, argv);
+        asio::co_spawn(ctx, std::bind(&LTSM::CupsBackend::start, &backend), asio::detached);
+        ctx.run();
+        return backend.status();
     } catch(const std::exception & err) {
-        std::cerr << "exception: " << err.what() << std::endl;
+        LTSM::Application::error("exception: {}", err.what());
     }
 
-    return EXIT_FAILURE;
+    return CUPS_BACKEND_FAILED;
 }
