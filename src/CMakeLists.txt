@@ -180,7 +180,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_cups_backend)
         set(CUR_TARGET ltsm_cups_backend)
 
-        CommonDefaults(SYSTEMD)
+        CommonDefaults(SYSTEMD BOOST)
 
         add_executable(${CUR_TARGET})
         find_package(Cups REQUIRED)
