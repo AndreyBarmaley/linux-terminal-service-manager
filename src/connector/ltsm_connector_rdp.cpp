@@ -405,7 +405,7 @@ namespace LTSM::Connector {
         return EXIT_SUCCESS;
     }
 
-    void ConnectorRdp::xcbDamageNotifyEvent(const xcb_rectangle_t & rt) {
+    void ConnectorRdp::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
         damageRegion.join(rt.x, rt.y, rt.width, rt.height);
     }
 

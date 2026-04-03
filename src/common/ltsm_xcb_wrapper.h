@@ -340,11 +340,10 @@ namespace LTSM {
         struct ModuleFixes : ModuleExtension {
             explicit ModuleFixes(const ConnectionShared &);
 
-            FixesRegionIdPtr createRegion(const xcb_rectangle_t &) const;
-            FixesRegionIdPtr createRegions(const xcb_rectangle_t*, size_t counts) const;
-
+            FixesRegionIdPtr createRegions(std::span<const xcb_rectangle_t>) const;
             FixesRegionIdPtr unionRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
             FixesRegionIdPtr intersectRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
+            FixesRegionIdPtr regionExtents(const xcb_xfixes_region_t &) const;
 
             xcb_rectangle_t fetchRegion(const xcb_xfixes_region_t &) const;
             std::vector<xcb_rectangle_t> fetchRegions(const xcb_xfixes_region_t &) const;
@@ -729,7 +728,7 @@ namespace LTSM {
             // root display events
             virtual void xcbDisplayConnectedEvent(void) { /*default empty */ }
             virtual void xcbFixesCursorChangedEvent(void) { /*default empty */ }
-            virtual void xcbDamageNotifyEvent(const xcb_rectangle_t &) { /*default empty */ }
+            virtual void xcbDamageNotifyEvent(const xcb_rectangle_t &, uint8_t level) { /*default empty */ }
             virtual void xcbRandrScreenSetSizeEvent(const Size &) { /*default empty */ }
             virtual void xcbRandrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) { /*default empty */ }
             virtual void xcbXkbGroupChangedEvent(int) { /*default empty */ }

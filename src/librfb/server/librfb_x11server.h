@@ -57,7 +57,7 @@ namespace LTSM {
           protected:
             // root display
             void xcbFixesCursorChangedEvent(void) override;
-            void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
+            void xcbDamageNotifyEvent(const xcb_rectangle_t &, uint8_t level) override;
             void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
             void xcbRandrScreenSetSizeEvent(const XCB::Size &) override;
             void xcbDisplayConnectedEvent(void) override;

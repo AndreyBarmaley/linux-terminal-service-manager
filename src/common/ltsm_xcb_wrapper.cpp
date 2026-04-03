@@ -230,38 +230,17 @@ namespace LTSM {
         }
     }
 
-    XCB::FixesRegionIdPtr XCB::ModuleFixes::createRegion(const xcb_rectangle_t & rect) const {
+    XCB::FixesRegionIdPtr XCB::ModuleFixes::createRegions(std::span<const xcb_rectangle_t> rects) const {
         if(auto ptr = conn.lock()) {
             xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
-
-            auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, 1, & rect);
+            auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, rects.size(), rects.data());
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
                 error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_create_region");
-                res = 0;
+                return nullptr;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rect: {}, resource id: {:#010x}",
-                               NS_FuncNameV, rect, res);
-
-            return std::make_unique<FixesRegionId>(conn, res);
-        }
-
-        return nullptr;
-    }
-
-    XCB::FixesRegionIdPtr XCB::ModuleFixes::createRegions(const xcb_rectangle_t* rects, size_t counts) const {
-        if(auto ptr = conn.lock()) {
-            xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
-
-            auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, counts, rects);
-
-            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
-                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_create_region");
-                res = 0;
-            }
-
-            Application::debug(DebugType::Xcb, "{}: rects: {}, resource id: {:#010x}", NS_FuncNameV, counts, res);
+            Application::debug(DebugType::Xcb, "{}: rects: {}, resource id: {:#010x}", NS_FuncNameV, rects.size(), res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -271,12 +250,11 @@ namespace LTSM {
     XCB::FixesRegionIdPtr XCB::ModuleFixes::intersectRegions(const xcb_xfixes_region_t & reg1, xcb_xfixes_region_t & reg2) const {
         if(auto ptr = conn.lock()) {
             xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
-
             auto cookie = xcb_xfixes_intersect_region_checked(ptr.get(), reg1, reg2, res);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
                 error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_intersect_region");
-                res = 0;
+                return nullptr;
             }
 
             Application::debug(DebugType::Xcb, "{}: reg1 id: {:#010x}, reg2 id: {:#010x}, resource id: {:#010x}", NS_FuncNameV, reg1, reg2, res);
@@ -289,15 +267,31 @@ namespace LTSM {
     XCB::FixesRegionIdPtr XCB::ModuleFixes::unionRegions(const xcb_xfixes_region_t & reg1, xcb_xfixes_region_t & reg2) const {
         if(auto ptr = conn.lock()) {
             xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
-
             auto cookie = xcb_xfixes_union_region_checked(ptr.get(), reg1, reg2, res);
 
             if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
                 error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_union_region");
-                res = 0;
+                return nullptr;
             }
 
             Application::debug(DebugType::Xcb, "{}: reg1 id: {:#010x}, reg2 id: {:#010x}, resource id: {:#010x}", NS_FuncNameV, reg1, reg2, res);
+            return std::make_unique<FixesRegionId>(conn, res);
+        }
+
+        return nullptr;
+    }
+
+    XCB::FixesRegionIdPtr XCB::ModuleFixes::regionExtents(const xcb_xfixes_region_t & reg) const {
+        if(auto ptr = conn.lock()) {
+            xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
+            auto cookie = xcb_xfixes_region_extents_checked(ptr.get(), reg, res);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
+                error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_region_extents");
+                return nullptr;
+            }
+
+            Application::debug(DebugType::Xcb, "{}: reg id: {:#010x}, resource id: {:#010x}", NS_FuncNameV, reg, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -310,6 +304,7 @@ namespace LTSM {
 
             if(const auto & err = xcbReply.error()) {
                 error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_fetch_region");
+                return xcb_rectangle_t{};
             }
 
             if(const auto & reply = xcbReply.reply()) {
@@ -322,7 +317,7 @@ namespace LTSM {
             }
         }
 
-        return xcb_rectangle_t{0, 0, 0, 0};
+        return xcb_rectangle_t{};
     }
 
     std::vector<xcb_rectangle_t> XCB::ModuleFixes::fetchRegions(const xcb_xfixes_region_t & reg) const {
@@ -331,6 +326,7 @@ namespace LTSM {
 
             if(const auto & err = xcbReply.error()) {
                 error(ptr.get(), err.get(), NS_FuncNameV, "xcb_xfixes_fetch_region");
+                return {};
             }
 
             if(const auto & reply = xcbReply.reply()) {
@@ -3175,7 +3171,7 @@ namespace LTSM {
             Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
                                NS_FuncNameV, dn->area, dn->level, dn->sequence, dn->timestamp);
 
-            xcbDamageNotifyEvent(dn->area);
+            xcbDamageNotifyEvent(dn->area, dn->level);
         } else if(isXFixesSelectionNotify(ev)) {
             auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
             auto selAtom = AtomName(_conn.get(), sn->selection);

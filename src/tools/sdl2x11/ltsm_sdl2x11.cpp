@@ -57,7 +57,7 @@ namespace LTSM {
                 }
         */
 
-        void xcbDamageNotifyEvent(const xcb_rectangle_t & rt) override {
+        void xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) override {
             damage.join(rt.x, rt.y, rt.width, rt.height);
         }
 
