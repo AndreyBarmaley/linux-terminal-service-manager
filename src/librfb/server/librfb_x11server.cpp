@@ -186,11 +186,11 @@ namespace LTSM {
         xcbDisableMessages(false);
         bool mainLoop = true;
         auto frameTimePoint = std::chrono::steady_clock::now();
-        size_t delayTimeout = 75;
+        size_t delayTimeout = 100;
 
-        if(0 == frameRateOption()) {
-            delayTimeout = 0;
-	}
+        if(isClientVideoSupported() || xcbNoDamageOption()) {
+            delayTimeout = 60;
+        }
 
         // process rfb messages background
         auto rfbThread = std::thread([this]() {
@@ -201,35 +201,29 @@ namespace LTSM {
             this->xcbProcessingEvents();
         });
 
-        std::this_thread::sleep_for(10ms);
-
         // main loop
         while(mainLoop) {
             serverMainLoopEvent();
 
             if(! rfbMessagesRunning()) {
                 mainLoop = false;
-                continue;
-            }
-
-            if(! xcbAllowMessages()) {
-                std::this_thread::sleep_for(20ms);
-                continue;
-            }
-
-            if(displayResizeProcessed || displayResizeNegotiation) {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-                continue;
+                break;
             }
 
             // check timepoint frame
-            if(isClientLtsmSupported() && delayTimeout) {
+            if(delayTimeout) {
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
 
                 if(dt.count() < delayTimeout) {
-                    Application::debug(DebugType::X11Srv, "{}: update time ms: {}", NS_FuncNameV, dt.count());
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
+                    auto last = delayTimeout - dt.count();
+
+                    if(! xcbNoDamageOption() && damageRegion.isEmpty() && 50 < last) {
+                        // damage or min fps: 20
+                        last = 50;
+                    }
+
+                    Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(last));
                     continue;
                 }
 
@@ -238,29 +232,28 @@ namespace LTSM {
                 }
             }
 
-            if(xcbNoDamageOption() || fullscreenUpdateReq) {
-                const std::scoped_lock guard{ serverLock };
-                damageRegion = XCB::RootDisplay::region();
-                fullscreenUpdateReq = false;
-            }
+            // processed frame update
+            if(fullscreenUpdateReq || ! damageRegion.isEmpty()) {
+                // wait condition
+                if(! xcbAllowMessages() || displayResizeProcessed ||
+                   displayResizeNegotiation || clientRegion.isEmpty()) {
+                    std::this_thread::sleep_for(10ms);
+                    continue;
+                }
 
-            if(clientRegion.isEmpty()) {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
-
-            if(damageRegion.isEmpty()) {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-            } else {
-                // processed frame update
                 frameTimePoint = std::chrono::steady_clock::now();
                 auto serverRegion = XCB::RootDisplay::region();
 
                 const std::scoped_lock guard{ serverLock };
-                // fix out of screen
-                damageRegion = serverRegion.intersected(damageRegion.align(4));
+
+                if(fullscreenUpdateReq) {
+                    damageRegion = serverRegion;
+                    fullscreenUpdateReq = false;
+                } else {
+                    // fix out of screen
+                    damageRegion = serverRegion.intersected(damageRegion.align(4));
+                }
+
                 if(clientRegion != serverRegion) {
                     damageRegion = clientRegion.intersected(damageRegion);
                 }
@@ -276,11 +269,11 @@ namespace LTSM {
                 }
 
                 damageRegion.reset();
+            }
 
-                // update timepoint
-                if(auto frameRate = frameRateOption()) {
-                    delayTimeout = 1000 / frameRate;
-                }
+            // update timepoint
+            if(auto frameRate = frameRateOption()) {
+                delayTimeout = 1000 / frameRate;
             }
         } // main loop
 
@@ -653,6 +646,7 @@ namespace LTSM {
     void RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
+
             if(psz && dsz < *psz) {
                 Application::warning("{}: display size: {}, select size: {}", NS_FuncNameV, dsz, *psz);
                 dsz = *psz;
@@ -661,7 +655,7 @@ namespace LTSM {
             auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
             size_t shmsz = dsz.width * dsz.height * bpp;
 
-            if(!shm || shm->owner != uid || shm->size < shmsz) {
+            if(! shm || shm->owner != uid || shm->size < shmsz) {
                 Application::info("{}: size: {}", NS_FuncNameV, shmsz);
                 shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
             }

@@ -60,7 +60,6 @@ namespace LTSM::Connector {
         Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
 
         _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
-        _frameRate = config().getInteger("vnc:frame:rate", 0);
 
         return rfbCommunication();
     }
@@ -309,7 +308,9 @@ namespace LTSM::Connector {
     }
 
     uint32_t ConnectorLtsm::frameRateOption(void) const {
-        return _frameRate;
+        constexpr uint32_t minFps = 5;
+        constexpr uint32_t maxFps = 20;
+        return std::clamp(_frameRate, minFps, maxFps);
     }
 
     bool ConnectorLtsm::xcbNoDamageOption(void) const {
@@ -368,9 +369,9 @@ namespace LTSM::Connector {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
             _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
             _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
-            _frameRate = opts->getInteger("frame:rate", 0);
+            _frameRate = opts->getInteger("frame:rate", _frameRate);
 
-            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), _frameRate);
+            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), frameRateOption());
 
             if(_x11NoDamage && ! XCB::RootDisplay::hasError()) {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);

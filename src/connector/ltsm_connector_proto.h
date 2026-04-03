@@ -48,9 +48,9 @@ namespace LTSM::Connector {
         std::list<TupleFileSize> _transferPlanned;
         std::mutex _lockTransfer;
 
-        std::atomic<uint32_t> _frameRate{0};
-        std::atomic<bool> _userSession{false};
-        std::atomic<bool> _x11NoDamage{false};
+        uint32_t _frameRate{0};
+        bool _userSession{false};
+        bool _x11NoDamage{false};
 
         //std::chrono::time_point<std::chrono::steady_clock> _idleSession;
         //uint32_t _idleTimeoutSec = 0;
