@@ -50,24 +50,6 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
-        const uint8_t xcbDamageNotifyMore = 0x80;
-/*
-        //const ModuleExtension* XCB::RootDisplay::getExtensionConst(XCB::Module::XFIXES);
-        //XCB::FixesRegionIdPtr = damageId;
-
-        if(!damageId_) {
-            damageId_ = xfixes_->createRegions({&rt, 1});
-            return;
-        }
-
-        if(level == xcbDamageNotifyMore) {
-            auto regId = xfixes_->createRegions({&rt, 1});
-            damageId_ = xfixes_->unionRegions(damageId_->xid, regId->xid);
-        } else {
-            damageId_ = xfixes_->regionExtents(damageId_->xid);
-            damage_ = true;
-        }
-*/
         const std::scoped_lock guard{ serverLock };
         damageRegion.join(rt.x, rt.y, rt.width, rt.height);
     }

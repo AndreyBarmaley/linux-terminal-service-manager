@@ -340,6 +340,7 @@ namespace LTSM {
         struct ModuleFixes : ModuleExtension {
             explicit ModuleFixes(const ConnectionShared &);
 
+            FixesRegionIdPtr createRegion(void) const;
             FixesRegionIdPtr createRegions(std::span<const xcb_rectangle_t>) const;
             FixesRegionIdPtr unionRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
             FixesRegionIdPtr intersectRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
