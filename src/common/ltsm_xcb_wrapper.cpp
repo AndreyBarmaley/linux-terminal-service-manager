@@ -3172,8 +3172,8 @@ namespace LTSM {
                 return GenericEvent();
             }
 
-            //            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
-            //                               NS_FuncNameV, dn->area, dn->level, dn->sequence, dn->timestamp);
+            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
+                               NS_FuncNameV, dn->area, dn->level, dn->sequence, dn->timestamp);
 
             xcbDamageNotifyEvent(dn->area);
         } else if(isXFixesSelectionNotify(ev)) {
