@@ -393,7 +393,7 @@ namespace LTSM {
                 auto ec = err.code();
                 Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "remoteHandshake", "asio", ec.value(), ec.message());
             } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", NS_FuncNameV, "remoteHandshake", err.what());
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
 
         }, asio::detached);
