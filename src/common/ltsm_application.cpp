@@ -753,6 +753,8 @@ namespace LTSM {
             throw std::runtime_error(NS_FuncNameS);
         }
 
+        spdlog::apply_all([&](auto log) { log->flush(); });
+
         // parent mode
         if(0 < pid) {
             Application::debug(DebugType::App, "{}: child pid: {}", NS_FuncNameV, pid);
@@ -760,15 +762,13 @@ namespace LTSM {
         }
 
         // child mode
+        spdlog::shutdown();
+        Application::setDebugTarget(DebugTarget::Console);
+
         signal(SIGTERM, SIG_DFL);
         signal(SIGCHLD, SIG_DFL);
         signal(SIGINT, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
-
-        // skip closelog, glibc dead lock
-        spdlog::drop("default");
-        auto log = Application::logger(DebugType::Default);
-        spdlog::set_default_logger(log);
 
         // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
         for(int fd = 3; fd < 1024; ++fd) {
@@ -778,6 +778,10 @@ namespace LTSM {
 
             close(fd);
         }
+
+        // register log
+        auto log = Application::logger(DebugType::Default);
+        spdlog::set_default_logger(log);
 
         if(debug) {
             auto file = fmt::format("/var/tmp/.fork_{}_{}.log", appIdent, getpid());
