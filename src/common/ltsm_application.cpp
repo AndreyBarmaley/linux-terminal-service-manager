@@ -763,7 +763,14 @@ namespace LTSM {
 
         // child mode
         spdlog::shutdown();
-        Application::setDebugTarget(DebugTarget::Console);
+
+        if(Application::isDebugTarget(DebugTarget::Syslog)) {
+#ifdef LTSM_WITH_SYSTEMD
+            if(sd_booted()) {
+                Application::setDebugTarget(DebugTarget::Console);
+            }
+#endif
+        }
 
         signal(SIGTERM, SIG_DFL);
         signal(SIGCHLD, SIG_DFL);
