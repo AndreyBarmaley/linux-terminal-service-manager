@@ -1529,7 +1529,7 @@ namespace LTSM::Manager {
         // main thread
         // ioc_.notify_fork(asio::execution_context::fork_parent);
 
-        Application::debug(DebugType::App, "{}: started, pid: {}, display: {}",
+        Application::debug(DebugType::App, "{}: started, child pid: {}, display: {}",
                            NS_FuncNameV, sess->pid1, sess->displayNum);
 
         auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
@@ -1551,6 +1551,7 @@ namespace LTSM::Manager {
             Application::error("{}: display session not started", NS_FuncNameV);
         }
 
+        // failed
         ForkMode::waitPid(sess->pid1);
         return nullptr;
     }
@@ -1650,7 +1651,7 @@ namespace LTSM::Manager {
 
         if(newSess) {
             // registered xvfb job
-            asio::post(ioc_, [this, pid = newSess->pid1](){
+            asio::post(childs_guard_, [this, pid = newSess->pid1](){
                 childs_.emplace_back(pid);
             });
         } else {        
