@@ -141,7 +141,7 @@ namespace LTSM {
         DirBuf createDirBuf(fuse_req_t req, const std::string & dir, const struct stat & st) const;
         
         inline bool localPath(const std::string & path) const {
-            return localPoint == point;
+            return localPoint == path;
         }
 
         inline bool socketConnected(void) const {
