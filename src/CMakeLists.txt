@@ -229,7 +229,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_session_fuse)
         set(CUR_TARGET ltsm_session_fuse)
 
-        CommonDefaults(SDBUS SYSTEMD JSON)
+        CommonDefaults(SDBUS SYSTEMD JSON BOOST)
 
         add_executable(${CUR_TARGET} ltsm_fuse_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)

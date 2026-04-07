@@ -25,19 +25,31 @@
 #define _LTSM_FUSE_SESSION_
 
 #include <string>
+#include <memory>
 #include <forward_list>
 
 #include "ltsm_fuse.h"
 #include "ltsm_fuse_adaptor.h"
+#include "ltsm_async_socket.h"
 
 namespace LTSM {
     struct FuseSession;
 
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
+    using FuseSessionPtr = std::unique_ptr<FuseSession>;
+
     class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Fuse_adaptor> {
-        std::forward_list<std::unique_ptr<FuseSession>> childs;
+        boost::asio::io_context ioc_;
+        boost::asio::signal_set signals_;
+
+        DBusConnectionPtr dbus_conn_;
+        std::forward_list<FuseSessionPtr> childs_;
+
+      protected:
+        void stop(void);
 
       public:
-        FuseSessionBus(sdbus::IConnection &, bool debug = false);
+        FuseSessionBus(DBusConnectionPtr, bool debug = false);
         virtual ~FuseSessionBus();
 
         int start(void);

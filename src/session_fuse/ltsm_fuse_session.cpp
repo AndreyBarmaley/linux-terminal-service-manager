@@ -49,18 +49,11 @@
 #include <fuse_lowlevel.h>
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
     const char* argv2[] = { "ltsm_fuse", nullptr };
     fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
-
-    std::unique_ptr<sdbus::IConnection> conn;
-
-    void signalHandler(int sig) {
-        if(sig == SIGTERM || sig == SIGINT) {
-            conn->leaveEventLoop();
-        }
-    }
 
     struct DirBuf : std::vector<char> {
         std::string root;
@@ -146,6 +139,14 @@ namespace LTSM {
         const PathStat* findInode(fuse_ino_t inode) const;
         const struct stat* findChildStat(fuse_ino_t parent, const char* child) const;
         DirBuf createDirBuf(fuse_req_t req, const std::string & dir, const struct stat & st) const;
+        
+        inline bool localPath(const std::string & path) const {
+            return localPoint == point;
+        }
+
+        inline bool socketConnected(void) const {
+            return true;
+        }
     };
 
     std::string PathStat::joinPath(std::string_view str) const {
@@ -871,12 +872,13 @@ namespace LTSM {
     }
 
     /// FuseSessionBus
-    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_session_fuse"),
+    FuseSessionBus::FuseSessionBus(DBusConnectionPtr conn, bool debug) : ApplicationLog("ltsm_session_fuse"),
 #ifdef SDBUS_2_0_API
-        AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_fuse_path})
+        AdaptorInterfaces(*conn, sdbus::ObjectPath {dbus_session_fuse_path}),
 #else
-        AdaptorInterfaces(conn, dbus_session_fuse_path)
+        AdaptorInterfaces(*conn, dbus_session_fuse_path),
 #endif
+        signals_ {ioc_}, dbus_conn_ {std::move(conn)}
     {
         registerAdaptor();
 
@@ -887,25 +889,50 @@ namespace LTSM {
 
     FuseSessionBus::~FuseSessionBus() {
         unregisterAdaptor();
+        stop();
     }
 
-    int FuseSessionBus::start(void) {
-        Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
-
-        signal(SIGTERM, signalHandler);
-        signal(SIGINT, signalHandler);
-
-        conn->enterEventLoop();
-
-        for(auto & fuse : childs) {
+    void FuseSessionBus::stop(void) {
+        for(auto & fuse : childs_) {
             fuse->initShutdown = true;
-
             if(fuse->sock) {
                 fuse->sock->reset();
             }
         }
 
-        Application::debug(DebugType::App, "service stopped");
+        childs_.clear();
+        signals_.cancel();
+        dbus_conn_->leaveEventLoop();
+    }
+
+    int FuseSessionBus::start(void) {
+        Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
+
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        signals_.async_wait([this](const system::error_code & ec, int signal) {
+            // skip canceled
+            if(ec != asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
+                this->stop();
+            }
+        });
+
+        auto sdbus_job = std::thread([this]() {
+            try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", err.what());
+                asio::post(ioc_, std::bind(&FuseSessionBus::stop, this));
+            }
+        });
+
+        ioc_.run();
+
+        dbus_conn_->leaveEventLoop();
+        sdbus_job.join();
+
+        Application::debug(DebugType::App, "Fuse session shutdown");
         return EXIT_SUCCESS;
     }
 
@@ -916,7 +943,7 @@ namespace LTSM {
 
     void FuseSessionBus::serviceShutdown(void) {
         Application::debug(DebugType::Dbus, "{}: pid: {}", NS_FuncNameV, getpid());
-        conn->leaveEventLoop();
+        asio::post(ioc_, std::bind(&FuseSessionBus::stop, this));
     }
 
     bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint,
@@ -924,7 +951,7 @@ namespace LTSM {
         Application::debug(DebugType::Dbus, "{}: local point: `{}', remote point: `{}', fuse socket: `{}'",
                     NS_FuncNameV, localPoint, remotePoint, fuseSocket);
 
-        if(std::ranges::any_of(childs, [&](auto & ptr) { return ptr->localPoint == localPoint; })) {
+        if(std::ranges::any_of(childs_, [&](auto & ptr) { return ptr->localPath(localPoint) && ptr->socketConnected(); })) {
             Application::error("{}: point busy, point: `{}'", NS_FuncNameV, localPoint);
             return false;
         }
@@ -938,7 +965,7 @@ namespace LTSM {
             return false;
         }
 
-        childs.emplace_front(std::move(ptr));
+        childs_.emplace_front(std::move(ptr));
         return true;
     }
 
@@ -949,8 +976,8 @@ namespace LTSM {
 
     void FuseSessionBus::umountPoint(const std::string & localPoint) {
         LTSM::Application::debug(DebugType::Dbus, "{}: local point: `{}'", NS_FuncNameV, localPoint);
-        std::erase_if(childs, [&](auto & ptr) {
-            return ptr->localPoint == localPoint;
+        std::erase_if(childs_, [&](auto & ptr) {
+            return ptr->localPath(localPoint);
         });
     }
 }
@@ -977,18 +1004,11 @@ int main(int argc, char** argv) {
 
     try {
 #ifdef SDBUS_2_0_API
-        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_fuse_name});
+        auto conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_fuse_name});
 #else
-        LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_fuse_name);
+        auto conn = sdbus::createSessionBusConnection(LTSM::dbus_session_fuse_name);
 #endif
-
-        if(! LTSM::conn) {
-            LTSM::Application::error("dbus connection failed, uid: {}", getuid());
-            return EXIT_FAILURE;
-        }
-
-        LTSM::FuseSessionBus fuseSession(*LTSM::conn, debug);
-        return fuseSession.start();
+        return LTSM::FuseSessionBus(std::move(conn), debug).start();
     } catch(const sdbus::Error & err) {
         LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
