@@ -217,9 +217,9 @@ namespace LTSM {
                 if(dt.count() < delayTimeout) {
                     auto last = delayTimeout - dt.count();
 
-                    if(! xcbNoDamageOption() && damageRegion.isEmpty() && 50 < last) {
-                        // damage or min fps: 20
-                        last = 50;
+                    if(! xcbNoDamageOption() && damageRegion.isEmpty() && 100 < last) {
+                        // damage or max fps: 10
+                        last = 100;
                     }
 
                     Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
