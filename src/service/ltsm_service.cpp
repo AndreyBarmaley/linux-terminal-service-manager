@@ -2486,26 +2486,33 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stopSessionChannels(XvfbSessionPtr xvfb) {
-        if(0 < xvfb->connectorId) {
-            auto fuse = xvfb->options.find("redirect:fuse");
+        auto fuse = xvfb->options.find("redirect:fuse");
 
-            if(xvfb->options.end() != fuse && ! fuse->second.empty()) {
-                for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>()) {
-                    stopFuseListener(xvfb, share);
+        if(xvfb->options.end() != fuse && ! fuse->second.empty()) {
+            for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>()) {
+                stopFuseListener(xvfb, share);
+            }
+        }
+
+        auto audio = xvfb->options.find("redirect:audio");
+
+        if(xvfb->options.end() != audio) {
+            stopAudioListener(xvfb, audio->second);
+        }
+
+        auto pcsc = xvfb->options.find("redirect:pcsc");
+
+        if(xvfb->options.end() != pcsc) {
+            stopPcscListener(xvfb, pcsc->second);
+        }
+
+        if(! xvfb->fusePoints.empty()) {
+            for(const auto & point: xvfb->fusePoints) {
+                if(int ret = umount(point.c_str())) {
+                    Application::error("{}: {} failed, code: {}, error: {}, path: `{}'", NS_FuncNameV, "umount", errno, strerror(errno), point);
                 }
             }
-
-            auto audio = xvfb->options.find("redirect:audio");
-
-            if(xvfb->options.end() != audio) {
-                stopAudioListener(xvfb, audio->second);
-            }
-
-            auto pcsc = xvfb->options.find("redirect:pcsc");
-
-            if(xvfb->options.end() != pcsc) {
-                stopPcscListener(xvfb, pcsc->second);
-            }
+            xvfb->fusePoints.clear();
         }
     }
 
@@ -2851,6 +2858,7 @@ namespace LTSM::Manager {
                           NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), localPoint, remotePoint, fuseSocket);
 
             if(xvfb->dbusFuseMountPoint(localPoint, remotePoint, fuseSocket)) {
+                xvfb->fusePoints.emplace_front(std::move(localPoint));
                 return true;
             }
     

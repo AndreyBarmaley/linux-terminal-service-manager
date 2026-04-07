@@ -243,6 +243,7 @@ namespace LTSM::Manager {
         EnvironmentsMap environments;
         OptionsMap options;
         std::vector<int32_t> encodings;
+        std::forward_list<std::string> fusePoints;
 
         std::filesystem::path xauthfile;
         UserSessionPtr userInfo;
