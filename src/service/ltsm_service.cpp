@@ -2508,8 +2508,12 @@ namespace LTSM::Manager {
 
         if(! xvfb->fusePoints.empty()) {
             for(const auto & point: xvfb->fusePoints) {
-                if(int ret = umount(point.c_str())) {
+                if(int ret = umount(point.c_str()); 0 < ret && ret != EINVAL) {
                     Application::error("{}: {} failed, code: {}, error: {}, path: `{}'", NS_FuncNameV, "umount", errno, strerror(errno), point);
+                }
+                std::error_code err;
+                if(std::filesystem::is_directory(point, err)) {
+                    std::filesystem::remove(point, err);
                 }
             }
             xvfb->fusePoints.clear();
