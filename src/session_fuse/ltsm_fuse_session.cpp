@@ -439,7 +439,7 @@ namespace LTSM {
         fuse_wait_ = promise.get_future();
 
         auto stop_token = asio::bind_cancellation_slot(fuse_stop_.slot(),
-        [fuse = ses.get(), stopped = std::move(promise)](std::exception_ptr eptr) mutable {
+            [fuse = ses.get(), stopped = std::move(promise)](std::exception_ptr eptr) mutable {
             fuse_session_unmount(fuse);
             stopped.set_value();
         });
@@ -1046,14 +1046,12 @@ namespace LTSM {
                            NS_FuncNameV, localPoint, remotePoint, socketPath);
 
         if(std::ranges::any_of(childs_, [&](auto & ptr) {
-        return ptr->localPath(localPoint) && ptr->socketConnected();
-        })) {
+            return ptr->localPath(localPoint) && ptr->socketConnected(); })) {
             Application::error("{}: point busy, point: `{}'", NS_FuncNameV, localPoint);
             return false;
         }
 
-        asio::co_spawn(ioc_,
-        [localPoint, remotePoint, socketPath, this]() -> asio::awaitable<void>  {
+        asio::co_spawn(ioc_, [localPoint, remotePoint, socketPath, this]() -> asio::awaitable<void>  {
             auto executor = co_await asio::this_coro::executor;
             auto sess = std::make_unique<FuseSession>(executor, localPoint, remotePoint);
 
