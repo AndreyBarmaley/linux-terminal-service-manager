@@ -677,7 +677,7 @@ namespace LTSM {
                 endian::native_to_little(context),
                 endian::native_to_little(timeout),
                 endian::native_to_little(statesCount));
-                
+
             for(uint32_t it = 0; it < statesCount; ++it) {
                 const SCARD_READERSTATE & state = states[it];
                 auto len = strnlen(state.szReader, MAX_READERNAME);
@@ -1022,7 +1022,11 @@ namespace LTSM {
             co_return false;
         }
 
-        co_await async_send_values(scope, context, ret);
+        co_await async_send_values(
+            endian::native_to_little(scope),
+            endian::native_to_little(context),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1056,7 +1060,10 @@ namespace LTSM {
             }
         }
 
-        co_await async_send_values(context, ret);
+        co_await async_send_values(
+            endian::native_to_little(context),
+            endian::native_to_little(ret));
+
         ptr->removeContext32(context32_);
 
         context32_ = 0;
@@ -1129,8 +1136,14 @@ namespace LTSM {
                                NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(context, readerData,
-            shareMode, prefferedProtocols, handle, activeProtocol, ret);
+        co_await async_send_values(
+            endian::native_to_little(context),
+            readerData,
+            endian::native_to_little(shareMode),
+            endian::native_to_little(prefferedProtocols),
+            endian::native_to_little(handle),
+            endian::native_to_little(activeProtocol),
+            endian::native_to_little(ret));
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1177,8 +1190,13 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, shareMode,
-            prefferedProtocols, initialization, activeProtocol, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(shareMode),
+            endian::native_to_little(prefferedProtocols),
+            endian::native_to_little(initialization),
+            endian::native_to_little(activeProtocol),
+            endian::native_to_little(ret));
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1228,7 +1246,11 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, disposition, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(disposition),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1268,7 +1290,10 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1308,7 +1333,11 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, disposition, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(disposition),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1368,10 +1397,16 @@ namespace LTSM {
 
         recvLength = data2.size();
 
-        co_await async_send_values(handle,
-            ioSendPciProtocol, ioSendPciLength, sendLength,
-            ioRecvPciProtocol, ioRecvPciLength, recvLength,
-            ret, data2);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(ioSendPciProtocol),
+            endian::native_to_little(ioSendPciLength),
+            endian::native_to_little(sendLength),
+            endian::native_to_little(ioRecvPciProtocol),
+            endian::native_to_little(ioRecvPciLength),
+            endian::native_to_little(recvLength),
+            endian::native_to_little(ret),
+            data2);
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1449,7 +1484,10 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1504,8 +1542,14 @@ namespace LTSM {
 
         bytesReturned = data2.size();
 
-        co_await async_send_values(handle, controlCode, sendLength,
-            recvLength, bytesReturned, ret, data2);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(controlCode),
+            endian::native_to_little(sendLength),
+            endian::native_to_little(recvLength),
+            endian::native_to_little(bytesReturned),
+            endian::native_to_little(ret),
+            data2);
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1561,7 +1605,13 @@ namespace LTSM {
         attrLen = std::min(attr.size(), static_cast<size_t>(MAX_BUFFER_SIZE));
         attr.resize(MAX_BUFFER_SIZE, 0);
 
-        co_await async_send_values(handle, attrId, attr, attrLen, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(attrId),
+            attr,
+            endian::native_to_little(attrLen),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1613,7 +1663,13 @@ namespace LTSM {
         // revert attr size
         attr.resize(MAX_BUFFER_SIZE, 0);
 
-        co_await async_send_values(handle, attrId, attr, attrLen, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(attrId),
+            attr,
+            endian::native_to_little(attrLen),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1646,7 +1702,9 @@ namespace LTSM {
                                NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(context, ret);
+        co_await async_send_values(
+            endian::native_to_little(context),
+            endian::native_to_little(ret));
 
         asio::co_spawn(socket().get_executor(),
                        std::bind(&PcscSessionBus::handlerStopClient, session_, cancelContext), asio::detached);
@@ -1672,7 +1730,11 @@ namespace LTSM {
             ret = SCARD_E_NO_SERVICE;
         }
 
-        co_await async_send_values(versionMajor, versionMinor, ret);
+        co_await async_send_values(
+            endian::native_to_little(versionMajor),
+            endian::native_to_little(versionMinor),
+            endian::native_to_little(ret));
+
         co_return true;
     }
 
@@ -1717,7 +1779,10 @@ namespace LTSM {
         const uint32_t timeout = 0;
         const uint32_t ret = SCARD_S_SUCCESS;
 
-        co_await async_send_values(timeout, ret);
+        co_await async_send_values(
+            endian::native_to_little(timeout),
+            endian::native_to_little(ret));
+
         co_return true;
     }
 
