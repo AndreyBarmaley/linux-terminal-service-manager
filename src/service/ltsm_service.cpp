@@ -23,7 +23,6 @@
 
 #include <errno.h>
 #include <unistd.h>
-#include <signal.h>
 
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -34,6 +33,7 @@
 #include <chrono>
 #include <atomic>
 #include <thread>
+#include <csignal>
 #include <cstring>
 #include <numeric>
 #include <cstdlib>
@@ -142,7 +142,7 @@ namespace LTSM::Manager {
 
         void pamOpenDisplaySession(XvfbSessionPtr sess, const ApplicationJsonConfig & json) {
             // child1 thread
-            signal(SIGTERM, ChildProcess::signalHandler);
+            std::signal(SIGTERM, ChildProcess::signalHandler);
 
             const auto & userInfo = sess->userInfo;
             auto pam = std::make_unique<PamSession>(json.configGetString("pam:service"),
@@ -3128,8 +3128,8 @@ namespace LTSM::Manager {
         asio::io_context ctx{concurency};
         asio::thread_pool pool{concurency};
 
-        signal(SIGPIPE, SIG_IGN);
-        signal(SIGHUP, SIG_IGN);
+        std::signal(SIGPIPE, SIG_IGN);
+        std::signal(SIGHUP, SIG_IGN);
 
         auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, std::move(conn), confile);
         Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
