@@ -1907,10 +1907,10 @@ namespace LTSM {
                                        NS_FuncNameV, "handlerClientWaitCommand", ec.value(), ec.message());
                 }
 
-                success = false;
+                co_return;
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                success = false;
+                co_return;
             }
 
             if(remote_->isError()) {
