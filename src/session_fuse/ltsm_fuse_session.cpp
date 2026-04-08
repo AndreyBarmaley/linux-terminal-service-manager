@@ -40,6 +40,7 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
+#include "ltsm_async_mutex.h"
 #include "ltsm_application.h"
 #include "ltsm_fuse_session.h"
 
@@ -77,15 +78,12 @@ namespace LTSM {
         }
     };
 
-    struct PathStat : protected std::pair<std::string, StStat> {
+    class PathStat : protected std::pair<std::string, StStat> {
       public:
         PathStat() = default;
+        ~PathStat() = default;
+
         PathStat(const std::string & str, StStat && st) : std::pair<std::string, StStat>(str, st) {}
-
-        virtual ~PathStat() = default;
-
-        //        std::string localPath(const FuseSession*) const;
-        //        std::string remotePath(const FuseSession*) const;
 
         std::string joinPath(std::string_view str) const {
             if(str.empty()) {
@@ -120,6 +118,7 @@ namespace LTSM {
 
     class FuseSession : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
         boost::asio::strand<boost::asio::any_io_executor> fuse_strand_;
+        mutable async_mutex send_lock_;
 
         fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
         fuse_lowlevel_ops oper = {};
@@ -153,7 +152,10 @@ namespace LTSM {
 
       public:
         FuseSession(const boost::asio::any_io_executor & ex, const std::string & local, const std::string & remote)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(ex), fuse_strand_{boost::asio::make_strand(ex)}, localPoint{local}, remotePoint{remote} {
+            : AsyncSocket<boost::asio::local::stream_protocol::socket>(ex)
+            , fuse_strand_{boost::asio::make_strand(ex)}
+            , send_lock_{socket().get_executor()}
+            , localPoint{local}, remotePoint{remote} {
             // added parent inode: 1
             StStat st = {};
 
@@ -172,9 +174,9 @@ namespace LTSM {
             stopSession();
         }
 
-        asio::awaitable<void> retryConnect(const std::string &, int);
-        asio::awaitable<void> remoteHandshake(void);
-        asio::awaitable<StStat> recvStatStruct(void) const;
+        [[nodiscard]] asio::awaitable<void> retryConnect(const std::string &, int);
+        [[nodiscard]] asio::awaitable<void> remoteHandshake(void);
+        [[nodiscard]] asio::awaitable<StStat> recvStatStruct(void) const;
 
         bool startSession(void);
 
@@ -195,23 +197,15 @@ namespace LTSM {
         }
 
         // fuse low level callbacks
-        asio::awaitable<void> cbLookup(fuse_req_t req, fuse_ino_t parent, const char* path) const;
-        asio::awaitable<void> cbGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
-        asio::awaitable<void> cbReadLink(fuse_req_t req, fuse_ino_t ino) const;
-        asio::awaitable<void> cbReadDir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info*);
-        asio::awaitable<void> cbOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
-        asio::awaitable<void> cbRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
-        asio::awaitable<void> cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info*) const;
-        asio::awaitable<void> cbAccess(fuse_req_t req, fuse_ino_t ino, int mask) const;
+        [[nodiscard]] asio::awaitable<void> cbLookup(fuse_req_t req, fuse_ino_t parent, const char* path) const;
+        [[nodiscard]] asio::awaitable<void> cbGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
+        [[nodiscard]] asio::awaitable<void> cbReadLink(fuse_req_t req, fuse_ino_t ino) const;
+        [[nodiscard]] asio::awaitable<void> cbReadDir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info*);
+        [[nodiscard]] asio::awaitable<void> cbOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
+        [[nodiscard]] asio::awaitable<void> cbRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
+        [[nodiscard]] asio::awaitable<void> cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info*) const;
+        [[nodiscard]] asio::awaitable<void> cbAccess(fuse_req_t req, fuse_ino_t ino, int mask) const;
     };
-
-    //    std::string PathStat::localPath(const FuseSession* fuse) const {
-    //        return fuse ? std::string(fuse->localPoint).append(first) : first;
-    //    }
-
-    //    std::string PathStat::remotePath(const FuseSession* fuse) const {
-    //        return fuse ? std::string(fuse->remotePoint).append(first) : first;
-    //    }
 
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path) {
         if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
@@ -393,7 +387,8 @@ namespace LTSM {
 
         co_await async_recv_values(dev, ino, mode, nlink, uid, gid, rdev, size, blksize, blocks, atime, mtime, ctime);
 
-        StStat st;
+        StStat st = {};
+
         st.st_dev = endian::little_to_native(dev);
         st.st_ino = endian::little_to_native(ino);
         st.st_mode = endian::little_to_native(mode);
@@ -678,8 +673,10 @@ namespace LTSM {
 
         assert(patch.size() < UINT16_MAX);
 
+        co_await send_lock_.async_lock();
         const auto & path = pathStat->relativePath();
 
+        // <CMD16> - fuse cmd
         // <FLAG32> - open flags
         // <LEN16><PATH> - fuse path
         try {
@@ -732,6 +729,7 @@ namespace LTSM {
             fuse_reply_err(req, EFAULT);
         }
 
+        send_lock_.unlock();
         co_return;
     }
 
@@ -758,6 +756,9 @@ namespace LTSM {
             co_return;
         }
 
+        co_await send_lock_.async_lock();
+
+        // <CMD16> - fuse cmd
         // <FDH32> - fd handle
         try {
             co_await async_send_values(
@@ -794,6 +795,8 @@ namespace LTSM {
         }
 
         fuse_reply_err(req, err);
+
+        send_lock_.unlock();
         co_return;
     }
 
@@ -823,6 +826,9 @@ namespace LTSM {
         const size_t blockmax = 48 * 1024;
         const size_t blocksz = std::min(maxsize, blockmax);
 
+        co_await send_lock_.async_lock();
+
+        // <CMD16> - fuse cmd
         // <FDH32> - fd handle
         // <SIZE16> - blocksz
         // <OFF64> - offset
@@ -881,6 +887,7 @@ namespace LTSM {
             fuse_reply_err(req, EFAULT);
         }
 
+        send_lock_.unlock();
         co_return;
     }
 
