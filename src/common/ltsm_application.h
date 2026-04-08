@@ -81,7 +81,8 @@ namespace LTSM {
         Gss = 1 << 13,
         Fork = 1 << 12,
         Common = 1 << 11,
-        Default = 1 << 10
+        Pam = 1 << 10,
+        Default = 1 << 9
     };
 
     using Logger = std::shared_ptr<spdlog::logger>;

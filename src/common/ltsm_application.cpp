@@ -134,6 +134,9 @@ namespace LTSM {
             case DebugType::Common:
                 return "common";
 
+            case DebugType::Pam:
+                return "pam";
+
             case DebugType::Default:
                 return "default";
         }
@@ -189,6 +192,8 @@ namespace LTSM {
                 types |= DebugType::Fork;
             } else if(slower == "common") {
                 types |= DebugType::Common;
+            } else if(slower == "pam") {
+                types |= DebugType::Pam;
             } else if(slower == "default") {
                 types |= DebugType::Default;
             } else if(slower == "all") {

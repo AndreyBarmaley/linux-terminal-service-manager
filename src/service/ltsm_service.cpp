@@ -336,15 +336,15 @@ namespace LTSM::Manager {
     char* PamAuthenticate::onPamPrompt(int style, const char* msg) const {
         switch(style) {
             case PAM_ERROR_MSG:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_ERROR_MSG", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_ERROR_MSG", msg);
                 break;
 
             case PAM_TEXT_INFO:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_TEXT_INFO", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_TEXT_INFO", msg);
                 break;
 
             case PAM_PROMPT_ECHO_ON:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_ON", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_ON", msg);
 
                 //if(0 == strncasecmp(msg, "login:", 6));
                 return strdup(login.c_str());
@@ -352,7 +352,7 @@ namespace LTSM::Manager {
                 break;
 
             case PAM_PROMPT_ECHO_OFF:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_OFF", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_OFF", msg);
 
                 //if(0 == strncasecmp(msg, "password:", 9));
                 return strdup(password.c_str());
