@@ -26,14 +26,14 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
-#include <csignal>
 
 #include <map>
 #include <mutex>
 #include <chrono>
 #include <atomic>
-#include <thread>
+#include <future>
 #include <cstring>
+#include <csignal>
 #include <iostream>
 #include <exception>
 #include <unordered_map>
@@ -118,6 +118,7 @@ namespace LTSM {
 
     class FuseSession : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
         boost::asio::strand<boost::asio::any_io_executor> fuse_strand_;
+        boost::asio::cancellation_signal fuse_stop_;
         mutable async_mutex send_lock_;
 
         fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
@@ -127,10 +128,9 @@ namespace LTSM {
         std::map<std::string, const StStat*> pathes;
         std::forward_list<LinkInfo> symlinks;
         std::unique_ptr<fuse_session, void(*)(fuse_session*)> ses{ nullptr, fuse_session_destroy };
+        std::future<void> fuse_wait_;
 
         DirBuf dirBuf;
-
-        std::thread thloop;
 
         const std::string localPoint;
         const std::string remotePoint;
@@ -149,6 +149,8 @@ namespace LTSM {
         const PathStat* findInode(fuse_ino_t inode) const;
         const StStat* findChildStat(fuse_ino_t parent, const char* child) const;
         DirBuf createDirBuf(fuse_req_t req, const std::string & dir, const StStat & st) const;
+
+        [[nodiscard]] asio::awaitable<void> fuseProcessed(int fd);
 
       public:
         FuseSession(const boost::asio::any_io_executor & ex, const std::string & local, const std::string & remote)
@@ -428,34 +430,66 @@ namespace LTSM {
             return false;
         }
 
-        // FIXME remove thread
-        // fuse_session_get_fd(se)
-        //fuse_set_signal_handlers(ses.get());
-
         if(0 > fuse_session_mount(ses.get(), localPoint.c_str())) {
             Application::error("{}: {} failed, local point: `{}'", NS_FuncNameV, "fuse_session_mount", localPoint);
             return false;
         }
 
-        thloop = std::thread([ses = ses.get()]() {
-            fuse_session_loop(ses);
+        std::promise<void> promise;
+        fuse_wait_ = promise.get_future();
+
+        auto stop_token = asio::bind_cancellation_slot(fuse_stop_.slot(),
+        [fuse = ses.get(), stopped = std::move(promise)](std::exception_ptr eptr) mutable {
+            fuse_session_unmount(fuse);
+            stopped.set_value();
         });
+
+        auto fd = fuse_session_fd(ses.get());
+        asio::co_spawn(socket().get_executor(), fuseProcessed(fd), std::move(stop_token));
 
         return true;
     }
 
+    asio::awaitable<void> FuseSession::fuseProcessed(int fd) {
+        auto ex = co_await asio::this_coro::executor;
+        boost::asio::posix::stream_descriptor sd{ex, fd};
+
+        for(;;) {
+            try {
+                co_await sd.async_wait(boost::asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+            } catch(const system::system_error& err) {
+                auto ec = err.code();
+
+                if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
+                    Application::error("{}: {} failed, code: {}, error: {}",
+                                       NS_FuncNameV, "handlerClientWaitCommand", ec.value(), ec.message());
+                }
+
+                co_return;
+            }
+
+            struct fuse_buf fbuf = { .mem = nullptr };
+
+            if(int res = fuse_session_receive_buf(ses.get(), &fbuf); res < 0) {
+                Application::error("{}: {} failed, error: {}",
+                                   NS_FuncNameV, "fuse_session_receive_buf", std::abs(res));
+            }
+
+            fuse_session_process_buf(ses.get(), &fbuf);
+            free(fbuf.mem);
+        }
+
+        co_return;
+    }
+
     void FuseSession::stopSession(void) noexcept {
         if(ses) {
-            if(! fuse_session_exited(ses.get())) {
-                fuse_session_unmount(ses.get());
-                fuse_session_exit(ses.get());
+            if(fuse_wait_.valid()) {
+                fuse_stop_.emit(boost::asio::cancellation_type::terminal);
+                fuse_wait_.get();
             }
 
             ses.reset();
-        }
-
-        if(thloop.joinable()) {
-            thloop.join();
         }
 
         fuse_opt_free_args(& args);
