@@ -453,6 +453,7 @@ namespace LTSM {
     asio::awaitable<void> FuseSession::fuseProcessed(int fd) {
         auto ex = co_await asio::this_coro::executor;
         boost::asio::posix::stream_descriptor sd{ex, fd};
+        sd.non_blocking(true);
 
         for(;;) {
             try {
@@ -469,14 +470,18 @@ namespace LTSM {
             }
 
             struct fuse_buf fbuf = { .mem = nullptr };
+            int res = fuse_session_receive_buf(ses.get(), &fbuf);
 
-            if(int res = fuse_session_receive_buf(ses.get(), &fbuf); res < 0) {
+            if(0 < res) {
+                fuse_session_process_buf(ses.get(), &fbuf);
+                free(fbuf.mem);
+            } else if (res == -EAGAIN || res == -EINTR) {
+                continue;
+            } else {
                 Application::error("{}: {} failed, error: {}",
                                    NS_FuncNameV, "fuse_session_receive_buf", std::abs(res));
+                break;
             }
-
-            fuse_session_process_buf(ses.get(), &fbuf);
-            free(fbuf.mem);
         }
 
         co_return;
