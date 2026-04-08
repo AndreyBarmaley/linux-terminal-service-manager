@@ -212,15 +212,10 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(counts);
 
-//    auto cmd = co_await async_recv_le16();
-
     if(cmd != Pkcs11Op::GetSlots) {
         Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         throw pkcs11_error(NS_FuncNameS);
     }
-
-    // slot counts
-//    uint16_t counts = co_await async_recv_le16();
 
     ListTokens newTokens;
     Application::debug(DebugType::Pkcs11, "{}: tokens counts: {}", NS_FuncNameV, counts);
