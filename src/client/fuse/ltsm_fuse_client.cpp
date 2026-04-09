@@ -67,7 +67,7 @@ namespace LTSM {
     }
 
 #ifdef __UNIX__
-    std::pair<ino_t, ino_t> readSymLink(const std::string & path, const struct stat & st1, const std::string & dir) {
+    std::pair<ino_t, ino_t> readSymLink(const std::filesystem::path & path, ino_t ino1, const std::string & dir) {
 
         std::error_code err;
         auto linkto = std::filesystem::read_symlink(path, err);
@@ -78,6 +78,10 @@ namespace LTSM {
             throw fuse_error(NS_FuncNameS);
         }
 
+        if(linkto.has_relative_path()) {
+            linkto = std::filesystem::absolute(path.parent_path() / linkto).lexically_normal();
+        }
+
         // check scope
         if(! startsWith(linkto.string(), dir)) {
             Application::warning("{}: {}, path: `{}'", NS_FuncNameV, "link skipped", path);
@@ -86,13 +90,13 @@ namespace LTSM {
 
         struct stat st2 = {};
 
+        // lstat() is identical to stat(), except that if pathname is a symbolic link.
         if(0 > ::stat(linkto.c_str(), & st2)) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               NS_FuncNameV, "stat", strerror(errno), errno, path);
+            Application::warning("{}: {}, path: `{}'", NS_FuncNameV, "link skipped", path);
             throw fuse_error(NS_FuncNameS);
         }
 
-        return std::make_pair(st1.st_ino, st2.st_ino);
+        return std::make_pair(ino1, st2.st_ino);
     }
 #endif
 
@@ -104,7 +108,7 @@ namespace LTSM {
         for(const auto & path : items) {
             struct stat st = {};
 
-            if(0 > ::stat(path.c_str(), & st)) {
+            if(0 > ::lstat(path.c_str(), & st)) {
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                    NS_FuncNameV, "stat", strerror(errno), errno, path);
                 continue;
@@ -112,17 +116,13 @@ namespace LTSM {
 
             switch(st.st_mode & S_IFMT) {
 #ifdef __UNIX__
-
-                case S_IFDIR:
                 case S_IFLNK:
-                case S_IFREG:
-                    break;
-#else
-
-                case S_IFDIR:
-                case S_IFREG:
                     break;
 #endif
+
+                case S_IFDIR:
+                case S_IFREG:
+                    break;
 
                 default:
                     Application::warning("{}: {}, mode: {:#018x}, path: `{}'",
@@ -135,7 +135,7 @@ namespace LTSM {
             // check link
             if(S_ISLNK(st.st_mode)) {
                 try {
-                    symlinks.emplace_back(readSymLink(path, st, dir));
+                    symlinks.emplace_back(readSymLink(path, st.st_ino, dir));
                 } catch(const fuse_error &) {
                     continue;
                 }
