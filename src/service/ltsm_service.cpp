@@ -183,7 +183,7 @@ namespace LTSM::Manager {
 
             if(pid_t pid = ForkMode::forkStart(); 0 != pid) {
                 pidNext = pid;
-                const bool notSysUser = std::string_view(ltsm_user_conn) != sess->userInfo->user();
+                const bool notSysUser = std::string_view(ltsm_user_conn) != userInfo->user();
                 std::future<void> detach;
 
                 // logon
@@ -211,7 +211,7 @@ namespace LTSM::Manager {
             auto sessionBin = json.configGetString("starter:path", "/usr/libexec/ltsm/ltsm_session_display");
 
             if(std::filesystem::exists(sessionBin)) {
-                if(switchToUser(*sess->userInfo)) {
+                if(switchToUser(*userInfo)) {
                     // set environments
                     for(const auto & [key, val] : sess->getEnvironments(pam->getEnvList())) {
                         Application::debug(DebugType::App, "{}: setenv[ {} ] = `{}'", NS_FuncNameV, key, val);

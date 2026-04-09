@@ -59,6 +59,8 @@ namespace PcscLite {
 namespace LTSM {
     namespace PcscOp {
         enum {
+            ProtoVer = 1,
+            //
             Init = 0xFD01
         };
     }

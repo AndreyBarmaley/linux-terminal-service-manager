@@ -95,7 +95,7 @@ namespace LTSM {
         // send initialize packet
         bs.write_le16(AudioOp::Init);
         // send proto ver
-        bs.write_le16(1);
+        bs.write_le16(AudioOp::ProtoVer);
 
         int numenc = 1;
 #ifdef LTSM_WITH_OPUS
@@ -136,6 +136,11 @@ namespace LTSM {
         auto ver = co_await async_recv_le16();
         // encoding
         auto enc = co_await async_recv_le16();
+
+        if(ver != AudioOp::ProtoVer) {
+            Application::error("{}: unsupported version: {}", NS_FuncNameV, ver);
+            throw audio_error(NS_FuncNameS);
+        }
 
         Application::info("{}: client proto version: {}, encode type: {:#06x}", NS_FuncNameV, ver, enc);
 

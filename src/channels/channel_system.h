@@ -461,7 +461,6 @@ namespace LTSM {
             PKCS11::LibraryPtr pkcs11;
             std::vector<uint8_t> last;
 
-            uint16_t protoVer = 0;
             uint8_t cid = 255;
 
           protected:

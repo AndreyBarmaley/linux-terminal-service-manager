@@ -147,7 +147,13 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
-    protoVer = sb.readIntLE16();
+    auto protoVer = sb.readIntLE16();
+
+    if(protoVer != Pkcs11Op::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
+        throw channel_error(NS_FuncNameS);
+    }
+
     reply.reset();
     // reply format:
     // <CMD16> - cmd id
@@ -171,7 +177,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     // no errors
     reply.writeIntLE16(0);
     // proto ver
-    reply.writeIntLE16(1);
+    reply.writeIntLE16(Pkcs11Op::ProtoVer);
     // library info
     reply.writeInt8(info->cryptokiVersion.major);
     reply.writeInt8(info->cryptokiVersion.minor);

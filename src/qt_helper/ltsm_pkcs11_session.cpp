@@ -100,7 +100,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     try {
         co_await async_send_values(
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::Init)),
-            endian::native_to_little(static_cast<uint16_t>(1 /* proto version */)));
+            endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::ProtoVer)));
 
         // client reply: cmd16, err16
         co_await async_recv_values(cmd, err);
@@ -129,16 +129,16 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
     }
 
     // proto version
-    auto ver = co_await async_recv_le16();
+    auto protoVer = co_await async_recv_le16();
 
-    if(ver != 1) {
-        Application::error("{}: {}: failed, ver: {:#06x}", NS_FuncNameV, "version", ver);
+    if(protoVer != Pkcs11Op::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
         Q_EMIT pkcs11Error("PKCS11 initialization failed");
         stop();
         co_return;
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", NS_FuncNameV, ver);
+    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", NS_FuncNameV, protoVer);
 
     // library info
     PKCS11::LibraryInfo info;

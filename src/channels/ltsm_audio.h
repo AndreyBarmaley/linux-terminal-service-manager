@@ -37,6 +37,8 @@ namespace LTSM {
 
     namespace AudioOp {
         enum {
+            ProtoVer = 1,
+            //
             Init = 0xFE01,
             Data = 0xFE02,
             Silent = 0xFE03

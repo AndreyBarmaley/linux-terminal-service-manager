@@ -151,9 +151,15 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
-    audioVer = sb.readIntLE16();
+    auto protoVer = sb.readIntLE16();
     auto numEnc = sb.readIntLE16();
-    Application::info("{}: server proto version: {}, encodings count: {}", NS_FuncNameV, audioVer, numEnc);
+
+    if(protoVer != AudioOp::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
+        throw audio_error(NS_FuncNameS);
+    }
+
+    Application::info("{}: server proto version: {}, encodings count: {}", NS_FuncNameV, protoVer, numEnc);
     formats.clear();
 
     if(numEnc * 10 > sb.last()) {
