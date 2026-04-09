@@ -108,7 +108,11 @@ namespace LTSM {
         for(const auto & path : items) {
             struct stat st = {};
 
+#ifdef __UNIX__
             if(0 > ::lstat(path.c_str(), & st)) {
+#else
+            if(0 > ::stat(path.c_str(), & st)) {
+#endif
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                    NS_FuncNameV, "stat", strerror(errno), errno, path);
                 continue;
