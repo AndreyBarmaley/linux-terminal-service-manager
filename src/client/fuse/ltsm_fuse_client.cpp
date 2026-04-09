@@ -222,8 +222,8 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
     try {
         while(2 < sb.last()) {
             // fuse stream format:
-            // <CMD16> - audio cmd
-            // <DATA> - audio data
+            // <CMD16> - fuse cmd
+            // <DATA> - fuse data
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto fuseCmd = sb.readIntLE16();
@@ -292,6 +292,11 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
+    if(fuseVer != FuseOp::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, fuseVer);
+        throw std::underflow_error(NS_FuncNameS);
+    }
+
     auto mountPoint = sb.readString(len);
 
     if(! owner->createChannelAllow(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
@@ -305,14 +310,14 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
 
     // reply format:
     reply.reset();
-    // <CMD16> - return code
+    // <CMD16> - fuse code
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Init);
     reply.writeIntLE32(fuseInit ? 0 : 1);
 
     if(fuseInit) {
         // proto ver
-        reply.writeIntLE16(1);
+        reply.writeIntLE16(FuseOp::ProtoVer);
         // <UID32> - local uid
         reply.writeIntLE32(getuid());
         // <GID32> - local gid
@@ -410,12 +415,14 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpReadDir(const StreamBufRef & sb) 
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
     // cmd format:
+    // <RID64> - fuse req
     // <FLAG32> - open flags
     // <LEN16><PATH> - fuse path
-    if(sb.last() < 6) {
+    if(sb.last() < 14) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
+    auto rid = sb.readIntLE64();
     auto flags = sb.readIntLE32();
     auto len = sb.readIntLE16();
 
@@ -428,9 +435,11 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
     int error = 0 > ret ? errno : 0;
     // reply format:
     reply.reset();
-    // <CMD16> - return code
+    // <CMD16> - fuse code
+    // <RID64> - fuse req
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Open);
+    reply.writeIntLE64(rid);
     reply.writeIntLE32(error);
 
     if(0 > ret) {
@@ -449,19 +458,23 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) {
     // cmd format:
+    // <RID64> - fuse req
     // <FDH32> - fd handle
-    if(sb.last() < 4) {
+    if(sb.last() < 12) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
+    auto rid = sb.readIntLE64();
     auto fdh = sb.readIntLE32();
     int ret = ::close(fdh);
     int error = 0 > ret ? errno : 0;
     // reply format:
     reply.reset();
-    // <CMD16> - return code
+    // <CMD16> - fuse code
+    // <RID64> - fuse req
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Release);
+    reply.writeIntLE64(rid);
     reply.writeIntLE32(error);
 
     if(0 > ret) {
@@ -478,25 +491,29 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
     // cmd format:
+    // <RID64> - fuse req
     // <FDH32> - fd handle
     // <SIZE16> - blocksz
     // <OFF64> - offset
-    if(sb.last() < 14) {
+    if(sb.last() < 22) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
-    int fdh = sb.readIntLE32();
-    uint16_t blocksz = sb.readIntLE16();
-    size_t offset = sb.readIntLE64();
+    auto rid = sb.readIntLE64();
+    auto fdh = sb.readIntLE32();
+    auto blocksz = sb.readIntLE16();
+    auto offset = sb.readIntLE64();
     int ret = lseek(fdh, offset, SEEK_SET);
     int error = 0 > ret ? errno : 0;
     // reply format:
     reply.reset();
 
     if(0 > ret) {
-        // <CMD16> - return code
+        // <CMD16> - fuse code
+        // <RID64> - fuse req
         // <ERR32> - errno
         reply.writeIntLE16(FuseOp::Read);
+        reply.writeIntLE64(rid);
         reply.writeIntLE32(error);
         Application::error("{}: {} failed, error: {}, code: {}, offset: {}",
                            NS_FuncNameV, "lseek", strerror(error), error, offset);
@@ -508,9 +525,11 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
     std::vector<uint8_t> buf(std::min(blocksz, blockmax));
     ssize_t rsz = ::read(fdh, buf.data(), buf.size());
     error = 0 > rsz ? errno : 0;
-    // <CMD16> - return code
+    // <CMD16> - fuse code
+    // <RID64> - fuse req
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Read);
+    reply.writeIntLE64(rid);
     reply.writeIntLE32(error);
 
     if(0 > rsz) {

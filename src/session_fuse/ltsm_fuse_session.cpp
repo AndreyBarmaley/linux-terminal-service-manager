@@ -37,6 +37,7 @@
 #include <iostream>
 #include <exception>
 #include <unordered_map>
+#include <boost/asio/experimental/awaitable_operators.hpp>
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
@@ -50,6 +51,7 @@
 
 using namespace std::chrono_literals;
 using namespace boost;
+using namespace boost::asio::experimental::awaitable_operators;
 
 namespace LTSM {
     const char* argv2[] = { "ltsm_fuse", nullptr };
@@ -59,22 +61,17 @@ namespace LTSM {
     using StStat = struct stat;
 
     struct DirBuf : std::vector<char> {
-        std::string root;
 
         DirBuf() {
             reserve(4096);
         }
 
-        DirBuf(const std::string & path) : root(path) {
-            reserve(4096);
-        }
-
-        void addEntry(fuse_req_t req, const std::string & name, const StStat & st) {
-            auto need = fuse_add_direntry(req, nullptr, 0, name.c_str(), nullptr, 0);
+        void addEntry(fuse_req_t req, const char* name, const StStat & st) {
+            auto need = fuse_add_direntry(req, nullptr, 0, name, nullptr, 0);
             auto used = size();
             resize(size() + need);
             auto ptr = std::next(begin(), used);
-            fuse_add_direntry(req, std::addressof(*ptr), need, name.c_str(), & st, size());
+            fuse_add_direntry(req, std::addressof(*ptr), need, name, & st, size());
         }
     };
 
@@ -116,9 +113,9 @@ namespace LTSM {
         }
     };
 
-    class FuseSession : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
-        boost::asio::strand<boost::asio::any_io_executor> fuse_strand_;
-        boost::asio::cancellation_signal fuse_stop_;
+    class FuseSession : protected AsyncSocket<asio::local::stream_protocol::socket> {
+        asio::strand<asio::any_io_executor> fuse_strand_;
+        asio::cancellation_signal fuse_stop_;
         mutable async_mutex send_lock_;
 
         fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
@@ -129,8 +126,6 @@ namespace LTSM {
         std::forward_list<LinkInfo> symlinks;
         std::unique_ptr<fuse_session, void(*)(fuse_session*)> ses{ nullptr, fuse_session_destroy };
         std::future<void> fuse_wait_;
-
-        DirBuf dirBuf;
 
         const std::string localPoint;
         const std::string remotePoint;
@@ -147,15 +142,29 @@ namespace LTSM {
 
         const LinkInfo* findLink(fuse_ino_t inode) const;
         const PathStat* findInode(fuse_ino_t inode) const;
-        const StStat* findChildStat(fuse_ino_t parent, const char* child) const;
+        const StStat* findChildStat(fuse_ino_t parent, std::string_view child) const;
         DirBuf createDirBuf(fuse_req_t req, const std::string & dir, const StStat & st) const;
 
-        [[nodiscard]] asio::awaitable<void> fuseProcessed(int fd);
+        [[nodiscard]] asio::awaitable<void> fuseCmdSend(void);
+        [[nodiscard]] asio::awaitable<void> fuseCmdRecv(void);
+
+        [[nodiscard]] asio::awaitable<void> replyLookup(fuse_req_t, fuse_ino_t, std::string path) const;
+        [[nodiscard]] asio::awaitable<void> replyGetAttr(fuse_req_t, fuse_ino_t) const;
+        [[nodiscard]] asio::awaitable<void> replyAccess(fuse_req_t, fuse_ino_t, int32_t mask) const;
+        [[nodiscard]] asio::awaitable<void> replyReadLink(fuse_req_t, fuse_ino_t) const;
+        [[nodiscard]] asio::awaitable<void> replyReadDir(fuse_req_t, fuse_ino_t, size_t, off_t) const;
+        [[nodiscard]] asio::awaitable<void> replyOpen(fuse_req_t) const;
+        [[nodiscard]] asio::awaitable<void> replyRelease(fuse_req_t) const;
+        [[nodiscard]] asio::awaitable<void> replyRead(fuse_req_t) const;
+
+        [[nodiscard]] asio::awaitable<void> sendOpen(fuse_req_t, std::string path, int32_t flags) const;
+        [[nodiscard]] asio::awaitable<void> sendRelease(fuse_req_t, uint64_t fh) const;
+        [[nodiscard]] asio::awaitable<void> sendRead(fuse_req_t req, size_t blocksz, off_t off, uint64_t fh) const;
 
       public:
-        FuseSession(const boost::asio::any_io_executor & ex, const std::string & local, const std::string & remote)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(ex)
-            , fuse_strand_{boost::asio::make_strand(ex)}
+        FuseSession(const asio::any_io_executor & ex, const std::string & local, const std::string & remote)
+            : AsyncSocket<asio::local::stream_protocol::socket>(ex)
+            , fuse_strand_{asio::make_strand(ex)}
             , send_lock_{socket().get_executor()}
             , localPoint{local}, remotePoint{remote} {
             // added parent inode: 1
@@ -194,24 +203,24 @@ namespace LTSM {
             return socket().is_open();
         }
 
-        boost::asio::strand<boost::asio::any_io_executor> & strand(void) {
+        asio::strand<asio::any_io_executor> & strand(void) {
             return fuse_strand_;
         }
 
         // fuse low level callbacks
-        [[nodiscard]] asio::awaitable<void> cbLookup(fuse_req_t req, fuse_ino_t parent, const char* path) const;
-        [[nodiscard]] asio::awaitable<void> cbGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
-        [[nodiscard]] asio::awaitable<void> cbReadLink(fuse_req_t req, fuse_ino_t ino) const;
-        [[nodiscard]] asio::awaitable<void> cbReadDir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info*);
-        [[nodiscard]] asio::awaitable<void> cbOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
-        [[nodiscard]] asio::awaitable<void> cbRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info*) const;
-        [[nodiscard]] asio::awaitable<void> cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info*) const;
-        [[nodiscard]] asio::awaitable<void> cbAccess(fuse_req_t req, fuse_ino_t ino, int mask) const;
+        void cbLookup(fuse_req_t, fuse_ino_t, std::string_view path) const;
+        void cbGetAttr(fuse_req_t, fuse_ino_t) const;
+        void cbReadLink(fuse_req_t, fuse_ino_t) const;
+        void cbReadDir(fuse_req_t, fuse_ino_t, size_t maxsz, off_t offset, int32_t flags) const;
+        void cbAccess(fuse_req_t, fuse_ino_t, int32_t mask) const;
+        void cbOpen(fuse_req_t, fuse_ino_t, int32_t flags) const;
+        void cbRelease(fuse_req_t, fuse_ino_t, uint64_t fh) const;
+        void cbRead(fuse_req_t, fuse_ino_t, size_t maxsz, off_t offset, uint64_t fh) const;
     };
 
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path) {
         if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbLookup, fuse, req, parent, path), asio::detached);
+            fuse->cbLookup(req, parent, path);
         } else {
             fuse_reply_err(req, EFAULT);
         }
@@ -219,47 +228,7 @@ namespace LTSM {
 
     void ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
         if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbGetAttr, fuse, req, ino, fi), asio::detached);
-        } else {
-            fuse_reply_err(req, EFAULT);
-        }
-    }
-
-    void ll_readlink(fuse_req_t req, fuse_ino_t ino) {
-        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbReadLink, fuse, req, ino), asio::detached);
-        } else {
-            fuse_reply_err(req, EFAULT);
-        }
-    }
-
-    void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) {
-        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbReadDir, fuse, req, ino, maxsize, off, fi), asio::detached);
-        } else {
-            fuse_reply_err(req, EFAULT);
-        }
-    }
-
-    void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbOpen, fuse, req, ino, fi), asio::detached);
-        } else {
-            fuse_reply_err(req, EFAULT);
-        }
-    }
-
-    void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbRelease, fuse, req, ino, fi), asio::detached);
-        } else {
-            fuse_reply_err(req, EFAULT);
-        }
-    }
-
-    void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) {
-        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbRead, fuse, req, ino, maxsize, off, fi), asio::detached);
+            fuse->cbGetAttr(req, ino);
         } else {
             fuse_reply_err(req, EFAULT);
         }
@@ -267,14 +236,64 @@ namespace LTSM {
 
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask) {
         if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
-            asio::co_spawn(fuse->strand(), std::bind(&FuseSession::cbAccess, fuse, req, ino, mask), asio::detached);
+            fuse->cbAccess(req, ino, mask);
+        } else {
+            fuse_reply_err(req, EFAULT);
+        }
+    }
+
+    void ll_readlink(fuse_req_t req, fuse_ino_t ino) {
+        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
+            fuse->cbReadLink(req, ino);
+        } else {
+            fuse_reply_err(req, EFAULT);
+        }
+    }
+
+    void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) {
+        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
+            fuse->cbReadDir(req, ino, maxsize, off, (fi ? fi->flags : 0));
+        } else {
+            fuse_reply_err(req, EFAULT);
+        }
+    }
+
+    void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
+        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
+            fuse->cbOpen(req, ino, (fi ? fi->flags : 0));
+        } else {
+            fuse_reply_err(req, EFAULT);
+        }
+    }
+
+    void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
+        if(!fi) {
+            fuse_reply_err(req, EFAULT);
+            return;
+        }
+
+        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
+            fuse->cbRelease(req, ino, fi->fh);
+        } else {
+            fuse_reply_err(req, EFAULT);
+        }
+    }
+
+    void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) {
+        if(!fi) {
+            fuse_reply_err(req, EFAULT);
+            return;
+        }
+
+        if(auto fuse = static_cast<FuseSession*>(fuse_req_userdata(req))) {
+            fuse->cbRead(req, ino, maxsize, off, fi->fh);
         } else {
             fuse_reply_err(req, EFAULT);
         }
     }
 
     // FuseSession
-    boost::asio::awaitable<void> FuseSession::retryConnect(const std::string & path, int attempts) {
+    asio::awaitable<void> FuseSession::retryConnect(const std::string & path, int attempts) {
         auto executor = co_await asio::this_coro::executor;
         asio::steady_timer timer{executor};
 
@@ -294,15 +313,12 @@ namespace LTSM {
         }
     }
 
-    boost::asio::awaitable<void> FuseSession::remoteHandshake(void) {
-        // send inititialize packet
-        const uint16_t protoVer = 1;
-
+    asio::awaitable<void> FuseSession::remoteHandshake(void) {
         // <VER16> - proto version
         // <LEN16><MOUNTPOINT> - mount point
         co_await async_send_values(
             endian::native_to_little(static_cast<uint16_t>(FuseOp::Init)),
-            endian::native_to_little(static_cast<uint16_t>(protoVer)),
+            endian::native_to_little(static_cast<uint16_t>(FuseOp::ProtoVer)),
             endian::native_to_little(static_cast<uint16_t>(remotePoint.size())),
             remotePoint);
 
@@ -340,7 +356,7 @@ namespace LTSM {
         remoteUid = uid;
         remoteGid = gid;
 
-        if(ver != protoVer) {
+        if(ver != FuseOp::ProtoVer) {
             Application::error("{}: unsupported proto version: {}", NS_FuncNameV, ver);
             throw fuse_error(NS_FuncNameS);
         }
@@ -382,7 +398,7 @@ namespace LTSM {
         co_return;
     }
 
-    boost::asio::awaitable<StStat> FuseSession::recvStatStruct(void) const {
+    asio::awaitable<StStat> FuseSession::recvStatStruct(void) const {
         // <STAT> - stat struct
         uint64_t dev, ino, nlink, rdev, size, blksize, blocks, atime, mtime, ctime;
         uint32_t mode, uid, gid;
@@ -439,49 +455,156 @@ namespace LTSM {
         fuse_wait_ = promise.get_future();
 
         auto stop_token = asio::bind_cancellation_slot(fuse_stop_.slot(),
-            [fuse = ses.get(), stopped = std::move(promise)](std::exception_ptr eptr) mutable {
+        [fuse = ses.get(), stopped = std::move(promise)](std::exception_ptr eptr) mutable {
             fuse_session_unmount(fuse);
             stopped.set_value();
         });
 
-        auto fd = fuse_session_fd(ses.get());
-        asio::co_spawn(socket().get_executor(), fuseProcessed(fd), std::move(stop_token));
+        asio::co_spawn(socket().get_executor(), fuseCmdSend() && fuseCmdRecv(), std::move(stop_token));
 
         return true;
     }
 
-    asio::awaitable<void> FuseSession::fuseProcessed(int fd) {
+    asio::awaitable<void> FuseSession::fuseCmdSend(void) {
+        auto fd = fuse_session_fd(ses.get());
+
         auto ex = co_await asio::this_coro::executor;
-        boost::asio::posix::stream_descriptor sd{ex, fd};
+        asio::posix::stream_descriptor sd{ex, fd};
+
         sd.non_blocking(true);
+        std::vector<char> tmpbuf(256 * 1024);
 
         for(;;) {
             try {
-                co_await sd.async_wait(boost::asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+                co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
             } catch(const system::system_error& err) {
                 auto ec = err.code();
 
                 if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
-                    Application::error("{}: {} failed, code: {}, error: {}",
+                    Application::error("{}: exception, code: {}, error: {}",
+                                       NS_FuncNameV, ec.value(), ec.message());
+                }
+
+                co_return;
+            }
+
+            struct fuse_buf fbuf = {};
+            fbuf.size = tmpbuf.size();
+            fbuf.mem = tmpbuf.data();
+
+            while(true) {
+                if(int res = fuse_session_receive_buf(ses.get(), &fbuf); res <= 0) {
+                    int err = std::abs(res);
+
+                    if(err == EAGAIN || err == EINTR) {
+                        continue;
+                    } else if(err == ENOBUFS) {
+                        tmpbuf.resize(tmpbuf.size() * 2);
+                        fbuf.size = tmpbuf.size();
+                        fbuf.mem = tmpbuf.data();
+                        continue;
+                    } else {
+                        Application::error("{}: exception, code: {}, error: {}",
+                                           NS_FuncNameV, err, strerror(err));
+                        co_return;
+                    }
+                }
+
+                break;
+            }
+
+            Application::debug(DebugType::Fuse, "{}: {}, len: {}",
+                              NS_FuncNameV, "fuse_session_receive_buf", fbuf.size);
+
+            fuse_session_process_buf(ses.get(), &fbuf);
+        }
+
+        co_return;
+    }
+
+    asio::awaitable<void> FuseSession::fuseCmdRecv(void) {
+        // reply format:
+        // <CMD16> - fuse cmd
+        // <RID64> - req id
+        // <ERR32> - errno
+        uint16_t cmd;
+        uint64_t rid;
+        uint32_t err;
+
+        for(;;) {
+            try {
+                co_await socket().async_wait(asio::local::stream_protocol::socket::wait_read, asio::use_awaitable);
+
+                Application::debug(DebugType::Fuse, "{}: socket data: {}", NS_FuncNameV, socket().available());
+
+                // data present locked
+                co_await send_lock_.async_lock();
+                co_await async_recv_values(cmd, rid, err);
+
+                endian::little_to_native_inplace(cmd);
+                endian::little_to_native_inplace(rid);
+                endian::little_to_native_inplace(err);
+                auto req = reinterpret_cast<fuse_req_t>(rid);
+
+                if(err) {
+                    Application::error("{}: recv error: {}", NS_FuncNameV, err);
+                    fuse_reply_err(req, err);
+                } else if(cmd == FuseOp::Open) {
+                    co_await replyOpen(req);
+                } else if(cmd == FuseOp::Release) {
+                    co_await replyRelease(req);
+                } else if(cmd == FuseOp::Read) {
+                    co_await replyRead(req);
+                } else {
+                    Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
+                    fuse_reply_err(req, EFAULT);
+                }
+            } catch(const system::system_error& err) {
+                auto ec = err.code();
+
+                if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
+                    Application::error("{}: exception, code: {}, error: {}",
                                        NS_FuncNameV, "handlerClientWaitCommand", ec.value(), ec.message());
                 }
 
                 co_return;
             }
 
-            struct fuse_buf fbuf = { .mem = nullptr };
-            int res = fuse_session_receive_buf(ses.get(), &fbuf);
+            send_lock_.unlock();
+        }
 
-            if(0 < res) {
-                fuse_session_process_buf(ses.get(), &fbuf);
-                free(fbuf.mem);
-            } else if (res == -EAGAIN || res == -EINTR) {
-                continue;
-            } else {
-                Application::error("{}: {} failed, error: {}",
-                                   NS_FuncNameV, "fuse_session_receive_buf", std::abs(res));
-                break;
-            }
+        co_return;
+    }
+
+    asio::awaitable<void> FuseSession::replyOpen(fuse_req_t req) const {
+
+        // <FDH32> - fd handle
+        uint32_t fh = co_await async_recv_le32();
+
+        struct fuse_file_info fi = {};
+        fi.fh = fh;
+
+        fuse_reply_open(req, &fi);
+        co_return;
+    }
+
+    asio::awaitable<void> FuseSession::replyRelease(fuse_req_t req) const {
+
+        fuse_reply_err(req, 0);
+        co_return;
+    }
+
+    asio::awaitable<void> FuseSession::replyRead(fuse_req_t req) const {
+
+        // <LEN16><DATA> - raw data
+        using binary_buf = std::vector<char>;
+        auto len = co_await async_recv_le16();
+
+        if(len) {
+            auto buf = co_await async_recv_buf<binary_buf>(len);
+            fuse_reply_buf(req, buf.data(), buf.size());
+        } else {
+            fuse_reply_buf(req, nullptr, 0);
         }
 
         co_return;
@@ -490,7 +613,7 @@ namespace LTSM {
     void FuseSession::stopSession(void) noexcept {
         if(ses) {
             if(fuse_wait_.valid()) {
-                fuse_stop_.emit(boost::asio::cancellation_type::terminal);
+                fuse_stop_.emit(asio::cancellation_type::terminal);
                 fuse_wait_.get();
             }
 
@@ -536,7 +659,7 @@ namespace LTSM {
         return std::addressof(iti->second);
     }
 
-    const StStat* FuseSession::findChildStat(fuse_ino_t parent, const char* child) const {
+    const StStat* FuseSession::findChildStat(fuse_ino_t parent, std::string_view child) const {
         auto iti = inodes.find(parent);
 
         if(iti == inodes.end()) {
@@ -554,7 +677,7 @@ namespace LTSM {
     }
 
     DirBuf FuseSession::createDirBuf(fuse_req_t req, const std::string & dir, const StStat & st) const {
-        DirBuf dirBuf(dir);
+        DirBuf dirBuf;
         dirBuf.addEntry(req, ".", st);
         dirBuf.addEntry(req, "..", st);
         auto it = pathes.upper_bound(dir);
@@ -563,7 +686,7 @@ namespace LTSM {
             auto path = std::filesystem::path(it->first);
 
             if(path.parent_path() == dir) {
-                dirBuf.addEntry(req, path.filename(), *it->second);
+                dirBuf.addEntry(req, path.filename().c_str(), *it->second);
             }
 
             it = std::next(it);
@@ -572,49 +695,49 @@ namespace LTSM {
         return dirBuf;
     }
 
-    asio::awaitable<void> FuseSession::cbLookup(fuse_req_t req, fuse_ino_t parent, const char* path) const {
-        Application::debug(DebugType::Fuse, "{}: ino: {}, path: `{}'", NS_FuncNameV, parent, path);
+    void FuseSession::cbLookup(fuse_req_t req, fuse_ino_t ino, std::string_view path) const {
+        Application::debug(DebugType::Fuse, "{}: ino: {}, path: `{}'", NS_FuncNameV, ino, path);
+        asio::co_spawn(fuse_strand_, replyLookup(req, ino, view2string(path)), asio::detached);
+    }
 
-        auto st = findChildStat(parent, path);
-
-        if(! st) {
+    asio::awaitable<void> FuseSession::replyLookup(fuse_req_t req, fuse_ino_t ino, std::string path) const {
+        // ino parent
+        if(auto st = findChildStat(ino, path)) {
+            fuse_entry_param entry = {};
+            entry.attr = *st;
+            entry.attr_timeout = 1.0;
+            entry.entry_timeout = 1.0;
+            entry.ino = st->st_ino;
+            fuse_reply_entry(req, & entry);
+        } else {
             fuse_reply_err(req, ENOENT);
-            co_return;
         }
-
-        // <STAT> - stat struct
-        fuse_entry_param entry = {};
-        entry.attr = *st;
-        entry.attr_timeout = 1.0;
-        entry.entry_timeout = 1.0;
-        entry.ino = st->st_ino;
-        fuse_reply_entry(req, & entry);
 
         co_return;
     }
 
-    asio::awaitable<void> FuseSession::cbGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) const {
-        Application::debug(DebugType::Fuse, "{}: ino: {}", NS_FuncNameV, ino);
+    void FuseSession::cbGetAttr(fuse_req_t req, fuse_ino_t ino) const {
+        Application::debug(DebugType::Fuse, "{}: ino: {}, flags: {:#010x}, fh: {}", NS_FuncNameV, ino);
+        asio::co_spawn(fuse_strand_, replyGetAttr(req, ino), asio::detached);
+    }
 
-        if(fi) {
-            Application::debug(DebugType::Fuse, "{}: file info - flags: {:#010x}, fh: {}", NS_FuncNameV, fi->flags, fi->fh);
-        }
-
-        auto pathStat = findInode(ino);
-
-        if(! pathStat) {
+    asio::awaitable<void> FuseSession::replyGetAttr(fuse_req_t req, fuse_ino_t ino) const {
+        if(auto pathStat = findInode(ino)) {
+            fuse_reply_attr(req, pathStat->statPtr(), 1.0);
+        } else {
             Application::error("{}: {} failed", NS_FuncNameV, "inode");
             fuse_reply_err(req, ENOENT);
-            co_return;
         }
-
-        fuse_reply_attr(req, pathStat->statPtr(), 1.0);
 
         co_return;
     }
 
-    asio::awaitable<void> FuseSession::cbReadLink(fuse_req_t req, fuse_ino_t ino) const {
+    void FuseSession::cbReadLink(fuse_req_t req, fuse_ino_t ino) const {
         Application::debug(DebugType::Fuse, "{}: ino: {}", NS_FuncNameV, ino);
+        asio::co_spawn(fuse_strand_, replyReadLink(req, ino), asio::detached);
+    }
+
+    asio::awaitable<void> FuseSession::replyReadLink(fuse_req_t req, fuse_ino_t ino) const {
 
         auto pathStat = findInode(ino);
 
@@ -647,292 +770,17 @@ namespace LTSM {
         }
 
         auto path = std::string(localPoint).append(pathStat->relativePath());
+
         fuse_reply_readlink(req, path.c_str());
-
         co_return;
     }
 
-    asio::awaitable<void> FuseSession::cbReadDir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) {
-        Application::debug(DebugType::Fuse, "{}: ino: {}, max size: {}, offset: {}", NS_FuncNameV, ino, maxsize, off);
-
-        if(fi) {
-            Application::debug(DebugType::Fuse, "{}: file info - flags: {:#010x}, fh: {}", NS_FuncNameV, fi->flags, fi->fh);
-        }
-
-        auto pathStat = findInode(ino);
-
-        if(! pathStat) {
-            fuse_reply_err(req, ENOENT);
-            co_return;
-        }
-
-        if(! S_ISDIR(pathStat->statRef().st_mode)) {
-            fuse_reply_err(req, ENOTDIR);
-            co_return;
-        }
-
-        // relative path
-        const auto & path = pathStat->relativePath();
-
-        if(dirBuf.root != path) {
-            dirBuf = createDirBuf(req, path, pathStat->statRef());
-        }
-
-        if((size_t) off < dirBuf.size()) {
-            fuse_reply_buf(req, dirBuf.data() + off, std::min(dirBuf.size() - off, maxsize));
-        } else {
-            fuse_reply_buf(req, nullptr, 0);
-        }
-
-        co_return;
-    }
-
-    asio::awaitable<void> FuseSession::cbOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) const {
-        Application::debug(DebugType::Fuse, "{}: ino: {}", NS_FuncNameV, ino);
-
-        if(fi) {
-            Application::debug(DebugType::Fuse, "{}: file info - flags: {:#010x}, fh: {}", NS_FuncNameV, fi->flags, fi->fh);
-        } else {
-            Application::error("{}: {} failed", NS_FuncNameV, "fuse_file_info");
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        auto pathStat = findInode(ino);
-
-        if(! pathStat) {
-            fuse_reply_err(req, ENOENT);
-            co_return;
-        }
-
-        if(S_ISDIR(pathStat->statRef().st_mode)) {
-            fuse_reply_err(req, EISDIR);
-            co_return;
-        }
-
-        assert(patch.size() < UINT16_MAX);
-
-        co_await send_lock_.async_lock();
-        const auto & path = pathStat->relativePath();
-
-        // <CMD16> - fuse cmd
-        // <FLAG32> - open flags
-        // <LEN16><PATH> - fuse path
-        try {
-            co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(FuseOp::Open)),
-                endian::native_to_little(static_cast<uint32_t>(fi->flags)),
-                endian::native_to_little(static_cast<uint16_t>(path.size())),
-                path);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        // reply format:
-        // <CMD16> - fuse cmd
-        // <ERR32> - errno
-        uint16_t cmd;
-        uint32_t err;
-
-        try {
-            co_await async_recv_values(cmd, err);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        endian::little_to_native_inplace(cmd);
-        endian::little_to_native_inplace(err);
-
-        if(cmd != FuseOp::Open) {
-            Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        if(err) {
-            Application::error("{}: recv error: {}", NS_FuncNameV, err);
-            fuse_reply_err(req, err);
-            co_return;
-        }
-
-        // <FDH32> - fd handle
-        try {
-            fi->fh = co_await async_recv_le32();
-            fuse_reply_open(req, fi);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-        }
-
-        send_lock_.unlock();
-        co_return;
-    }
-
-    asio::awaitable<void> FuseSession::cbRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) const {
-        Application::debug(DebugType::Fuse, "{}: ino: {}", NS_FuncNameV, ino);
-
-        if(fi) {
-            Application::debug(DebugType::Fuse, "{}: file info - flags: {:#010x}, fh: {}", NS_FuncNameV, fi->flags, fi->fh);
-        } else {
-            Application::error("{}: {} failed", NS_FuncNameV, "fuse_file_info");
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        auto pathStat = findInode(ino);
-
-        if(! pathStat) {
-            fuse_reply_err(req, EBADF);
-            co_return;
-        }
-
-        if(S_ISDIR(pathStat->statRef().st_mode)) {
-            fuse_reply_err(req, EBADF);
-            co_return;
-        }
-
-        co_await send_lock_.async_lock();
-
-        // <CMD16> - fuse cmd
-        // <FDH32> - fd handle
-        try {
-            co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(FuseOp::Release)),
-                endian::native_to_little(static_cast<uint32_t>(fi->fh)));
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        // reply format:
-        // <CMD16> - fuse cmd
-        // <ERR32> - errno
-        uint16_t cmd;
-        uint32_t err;
-
-        try {
-            co_await async_recv_values(cmd, err);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        if(cmd != FuseOp::Release) {
-            Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        if(err) {
-            Application::error("{}: recv error: {}", NS_FuncNameV, err);
-        }
-
-        fuse_reply_err(req, err);
-
-        send_lock_.unlock();
-        co_return;
-    }
-
-    asio::awaitable<void> FuseSession::cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) const {
-        Application::debug(DebugType::Fuse, "{}: ino: {}", NS_FuncNameV, ino);
-
-        if(fi) {
-            Application::debug(DebugType::Fuse, "{}: file info - flags: {:#010x}, fh: {}", NS_FuncNameV, fi->flags, fi->fh);
-        } else {
-            Application::error("{}: {} failed", NS_FuncNameV, "fuse_file_info");
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        auto pathStat = findInode(ino);
-
-        if(! pathStat) {
-            fuse_reply_err(req, EBADF);
-            co_return;
-        }
-
-        if(S_ISDIR(pathStat->statRef().st_mode)) {
-            fuse_reply_err(req, EISDIR);
-            co_return;
-        }
-
-        const size_t blockmax = 48 * 1024;
-        const size_t blocksz = std::min(maxsize, blockmax);
-
-        co_await send_lock_.async_lock();
-
-        // <CMD16> - fuse cmd
-        // <FDH32> - fd handle
-        // <SIZE16> - blocksz
-        // <OFF64> - offset
-        try {
-            co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(FuseOp::Read)),
-                endian::native_to_little(static_cast<uint32_t>(fi->fh)),
-                endian::native_to_little(static_cast<uint16_t>(blocksz)),
-                endian::native_to_little(static_cast<uint64_t>(off)));
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        // reply format:
-        // <CMD16> - fuse cmd
-        // <ERR32> - errno ot read sz
-        uint16_t cmd;
-        uint32_t err;
-
-        try {
-            co_await async_recv_values(cmd, err);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        if(cmd != FuseOp::Read) {
-            Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
-            fuse_reply_err(req, EFAULT);
-            co_return;
-        }
-
-        if(err) {
-            Application::error("{}: recv error: {}", NS_FuncNameV, err);
-            fuse_reply_err(req, err);
-            co_return;
-        }
-
-        // <LEN16><DATA> - raw data
-        using binary_buf = std::vector<char>;
-
-        try {
-            auto len = co_await async_recv_le16();
-
-            if(len) {
-                auto buf = co_await async_recv_buf<binary_buf>(len);
-                fuse_reply_buf(req, buf.data(), buf.size());
-            } else {
-                fuse_reply_buf(req, nullptr, 0);
-            }
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            fuse_reply_err(req, EFAULT);
-        }
-
-        send_lock_.unlock();
-        co_return;
-    }
-
-    asio::awaitable<void> FuseSession::cbAccess(fuse_req_t req, fuse_ino_t ino, int mask) const {
+    void FuseSession::cbAccess(fuse_req_t req, fuse_ino_t ino, int32_t mask) const {
         Application::debug(DebugType::Fuse, "{}: ino: {}, mask: {:#010x}", NS_FuncNameV, ino, mask);
+        asio::co_spawn(fuse_strand_, replyAccess(req, ino, mask), asio::detached);
+    }
 
+    asio::awaitable<void> FuseSession::replyAccess(fuse_req_t req, fuse_ino_t ino, int32_t mask) const {
         if(ino == 1) {
             fuse_reply_err(req, 0);
             co_return;
@@ -973,6 +821,167 @@ namespace LTSM {
         }
 
         fuse_reply_err(req, EINVAL);
+        co_return;
+    }
+
+    void FuseSession::cbReadDir(fuse_req_t req, fuse_ino_t ino, size_t maxsz, off_t off, int32_t flags) const {
+        Application::debug(DebugType::Fuse, "{}: ino: {}, max size: {}, offset: {}, flags: {:#010x}",
+                           NS_FuncNameV, ino, maxsz, off, flags);
+        asio::co_spawn(fuse_strand_, replyReadDir(req, ino, maxsz, off), asio::detached);
+    }
+
+    asio::awaitable<void> FuseSession::replyReadDir(fuse_req_t req, fuse_ino_t ino, size_t maxsz, off_t off) const {
+        auto pathStat = findInode(ino);
+
+        if(! pathStat) {
+            fuse_reply_err(req, ENOENT);
+            co_return;
+        }
+
+        if(! S_ISDIR(pathStat->statRef().st_mode)) {
+            fuse_reply_err(req, ENOTDIR);
+            co_return;
+        }
+
+        // relative path
+        const auto & path = pathStat->relativePath();
+        auto dirBuf = createDirBuf(req, path, pathStat->statRef());
+
+        if((size_t) off < dirBuf.size()) {
+            fuse_reply_buf(req, dirBuf.data() + off, std::min(dirBuf.size() - off, maxsz));
+        } else {
+            fuse_reply_buf(req, nullptr, 0);
+        }
+
+        co_return;
+    }
+
+    void FuseSession::cbOpen(fuse_req_t req, fuse_ino_t ino, int32_t flags) const {
+        Application::debug(DebugType::Fuse, "{}: ino: {}, flags: {:#010x}", NS_FuncNameV, ino, flags);
+
+        auto pathStat = findInode(ino);
+
+        if(! pathStat) {
+            fuse_reply_err(req, ENOENT);
+            return;
+        }
+
+        if(S_ISDIR(pathStat->statRef().st_mode)) {
+            fuse_reply_err(req, EISDIR);
+            return;
+        }
+
+        std::string path = pathStat->relativePath();
+        assert(path.size() < UINT16_MAX);
+
+        asio::co_spawn(fuse_strand_, sendOpen(req, std::move(path), flags), asio::detached);
+    }
+
+    asio::awaitable<void> FuseSession::sendOpen(fuse_req_t req, std::string path, int32_t flags) const {
+
+        co_await send_lock_.async_lock();
+
+        // <CMD16> - fuse cmd
+        // <REQ64> - fuse req
+        // <FLAG32> - open flags
+        // <LEN16><PATH> - fuse path
+        try {
+            co_await async_send_values(
+                endian::native_to_little(static_cast<uint16_t>(FuseOp::Open)),
+                endian::native_to_little(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(req))),
+                endian::native_to_little(static_cast<uint32_t>(flags)),
+                endian::native_to_little(static_cast<uint16_t>(path.size())),
+                path);
+        } catch(const std::exception & err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            fuse_reply_err(req, EFAULT);
+        }
+
+        send_lock_.unlock();
+        co_return;
+    }
+
+    void FuseSession::cbRelease(fuse_req_t req, fuse_ino_t ino, uint64_t fh) const {
+        Application::debug(DebugType::Fuse, "{}: ino: {}, fh: {}", NS_FuncNameV, ino, fh);
+
+        auto pathStat = findInode(ino);
+
+        if(! pathStat) {
+            fuse_reply_err(req, EBADF);
+            return;
+        }
+
+        if(S_ISDIR(pathStat->statRef().st_mode)) {
+            fuse_reply_err(req, EBADF);
+            return;
+        }
+
+        asio::co_spawn(fuse_strand_, sendRelease(req, fh), asio::detached);
+    }
+
+    asio::awaitable<void> FuseSession::sendRelease(fuse_req_t req, uint64_t fh) const {
+        co_await send_lock_.async_lock();
+
+        // <CMD16> - fuse cmd
+        // <REQ64> - fuse req
+        // <FDH32> - fd handle
+        try {
+            co_await async_send_values(
+                endian::native_to_little(static_cast<uint16_t>(FuseOp::Release)),
+                endian::native_to_little(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(req))),
+                endian::native_to_little(static_cast<uint32_t>(fh)));
+        } catch(const std::exception & err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            fuse_reply_err(req, EFAULT);
+        }
+
+        send_lock_.unlock();
+        co_return;
+    }
+
+    void FuseSession::cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsz, off_t off, uint64_t fh) const {
+        Application::debug(DebugType::Fuse, "{}: ino: {}, fh: {}", NS_FuncNameV, ino, fh);
+
+        auto pathStat = findInode(ino);
+
+        if(! pathStat) {
+            fuse_reply_err(req, EBADF);
+            return;
+        }
+
+        if(S_ISDIR(pathStat->statRef().st_mode)) {
+            fuse_reply_err(req, EISDIR);
+            return;
+        }
+
+        const size_t blockmax = 48 * 1024;
+        const size_t blocksz = std::min(maxsz, blockmax);
+
+        asio::co_spawn(fuse_strand_, sendRead(req, blocksz, off, fh), asio::detached);
+    }
+
+    asio::awaitable<void> FuseSession::sendRead(fuse_req_t req, size_t blocksz, off_t off, uint64_t fh) const {
+
+        co_await send_lock_.async_lock();
+
+        // <CMD16> - fuse cmd
+        // <REQ64> - fuse req
+        // <FDH32> - fd handle
+        // <SIZE16> - blocksz
+        // <OFF64> - offset
+        try {
+            co_await async_send_values(
+                endian::native_to_little(static_cast<uint16_t>(FuseOp::Read)),
+                endian::native_to_little(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(req))),
+                endian::native_to_little(static_cast<uint32_t>(fh)),
+                endian::native_to_little(static_cast<uint16_t>(blocksz)),
+                endian::native_to_little(static_cast<uint64_t>(off)));
+        } catch(const std::exception & err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            fuse_reply_err(req, EFAULT);
+        }
+
+        send_lock_.unlock();
         co_return;
     }
 
@@ -1051,7 +1060,7 @@ namespace LTSM {
                            NS_FuncNameV, localPoint, remotePoint, socketPath);
 
         if(std::ranges::any_of(childs_, [&](auto & ptr) {
-            return ptr->localPath(localPoint) && ptr->socketConnected(); })) {
+                return ptr->localPath(localPoint) && ptr->socketConnected(); })) {
             Application::error("{}: point busy, point: `{}'", NS_FuncNameV, localPoint);
             return false;
         }
