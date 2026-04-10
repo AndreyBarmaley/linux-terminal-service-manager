@@ -43,7 +43,6 @@ using namespace boost;
 Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
     AsyncSocket<asio::local::stream_protocol::socket>(member.get_executor()),
     ioc_{member},
-    work_guard_{asio::make_work_guard(ioc_)},
     send_lock_{ioc_.get_executor()},
     templatePath{"/var/run/ltsm/pkcs11/%{display}/sock"} {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
@@ -58,74 +57,83 @@ Pkcs11Client::~Pkcs11Client() {
     }
 }
 
-void Pkcs11Client::stop(void) {
-    update_tokens_.emit(asio::cancellation_type::terminal);
-
-    system::error_code ec;
-    socket().cancel(ec);
-    socket().close(ec);
-
-    work_guard_.reset();
+void Pkcs11Client::stop(void) noexcept {
+    try {
+        socket().cancel();
+        client_cancel_.emit(asio::cancellation_type::terminal);
+    } catch(...) {
+    }
 }
 
 void Pkcs11Client::run(void) {
-    asio::co_spawn(ioc_, remoteConnect(), asio::detached);
+    asio::co_spawn(ioc_, clientHandler(),
+        asio::bind_cancellation_slot(client_cancel_.slot(), asio::detached));
 
     ioc_.run();
     Q_EMIT pkcs11Shutdown();
 }
 
-asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
-    const int attempts = 7;
-    const auto path = templatePath.toStdString();
+asio::awaitable<void> Pkcs11Client::clientHandler(void) {
+    const int attempts = 5;
+    try {
+        co_await retryConnect(templatePath.toStdString(), attempts);
+        co_await remoteHandshake();
+        co_await updateTokensTimer();
+    } catch(const boost::system::system_error& err) {
+        auto ec = err.code();
+        if(ec != asio::error::operation_aborted) {
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+        }
+    } catch(const std::exception & err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        asio::post(ioc_, std::bind(&Pkcs11Client::stop, this));
+        Q_EMIT pkcs11Error("PKCS11 initialization failed");
+    }
+}
+
+asio::awaitable<void> Pkcs11Client::retryConnect(const std::string& path, int attempts) {
+    auto ex = co_await asio::this_coro::executor;
+    asio::steady_timer timer{ex};
 
     for(int it = 1; it <= attempts; it++) {
         try {
             co_await socket().async_connect(path, asio::use_awaitable);
-            break;
+            Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", NS_FuncNameV, path);
+            co_return;
         } catch(const system::system_error& err) {
             if(it == attempts) {
-                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}", NS_FuncNameV, "connect", path, attempts, err.code().message());
-                co_return;
+                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}",
+                    NS_FuncNameV, "connect", path, attempts, err.code().message());
+                throw system::system_error(asio::error::operation_aborted);
             }
         }
 
-        asio::steady_timer timer{ioc_, 300ms};
+        timer.expires_after(300ms);
         co_await timer.async_wait(asio::use_awaitable);
     }
+}
 
-    Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", NS_FuncNameV, path);
+asio::awaitable<void> Pkcs11Client::remoteHandshake(void) {
     uint16_t cmd, err;
 
-    try {
-        co_await async_send_values(
+    co_await async_send_values(
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::Init)),
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::ProtoVer)));
 
-        // client reply: cmd16, err16
-        co_await async_recv_values(cmd, err);
-        endian::little_to_native_inplace(cmd);
-        endian::little_to_native_inplace(err);
-    } catch(const std::exception & exp) {
-        Application::error("{}: exception: {}", NS_FuncNameV, "PKCS11 initialization failed");
-        Q_EMIT pkcs11Error("PKCS11 initialization failed");
-        stop();
-        co_return;
-    }
+    // client reply: cmd16, err16
+    co_await async_recv_values(cmd, err);
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(err);
 
     if(cmd != Pkcs11Op::Init) {
         Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
-        Q_EMIT pkcs11Error("PKCS11 initialization failed");
-        stop();
-        co_return;
+        throw pkcs11_error(NS_FuncNameS);
     }
 
     if(err) {
         auto str = co_await async_recv_buf<std::string>(err);
         Application::error("{}: recv error: {}", NS_FuncNameV, str);
-        Q_EMIT pkcs11Error(QString("PKCS11 error: %1").arg(str.c_str()));
-        stop();
-        co_return;
+        throw pkcs11_error(NS_FuncNameS);
     }
 
     // proto version
@@ -133,9 +141,7 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
     if(protoVer != Pkcs11Op::ProtoVer) {
         Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
-        Q_EMIT pkcs11Error("PKCS11 initialization failed");
-        stop();
-        co_return;
+        throw pkcs11_error(NS_FuncNameS);
     }
 
     Application::debug(DebugType::Pkcs11, "{}: proto version: {}", NS_FuncNameV, protoVer);
@@ -162,40 +168,27 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
     Application::debug(DebugType::Pkcs11, "{}: library version: {}.{}",
                        NS_FuncNameV, info.libraryVersion.major, info.libraryVersion.minor);
-
-    // update tokens timer
-    asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
-
     co_return;
 }
 
 asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
-    bool success = false;
+    auto ex = co_await asio::this_coro::executor;
+    asio::steady_timer timer{ex};
 
-    try {
-        for(;;) {
-            asio::steady_timer timer(ioc_, std::chrono::milliseconds(450));
-            co_await timer.async_wait(asio::use_awaitable);
-            co_await send_lock_.async_lock();
-            auto success = co_await updateTokens();
-            send_lock_.unlock();
+    for(;;) {
+        timer.expires_after(450ms);
+        co_await timer.async_wait(asio::use_awaitable);
 
-            if(success) {
-                Q_EMIT pkcs11TokensChanged();
-            }
+        co_await send_lock_.async_lock();
+        bool success = co_await updateTokens();
+        send_lock_.unlock();
+
+        if(success) {
+            Q_EMIT pkcs11TokensChanged();
         }
-    } catch(const boost::system::system_error& err) {
-        auto ec = err.code();
-
-        if(ec != asio::error::operation_aborted) {
-            Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "timer", ec.value(), ec.message());
-        }
-    } catch(const std::exception& err) {
-        Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
-        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> { stop(); co_return; }, asio::detached);
     }
 
-    send_lock_.unlock();
+    co_return;
 }
 
 asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
