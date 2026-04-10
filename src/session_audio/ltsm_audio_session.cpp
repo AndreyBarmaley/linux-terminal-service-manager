@@ -27,6 +27,7 @@
 #include <filesystem>
 
 #include <boost/container/small_vector.hpp>
+#include <boost/asio/experimental/awaitable_operators.hpp>
 
 #include "ltsm_tools.h"
 #include "ltsm_audio.h"
@@ -37,6 +38,7 @@
 
 using namespace std::chrono_literals;
 using namespace boost;
+using namespace boost::asio::experimental::awaitable_operators;
 
 namespace LTSM {
 #ifdef LTSM_WITH_PULSE
@@ -58,17 +60,18 @@ namespace LTSM {
     }
 
     asio::awaitable<void> AudioClient::retryConnect(const std::string & path, int attempts) {
-        auto executor = co_await asio::this_coro::executor;
-        asio::steady_timer timer{executor};
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
 
         for(int it = 1; it <= attempts; it++) {
             try {
                 co_await socket().async_connect(path, asio::use_awaitable);
+                Application::debug(DebugType::Audio, "{}: connected, path: {}", NS_FuncNameV, path);
                 co_return;
             } catch(const system::system_error& ec) {
                 if(it == attempts) {
                     Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
-                    throw;
+                    throw system::system_error(asio::error::operation_aborted);
                 }
             }
 
@@ -163,18 +166,16 @@ namespace LTSM {
         }
 
         co_await timerWaitEngine();
-
-        co_return;
     }
 
     asio::awaitable<void> AudioClient::timerWaitEngine(void)
     {
-        auto executor = co_await asio::this_coro::executor;
-        asio::steady_timer timer_init(executor);
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
 
-        while(true) {
-            timer_init.expires_after(300ms);
-            co_await timer_init.async_wait(asio::use_awaitable);
+        for(;;) {
+            timer.expires_after(300ms);
+            co_await timer.async_wait(asio::use_awaitable);
 
             if(engineInit()) {
                 co_return;
@@ -182,8 +183,6 @@ namespace LTSM {
 
             LTSM::Application::debug(DebugType::Audio, "{}: wait audio engine init...", NS_FuncNameV);
         }
-
-        co_return;
     }
 
     bool AudioClient::engineInit(void) {
@@ -242,7 +241,7 @@ namespace LTSM {
         Application::debug(DebugType::Audio, "{}: data size: {}, packets: {}", NS_FuncNameV, span.size(), packets.size());
 
         asio::co_spawn(strand_, [this, list = std::move(packets)]() -> asio::awaitable<void> {
-            boost::container::small_vector<boost::asio::const_buffer, 3> buffers;
+            container::small_vector<asio::const_buffer, 3> buffers;
             for(auto & pkt : list) {
                 buffers.clear();
                 buffers.emplace_back(&pkt->id_, sizeof(pkt->id_));
@@ -253,9 +252,12 @@ namespace LTSM {
                 // send all buffers
                 try {
                     co_await async_send_buf(buffers);
-                } catch(const boost::system::system_error& err) {
+                } catch(const system::system_error& err) {
                     auto ec = err.code();
-                    Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "dataReadyNotify", "write", ec.value(), ec.message());
+                    if(ec != asio::error::operation_aborted) {
+                        Application::error("{}: system error: `{}', code: {}",
+                                NS_FuncNameV, ec.message(), ec.value());
+                    }
                     socket().close();
                     co_return;
                 }
@@ -310,7 +312,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
-        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)}, dbus_sd_{ioc_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -320,44 +322,71 @@ namespace LTSM {
 
     AudioSessionBus::~AudioSessionBus() {
         unregisterAdaptor();
-        stop();
     }
 
     void AudioSessionBus::stop(void) {
+        dbus_sd_.cancel();
+        connect_cancel_.emit(asio::cancellation_type::terminal);
         clients_.clear();
         signals_.cancel();
-        dbus_conn_->leaveEventLoop();
+    }
+
+    asio::awaitable<void> AudioSessionBus::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+    asio::awaitable<void> AudioSessionBus::sdbusHandler(void) {
+        auto pollData = dbus_conn_->getEventLoopPollData();
+        dbus_sd_.assign(pollData.fd);
+
+        try {
+            for(;;) {
+                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+#ifdef SDBUS_2_0_API
+                while(dbus_conn_->processPendingEvent()) {
+#else
+                while(dbus_conn_->processPendingRequest()) {
+#endif
+                    std::this_thread::yield();
+                }
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+            }
+        } catch(const sdbus::Error& err) {
+            Application::error("{}: sdbus error: {}", NS_FuncNameV, err.what());
+            asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
+        }
     }
 
     int AudioSessionBus::start(void) {
 
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
-
-        signals_.add(SIGTERM);
-        signals_.add(SIGINT);
-
-        signals_.async_wait([this](const system::error_code & ec, int signal) {
-            // skip canceled
-            if(ec != asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
-                this->stop();
-            }
-        });
-
-        auto sdbus_job = std::thread([this]() {
-            try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
-            }
-        });
+        asio::co_spawn(ioc_, sdbusHandler() && signalsHandler(), asio::detached);
 
         ioc_.run();
 
-        dbus_conn_->leaveEventLoop();
-        sdbus_job.join();
-
-        Application::notice("{}: Audio session shutdown", NS_FuncNameV);
+        Application::notice("{}: service shutdown", NS_FuncNameV);
         return EXIT_SUCCESS;
     }
 
@@ -385,7 +414,7 @@ namespace LTSM {
             return false;
         }
 
-        asio::co_spawn(ioc_,
+        asio::co_spawn(clients_strand_,
         [socketPath, this]() -> asio::awaitable<void>  {
             auto executor = co_await asio::this_coro::executor;
             auto client = std::make_unique<AudioClient>(executor);
@@ -396,12 +425,15 @@ namespace LTSM {
                 clients_.emplace_front(std::move(client));
             } catch(const system::system_error& err) {
                 auto ec = err.code();
-                Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "remoteHandshake", "asio", ec.value(), ec.message());
+                if(ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: `{}', code: {}",
+                        NS_FuncNameV, ec.message(), ec.value());
+                }
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
 
-        }, asio::detached);
+        }, asio::bind_cancellation_slot(connect_cancel_.slot(), asio::detached));
 
         return true;
     }
@@ -441,8 +473,6 @@ int main(int argc, char** argv) {
         auto conn = sdbus::createSessionBusConnection(LTSM::dbus_session_audio_name);
 #endif
         return LTSM::AudioSessionBus(std::move(conn), debug).start();
-    } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

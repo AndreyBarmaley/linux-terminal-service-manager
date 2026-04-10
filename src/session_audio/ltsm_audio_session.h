@@ -98,11 +98,16 @@ namespace LTSM {
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
+        boost::asio::cancellation_signal connect_cancel_;
+        boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
+        boost::asio::posix::stream_descriptor dbus_sd_;
 
         DBusConnectionPtr dbus_conn_;
         std::forward_list<AudioClientPtr> clients_;
 
       protected:
+        boost::asio::awaitable<void> signalsHandler(void);
+        boost::asio::awaitable<void> sdbusHandler(void);
         void stop(void);
 
       public:
