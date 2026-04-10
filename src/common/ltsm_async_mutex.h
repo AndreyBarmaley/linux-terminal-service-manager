@@ -59,6 +59,10 @@ namespace LTSM {
                 }
             }
         }
+
+        void cancel(void) {
+            timer_.cancel();
+        }
     };
 }
 
