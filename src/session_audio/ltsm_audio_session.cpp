@@ -358,7 +358,6 @@ namespace LTSM {
 
         try {
             for(;;) {
-                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
 #ifdef SDBUS_2_0_API
                 while(dbus_conn_->processPendingEvent()) {
 #else
@@ -366,6 +365,8 @@ namespace LTSM {
 #endif
                     std::this_thread::yield();
                 }
+                // sdbus: order is important here
+                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
             }
         } catch(const system::system_error& err) {
             auto ec = err.code();
@@ -440,8 +441,10 @@ namespace LTSM {
 
     void AudioSessionBus::disconnectChannel(const std::string & socketPath) {
         Application::debug(DebugType::Dbus, "{}: socket path: `{}'", NS_FuncNameV, socketPath);
-        std::erase_if(clients_, [&socketPath](auto & cli) {
-            return cli->socketPath(socketPath);
+        asio::post(clients_strand_, [this, socketPath]() {
+            std::erase_if(clients_, [&socketPath](auto & cli) {
+                return cli->socketPath(socketPath);
+            });
         });
     }
 }

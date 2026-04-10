@@ -1042,7 +1042,6 @@ namespace LTSM {
 
         try {
             for(;;) {
-                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
 #ifdef SDBUS_2_0_API
                 while(dbus_conn_->processPendingEvent()) {
 #else
@@ -1050,6 +1049,8 @@ namespace LTSM {
 #endif
                     std::this_thread::yield();
                 }
+                // sdbus: order is important here
+                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
             }
         } catch(const system::system_error& err) {
             auto ec = err.code();
@@ -1124,8 +1125,11 @@ namespace LTSM {
 
     void FuseSessionBus::umountPoint(const std::string & localPoint) {
         LTSM::Application::debug(DebugType::Dbus, "{}: local point: `{}'", NS_FuncNameV, localPoint);
-        std::erase_if(childs_, [&](auto & ptr) {
-            return ptr->localPath(localPoint);
+
+        asio::post(clients_strand_, [this, localPoint]() {
+            std::erase_if(childs_, [&](auto & ptr) {
+                return ptr->localPath(localPoint);
+            });
         });
     }
 }
