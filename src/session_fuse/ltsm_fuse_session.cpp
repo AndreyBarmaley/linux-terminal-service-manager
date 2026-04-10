@@ -992,7 +992,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_fuse_path),
 #endif
-        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)}, dbus_sd_{ioc_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -1002,45 +1002,74 @@ namespace LTSM {
 
     FuseSessionBus::~FuseSessionBus() {
         unregisterAdaptor();
-        stop();
     }
 
-    void FuseSessionBus::stop(void) {
-        childs_.clear();
-        signals_.cancel();
-        dbus_conn_->leaveEventLoop();
+    void FuseSessionBus::stop(void) noexcept {
+        try {
+            dbus_sd_.cancel();
+            connect_cancel_.emit(asio::cancellation_type::terminal);
+            childs_.clear();
+            signals_.cancel();
+        } catch(...) {
+        }
+    }
+
+    asio::awaitable<void> FuseSessionBus::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+        signals_.add(SIGPIPE);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc_, std::bind(&FuseSessionBus::stop, this));
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+    asio::awaitable<void> FuseSessionBus::sdbusHandler(void) {
+        auto pollData = dbus_conn_->getEventLoopPollData();
+        dbus_sd_.assign(pollData.fd);
+
+        try {
+            for(;;) {
+                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+#ifdef SDBUS_2_0_API
+                while(dbus_conn_->processPendingEvent()) {
+#else
+                while(dbus_conn_->processPendingRequest()) {
+#endif
+                    std::this_thread::yield();
+                }
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+            }
+        } catch(const sdbus::Error& err) {
+            Application::error("{}: sdbus error: {}", NS_FuncNameV, err.what());
+            asio::post(ioc_, std::bind(&FuseSessionBus::stop, this));
+        }
     }
 
     int FuseSessionBus::start(void) {
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
 
-        std::signal(SIGPIPE, SIG_IGN);
-
-        signals_.add(SIGTERM);
-        signals_.add(SIGINT);
-
-        signals_.async_wait([this](const system::error_code & ec, int signal) {
-            // skip canceled
-            if(ec != asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
-                this->stop();
-            }
-        });
-
-        auto sdbus_job = std::thread([this]() {
-            try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                asio::post(ioc_, std::bind(&FuseSessionBus::stop, this));
-            }
-        });
-
+        asio::co_spawn(ioc_, sdbusHandler() && signalsHandler(), asio::detached);
         ioc_.run();
 
-        dbus_conn_->leaveEventLoop();
-        sdbus_job.join();
-
-        Application::debug(DebugType::App, "Fuse session shutdown");
+        Application::notice("{}: service shutdown", NS_FuncNameV);
         return EXIT_SUCCESS;
     }
 
@@ -1065,9 +1094,9 @@ namespace LTSM {
             return false;
         }
 
-        asio::co_spawn(ioc_, [localPoint, remotePoint, socketPath, this]() -> asio::awaitable<void>  {
-            auto executor = co_await asio::this_coro::executor;
-            auto sess = std::make_unique<FuseSession>(executor, localPoint, remotePoint);
+        asio::co_spawn(clients_strand_, [localPoint, remotePoint, socketPath, this]() -> asio::awaitable<void>  {
+            auto ex = co_await asio::this_coro::executor;
+            auto sess = std::make_unique<FuseSession>(ex, localPoint, remotePoint);
 
             try {
                 co_await sess->retryConnect(socketPath, 5);
@@ -1078,12 +1107,12 @@ namespace LTSM {
                 }
             } catch(const system::system_error& err) {
                 auto ec = err.code();
-                Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "remoteHandshake", "asio", ec.value(), ec.message());
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
 
-        }, asio::detached);
+        }, asio::bind_cancellation_slot(connect_cancel_.slot(), asio::detached));
 
         return true;
     }

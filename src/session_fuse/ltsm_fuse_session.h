@@ -41,12 +41,17 @@ namespace LTSM {
     class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Fuse_adaptor> {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
+        boost::asio::cancellation_signal connect_cancel_;
+        boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
+        boost::asio::posix::stream_descriptor dbus_sd_;
 
         DBusConnectionPtr dbus_conn_;
         std::forward_list<FuseSessionPtr> childs_;
 
       protected:
-        void stop(void);
+        boost::asio::awaitable<void> signalsHandler(void);
+        boost::asio::awaitable<void> sdbusHandler(void);
+        void stop(void) noexcept;
 
       public:
         FuseSessionBus(DBusConnectionPtr, bool debug = false);
