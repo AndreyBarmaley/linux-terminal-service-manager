@@ -1706,8 +1706,8 @@ namespace LTSM {
             endian::native_to_little(context),
             endian::native_to_little(ret));
 
-        asio::co_spawn(socket().get_executor(),
-                       std::bind(&PcscSessionBus::handlerStopClient, session_, cancelContext), asio::detached);
+        asio::post(socket().get_executor(),
+                       std::bind(&PcscSessionBus::stopClientContext, session_, cancelContext));
 
         co_return true;
     }
@@ -1793,7 +1793,8 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_pcsc_path),
 #endif
-        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        SDBus::AsioCoroConnector(std::move(conn)),
+        signals_ {ioc_} {
         registerAdaptor();
 
         if(debug) {
@@ -1803,17 +1804,52 @@ namespace LTSM {
 
     PcscSessionBus::~PcscSessionBus() {
         unregisterAdaptor();
-        stop();
     }
 
     void PcscSessionBus::stop(void) {
+        sdbusLoopCancel();
         listen_stop_.emit(asio::cancellation_type::terminal);
+        clients_.clear();
+        remote_.reset();
         signals_.cancel();
-        dbus_conn_->leaveEventLoop();
+    }
+
+    asio::awaitable<void> PcscSessionBus::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+    asio::awaitable<void> PcscSessionBus::sdbusHandler(void) {
+        try {
+            co_await sdbusEventLoop();
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+        } catch(const sdbus::Error& err) {
+            Application::error("{}: sdbus error: {}", NS_FuncNameV, err.what());
+            asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
+        }
     }
 
     int PcscSessionBus::start(void) {
-        Application::info("{}: uid: {}, pid: {}, version: {}", NS_FuncNameV, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
+        Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
 
         auto pcsc_path = getenv("PCSCLITE_CSOCK_NAME");
 
@@ -1827,33 +1863,12 @@ namespace LTSM {
         pcsc_ep_.path(pcsc_path);
         remote_ = std::make_shared<PcscRemote>(asio::local::stream_protocol::socket{ioc_});
 
-        signals_.add(SIGTERM);
-        signals_.add(SIGINT);
-
-        signals_.async_wait([this](const system::error_code & ec, int signal) {
-            // skip canceled
-            if(ec != asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
-                this->stop();
-            }
-        });
-
-        auto sdbus_job = std::thread([this]() {
-            try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
-            }
-        });
-
         // main loop
+        asio::co_spawn(ioc_, sdbusHandler(), asio::detached);
+        asio::co_spawn(ioc_, signalsHandler(), asio::detached);
         ioc_.run();
 
-        dbus_conn_->leaveEventLoop();
-        sdbus_job.join();
-
-        Application::notice("{}: PCSC session shutdown", NS_FuncNameV);
-
+        Application::notice("{}: service shutdown", NS_FuncNameV);
         std::filesystem::remove(pcsc_path);
 
         return EXIT_SUCCESS;
@@ -1874,24 +1889,23 @@ namespace LTSM {
         setDebugLevel(level);
     }
 
-    asio::awaitable<void> PcscSessionBus::handlerStopClient(uint64_t ctx) {
+    void PcscSessionBus::stopClientContext(uint64_t ctx) {
 
-        asio::co_spawn(clients_guard_, [this, ctx]() -> asio::awaitable<void> {
-            auto it = std::find_if(clients_.begin(), clients_.end(), [ = ](auto & cli) {
-                return cli.proxyContext() == ctx;
-            });
+        auto it = std::find_if(clients_.begin(), clients_.end(), [ = ](auto & cli) {
+            return cli.proxyContext() == ctx;
+        });
 
-            if(it != clients_.end()) {
-                Application::debug(DebugType::Dbus, "{}: stop remote: {:#018x}", "handlerStopClient", ctx);
+        if(it != clients_.end()) {
+            Application::debug(DebugType::Dbus, "{}: stop remote: {:#018x}", "stopClientHandler", ctx);
+
+            asio::co_spawn(clients_guard_, [it]() -> asio::awaitable<void> {
                 it->stopSignal();
-            }
-            co_return;
-        }, asio::detached);
-
-        co_return;
+                co_return;
+            }, asio::detached);
+        }
     }
 
-    asio::awaitable<void> PcscSessionBus::handlerLocalAccept(PcscLocal & client) {
+    asio::awaitable<void> PcscSessionBus::acceptHandler(PcscLocal & client) {
 
         Application::debug(DebugType::App, "{}: clientId: {}", NS_FuncNameV, client.id());
         bool success = true;
@@ -1903,8 +1917,8 @@ namespace LTSM {
                 auto ec = err.code();
 
                 if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
-                    Application::error("{}: {} failed, code: {}, error: {}",
-                                       NS_FuncNameV, "handlerClientWaitCommand", ec.value(), ec.message());
+                    Application::error("{}: system error: {}, code: {}",
+                                       NS_FuncNameV, ec.message(), ec.value());
                 }
 
                 co_return;
@@ -1922,7 +1936,7 @@ namespace LTSM {
         co_return;
     }
 
-    void PcscSessionBus::handlerLocalStopped(const PcscLocal* client, std::exception_ptr eptr) {
+    void PcscSessionBus::clientStoppedHandler(const PcscLocal* client, std::exception_ptr eptr) {
         auto it = std::find_if(clients_.begin(), clients_.end(), [&](auto & cli) {
             return client == std::addressof(cli);
         });
@@ -1935,7 +1949,7 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> PcscSessionBus::handlerLocalListener(void) {
+    asio::awaitable<void> PcscSessionBus::listenerHandler(void) {
         try {
             auto executor = co_await asio::this_coro::executor;
             asio::local::stream_protocol::acceptor acceptor(executor, pcsc_ep_);
@@ -1948,15 +1962,15 @@ namespace LTSM {
                 auto & client = clients_.back();
 
                 auto token = asio::bind_cancellation_slot(client.stopSlot(),
-                             std::bind(&PcscSessionBus::handlerLocalStopped, this, &client, std::placeholders::_1));
+                             std::bind(&PcscSessionBus::clientStoppedHandler, this, &client, std::placeholders::_1));
 
-                asio::co_spawn(executor, handlerLocalAccept(client), std::move(token));
+                asio::co_spawn(executor, acceptHandler(client), std::move(token));
             }
         } catch(const system::system_error& err) {
             auto ec = err.code();
 
             if(ec != asio::error::operation_aborted) {
-                Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "handlerLocalAccept", ec.value(), ec.message());
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
         }
 
@@ -1988,7 +2002,7 @@ namespace LTSM {
                 Application::warning("{}: old socket removed", NS_FuncNameV);
             }
 
-            asio::co_spawn(clients_guard_, handlerLocalListener(),
+            asio::co_spawn(clients_guard_, listenerHandler(),
                            asio::bind_cancellation_slot(listen_stop_.slot(), asio::detached));
 
             return true;
@@ -2032,8 +2046,6 @@ int main(int argc, char** argv) {
 #endif
 
         return LTSM::PcscSessionBus(std::move(conn), debug).start();
-    } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

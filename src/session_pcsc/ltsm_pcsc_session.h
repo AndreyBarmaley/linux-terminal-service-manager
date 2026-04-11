@@ -25,22 +25,19 @@
 #define _LTSM_PCSC_SESSION_
 
 #include <tuple>
-#include <thread>
-#include <atomic>
 #include <memory>
-#include <future>
 #include <string>
 #include <vector>
-#include <functional>
 #include <forward_list>
 
 #include "pcsclite.h"
 
 #include "ltsm_pcsc.h"
-#include "ltsm_async_socket.h"
-#include "ltsm_application.h"
-#include "ltsm_pcsc_adaptor.h"
+#include "ltsm_async_sdbus.h"
 #include "ltsm_async_mutex.h"
+#include "ltsm_application.h"
+#include "ltsm_async_socket.h"
+#include "ltsm_pcsc_adaptor.h"
 
 namespace PcscLite {
     // origin READER_STATE: PCSC/src/eventhandler.h
@@ -242,26 +239,27 @@ namespace LTSM {
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
-    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor> {
+    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
 
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;
-
         boost::asio::cancellation_signal listen_stop_;
 
         std::list<PcscLocal> clients_;
         boost::asio::strand<boost::asio::any_io_executor> clients_guard_{ioc_.get_executor()};
 
-        DBusConnectionPtr dbus_conn_;
         std::shared_ptr<PcscRemote> remote_;
 
       protected:
         void stop(void);
 
-        [[nodiscard]] boost::asio::awaitable<void> handlerLocalAccept(PcscLocal & client);
-        [[nodiscard]] boost::asio::awaitable<void> handlerLocalListener(void);
-        void handlerLocalStopped(const PcscLocal* client, std::exception_ptr);
+        [[nodiscard]] boost::asio::awaitable<void> signalsHandler(void);
+        [[nodiscard]] boost::asio::awaitable<void> sdbusHandler(void);
+        [[nodiscard]] boost::asio::awaitable<void> acceptHandler(PcscLocal & client);
+        [[nodiscard]] boost::asio::awaitable<void> listenerHandler(void);
+
+        void clientStoppedHandler(const PcscLocal* client, std::exception_ptr);
 
       public:
         PcscSessionBus(DBusConnectionPtr, bool debug = false);
@@ -269,7 +267,7 @@ namespace LTSM {
 
         int start(void);
 
-        [[nodiscard]] boost::asio::awaitable<void> handlerStopClient(uint64_t);
+        void stopClientContext(uint64_t);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
