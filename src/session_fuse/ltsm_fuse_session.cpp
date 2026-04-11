@@ -26,7 +26,6 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
-
 #include <map>
 #include <mutex>
 #include <chrono>
@@ -37,6 +36,7 @@
 #include <iostream>
 #include <exception>
 #include <unordered_map>
+
 #include <boost/asio/experimental/awaitable_operators.hpp>
 
 #include "ltsm_tools.h"
@@ -51,7 +51,6 @@
 
 using namespace std::chrono_literals;
 using namespace boost;
-using namespace boost::asio::experimental::awaitable_operators;
 
 namespace LTSM {
     const char* argv2[] = { "ltsm_fuse", nullptr };
@@ -460,6 +459,7 @@ namespace LTSM {
             stopped.set_value();
         });
 
+        using namespace asio::experimental::awaitable_operators;
         asio::co_spawn(socket().get_executor(), fuseCmdSend() && fuseCmdRecv(), std::move(stop_token));
 
         return true;
@@ -992,7 +992,8 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_fuse_path),
 #endif
-        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)}, dbus_sd_{ioc_}, dbus_conn_ {std::move(conn)} {
+        SDBus::AsioCoroConnector(std::move(conn)),
+        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)} {
         registerAdaptor();
 
         if(debug) {
@@ -1006,7 +1007,7 @@ namespace LTSM {
 
     void FuseSessionBus::stop(void) noexcept {
         try {
-            dbus_sd_.cancel();
+            sdbusLoopCancel();
             connect_cancel_.emit(asio::cancellation_type::terminal);
             childs_.clear();
             signals_.cancel();
@@ -1037,27 +1038,12 @@ namespace LTSM {
     }
 
     asio::awaitable<void> FuseSessionBus::sdbusHandler(void) {
-        auto pollData = dbus_conn_->getEventLoopPollData();
-        dbus_sd_.assign(pollData.fd);
-
         try {
-            for(;;) {
-#ifdef SDBUS_2_0_API
-                while(dbus_conn_->processPendingEvent()) {
-#else
-                while(dbus_conn_->processPendingRequest()) {
-#endif
-                    std::this_thread::yield();
-                }
-                // sdbus: order is important here
-                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
-            }
+            co_await sdbusEventLoop();
         } catch(const system::system_error& err) {
             auto ec = err.code();
-            if(ec != asio::error::operation_aborted) {
-                Application::error("{}: system error: `{}', code: {}",
+            Application::error("{}: system error: `{}', code: {}",
                     NS_FuncNameV, ec.message(), ec.value());
-            }
         } catch(const sdbus::Error& err) {
             Application::error("{}: sdbus error: {}", NS_FuncNameV, err.what());
             asio::post(ioc_, std::bind(&FuseSessionBus::stop, this));
@@ -1067,7 +1053,8 @@ namespace LTSM {
     int FuseSessionBus::start(void) {
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
 
-        asio::co_spawn(ioc_, sdbusHandler() && signalsHandler(), asio::detached);
+        asio::co_spawn(ioc_, sdbusHandler(), asio::detached);
+        asio::co_spawn(ioc_, signalsHandler(), asio::detached);
         ioc_.run();
 
         Application::notice("{}: service shutdown", NS_FuncNameV);
@@ -1161,8 +1148,6 @@ int main(int argc, char** argv) {
         auto conn = sdbus::createSessionBusConnection(LTSM::dbus_session_fuse_name);
 #endif
         return LTSM::FuseSessionBus(std::move(conn), debug).start();
-    } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
