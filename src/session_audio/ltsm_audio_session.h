@@ -31,6 +31,7 @@
 #include <forward_list>
 
 #include "ltsm_application.h"
+#include "ltsm_async_sdbus.h"
 #include "ltsm_async_socket.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
@@ -95,14 +96,12 @@ namespace LTSM {
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
     using AudioClientPtr = std::unique_ptr<AudioClient>;
 
-    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
+    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
         boost::asio::cancellation_signal connect_cancel_;
         boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
-        boost::asio::posix::stream_descriptor dbus_sd_;
 
-        DBusConnectionPtr dbus_conn_;
         std::forward_list<AudioClientPtr> clients_;
 
       protected:

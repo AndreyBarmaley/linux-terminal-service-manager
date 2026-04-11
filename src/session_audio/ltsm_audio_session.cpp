@@ -27,7 +27,6 @@
 #include <filesystem>
 
 #include <boost/container/small_vector.hpp>
-#include <boost/asio/experimental/awaitable_operators.hpp>
 
 #include "ltsm_tools.h"
 #include "ltsm_audio.h"
@@ -38,7 +37,6 @@
 
 using namespace std::chrono_literals;
 using namespace boost;
-using namespace boost::asio::experimental::awaitable_operators;
 
 namespace LTSM {
 #ifdef LTSM_WITH_PULSE
@@ -312,7 +310,8 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
-        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)}, dbus_sd_{ioc_}, dbus_conn_ {std::move(conn)} {
+        SDBus::AsioCoroConnector(std::move(conn)),
+        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)} {
         registerAdaptor();
 
         if(debug) {
@@ -325,7 +324,7 @@ namespace LTSM {
     }
 
     void AudioSessionBus::stop(void) {
-        dbus_sd_.cancel();
+        sdbusLoopCancel();
         connect_cancel_.emit(asio::cancellation_type::terminal);
         clients_.clear();
         signals_.cancel();
@@ -353,27 +352,12 @@ namespace LTSM {
     }
 
     asio::awaitable<void> AudioSessionBus::sdbusHandler(void) {
-        auto pollData = dbus_conn_->getEventLoopPollData();
-        dbus_sd_.assign(pollData.fd);
-
         try {
-            for(;;) {
-#ifdef SDBUS_2_0_API
-                while(dbus_conn_->processPendingEvent()) {
-#else
-                while(dbus_conn_->processPendingRequest()) {
-#endif
-                    std::this_thread::yield();
-                }
-                // sdbus: order is important here
-                co_await dbus_sd_.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
-            }
+            co_await sdbusEventLoop();
         } catch(const system::system_error& err) {
             auto ec = err.code();
-            if(ec != asio::error::operation_aborted) {
-                Application::error("{}: system error: `{}', code: {}",
+            Application::error("{}: system error: `{}', code: {}",
                     NS_FuncNameV, ec.message(), ec.value());
-            }
         } catch(const sdbus::Error& err) {
             Application::error("{}: sdbus error: {}", NS_FuncNameV, err.what());
             asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
@@ -383,7 +367,9 @@ namespace LTSM {
     int AudioSessionBus::start(void) {
 
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
-        asio::co_spawn(ioc_, sdbusHandler() && signalsHandler(), asio::detached);
+
+        asio::co_spawn(ioc_, sdbusHandler(), asio::detached);
+        asio::co_spawn(ioc_, signalsHandler(), asio::detached);
 
         ioc_.run();
 
