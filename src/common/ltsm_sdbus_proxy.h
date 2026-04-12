@@ -63,8 +63,8 @@ namespace LTSM::SDBus {
             try {
                 return static_cast<Type>(proxy->getProperty(prop).onInterface(interface));
             } catch(const sdbus::Error &err) {
-                Application::error("{}: failed, sdbus error: {}, msg: {}",
-                                   NS_FuncNameV, err.getName(), err.getMessage());
+                Application::error("{}: failed, prop: {}, sdbus error: {}",
+                    NS_FuncNameV, prop, err.getName());
             }
 
             return {};
@@ -81,8 +81,8 @@ namespace LTSM::SDBus {
                 .withArguments(std::forward<Args>(args)...)
                 .storeResultsTo(res);
             } catch(const sdbus::Error &err) {
-                Application::error("{}: failed, sdbus error: {}, msg: {}",
-                                   NS_FuncNameV, err.getName(), err.getMessage());
+                Application::error("{}: failed, method: {}, sdbus error: {}",
+                    NS_FuncNameV, methodName, err.getName());
             }
 
             return res;
@@ -96,8 +96,8 @@ namespace LTSM::SDBus {
                 .onInterface(interface)
                 .withArguments(std::forward<Args>(args)...);
             } catch(const sdbus::Error &err) {
-                Application::error("{}: failed, sdbus error: {}, msg: {}",
-                                   NS_FuncNameV, err.getName(), err.getMessage());
+                Application::error("{}: failed, method: {}, sdbus error: {}",
+                    NS_FuncNameV, methodName, err.getName());
             }
         }
     };

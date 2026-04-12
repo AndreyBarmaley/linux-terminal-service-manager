@@ -1843,7 +1843,7 @@ namespace LTSM {
             Application::error("{}: system error: `{}', code: {}",
                     NS_FuncNameV, ec.message(), ec.value());
         } catch(const sdbus::Error& err) {
-            Application::error("{}: sdbus error: {}", NS_FuncNameV, err.what());
+            Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
             asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
         }
     }

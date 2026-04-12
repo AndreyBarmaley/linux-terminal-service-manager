@@ -552,8 +552,8 @@ namespace LTSM::DisplaySession {
         auto sdbus_job = std::thread([this]() {
            try {
                 dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
+            } catch(const sdbus::Error& err) {
+                Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
                 boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             }
         });
