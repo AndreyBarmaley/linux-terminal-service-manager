@@ -49,6 +49,7 @@ namespace LTSM::SDBus {
             }
         };
 
+#ifdef SDBUS_2_0_API
         [[nodiscard]] asio::awaitable<void> waitPollDataEventFd(const sdbus::IConnection::PollData & pollData) {
             auto ex = co_await asio::this_coro::executor;
             weak_stream_descriptor sd{ex, pollData.eventFd};
@@ -58,6 +59,7 @@ namespace LTSM::SDBus {
 
             co_return;
         }
+#endif
 
         [[nodiscard]] asio::awaitable<void> waitPollDataFd(const sdbus::IConnection::PollData & pollData) {
             auto ex = co_await asio::this_coro::executor;
@@ -134,8 +136,12 @@ namespace LTSM::SDBus {
             auto ex = co_await asio::this_coro::executor;
             auto pollData = dbus_conn_->getEventLoopPollData();
 
+#ifdef SDBUS_2_0_API
             using namespace asio::experimental::awaitable_operators;
             co_await (waitPollDataFd(pollData) || waitPollDataEventFd(pollData));
+#else
+            co_await (waitPollDataFd(pollData));
+#endif
 
 #ifdef SDBUS_2_0_API
             dbus_conn_->processPendingEvent();
