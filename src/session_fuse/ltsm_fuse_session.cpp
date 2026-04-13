@@ -190,12 +190,12 @@ namespace LTSM {
 
         bool startSession(void);
 
-        inline bool localPath(std::string_view path) const {
-            return localPoint == path;
+        const std::string& localPath(void) const {
+            return localPoint;
         }
 
-        inline bool socketPath(std::string_view path) const {
-            return socket().local_endpoint().path() == path;
+        std::string socketPath(void) const {
+            return socket().local_endpoint().path();
         }
 
         inline bool socketConnected(void) const {
@@ -299,6 +299,7 @@ namespace LTSM {
         for(int it = 1; it <= attempts; it++) {
             try {
                 co_await socket().async_connect(path, asio::use_awaitable);
+                Application::debug(DebugType::Fuse, "{}: connected, path: {}", NS_FuncNameV, path);
                 co_return;
             } catch(const system::system_error& ec) {
                 if(it == attempts) {
@@ -1077,7 +1078,7 @@ namespace LTSM {
                            NS_FuncNameV, localPoint, remotePoint, socketPath);
 
         if(std::ranges::any_of(childs_, [&](auto & ptr) {
-                return ptr->localPath(localPoint) && ptr->socketConnected(); })) {
+                return ptr->localPath() == localPoint && ptr->socketConnected(); })) {
             Application::error("{}: point busy, point: `{}'", NS_FuncNameV, localPoint);
             return false;
         }
@@ -1095,7 +1096,9 @@ namespace LTSM {
                 }
             } catch(const system::system_error& err) {
                 auto ec = err.code();
-                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                if(ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                }
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             }
@@ -1115,7 +1118,7 @@ namespace LTSM {
 
         asio::post(clients_strand_, [this, localPoint]() {
             std::erase_if(childs_, [&](auto & ptr) {
-                return ptr->localPath(localPoint);
+                return ptr->localPath() == localPoint;
             });
         });
     }
