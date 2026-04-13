@@ -202,15 +202,25 @@ namespace LTSM {
         trans_lock_.unlock(id);
     }
 
-    asio::awaitable<bool> PcscRemote::handlerWaitConnect(const std::string & path) {
-        try {
-            co_await socket().async_connect(path, asio::use_awaitable);
-            connected_ = true;
-        } catch(const std::exception & ex) {
-            Application::error("{}: exception: {}", NS_FuncNameV, ex.what());
-        }
+    asio::awaitable<void> PcscRemote::retryConnect(const std::string & path, int attempts) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
 
-        co_return connected_;
+        for(int it = 1; it <= attempts; it++) {
+            try {
+                co_await socket().async_connect(path, asio::use_awaitable);
+                Application::debug(DebugType::Pcsc, "{}: connected, path: {}", NS_FuncNameV, path);
+                co_return;
+            } catch(const system::system_error& ec) {
+                if(it == attempts) {
+                    Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
+                    throw system::system_error(asio::error::operation_aborted);
+                }
+            }
+
+            timer.expires_after(300ms);
+            co_await timer.async_wait(asio::use_awaitable);
+        }
     }
 
     asio::awaitable<RetEstablishedContext>
@@ -1983,32 +1993,34 @@ namespace LTSM {
         Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, path);
 
         if(remote_->isConnected()) {
+            Application::warning("{}: also connected, socket path: `{}'", NS_FuncNameV, remote_->socketPath());
             return false;
         }
 
-        auto wait = asio::co_spawn(ioc_.get_executor(), remote_->handlerWaitConnect(path), asio::use_future);
-        bool connected = false;
+        const int attempts = 5;
+        auto waitConnect = asio::co_spawn(ioc_.get_executor(), remote_->retryConnect(path, attempts), asio::use_future);
 
         try {
-            connected = wait.get();
-        } catch(const std::exception & ex) {
-            Application::error("{}: exception: {}", NS_FuncNameV, ex.what());
+            waitConnect.get();
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
             return false;
         }
 
-        if(connected) {
-            if(std::filesystem::is_socket(pcsc_ep_.path())) {
-                std::filesystem::remove(pcsc_ep_.path());
-                Application::warning("{}: old socket removed", NS_FuncNameV);
-            }
-
-            asio::co_spawn(clients_guard_, listenerHandler(),
-                           asio::bind_cancellation_slot(listen_stop_.slot(), asio::detached));
-
-            return true;
+        // remote connected
+        if(std::filesystem::is_socket(pcsc_ep_.path())) {
+            std::filesystem::remove(pcsc_ep_.path());
+            Application::warning("{}: old socket removed", NS_FuncNameV);
         }
 
-        return false;
+        // start local listener
+        asio::co_spawn(clients_guard_, listenerHandler(),
+                           asio::bind_cancellation_slot(listen_stop_.slot(), asio::detached));
+
+        return true;
     }
 
     void PcscSessionBus::disconnectChannel(const std::string & clientPath) {

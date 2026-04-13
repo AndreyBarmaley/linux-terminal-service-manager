@@ -107,7 +107,6 @@ namespace LTSM {
         Transaction trans_lock_;
 
         boost::system::error_code ec_;
-        bool connected_{false};
 
       protected:
         [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
@@ -120,7 +119,7 @@ namespace LTSM {
             , trans_lock_{socket().get_executor()} {}
         ~PcscRemote() = default;
 
-        [[nodiscard]] boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
+        [[nodiscard]] boost::asio::awaitable<void> retryConnect(const std::string & path, int attempts);
 
         [[nodiscard]] boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
         [[nodiscard]] boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
@@ -144,7 +143,11 @@ namespace LTSM {
         }
 
         bool isConnected(void) const {
-            return connected_;
+            return socket().is_open();
+        }
+
+        std::string socketPath(void) const {
+            return socket().remote_endpoint().path();
         }
 
         [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
