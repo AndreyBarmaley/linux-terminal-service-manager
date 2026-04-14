@@ -35,14 +35,19 @@
 #include "librfb_ffmpeg.h"
 #endif
 
+#ifdef LTSM_WITH_BOOST
+#include <boost/asio/ssl/stream.hpp>
+#endif
+
 using namespace std::chrono_literals;
 
 namespace LTSM {
     /* RFB::ClientDecoder */
 #ifdef LTSM_WITH_BOOST
     void RFB::ClientDecoder::setSocketStreamMode(boost::asio::io_context& ctx, int sockfd) {
-        using BoostStreamSock = BoostStream<boost::asio::ip::tcp::socket>;
-        socket = std::make_unique<BoostStreamSock>(boost::asio::ip::tcp::socket{ctx, boost::asio::ip::tcp::v4(), sockfd});
+        using BoostSock = boost::asio::ip::tcp::socket;
+        using BoostStreamSock = BoostStream<BoostSock>;
+        socket = std::make_unique<BoostStreamSock>(BoostSock{ctx, boost::asio::ip::tcp::v4(), sockfd});
         streamIn = streamOut = socket.get();
     }
 #endif
@@ -198,6 +203,39 @@ namespace LTSM {
             return false;
         }
 
+#ifdef LTSM_WITH_BOOST
+        using BoostSock = boost::asio::ip::tcp::socket;
+        using BoostStreamSock = BoostStream<BoostSock>;
+        using BoostSslStreamSock = BoostSslStream<BoostSock>;
+
+        auto sock = static_cast<BoostStreamSock*>(socket.get());
+
+        try {
+            auto ssl_sock = std::make_unique<BoostSslStreamSock>(std::move(sock->native()),
+                    boost::asio::ssl::context::tlsv12_client);
+            ssl_sock->setCipherSuite("AECDH-AES256-SHA:@SECLEVEL=0");
+            ssl_sock->native().handshake(boost::asio::ssl::stream_base::client);
+
+            if(mode == RFB::SECURITY_VENCRYPT02_X509NONE) {
+                if(sec.caFile.empty()) {
+                    ssl_sock->context().set_default_verify_paths();
+                } else {
+                    ssl_sock->context().load_verify_file(sec.caFile);
+                }
+                ssl_sock->context().use_certificate_chain_file(sec.certFile);
+                ssl_sock->context().use_private_key_file(sec.keyFile, boost::asio::ssl::context::pem);
+                ssl_sock->context().set_verify_mode(boost::asio::ssl::verify_peer);
+                socket = std::move(ssl_sock);
+            } else {
+                ssl_sock->context().set_verify_mode(boost::asio::ssl::verify_none);
+                socket = std::move(ssl_sock);
+            }
+        } catch(gnutls::exception & err) {
+            Application::error("boost ssl error: {}, code: {}", err.what(), err.get_code());
+            return false;
+        }
+        streamIn = streamOut = socket.get();
+#else
         try {
             if(mode == RFB::SECURITY_VENCRYPT02_X509NONE)
                 tls = std::make_unique<TLS::X509Session>(socket.get(), sec.caFile, sec.certFile, sec.keyFile,
@@ -212,6 +250,7 @@ namespace LTSM {
 
         socket->useStatistic(false);
         streamIn = streamOut = tls.get();
+#endif
         return true;
     }
 #endif

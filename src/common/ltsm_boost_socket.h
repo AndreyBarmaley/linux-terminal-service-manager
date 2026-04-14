@@ -26,18 +26,27 @@
 
 #include "ltsm_sockets.h"
 
+#include <stdexcept>
+#include <openssl/ssl.h>
+
 #include <boost/asio.hpp>
+#include <boost/asio/ssl/stream.hpp>
 
 namespace LTSM {
     template <typename Stream>
     class BoostStream : public NetworkStream {
+      protected:
         mutable Stream stream_;
 
       public:
         explicit BoostStream(Stream && st) : stream_{std::move(st)} {}
 
+        Stream & native(void) {
+            return stream_;
+        }
+
         bool hasInput(void) const override {
-            return NetworkStream::hasInput(stream_.native_handle());
+            return 0 < stream_.available(); //NetworkStream::hasInput(stream_.native_handle());
         }
 
         size_t hasData(void) const override {
@@ -47,7 +56,7 @@ namespace LTSM {
         uint8_t peekInt8(void) const override {
             uint8_t res;
             stream_.receive(boost::asio::buffer(&res, 1),
-                boost::asio::ip::tcp::socket::message_peek);
+                            boost::asio::ip::tcp::socket::message_peek);
             return res;
         }
 
@@ -66,6 +75,61 @@ namespace LTSM {
         }
     };
 
+    template <typename Stream>
+    class BoostSslStream : public NetworkStream {
+      protected:
+        boost::asio::ssl::context ssl_ctx_;
+        mutable boost::asio::ssl::stream<Stream> stream_;
+
+      public:
+        explicit BoostSslStream(Stream && st, const boost::asio::ssl::context::method & method)
+            : ssl_ctx_{method}, stream_{std::move(st), ssl_ctx_} {}
+
+        boost::asio::ssl::context & context(void) {
+            return ssl_ctx_;
+        }
+
+        boost::asio::ssl::stream<Stream> & native(void) {
+            return stream_;
+        }
+
+        void setCipherSuite(const char* list) {
+            if(list) {
+                auto ssl = stream_.native_handle();
+                SSL_set_cipher_list(ssl, list);
+            }
+        }
+
+        bool hasInput(void) const override {
+            auto ssl = stream_.native_handle();
+            return 0 < SSL_pending(ssl) ||
+                0 < stream_.lowest_layer().available();
+        }
+
+        size_t hasData(void) const override {
+            auto ssl = stream_.native_handle();
+            return SSL_pending(ssl);
+        }
+
+        uint8_t peekInt8(void) const override {
+            uint8_t res;
+            auto ssl = stream_.native_handle();
+
+            if(auto ret = SSL_peek(ssl, &res, 1); ret <= 0) {
+                throw std::runtime_error("SSL peek failed");
+            }
+
+            return res;
+        }
+
+        void sendRaw(const void* ptr, size_t len) override {
+            boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+        }
+
+        void recvRaw(void* ptr, size_t len) const override {
+            boost::asio::read(stream_, boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+        }
+    };
 } // LTSM
 
 #endif // _LTSM_BOOST_SOCKETS_

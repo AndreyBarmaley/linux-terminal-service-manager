@@ -2,7 +2,7 @@ function(CommonDefaults)
     set(LTSM_WITH_FB_PARALLELS ON PARENT_SCOPE)
     set(LTSM_WITH_XCB_ERRORS ON PARENT_SCOPE)
 
-    list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP ZLIB BOOST)
+    list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP ZLIB BOOST OPENSSL)
 
     foreach(ARG IN ITEMS ${OPTS})
         string(JOIN "" PARAM LTSM_WITH_ ${ARG})
@@ -337,7 +337,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_vnc2image)
     set(CUR_TARGET ltsm_vnc2image)
 
-    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST)
+    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST OPENSSL)
 
     add_executable(${CUR_TARGET} tools/vnc2image/ltsm_vnc2image.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
