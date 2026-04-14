@@ -50,10 +50,6 @@
 #include "ltsm_gsslayer.h"
 #endif
 
-#ifdef LTSM_WITH_BOOST
-#include <boost/asio.hpp>
-#endif
-
 #include "ltsm_streambuf.h"
 
 #define LTSM_SOCKETS_VERSION 20250320
@@ -184,45 +180,6 @@ namespace LTSM {
         static void sendTo(int fd, const void*, ssize_t);
         static void recvFrom(int fd, void*, ssize_t);
     };
-
-#ifdef LTSM_WITH_BOOST
-    template <typename Stream>
-    class BoostStream : public NetworkStream {
-        mutable Stream stream_;
-
-      public:
-        explicit BoostStream(Stream && st) : stream_{std::move(st)} {}
-
-        bool hasInput(void) const override {
-            return NetworkStream::hasInput(stream_.native_handle());
-        }
-
-        size_t hasData(void) const override {
-            return stream_.available();
-        }
-
-        uint8_t peekInt8(void) const override {
-            uint8_t res;
-            stream_.receive(boost::asio::buffer(&res, 1),
-                boost::asio::ip::tcp::socket::message_peek);
-            return res;
-        }
-
-#ifdef LTSM_WITH_GNUTLS
-        void setupTLS(gnutls::session* sess) const override {
-            sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(stream_.native_handle()));
-        }
-#endif
-
-        void sendRaw(const void* ptr, size_t len) override {
-            boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
-        }
-
-        void recvRaw(void* ptr, size_t len) const override {
-            boost::asio::read(stream_, boost::asio::buffer(ptr, len), boost::asio::transfer_all());
-        }
-    };
-#endif
 
     /// @brief: socket stream
     class SocketStream : public NetworkStream {

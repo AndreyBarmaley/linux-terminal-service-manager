@@ -31,6 +31,10 @@
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
 
+#ifdef LTSM_WITH_BOOST
+#include "ltsm_boost_socket.h"
+#endif
+
 namespace LTSM {
     namespace RFB {
         /* ClientDecoder */
