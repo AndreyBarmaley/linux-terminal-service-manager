@@ -164,7 +164,7 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_GNUTLS
     bool RFB::ServerEncoder::authVncInit(const std::string & passwdFile) {
-        std::vector<uint8_t> challenge = TLS::randomKey(16);
+        std::vector<uint8_t> challenge = Tools::randomBytes(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::hexString(challenge, 2);
