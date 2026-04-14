@@ -120,6 +120,7 @@ namespace LTSM {
         ~PcscRemote() = default;
 
         [[nodiscard]] boost::asio::awaitable<void> retryConnect(const std::string & path, int attempts);
+        [[nodiscard]] boost::asio::awaitable<void> remoteHandshake(void);
 
         [[nodiscard]] boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
         [[nodiscard]] boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
@@ -247,6 +248,7 @@ namespace LTSM {
         boost::asio::signal_set signals_;
 
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;
+        boost::asio::cancellation_signal remote_cancel_;
         boost::asio::cancellation_signal listen_stop_;
 
         std::list<PcscLocal> clients_;

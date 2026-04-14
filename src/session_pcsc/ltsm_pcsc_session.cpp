@@ -211,16 +211,61 @@ namespace LTSM {
                 co_await socket().async_connect(path, asio::use_awaitable);
                 Application::debug(DebugType::Pcsc, "{}: connected, path: {}", NS_FuncNameV, path);
                 co_return;
-            } catch(const system::system_error& ec) {
+            } catch(const system::system_error& err) {
                 if(it == attempts) {
                     Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
                     throw system::system_error(asio::error::operation_aborted);
+                } else {
+            	    auto ec = err.code();
+                    Application::warning("{}: system error: {}", NS_FuncNameV, ec.message());
                 }
             }
 
             timer.expires_after(300ms);
             co_await timer.async_wait(asio::use_awaitable);
         }
+    }
+
+    asio::awaitable<void> PcscRemote::remoteHandshake(void) {
+        co_await send_lock_.async_lock();
+
+        try {
+            co_await async_send_values(
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::ProtoVer)));
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
+        }
+
+        uint16_t cmd, err;
+
+        co_await async_recv_values(cmd, err);
+        endian::little_to_native_inplace(cmd);
+        endian::little_to_native_inplace(err);
+
+        if(cmd != PcscOp::Init) {
+            send_lock_.unlock();
+            Application::error("{}: {} failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        if(err) {
+            auto str = co_await async_recv_buf<std::string>(err);
+            send_lock_.unlock();
+            Application::error("{}: recv error: {}", NS_FuncNameV, str);
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ver = co_await async_recv_le16();
+        send_lock_.unlock();
+
+        if(ver == PcscOp::ProtoVer) {
+            Application::info("{}: client proto version: {}", NS_FuncNameV, ver);
+            co_return;
+        }
+
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, ver);
+        throw pcsc_error(NS_FuncNameS);
     }
 
     asio::awaitable<RetEstablishedContext>
@@ -234,7 +279,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::EstablishContext)),
                 endian::native_to_little(scope));
 
@@ -261,7 +306,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::ReleaseContext)),
                 endian::native_to_little(context));
 
@@ -286,7 +331,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Connect)),
                 endian::native_to_little(context),
                 endian::native_to_little(shareMode),
@@ -318,7 +363,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Reconnect)),
                 endian::native_to_little(handle),
                 endian::native_to_little(shareMode),
@@ -347,7 +392,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Disconnect)),
                 endian::native_to_little(handle),
                 endian::native_to_little(disposition));
@@ -372,7 +417,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::BeginTransaction)),
                 endian::native_to_little(handle));
 
@@ -399,7 +444,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::EndTransaction)),
                 endian::native_to_little(handle),
                 endian::native_to_little(disposition));
@@ -432,7 +477,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Transmit)),
                 endian::native_to_little(handle),
                 endian::native_to_little(ioSendPciProtocol),
@@ -476,22 +521,21 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Status)),
                 endian::native_to_little(handle));
 
-            uint32_t nameLen = co_await async_recv_le32();
-            readerName = co_await async_recv_buf<std::string>(nameLen);
-
-            uint32_t atrLen;
-            co_await async_recv_values(state, protocol, atrLen);
+            uint32_t nameLen, atrLen;
+            co_await async_recv_values(state, protocol, nameLen, atrLen, ret);
 
             endian::little_to_native_inplace(state);
             endian::little_to_native_inplace(protocol);
+            endian::little_to_native_inplace(nameLen);
             endian::little_to_native_inplace(atrLen);
-        
+            endian::little_to_native_inplace(ret);
+
+            readerName = co_await async_recv_buf<std::string>(nameLen);
             atr = co_await async_recv_buf<binary_buf>(atrLen);
-            ret = co_await async_recv_le32();
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -519,7 +563,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Control)),
                 endian::native_to_little(handle),
                 endian::native_to_little(controlCode),
@@ -553,7 +597,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::GetAttrib)),
                 endian::native_to_little(handle),
                 endian::native_to_little(attrId));
@@ -590,7 +634,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::SetAttrib)),
                 endian::native_to_little(handle),
                 endian::native_to_little(attrId),
@@ -616,7 +660,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Cancel)),
                 endian::native_to_little(context));
 
@@ -641,7 +685,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::ListReaders)),
                 endian::native_to_little(context));
 
@@ -682,7 +726,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::GetStatusChange)),
                 endian::native_to_little(context),
                 endian::native_to_little(timeout),
@@ -1818,6 +1862,7 @@ namespace LTSM {
 
     void PcscSessionBus::stop(void) {
         sdbusLoopCancel();
+        remote_cancel_.emit(asio::cancellation_type::terminal);
         listen_stop_.emit(asio::cancellation_type::terminal);
         clients_.clear();
         remote_.reset();
@@ -1960,6 +2005,12 @@ namespace LTSM {
     }
 
     asio::awaitable<void> PcscSessionBus::listenerHandler(void) {
+        // remote connected
+        if(std::filesystem::is_socket(pcsc_ep_.path())) {
+            std::filesystem::remove(pcsc_ep_.path());
+            Application::warning("{}: old socket removed", NS_FuncNameV);
+        }
+
         try {
             auto executor = co_await asio::this_coro::executor;
             asio::local::stream_protocol::acceptor acceptor(executor, pcsc_ep_);
@@ -1989,36 +2040,37 @@ namespace LTSM {
         }
     }
 
-    bool PcscSessionBus::connectChannel(const std::string & path) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, path);
+    bool PcscSessionBus::connectChannel(const std::string & socketPath) {
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, socketPath);
 
         if(remote_->isConnected()) {
             Application::warning("{}: also connected, socket path: `{}'", NS_FuncNameV, remote_->socketPath());
             return false;
         }
 
-        const int attempts = 5;
-        auto waitConnect = asio::co_spawn(ioc_.get_executor(), remote_->retryConnect(path, attempts), asio::use_future);
+        asio::co_spawn(ioc_,
+        [socketPath, this]() -> asio::awaitable<void>  {
+            auto executor = co_await asio::this_coro::executor;
 
-        try {
-            waitConnect.get();
-        } catch(const system::system_error& err) {
-            auto ec = err.code();
-            if(ec != asio::error::operation_aborted) {
-                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-            }
-            return false;
-        }
+            try {
+                co_await remote_->retryConnect(socketPath, 5);
+                co_await remote_->remoteHandshake();
 
-        // remote connected
-        if(std::filesystem::is_socket(pcsc_ep_.path())) {
-            std::filesystem::remove(pcsc_ep_.path());
-            Application::warning("{}: old socket removed", NS_FuncNameV);
-        }
-
-        // start local listener
-        asio::co_spawn(clients_guard_, listenerHandler(),
+                // start local listener
+                asio::co_spawn(clients_guard_, listenerHandler(),
                            asio::bind_cancellation_slot(listen_stop_.slot(), asio::detached));
+
+            } catch(const system::system_error& err) {
+                auto ec = err.code();
+                if(ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: `{}', code: {}",
+                        NS_FuncNameV, ec.message(), ec.value());
+                }
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            }
+
+        }, asio::bind_cancellation_slot(remote_cancel_.slot(), asio::detached));
 
         return true;
     }

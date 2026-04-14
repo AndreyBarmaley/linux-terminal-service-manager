@@ -425,23 +425,24 @@ namespace LTSM {
             std::vector<uint8_t> last;
 
           protected:
-            void pcscCommand(uint16_t cmd, const StreamBufRef & sb);
+            bool pcscOpInit(const StreamBufRef &);
+            void pcscLiteCommand(uint16_t cmd, const StreamBufRef & sb);
 
-            void pcscEstablishContext(const StreamBufRef &);
-            void pcscReleaseContext(const StreamBufRef &);
-            void pcscListReaders(const StreamBufRef &);
-            void pcscConnect(const StreamBufRef &);
-            void pcscReconnect(const StreamBufRef &);
-            void pcscDisconnect(const StreamBufRef &);
-            void pcscBeginTransaction(const StreamBufRef &);
-            void pcscEndTransaction(const StreamBufRef &);
-            void pcscTransmit(const StreamBufRef &);
-            void pcscStatus(const StreamBufRef &);
-            void pcscGetStatusChange(const StreamBufRef &);
-            void pcscControl(const StreamBufRef &);
-            void pcscCancel(const StreamBufRef &);
-            void pcscGetAttrib(const StreamBufRef &);
-            void pcscSetAttrib(const StreamBufRef &);
+            void pcscLiteEstablishContext(const StreamBufRef &);
+            void pcscLiteReleaseContext(const StreamBufRef &);
+            void pcscLiteListReaders(const StreamBufRef &);
+            void pcscLiteConnect(const StreamBufRef &);
+            void pcscLiteReconnect(const StreamBufRef &);
+            void pcscLiteDisconnect(const StreamBufRef &);
+            void pcscLiteBeginTransaction(const StreamBufRef &);
+            void pcscLiteEndTransaction(const StreamBufRef &);
+            void pcscLiteTransmit(const StreamBufRef &);
+            void pcscLiteStatus(const StreamBufRef &);
+            void pcscLiteGetStatusChange(const StreamBufRef &);
+            void pcscLiteControl(const StreamBufRef &);
+            void pcscLiteCancel(const StreamBufRef &);
+            void pcscLiteGetAttrib(const StreamBufRef &);
+            void pcscLiteSetAttrib(const StreamBufRef &);
 
           public:
             ConnectorClientPcsc(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
