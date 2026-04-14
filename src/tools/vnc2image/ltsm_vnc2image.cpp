@@ -80,7 +80,11 @@ namespace LTSM {
             return -1;
         }
 
+#ifdef LTSM_WITH_BOOST
+        RFB::ClientDecoder::setSocketStreamMode(ioc_, sockfd);
+#else
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
+#endif
         RFB::SecurityInfo rfbsec;
         rfbsec.authVenCrypt = ! notls;
         rfbsec.authNone = password.empty();

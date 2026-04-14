@@ -36,7 +36,6 @@ namespace LTSM {
         /* ClientDecoder */
         class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
             PixelFormat serverPf;
-
             std::unique_ptr<NetworkStream> socket; /// socket layer
 #ifdef LTSM_WITH_GNUTLS
             std::unique_ptr<TLS::Stream> tls; /// tls layer
@@ -108,8 +107,10 @@ namespace LTSM {
             void recvDecodingRichCursor(const XCB::Region &);
             void recvDecodingLtsmCursor(const XCB::Region &);
 
+#ifdef LTSM_WITH_BOOST
+            void setSocketStreamMode(boost::asio::io_context&, int sockd);
+#endif
             void setSocketStreamMode(int sockd);
-            void setInetStreamMode(void);
             void updateRegion(int type, const XCB::Region &);
 
           public:
@@ -156,20 +157,6 @@ namespace LTSM {
             virtual uint32_t frameRateOption(void) const { return 16; }
 
             virtual void decoderInitEvent(DecodingBase*) { /* empty */ }
-        };
-
-        class ClientDecoderSocket : public ClientDecoder {
-          public:
-            ClientDecoderSocket(int sd) {
-                setSocketStreamMode(sd);
-            }
-        };
-
-        class ClientDecoderInet : public ClientDecoder {
-          public:
-            ClientDecoderInet() {
-                setInetStreamMode();
-            }
         };
     };
 }

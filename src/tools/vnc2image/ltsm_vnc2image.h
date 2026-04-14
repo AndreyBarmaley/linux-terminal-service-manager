@@ -30,10 +30,13 @@
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
 
-#define LTSM_VNC2IMAGE_VERSION 20220829
+#define LTSM_VNC2IMAGE_VERSION 20260414
 
 namespace LTSM {
     class Vnc2Image : public Application, protected RFB::ClientDecoder {
+#ifdef LTSM_WITH_BOOST
+        boost::asio::io_context ioc_;
+#endif
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 

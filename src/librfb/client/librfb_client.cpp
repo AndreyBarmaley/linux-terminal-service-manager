@@ -39,10 +39,13 @@ using namespace std::chrono_literals;
 
 namespace LTSM {
     /* RFB::ClientDecoder */
-    void RFB::ClientDecoder::setInetStreamMode(void) {
-        socket = std::make_unique<InetStream>();
+#ifdef LTSM_WITH_BOOST
+    void RFB::ClientDecoder::setSocketStreamMode(boost::asio::io_context& ctx, int sockfd) {
+        using BoostStreamSock = BoostStream<boost::asio::ip::tcp::socket>;
+        socket = std::make_unique<BoostStreamSock>(boost::asio::ip::tcp::socket{ctx, boost::asio::ip::tcp::v4(), sockfd});
         streamIn = streamOut = socket.get();
     }
+#endif
 
     void RFB::ClientDecoder::setSocketStreamMode(int sockfd) {
         socket = std::make_unique<SocketStream>(sockfd);
