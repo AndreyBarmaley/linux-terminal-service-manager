@@ -256,7 +256,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     // no errors
     reply.writeIntLE16(0);
     // proto ver
-    reply.writeIntLE16(1);
+    reply.writeIntLE16(AudioOp::ProtoVer);
     // encoding type
     reply.writeIntLE16(format->type);
     owner->sendLtsmChannelData(cid, reply.rawbuf());
