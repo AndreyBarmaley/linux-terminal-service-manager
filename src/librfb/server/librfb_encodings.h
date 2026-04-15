@@ -68,7 +68,6 @@ namespace LTSM {
 
             bool hasInput(void) const override;
             size_t hasData(void) const override;
-            uint8_t peekInt8(void) const override;
 
             void sendRaw(const void* ptr, size_t len) override;
             void recvRaw(void* ptr, size_t len) const override;

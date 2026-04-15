@@ -116,19 +116,6 @@ namespace LTSM {
         return 0;
     }
 
-    uint8_t RFB::ClientDecoder::peekInt8(void) const {
-        try {
-            if(rfbMessages) {
-                return streamIn->peekInt8();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
-        }
-
-        return 0;
-    }
-
 #ifdef LTSM_WITH_GNUTLS
     bool RFB::ClientDecoder::authVncInit(std::string_view password) {
         // recv challenge 16 bytes

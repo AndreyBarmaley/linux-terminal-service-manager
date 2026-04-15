@@ -173,11 +173,6 @@ namespace LTSM {
         throw network_error(NS_FuncNameS);
     }
 
-    uint8_t RFB::EncoderWrapper::peekInt8(void) const {
-        LTSM::Application::error("{}: disabled", NS_FuncNameV);
-        throw network_error(NS_FuncNameS);
-    }
-
     // EncodingBase
     RFB::EncodingBase::EncodingBase(int v) : type(v) {
         Application::info("{}: init encoding: {}", NS_FuncNameV, encodingName(type));

@@ -82,10 +82,6 @@ namespace LTSM {
                 return stream->hasData();
             }
 
-            uint8_t peekInt8(void) const override {
-                return stream->peekInt8();
-            }
-
             void sendRaw(const void* ptr, size_t len) override {
                 stream->sendRaw(ptr, len);
             }

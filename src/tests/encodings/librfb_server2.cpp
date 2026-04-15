@@ -94,16 +94,6 @@ namespace LTSM {
         return 0;
     }
 
-    uint8_t RFB::ServerEncoderBuf::peekInt8(void) const {
-        try {
-            return streamIn->peekInt8();
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        }
-
-        return 0;
-    }
-
     XCB::Size RFB::ServerEncoderBuf::displaySize(void) const {
         return dsz;
     }

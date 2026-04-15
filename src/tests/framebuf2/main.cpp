@@ -70,9 +70,6 @@ class FakeStream : public RFB::EncoderStream {
     size_t hasData(void) const override {
         throw std::runtime_error("unsupported");
     }
-    uint8_t peekInt8(void) const override {
-        throw std::runtime_error("unsupported");
-    }
     void recvRaw(void* ptr, size_t len) const override {
         throw std::runtime_error("unsupported");
     }

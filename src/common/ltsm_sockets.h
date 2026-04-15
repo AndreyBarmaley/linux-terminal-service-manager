@@ -137,7 +137,6 @@ namespace LTSM {
 
         virtual bool hasInput(void) const = 0;
         virtual size_t hasData(void) const = 0;
-        virtual uint8_t peekInt8(void) const = 0;
 
         inline uint16_t recvIntBE16(void) const {
             return getIntBE16();
@@ -202,7 +201,6 @@ namespace LTSM {
 
         bool hasInput(void) const override;
         size_t hasData(void) const override;
-        uint8_t peekInt8(void) const override;
 
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;
@@ -229,7 +227,6 @@ namespace LTSM {
 #endif
         bool hasInput(void) const override;
         size_t hasData(void) const override;
-        uint8_t peekInt8(void) const override;
 
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;
@@ -328,7 +325,6 @@ namespace LTSM {
             bool hasInput(void) const override;
             size_t hasData(void) const override;
             void sendFlush(void) override;
-            uint8_t peekInt8(void) const override;
 
             void sendRaw(const void*, size_t) override;
             void recvRaw(void*, size_t) const override;
@@ -377,7 +373,6 @@ namespace LTSM {
             void sendRaw(const void*, size_t) override;
             void sendFlush(void) override;
             void recvRaw(void*, size_t) const override;
-            uint8_t peekInt8(void) const override;
 
             BaseLayer(NetworkStream* st, size_t capacity = 4096);
         };
@@ -462,7 +457,6 @@ namespace LTSM {
 
           private:
             void recvRaw(void*, size_t) const override;
-            uint8_t peekInt8(void) const override;
         };
 
         /// @brief: zlib compress input stream only
@@ -494,7 +488,6 @@ namespace LTSM {
             bool hasInput(void) const override;
             size_t hasData(void) const override;
             void recvRaw(void*, size_t) const override;
-            uint8_t peekInt8(void) const override;
 
           private:
             void sendRaw(const void*, size_t) override;

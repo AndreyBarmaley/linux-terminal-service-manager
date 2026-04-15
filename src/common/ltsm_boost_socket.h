@@ -53,13 +53,6 @@ namespace LTSM {
             return stream_.available();
         }
 
-        uint8_t peekInt8(void) const override {
-            uint8_t res;
-            stream_.receive(boost::asio::buffer(&res, 1),
-                            boost::asio::ip::tcp::socket::message_peek);
-            return res;
-        }
-
 #ifdef LTSM_WITH_GNUTLS
         void setupTLS(gnutls::session* sess) const override {
             sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(stream_.native_handle()));
@@ -109,17 +102,6 @@ namespace LTSM {
         size_t hasData(void) const override {
             auto ssl = stream_.native_handle();
             return SSL_pending(ssl);
-        }
-
-        uint8_t peekInt8(void) const override {
-            uint8_t res;
-            auto ssl = stream_.native_handle();
-
-            if(auto ret = SSL_peek(ssl, &res, 1); ret <= 0) {
-                throw std::runtime_error("SSL peek failed");
-            }
-
-            return res;
         }
 
         void sendRaw(const void* ptr, size_t len) override {

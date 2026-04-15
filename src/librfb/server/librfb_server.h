@@ -117,7 +117,6 @@ namespace LTSM {
             void recvRaw(void* ptr, size_t len) const override;
             bool hasInput(void) const override;
             size_t hasData(void) const override;
-            uint8_t peekInt8(void) const override;
 
             // channel listenner interface
             void recvChannelSystem(const std::vector<uint8_t> &) override;

@@ -139,19 +139,6 @@ namespace LTSM {
         return 0;
     }
 
-    uint8_t RFB::ServerEncoder::peekInt8(void) const {
-        try {
-            if(rfbMessages) {
-                return streamIn->peekInt8();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
-        }
-
-        return 0;
-    }
-
     bool RFB::ServerEncoder::isUpdateProcessed(void) const {
         return fbUpdateProcessing;
     }

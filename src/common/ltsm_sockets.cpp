@@ -408,17 +408,6 @@ namespace LTSM {
         NetworkStream::bytesOut += len;
     }
 
-    uint8_t SocketStream::peekInt8(void) const {
-        uint8_t res = 0;
-
-        if(1 != recv(sock, & res, 1, MSG_PEEK)) {
-            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "recv", strerror(errno), errno);
-            throw network_error(NS_FuncNameS);
-        }
-
-        return res;
-    }
-
     /* InetStream */
     InetStream::InetStream() {
         fdin = dup(fileno(stdin));
@@ -461,17 +450,6 @@ namespace LTSM {
     void InetStream::sendRaw(const void* ptr, size_t len) {
         sendTo(fdout, ptr, len);
         NetworkStream::bytesOut += len;
-    }
-
-    uint8_t InetStream::peekInt8(void) const {
-        uint8_t res = 0;
-
-        if(1 != recv(fdin, & res, 1, MSG_PEEK)) {
-            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "recv", strerror(errno), errno);
-            throw network_error(NS_FuncNameS);
-        }
-
-        return res;
     }
 
     /* ProxySocket */
@@ -1138,16 +1116,6 @@ namespace LTSM {
             NetworkStream::bytesOut += len;
         }
 
-        uint8_t Stream::peekInt8(void) const {
-            if(0 > peek) {
-                uint8_t val;
-                recvRaw(& val, 1);
-                peek = val;
-            }
-
-            return static_cast<uint8_t>(peek);
-        }
-
         void Stream::sendFlush(void) {
             // flush send data
             gnutls_record_uncork(Session::ptr(session.get()), 0);
@@ -1302,11 +1270,6 @@ namespace LTSM {
             throw zlib_error(NS_FuncNameS);
         }
 
-        uint8_t DeflateStream::peekInt8(void) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
         /* Zlib::InflateBase */
         InflateBase::InflateBase() {
             zs.data_type = Z_BINARY;
@@ -1377,15 +1340,6 @@ namespace LTSM {
             return sb.last();
         }
 
-        uint8_t InflateStream::peekInt8(void) const {
-            if(0 == sb.last()) {
-                Application::error("{}: stream empty", NS_FuncNameV);
-                throw zlib_error(NS_FuncNameS);
-            }
-
-            return sb.peek();
-        }
-
         void InflateStream::sendRaw(const void* ptr, size_t len) {
             Application::error("{}: {}", NS_FuncNameV, "disabled");
             throw zlib_error(NS_FuncNameS);
@@ -1419,10 +1373,6 @@ namespace LTSM {
             }
 
             return rcvbuf.last();
-        }
-
-        uint8_t BaseLayer::peekInt8(void) const {
-            return rcvbuf.peek();
         }
 
         void BaseLayer::recvRaw(void* data, size_t len) const {
