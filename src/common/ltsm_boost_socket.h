@@ -28,13 +28,13 @@
 #include <windows.h>
 #endif
 
-#include "ltsm_sockets.h"
-
 #include <stdexcept>
 #include <openssl/ssl.h>
 
-#include <boost/asio.hpp>
 #include <boost/asio/ssl/stream.hpp>
+
+#include "ltsm_sockets.h"
+#include "ltsm_async_socket.h"
 
 namespace LTSM {
     class BoostSocket : public NetworkStream {
@@ -45,35 +45,39 @@ namespace LTSM {
     template <typename Stream>
     class BoostStream : public BoostSocket {
       protected:
-        mutable Stream stream_;
+        AsyncSocket<Stream> stream_;
 
       public:
         explicit BoostStream(Stream && st) : stream_{std::move(st)} {}
 
         Stream & native(void) {
-            return stream_;
+            return stream_.socket();
+        }
+
+        const Stream & native(void) const {
+            return stream_.socket();
         }
 
         void closeSocket(void) override {
             boost::system::error_code ec;
-            stream_.close(ec);
+            native().close(ec);
         }
 
         bool hasInput(void) const override {
-            return 0 < stream_.available();
+            return 0 < native().available();
         }
 
         size_t hasData(void) const override {
-            return stream_.available();
+            return native().available();
         }
 
         void sendRaw(const void* ptr, size_t len) override {
-            boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+            boost::asio::write(native(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
             NetworkStream::bytesOut += len;
         }
 
         void recvRaw(void* ptr, size_t len) const override {
-            boost::asio::read(stream_, boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+            boost::asio::read(const_cast<Stream &>(native()), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
             NetworkStream::bytesIn += len;
         }
     };
@@ -82,53 +86,59 @@ namespace LTSM {
     class BoostSslStream : public BoostSocket {
       protected:
         boost::asio::ssl::context ssl_ctx_;
-        mutable boost::asio::ssl::stream<Stream> stream_;
+
+        using SslStream = boost::asio::ssl::stream<Stream>;
+        AsyncSocket<SslStream> stream_;
 
       public:
         explicit BoostSslStream(Stream && st, const boost::asio::ssl::context::method & method)
-            : ssl_ctx_{method}, stream_{std::move(st), ssl_ctx_} {}
+            : ssl_ctx_{method}, stream_{SslStream{std::move(st), ssl_ctx_}} {}
 
         boost::asio::ssl::context & context(void) {
             return ssl_ctx_;
         }
 
         boost::asio::ssl::stream<Stream> & native(void) {
-            return stream_;
+            return stream_.socket();
+        }
+
+        const boost::asio::ssl::stream<Stream> & native(void) const {
+            return stream_.socket();
         }
 
         void closeSocket(void) override {
             boost::system::error_code ec;
-            stream_.shutdown(ec);
-            stream_.lowest_layer().close(ec);
+            native().shutdown(ec);
+            native().lowest_layer().close(ec);
         }
 
         void setCipherSuite(const char* list) {
             if(list) {
-                auto ssl = stream_.native_handle();
+                auto ssl = native().native_handle();
                 SSL_set_cipher_list(ssl, list);
             }
         }
 
         bool hasInput(void) const override {
-            if(auto ssl = stream_.native_handle()) {
+            if(auto ssl = const_cast<SslStream &>(native()).native_handle()) {
                 return 0 < SSL_pending(ssl) ||
-                    0 < stream_.lowest_layer().available();
+                    0 < native().lowest_layer().available();
             }
             return false;
         }
 
         size_t hasData(void) const override {
-            auto ssl = stream_.native_handle();
+            auto ssl = const_cast<SslStream &>(native()).native_handle();
             return ssl ? SSL_pending(ssl) : 0;
         }
 
         void sendRaw(const void* ptr, size_t len) override {
-            boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+            boost::asio::write(native(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
             NetworkStream::bytesOut += len;
         }
 
         void recvRaw(void* ptr, size_t len) const override {
-            boost::asio::read(stream_, boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+            boost::asio::read(const_cast<SslStream &>(native()), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
             NetworkStream::bytesIn += len;
         }
     };
