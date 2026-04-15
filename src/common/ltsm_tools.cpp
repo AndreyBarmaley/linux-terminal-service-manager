@@ -541,6 +541,7 @@ namespace LTSM {
         res.reserve(bytesCount);
 
         std::random_device dev;
+        // random_device operator()
         std::mt19937 rng(dev());
         std::uniform_int_distribution<std::mt19937::result_type> byte255(0, 255);
 
