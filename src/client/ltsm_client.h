@@ -26,6 +26,7 @@
 #include <chrono>
 #include <string>
 #include <memory>
+#include <thread>
 #include <atomic>
 #include <stdexcept>
 #include <forward_list>
@@ -58,9 +59,9 @@ namespace LTSM {
         public RFB::WinClient
 #endif
     {
-#ifdef LTSM_WITH_BOOST
-        boost::asio::io_context ioc_;
-#endif
+        const int concurency_ = std::thread::hardware_concurrency();
+        boost::asio::io_context ioc_{concurency_ < 4 ? concurency_ : 4};
+
         PixelFormat clientPf;
         RFB::SecurityInfo rfbsec;
 

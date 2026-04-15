@@ -73,18 +73,14 @@ namespace LTSM {
     }
 
     int Vnc2Image::start(void) {
-        auto ipaddr = TCPSocket::resolvHostname(host);
-        int sockfd = TCPSocket::connect(ipaddr, port);
+        boost::asio::ip::tcp::socket sock{ioc_};
+        boost::asio::ip::tcp::resolver resolver{ioc_};
 
-        if(0 > sockfd) {
-            return -1;
-        }
+        auto endpoints = resolver.resolve(host, std::to_string(port));
+        boost::asio::connect(sock, endpoints);
 
-#ifdef LTSM_WITH_BOOST
-        RFB::ClientDecoder::setSocketStreamMode(ioc_, sockfd);
-#else
-        RFB::ClientDecoder::setSocketStreamMode(sockfd);
-#endif
+        RFB::ClientDecoder::setSocketStreamMode(std::move(sock));
+
         RFB::SecurityInfo rfbsec;
         rfbsec.authVenCrypt = ! notls;
         rfbsec.authNone = password.empty();

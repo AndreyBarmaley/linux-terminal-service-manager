@@ -42,6 +42,7 @@
 #include "ltsm_client.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
     const auto sanedef = "sock://127.0.0.1:6566";
@@ -682,12 +683,13 @@ namespace LTSM {
     }
 
     int ClientApp::start(void) {
-        auto ipaddr = TCPSocket::resolvHostname(host);
-        int sockfd = TCPSocket::connect(ipaddr, port);
+        asio::ip::tcp::socket sock{ioc_};
+        asio::ip::tcp::resolver resolver{ioc_};
 
-        if(0 > sockfd) {
-            return -1;
-        }
+        auto endpoints = resolver.resolve(host, std::to_string(port));
+        asio::connect(sock, endpoints);
+
+        RFB::ClientDecoder::setSocketStreamMode(std::move(sock));
 
         if(rfbsec.passwdFile.empty()) {
             if(auto env = std::getenv("LTSM_PASSWORD")) {
@@ -705,11 +707,6 @@ namespace LTSM {
             }
         }
 
-#ifdef LTSM_WITH_BOOST
-        RFB::ClientDecoder::setSocketStreamMode(ioc_, sockfd);
-#else
-        RFB::ClientDecoder::setSocketStreamMode(sockfd);
-#endif
         rfbsec.authVnc = ! rfbsec.passwdFile.empty();
         rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
 
@@ -736,10 +733,8 @@ namespace LTSM {
                 rfbsec.krb5Service.append("@").append(host);
             }
 
-            Application::info("{}: kerberos remote service: {}", NS_FuncNameV,
-                              rfbsec.krb5Service);
-            Application::info("{}: kerberos local name: {}", NS_FuncNameV,
-                              rfbsec.krb5Name);
+            Application::debug(DebugType::Gss, "{}: used kerberos, remote service: {}, local name: {}",
+                                NS_FuncNameV, rfbsec.krb5Service, rfbsec.krb5Name);
         }
 
         // connected
@@ -747,6 +742,8 @@ namespace LTSM {
             return -1;
         }
 
+        asio::thread_pool thread_pool{concurency_};
+    
         // rfb thread: process rfb messages
         auto thrfb = std::thread([this]() {
             this->rfbMessagesLoop();

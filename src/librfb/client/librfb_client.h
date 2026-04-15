@@ -30,24 +30,15 @@
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
-
-#ifdef LTSM_WITH_BOOST
 #include "ltsm_boost_socket.h"
-#endif
 
 namespace LTSM {
     namespace RFB {
         /* ClientDecoder */
         class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
             PixelFormat serverPf;
-#ifdef LTSM_WITH_BOOST
+
             std::unique_ptr<BoostSocket> socket; /// socket layer
-#else
-            std::unique_ptr<NetworkStream> socket; /// socket layer
-#ifdef LTSM_WITH_GNUTLS
-            std::unique_ptr<TLS::Stream> tls; /// tls layer
-#endif
-#endif
             std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
             std::unique_ptr<DecodingBase> decoder;
 
@@ -114,11 +105,7 @@ namespace LTSM {
             void recvDecodingRichCursor(const XCB::Region &);
             void recvDecodingLtsmCursor(const XCB::Region &);
 
-#ifdef LTSM_WITH_BOOST
-            void setSocketStreamMode(boost::asio::io_context&, int sockd);
-#else
-            void setSocketStreamMode(int sockd);
-#endif
+            void setSocketStreamMode(boost::asio::ip::tcp::socket&&);
             void updateRegion(int type, const XCB::Region &);
 
           public:
