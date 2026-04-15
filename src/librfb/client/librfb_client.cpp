@@ -50,12 +50,12 @@ namespace LTSM {
         socket = std::make_unique<BoostStreamSock>(BoostSock{ctx, boost::asio::ip::tcp::v4(), sockfd});
         streamIn = streamOut = socket.get();
     }
-#endif
-
+#else
     void RFB::ClientDecoder::setSocketStreamMode(int sockfd) {
         socket = std::make_unique<SocketStream>(sockfd);
         streamIn = streamOut = socket.get();
     }
+#endif
 
     void RFB::ClientDecoder::sendFlush(void) {
         try {
@@ -450,7 +450,9 @@ namespace LTSM {
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void) {
         channelsShutdown();
-        std::this_thread::sleep_for(100ms);
+#ifdef LTSM_WITH_BOOST
+        socket->closeSocket();
+#endif
         rfbMessages = false;
     }
 

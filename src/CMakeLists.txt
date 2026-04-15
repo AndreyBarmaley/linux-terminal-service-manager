@@ -294,7 +294,7 @@ if(LTSM_BUILD_CLIENT)
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
     set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect (openal)")
 
-    CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB)
+    CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB BOOST)
 
     set(LTSM_WITH_FFMPEG ${LTSM_CLIENT_FFMPEG_SUPPORT})
     set(LTSM_WITH_GSSAPI ${LTSM_CLIENT_GSSAPI_AUTH})
@@ -339,13 +339,14 @@ if(LTSM_BUILD_TOOLS)
 
     CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST OPENSSL)
 
-    add_executable(${CUR_TARGET} tools/vnc2image/ltsm_vnc2image.cpp)
+    add_executable(${CUR_TARGET})
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
     target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_BOOST)
 
     add_subdirectory(common ${CUR_TARGET}_common)
     add_subdirectory(channels ${CUR_TARGET}_channels)
     add_subdirectory(librfb ${CUR_TARGET}_librfb)
+    add_subdirectory(tools/vnc2image ${CUR_TARGET}_vnc2image)
 
     set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
 

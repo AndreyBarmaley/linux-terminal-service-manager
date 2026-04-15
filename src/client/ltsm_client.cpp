@@ -705,7 +705,11 @@ namespace LTSM {
             }
         }
 
+#ifdef LTSM_WITH_BOOST
+        RFB::ClientDecoder::setSocketStreamMode(ioc_, sockfd);
+#else
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
+#endif
         rfbsec.authVnc = ! rfbsec.passwdFile.empty();
         rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
 
@@ -851,7 +855,6 @@ namespace LTSM {
             }
 
             if(! sdlEventProcessing()) {
-                std::this_thread::sleep_for(5ms);
                 continue;
             }
         }

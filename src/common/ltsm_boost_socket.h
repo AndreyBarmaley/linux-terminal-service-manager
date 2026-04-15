@@ -33,8 +33,13 @@
 #include <boost/asio/ssl/stream.hpp>
 
 namespace LTSM {
+    class BoostSocket : public NetworkStream {
+    public:
+        virtual void closeSocket(void) = 0;
+    };
+
     template <typename Stream>
-    class BoostStream : public NetworkStream {
+    class BoostStream : public BoostSocket {
       protected:
         mutable Stream stream_;
 
@@ -45,8 +50,13 @@ namespace LTSM {
             return stream_;
         }
 
+        void closeSocket(void) override {
+            boost::system::error_code ec;
+            stream_.close(ec);
+        }
+
         bool hasInput(void) const override {
-            return 0 < stream_.available(); //NetworkStream::hasInput(stream_.native_handle());
+            return 0 < stream_.available();
         }
 
         size_t hasData(void) const override {
@@ -61,15 +71,17 @@ namespace LTSM {
 
         void sendRaw(const void* ptr, size_t len) override {
             boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+            NetworkStream::bytesOut += len;
         }
 
         void recvRaw(void* ptr, size_t len) const override {
             boost::asio::read(stream_, boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+            NetworkStream::bytesIn += len;
         }
     };
 
     template <typename Stream>
-    class BoostSslStream : public NetworkStream {
+    class BoostSslStream : public BoostSocket {
       protected:
         boost::asio::ssl::context ssl_ctx_;
         mutable boost::asio::ssl::stream<Stream> stream_;
@@ -86,6 +98,12 @@ namespace LTSM {
             return stream_;
         }
 
+        void closeSocket(void) override {
+            boost::system::error_code ec;
+            stream_.shutdown(ec);
+            stream_.lowest_layer().close(ec);
+        }
+
         void setCipherSuite(const char* list) {
             if(list) {
                 auto ssl = stream_.native_handle();
@@ -94,22 +112,26 @@ namespace LTSM {
         }
 
         bool hasInput(void) const override {
-            auto ssl = stream_.native_handle();
-            return 0 < SSL_pending(ssl) ||
-                0 < stream_.lowest_layer().available();
+            if(auto ssl = stream_.native_handle()) {
+                return 0 < SSL_pending(ssl) ||
+                    0 < stream_.lowest_layer().available();
+            }
+            return false;
         }
 
         size_t hasData(void) const override {
             auto ssl = stream_.native_handle();
-            return SSL_pending(ssl);
+            return ssl ? SSL_pending(ssl) : 0;
         }
 
         void sendRaw(const void* ptr, size_t len) override {
             boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+            NetworkStream::bytesOut += len;
         }
 
         void recvRaw(void* ptr, size_t len) const override {
             boost::asio::read(stream_, boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+            NetworkStream::bytesIn += len;
         }
     };
 } // LTSM

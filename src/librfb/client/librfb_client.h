@@ -41,7 +41,7 @@ namespace LTSM {
         class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
             PixelFormat serverPf;
 #ifdef LTSM_WITH_BOOST
-            std::unique_ptr<NetworkStream> socket; /// socket layer
+            std::unique_ptr<BoostSocket> socket; /// socket layer
 #else
             std::unique_ptr<NetworkStream> socket; /// socket layer
 #ifdef LTSM_WITH_GNUTLS
@@ -116,8 +116,9 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_BOOST
             void setSocketStreamMode(boost::asio::io_context&, int sockd);
-#endif
+#else
             void setSocketStreamMode(int sockd);
+#endif
             void updateRegion(int type, const XCB::Region &);
 
           public:

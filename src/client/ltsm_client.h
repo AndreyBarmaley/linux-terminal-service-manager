@@ -58,6 +58,9 @@ namespace LTSM {
         public RFB::WinClient
 #endif
     {
+#ifdef LTSM_WITH_BOOST
+        boost::asio::io_context ioc_;
+#endif
         PixelFormat clientPf;
         RFB::SecurityInfo rfbsec;
 
