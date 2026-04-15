@@ -569,23 +569,17 @@ namespace LTSM {
             if(msgType == RFB::PROTOCOL_LTSM) {
                 if(! clientLtsmSupported) {
                     Application::error("{}: client not support encoding: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
-                    throw rfb_error(NS_FuncNameS);
+                    rfbMessagesShutdown();
+                    return;
                 }
 
                 try {
                     recvLtsmProto(*this);
-                } catch(const std::runtime_error & err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                    rfbMessagesShutdown();
                 } catch(const std::exception & err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    rfbMessagesShutdown();
+                    return;
                 }
-
-                continue;
-            }
-
-            if(! rfbMessages) {
-                break;
             }
 
             switch(msgType) {

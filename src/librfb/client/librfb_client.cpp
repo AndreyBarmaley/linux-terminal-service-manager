@@ -549,23 +549,16 @@ namespace LTSM {
                 if(0 == serverLtsmVersion) {
                     Application::error("{}: server not supported: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
                     rfbMessagesShutdown();
-                    continue;
+                    return;
                 }
 
                 try {
                     recvLtsmProto(*this);
-                } catch(const std::runtime_error & err) {
+                } catch(const std::exception& err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                     rfbMessagesShutdown();
-                } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    return;
                 }
-
-                continue;
-            }
-
-            if(! rfbMessages) {
-                break;
             }
 
             switch(msgType) {

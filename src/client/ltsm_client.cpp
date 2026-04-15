@@ -742,17 +742,17 @@ namespace LTSM {
             return -1;
         }
 
-        asio::thread_pool thread_pool{concurency_};
+        // asio::thread_pool thread_pool{concurency_};
     
         // rfb thread: process rfb messages
         auto thrfb = std::thread([this]() {
             this->rfbMessagesLoop();
         });
 
+#ifdef __UNIX__
         // xcb thread: wait xkb event
         auto thxcb = std::thread([this]() {
             while(this->rfbMessagesRunning()) {
-#ifdef __UNIX__
 
                 if(auto err = XCB::RootDisplay::hasError()) {
                     Application::warning("{}: x11 error: {}", NS_FuncNameV, err);
@@ -770,11 +770,10 @@ namespace LTSM {
                     }
                 }
 
-#endif
-
                 std::this_thread::sleep_for(50ms);
             }
         });
+#endif
 
         if(isContinueUpdatesSupport()) {
             sendContinuousUpdates(true, { XCB::Point(0, 0), windowSize });
@@ -868,10 +867,11 @@ namespace LTSM {
             thrfb.join();
         }
 
+#ifdef __UNIX__
         if(thxcb.joinable()) {
             thxcb.join();
         }
-
+#endif
         return 0;
     }
 
