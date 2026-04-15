@@ -24,6 +24,10 @@
 #ifndef _LTSM_BOOST_SOCKETS_
 #define _LTSM_BOOST_SOCKETS_
 
+#ifdef __WIN32__
+#include <windows.h>
+#endif
+
 #include "ltsm_sockets.h"
 
 #include <stdexcept>
@@ -62,12 +66,6 @@ namespace LTSM {
         size_t hasData(void) const override {
             return stream_.available();
         }
-
-#ifdef LTSM_WITH_GNUTLS
-        void setupTLS(gnutls::session* sess) const override {
-            sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(stream_.native_handle()));
-        }
-#endif
 
         void sendRaw(const void* ptr, size_t len) override {
             boost::asio::write(stream_, boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());

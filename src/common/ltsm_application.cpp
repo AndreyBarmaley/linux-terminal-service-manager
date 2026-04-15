@@ -406,12 +406,12 @@ namespace LTSM {
         }
     }
 
+#ifdef __UNIX__
     // WatchModification
     WatchModification::~WatchModification() {
         inotifyWatchStop();
     }
 
-#ifdef __UNIX__
 #ifdef LTSM_WITH_BOOST
     boost::asio::awaitable<void> WatchModification::inotifyWatchCb(void) {
         auto len = co_await _inotifyStream.async_read_some(boost::asio::buffer(_inotifyBuf), boost::asio::use_awaitable);
@@ -552,17 +552,6 @@ namespace LTSM {
         _inotifyFd = -1;
         _inotifyWd = -1;
     }
-#else
-    void WatchModification::inotifyWatchCb(void) const {
-    }
-
-    bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
-        return false;
-    }
-
-    void WatchModification::inotifyWatchStop(void) {
-    }
-#endif
 
     // ApplicationJsonConfig
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident)
@@ -691,7 +680,8 @@ namespace LTSM {
             configReloadedEvent();
         }
     }
-#endif
+#endif // __UNIX__
+#endif // LTSM_WITH_JSON
 
 #ifdef LTSM_WITH_AUDIT
     AuditLog::AuditLog() {

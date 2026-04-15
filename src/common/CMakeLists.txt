@@ -6,7 +6,6 @@ elseif(UNIX)
     #target_link_libraries(${CUR_TARGET} PUBLIC ${XKBFILE_LIBRARY} ${X11_LIBRARY})
 elseif(MINGW)
     target_include_directories(${CUR_TARGET} PUBLIC mingw)
-    target_link_libraries(${CUR_TARGET} PUBLIC wsock32 winscard)
 endif()
 
 target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)
