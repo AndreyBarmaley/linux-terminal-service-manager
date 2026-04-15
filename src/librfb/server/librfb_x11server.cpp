@@ -180,17 +180,12 @@ namespace LTSM {
         xcbShmInit();
 
         serverConnectedEvent();
-        Application::info("{}: wait RFB messages...", NS_FuncNameV);
+        Application::info("{}: wait RFB messages, fps: {}", NS_FuncNameV, frameRateOption());
 
         // xcb on
         xcbDisableMessages(false);
         bool mainLoop = true;
         auto frameTimePoint = std::chrono::steady_clock::now();
-        size_t delayTimeout = 100;
-
-        if(isClientVideoSupported() || xcbNoDamageOption()) {
-            delayTimeout = 60;
-        }
 
         // process rfb messages background
         auto rfbThread = std::thread([this]() {
@@ -211,24 +206,32 @@ namespace LTSM {
             }
 
             // check timepoint frame
-            if(delayTimeout) {
+            if(auto frameRate = frameRateOption()) {
+                int delayTimeout = 1000 / frameRate;
+
+                if(isClientFFmpegEncoding()) {
+                    // ffmpeg encoding: fixed fps
+                    fullscreenUpdateReq = true;
+                } else if(xcbNoDamageOption()) {
+                    // no damage: fixed fps
+                } else if(! damageRegion.isEmpty()) {
+                    // damage present - 16 fps
+                    delayTimeout = 65;
+                }
+
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+                int last = delayTimeout - static_cast<int>(dt.count());
+                Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
 
-                if(dt.count() < delayTimeout) {
-                    auto last = delayTimeout - dt.count();
-
-                    if(! xcbNoDamageOption() && damageRegion.isEmpty() && 100 < last) {
-                        // damage or max fps: 10
-                        last = 100;
-                    }
-
-                    Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(last));
+                // large timepoint
+                if(30 < last) {
+                    std::this_thread::sleep_for(30ms);
                     continue;
                 }
 
-                if(isClientVideoSupported()) {
-                    fullscreenUpdateReq = true;
+                // small timepoint
+                if(0 < last) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(last));
                 }
             }
 
@@ -269,11 +272,6 @@ namespace LTSM {
                 }
 
                 damageRegion.reset();
-            }
-
-            // update timepoint
-            if(auto frameRate = frameRateOption()) {
-                delayTimeout = 1000 / frameRate;
             }
         } // main loop
 

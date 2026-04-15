@@ -726,14 +726,10 @@ namespace LTSM {
                 case RFB::ENCODING_LTSM_QOI:
                 case RFB::ENCODING_LTSM_LZ4:
                 case RFB::ENCODING_LTSM_TJPG:
-                    clientLtsmSupported = true;
-                    break;
-
                 case RFB::ENCODING_LTSM_H264:
                 case RFB::ENCODING_LTSM_AV1:
                 case RFB::ENCODING_LTSM_VP8:
                     clientLtsmSupported = true;
-                    clientVideoSupported = true;
                     break;
 
                 case RFB::ENCODING_CONTINUOUS_UPDATES:
@@ -884,13 +880,11 @@ namespace LTSM {
         Application::info("{}: display resized, new size: {}", NS_FuncNameV, dsz);
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
-        std::thread([this, sz = dsz]() {
-            if(this->encoder &&
-               (this->encoder->getType() == RFB::ENCODING_LTSM_H264 ||
-                this->encoder->getType() == RFB::ENCODING_LTSM_AV1 || this->encoder->getType() == RFB::ENCODING_LTSM_VP8)) {
+        if(isClientFFmpegEncoding()) {
+    	    std::thread([this, sz = dsz]() {
                 this->encoder->resizedEvent(sz);
-            }
-        }).detach();
+    	    }).detach();
+        }
 
 #endif
     }
@@ -1307,8 +1301,10 @@ namespace LTSM {
         return clientLtsmSupported;
     }
 
-    bool RFB::ServerEncoder::isClientVideoSupported(void) const {
-        return clientVideoSupported;
+    bool RFB::ServerEncoder::isClientFFmpegEncoding(void) const {
+	return encoder &&
+            (encoder->getType() == RFB::ENCODING_LTSM_H264 ||
+                encoder->getType() == RFB::ENCODING_LTSM_AV1 || encoder->getType() == RFB::ENCODING_LTSM_VP8);
     }
 
     void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::span<const uint8_t> buf) {
@@ -1366,16 +1362,11 @@ namespace LTSM {
 
     void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts, uint32_t frameRate) {
         if(encoder) {
-            switch(encoder->getType()) {
-                case RFB::ENCODING_LTSM_H264:
-                case RFB::ENCODING_LTSM_AV1:
-                case RFB::ENCODING_LTSM_VP8:
-                    encoder->setFps(frameRate);
-                    serverScreenUpdateRequest();
-                    break;
-
-                default: break;
+    	    if(isClientFFmpegEncoding()) {
+        	encoder->setFps(frameRate);
+        	serverScreenUpdateRequest();
             }
+
             // apply opts: need full update
             if(encoder->setEncodingOptions(opts)) {
                 serverScreenUpdateRequest();

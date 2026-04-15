@@ -130,7 +130,7 @@ namespace LTSM {
             void setEncodingOptions(const std::forward_list<std::string> &, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;
-            bool isClientVideoSupported(void) const;
+            bool isClientFFmpegEncoding(void) const;
             bool isClientSupportedEncoding(int) const;
             bool isContinueUpdatesProcessed(void) const;
 
