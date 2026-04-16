@@ -31,6 +31,15 @@
 #include <cassert>
 
 #include <boost/endian.hpp>
+/*
+    example:
+    std::ofstream ofs(...);
+    byte::ostream bs(ofs);
+
+    bs.write_byte(0);
+    bs.write_be16(host.size());
+    bs.write_string(host);
+*/
 
 namespace byte {
     class ostream : public std::ostream {
@@ -78,6 +87,10 @@ namespace byte {
             st.put(val);
             assert(st.good());
             return *this;
+        }
+        ostream & write_zero(uint32_t len) {
+            std::vector<uint8_t> zero(len, 0);
+            return write_bytes(zero);
         }
         template<typename T>
         ostream & write_bytes(const std::vector<T> & buf) {
@@ -137,6 +150,9 @@ namespace byte {
             auto val = st.get();
             assert(st.gcount() == 1);
             return val;
+        }
+        void skip_bytes(size_t len) {
+            [[maybe_unused]] auto buf = read_bytes(len);
         }
         std::vector<uint8_t> read_bytes(size_t len) {
             std::vector<uint8_t> buf(len);

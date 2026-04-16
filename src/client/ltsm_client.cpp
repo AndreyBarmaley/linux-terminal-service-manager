@@ -263,7 +263,12 @@ namespace LTSM {
     }
 
     ClientApp::ClientApp(int argc, const char** argv)
-        : Application("ltsm_client") {
+        : Application("ltsm_client")
+#ifdef LTSM_WITH_X11
+        , RFB::X11Client(ioc_) {
+#else
+        , RFB::WinClient(ioc_) {
+#endif
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 #ifdef LTSM_WITH_GNUTLS

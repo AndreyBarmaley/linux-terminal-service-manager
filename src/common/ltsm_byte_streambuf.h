@@ -101,6 +101,7 @@ namespace byte {
                 boost::asio::buffer_copy(buf, boost::asio::buffer(ptr, len));
                 sb_.commit(len);
             }
+
             return *this;
         }
 
@@ -145,6 +146,7 @@ namespace byte {
                 sb_.consume(len);
                 return res;
             }
+
             return {};
         }
 

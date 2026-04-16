@@ -46,7 +46,7 @@ namespace LTSM {
     namespace AsioTls {
         enum class HandshakeType { Client, Srrver };
 
-        class AsyncStream : protected boost::base_from_member<AsioSslContext>, protected AsyncSocket<AsioSslStream>, public NetworkStream {
+        class AsyncStream : protected boost::base_from_member<AsioSslContext>, public AsyncSocket<AsioSslStream>, public NetworkStream {
             bool ssl_connected = false;
 
           public:
@@ -76,15 +76,17 @@ namespace LTSM {
 
             void sslHandshake(const HandshakeType & type) {
                 ssl_stream().handshake(type == HandshakeType::Client ?
-                    boost::asio::ssl::stream_base::client : boost::asio::ssl::stream_base::server);
+                                       boost::asio::ssl::stream_base::client : boost::asio::ssl::stream_base::server);
                 ssl_connected = true;
             }
 
             void closeSocket(void) {
                 boost::system::error_code ec;
+
                 if(ssl_connected) {
                     ssl_stream().shutdown(ec);
                 }
+
                 ssl_stream().lowest_layer().close(ec);
             }
 
@@ -99,10 +101,12 @@ namespace LTSM {
                 if(ssl_connected) {
                     if(auto ssl = const_cast<AsioSslStream &>(ssl_stream()).native_handle()) {
                         return 0 < SSL_pending(ssl) ||
-                           0 < ssl_stream().lowest_layer().available();
+                               0 < ssl_stream().lowest_layer().available();
                     }
+
                     return false;
                 }
+
                 return 0 < ssl_stream().lowest_layer().available();
             }
 
@@ -111,6 +115,7 @@ namespace LTSM {
                     auto ssl = const_cast<AsioSslStream &>(ssl_stream()).native_handle();
                     return ssl ? SSL_pending(ssl) : 0;
                 }
+
                 return ssl_stream().lowest_layer().available();
             }
 
@@ -120,6 +125,7 @@ namespace LTSM {
                 } else {
                     boost::asio::write(ssl_stream().next_layer(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
                 }
+
                 NetworkStream::bytesOut += len;
             }
 
@@ -129,6 +135,7 @@ namespace LTSM {
                 } else {
                     boost::asio::read(const_cast<AsioSslStream &>(ssl_stream()).next_layer(), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
                 }
+
                 NetworkStream::bytesIn += len;
             }
         };

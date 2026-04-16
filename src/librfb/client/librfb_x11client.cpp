@@ -31,9 +31,10 @@
 #include "librfb_x11client.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
-    RFB::X11Client::X11Client() {
+    RFB::X11Client::X11Client(asio::io_context & ctx) : ClientDecoder(ctx) {
         if(! displayConnect(-1,
                             XCB::InitModules::Xkb | XCB::InitModules::SelCopy | XCB::InitModules::SelPaste, nullptr)) {
             throw xcb_error(NS_FuncNameS);

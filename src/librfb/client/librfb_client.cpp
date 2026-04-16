@@ -35,6 +35,7 @@
 #include "librfb_ffmpeg.h"
 #endif
 
+#include "ltsm_byte_stream.h"
 #include <boost/asio/ssl/stream.hpp>
 
 using namespace std::chrono_literals;
@@ -466,6 +467,132 @@ namespace LTSM {
         return encodings;
     }
 
+#ifdef LTSM_WITH_BOOST
+    asio::awaitable<void> RFB::ClientDecoder::rfbMessagesLoopAwait(void) {
+        auto encodings = supportedEncodings();
+        // added pseudo encodings
+        encodings.push_front(ENCODING_LAST_RECT);
+        encodings.push_front(ENCODING_RICH_CURSOR);
+        encodings.push_front(ENCODING_EXT_DESKTOP_SIZE);
+        encodings.push_front(ENCODING_CONTINUOUS_UPDATES);
+
+        if(auto audioEncoding = clientPrefferedAudioEncoding(); 0 < audioEncoding) {
+            encodings.push_front(audioEncoding);
+        }
+
+        if(clientLtsmSupported()) {
+            encodings.push_front(ENCODING_LTSM);
+        }
+
+        if(auto prefferedEncoding = clientPrefferedVideoEncoding(); 0 < prefferedEncoding) {
+#ifdef LTSM_DECODING_FFMPEG
+
+            // experimental feature remove and added from preffered
+            if(prefferedEncoding != ENCODING_LTSM_H264) {
+                encodings.remove(ENCODING_LTSM_H264);
+            }
+
+            if(prefferedEncoding != ENCODING_LTSM_AV1) {
+                encodings.remove(ENCODING_LTSM_AV1);
+            }
+
+            if(prefferedEncoding != ENCODING_LTSM_VP8) {
+                encodings.remove(ENCODING_LTSM_VP8);
+            }
+
+#endif
+            // preffered set priority
+            auto it = std::ranges::find_if(encodings, [&](auto & enc) {
+                return prefferedEncoding == enc;
+            });
+
+            if(it != encodings.end()) {
+                auto enc = *it;
+                encodings.erase(it);
+                it = std::ranges::find(encodings, ENCODING_LTSM);
+                encodings.insert(it == encodings.end() ? it : std::next(it), enc);
+            }
+        }
+
+        co_await sendEncodingsAwait(encodings);
+        co_await sendPixelFormatAwait();
+
+        // request full update
+        co_await sendFrameBufferUpdateAwait(false);
+        Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
+        auto cur = std::chrono::steady_clock::now();
+
+        while(rfbMessages) {
+            auto now = std::chrono::steady_clock::now();
+
+            if((! continueUpdatesSupport || ! continueUpdatesProcessed) &&
+               std::chrono::milliseconds(300) <= now - cur) {
+                // request incr update
+                co_await sendFrameBufferUpdateAwait(true);
+                cur = now;
+            }
+
+            //if(! hasInput()) {
+            //    std::this_thread::sleep_for(5ms);
+            //    continue;
+            //}
+
+            int msgType = co_await socket->async_recv_byte();
+
+            if(msgType == PROTOCOL_LTSM) {
+                if(0 == serverLtsmVersion) {
+                    Application::error("{}: server not supported: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
+                    rfbMessagesShutdown();
+                    co_return;
+                }
+
+                try {
+                    recvLtsmProto(*this);
+                } catch(const std::exception& err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    rfbMessagesShutdown();
+                    co_return;
+                }
+            }
+
+            switch(msgType) {
+                case SERVER_FB_UPDATE:
+                    try {
+                        recvFBUpdateEvent();
+                    } catch(const std::exception & err) {
+                        rfbMessagesShutdown();
+                    }
+
+                    break;
+
+                case SERVER_SET_COLOURMAP:
+                    recvColorMapEvent();
+                    break;
+
+                case SERVER_BELL:
+                    recvBellEvent();
+                    break;
+
+                case SERVER_CUT_TEXT:
+                    recvCutTextEvent();
+                    break;
+
+                case SERVER_CONTINUOUS_UPDATES:
+                    recvContinuousUpdatesEvent();
+                    break;
+
+                default: {
+                    Application::error("{}: unknown message: {:#04x}", NS_FuncNameV, msgType);
+                    rfbMessagesShutdown();
+                    co_return;
+                }
+            }
+        }
+
+        co_return;
+    }
+#endif
+
     void RFB::ClientDecoder::rfbMessagesLoop(void) {
         auto encodings = supportedEncodings();
         // added pseudo encodings
@@ -587,20 +714,98 @@ namespace LTSM {
         }
     }
 
+    bool RFB::ClientDecoder::isClientFFmpegEncoding(void) const {
+        return decoder &&
+            (decoder->getType() == RFB::ENCODING_LTSM_H264 ||
+                decoder->getType() == RFB::ENCODING_LTSM_AV1 || decoder->getType() == RFB::ENCODING_LTSM_VP8);
+    }
+
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz) {
         Application::info("{}: display resized, new size: {}", NS_FuncNameV, dsz);
 #ifdef LTSM_DECODING_FFMPEG
         // event background
-        std::thread([this, sz = dsz]() {
-            if(this->decoder &&
-               (this->decoder->getType() == RFB::ENCODING_LTSM_H264 ||
-                this->decoder->getType() == RFB::ENCODING_LTSM_AV1 || this->decoder->getType() == RFB::ENCODING_LTSM_VP8)) {
+        if(isClientFFmpegEncoding()) {
+            std::thread([this, sz = dsz]() {
                 this->decoder->resizedEvent(sz);
-            }
-        }).detach();
-
+            }).detach();
+        }
 #endif
     }
+
+#ifdef LTSM_WITH_BOOST
+    asio::awaitable<void> RFB::ClientDecoder::sendPixelFormatAwait(void) const {
+        const auto & pf = clientFormat();
+        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
+                           NS_FuncNameV, pf.bitsPerPixel(), (int) platformBigEndian(),
+                           pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
+
+        StreamBuf sb(20);
+
+        const uint8_t trueColor = 1;
+        const uint8_t defaultDepth = 24;
+
+        sb.writeInt8(RFB::CLIENT_SET_PIXEL_FORMAT).
+            writeZero(3). // padding
+            writeInt8(pf.bitsPerPixel()).
+            writeInt8(defaultDepth).
+            writeInt8(platformBigEndian()).
+            writeInt8(trueColor).
+            writeIntBE16(pf.rmax()).
+            writeIntBE16(pf.gmax()).
+            writeIntBE16(pf.bmax()).
+            writeInt8(pf.rshift()).
+            writeInt8(pf.gshift()).
+            writeInt8(pf.bshift()).
+            writeZero(3); // padding
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_send_buf(asio::buffer(sb.rawbuf()));
+        send_lock_.unlock();
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendEncodingsAwait(const std::list<int> & encodings) const {
+        for(const auto & type : encodings) {
+            Application::debug(DebugType::Rfb, "{}: {}", NS_FuncNameV, encodingName(type));
+        }
+
+        StreamBuf sb(4 + encodings.size() * sizeof(uint32_t));
+
+        sb.writeInt8(RFB::CLIENT_SET_ENCODINGS).
+            writeZero(1). // padding
+            writeIntBE16(encodings.size());
+
+        for(const auto & val : encodings) {
+            sb.writeIntBE32(val);
+        }
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_send_buf(asio::buffer(sb.rawbuf()));
+        send_lock_.unlock();
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(bool incr) const {
+        auto csz = clientSize();
+        co_return co_await sendFrameBufferUpdateAwait(XCB::Region{0, 0, csz.width, csz.height}, incr);
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(const XCB::Region & reg, bool incr) const {
+        Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
+
+        StreamBuf sb(10);
+
+        sb.writeInt8(RFB::CLIENT_REQUEST_FB_UPDATE).
+            writeInt8(incr ? 1 : 0).
+            writeIntBE16(reg.x).
+            writeIntBE16(reg.y).
+            writeIntBE16(reg.width).
+            writeIntBE16(reg.height);
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_send_buf(asio::buffer(sb.rawbuf()));
+        send_lock_.unlock();
+    }
+
+#endif
 
     void RFB::ClientDecoder::sendPixelFormat(void) {
         auto & pf = clientFormat();
@@ -719,7 +924,6 @@ namespace LTSM {
         sendIntBE16(reg.height);
         sendFlush();
     }
-
 
     void RFB::ClientDecoder::updateRegion(int type, const XCB::Region & reg) {
         if(! decoder || type != decoder->getType()) {

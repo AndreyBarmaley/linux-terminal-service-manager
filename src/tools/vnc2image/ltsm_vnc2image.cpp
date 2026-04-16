@@ -41,7 +41,7 @@ namespace LTSM {
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
-        : Application("ltsm_vnc2image") {
+        : Application("ltsm_vnc2image"), ClientDecoder(ioc_) {
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 

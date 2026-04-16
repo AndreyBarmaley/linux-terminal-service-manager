@@ -30,6 +30,7 @@
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
+#include "ltsm_async_mutex.h"
 #include "ltsm_boost_socket.h"
 
 namespace LTSM {
@@ -38,7 +39,10 @@ namespace LTSM {
         class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
             PixelFormat serverPf;
 
+            mutable async_mutex send_lock_;
             std::unique_ptr<AsioTls::AsyncStream> socket; /// socket layer
+            //boost::asio::strand<boost::asio::any_io_executor> send_order_;
+
             std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
             std::unique_ptr<DecodingBase> decoder;
 
@@ -81,6 +85,12 @@ namespace LTSM {
             bool authGssApiInit(const SecurityInfo &);
 #endif
 
+#ifdef LTSM_WITH_BOOST
+            boost::asio::awaitable<void> sendPixelFormatAwait(void) const;
+            boost::asio::awaitable<void> sendEncodingsAwait(const std::list<int> &) const;
+            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
+            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
+#endif
             void sendPixelFormat(void);
             void sendEncodings(const std::list<int> &);
             void sendFrameBufferUpdate(bool incr);
@@ -107,13 +117,20 @@ namespace LTSM {
 
             void setSocketStreamMode(boost::asio::ip::tcp::socket&&);
             void updateRegion(int type, const XCB::Region &);
+            bool isClientFFmpegEncoding(void) const;
 
           public:
-            ClientDecoder() = default;
+            ClientDecoder(boost::asio::io_context & ctx)
+                : send_lock_{ctx.get_executor()} {}
 
             bool rfbHandshake(const SecurityInfo &);
             bool rfbMessagesRunning(void) const;
+
+#ifdef LTSM_WITH_BOOST
+            boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
+#endif
             void rfbMessagesLoop(void);
+
             void rfbMessagesShutdown(void);
             bool isContinueUpdatesSupport(void) const;
             bool isContinueUpdatesProcessed(void) const;

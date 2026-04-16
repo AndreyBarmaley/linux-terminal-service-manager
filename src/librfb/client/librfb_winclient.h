@@ -51,7 +51,7 @@ namespace LTSM {
             void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
 
           public:
-            WinClient();
+            WinClient(boost::asio::io_context&);
         };
     }
 }

@@ -64,7 +64,7 @@ namespace LTSM {
         if constexpr(std::is_integral_v<DecayedT>) {
             return boost::asio::buffer(&val, sizeof(val));
         } else if constexpr(is_mutable_buffer_v<DecayedT>) {
-                return std::move(val);
+            return std::move(val);
         } else if constexpr(has_data_size_v<DecayedT>) {
             if constexpr(sizeof(typename DecayedT::value_type) == 1) {
                 return boost::asio::buffer(val.data(), val.size());
@@ -83,7 +83,7 @@ namespace LTSM {
         if constexpr(std::is_integral_v<DecayedT>) {
             return boost::asio::const_buffer(&val, sizeof(val));
         } else if constexpr(is_const_buffer_v<DecayedT>) {
-                return val;
+            return val;
         } else if constexpr(has_data_size_v<DecayedT>) {
             if constexpr(sizeof(typename DecayedT::value_type) == 1) {
                 return boost::asio::const_buffer(val.data(), val.size());
@@ -146,7 +146,7 @@ namespace LTSM {
         [[nodiscard]] boost::asio::awaitable<void> async_recv_values(Values&&... vals) const {
             auto list = { value_to_buffer(std::forward<Values>(vals))... };
             co_await boost::asio::async_read(sock_, list,
-                                              boost::asio::transfer_all(), boost::asio::use_awaitable);
+                                             boost::asio::transfer_all(), boost::asio::use_awaitable);
         }
 
         [[nodiscard]] boost::asio::awaitable<uint8_t> async_recv_byte(void) const {

@@ -151,8 +151,9 @@ namespace LTSM {
             return getInt8();
         }
 
-        inline void writeInt8(uint8_t v) {
+        inline MemoryStream & writeInt8(uint8_t v) {
             putInt8(v);
+            return *this;
         }
 
         /// @brief: read uint16 (depends on current endian mode)
@@ -240,6 +241,11 @@ namespace LTSM {
 
         inline MemoryStream & writeIntBE64(uint64_t v) {
             putIntBE64(v);
+            return *this;
+        }
+
+        inline MemoryStream & writeZero(size_t len) {
+            fill(len, 0);
             return *this;
         }
 
