@@ -575,6 +575,7 @@ namespace LTSM {
 
                 try {
                     recvLtsmProto(*this);
+                    continue;
                 } catch(const std::exception & err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                     rfbMessagesShutdown();
