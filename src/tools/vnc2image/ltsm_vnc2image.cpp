@@ -73,13 +73,10 @@ namespace LTSM {
     }
 
     int Vnc2Image::start(void) {
-        boost::asio::ip::tcp::socket sock{ioc_};
-        boost::asio::ip::tcp::resolver resolver{ioc_};
 
-        auto endpoints = resolver.resolve(host, std::to_string(port));
-        boost::asio::connect(sock, endpoints);
-
-        RFB::ClientDecoder::setSocketStreamMode(std::move(sock));
+        if(! ClientDecoder::socketConnect(host, port)) {
+            return -1;
+        }
 
         RFB::SecurityInfo rfbsec;
         rfbsec.authVenCrypt = ! notls;

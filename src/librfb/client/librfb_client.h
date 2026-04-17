@@ -115,13 +115,12 @@ namespace LTSM {
             void recvDecodingRichCursor(const XCB::Region &);
             void recvDecodingLtsmCursor(const XCB::Region &);
 
-            void setSocketStreamMode(boost::asio::ip::tcp::socket&&);
+            bool socketConnect(std::string_view host, uint16_t port);
             void updateRegion(int type, const XCB::Region &);
             bool isClientFFmpegEncoding(void) const;
 
           public:
-            ClientDecoder(boost::asio::io_context & ctx)
-                : send_lock_{ctx.get_executor()} {}
+            ClientDecoder(boost::asio::io_context&);
 
             bool rfbHandshake(const SecurityInfo &);
             bool rfbMessagesRunning(void) const;

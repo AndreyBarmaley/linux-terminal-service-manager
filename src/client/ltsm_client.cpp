@@ -688,13 +688,9 @@ namespace LTSM {
     }
 
     int ClientApp::start(void) {
-        asio::ip::tcp::socket sock{ioc_};
-        asio::ip::tcp::resolver resolver{ioc_};
-
-        auto endpoints = resolver.resolve(host, std::to_string(port));
-        asio::connect(sock, endpoints);
-
-        RFB::ClientDecoder::setSocketStreamMode(std::move(sock));
+        if(! ClientDecoder::socketConnect(host, port)) {
+            return -1;
+        }
 
         if(rfbsec.passwdFile.empty()) {
             if(auto env = std::getenv("LTSM_PASSWORD")) {

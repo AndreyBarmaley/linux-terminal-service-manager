@@ -43,9 +43,24 @@ using namespace boost;
 
 namespace LTSM {
     /* RFB::ClientDecoder */
-    void RFB::ClientDecoder::setSocketStreamMode(asio::ip::tcp::socket && sock) {
-        socket = std::make_unique<AsioTls::AsyncStream>(std::move(sock), asio::ssl::context::tlsv12_client);
-        streamIn = streamOut = socket.get();
+    RFB::ClientDecoder::ClientDecoder(asio::io_context& ctx) : send_lock_{ctx.get_executor()} {
+        socket = std::make_unique<AsioTls::AsyncStream>(ctx.get_executor(), asio::ssl::context::tlsv12_client);
+    }
+
+    bool RFB::ClientDecoder::socketConnect(std::string_view host, uint16_t port) {
+        if(socket) {
+            try {
+                asio::ip::tcp::resolver resolver{socket->ssl_stream().get_executor()};
+                auto endpoints = resolver.resolve(host, std::to_string(port));
+                asio::connect(socket->ssl_stream().lowest_layer(), endpoints);
+                streamIn = streamOut = socket.get();
+                return true;
+            } catch(system::system_error& err) {
+                auto ec = err.code();
+                LTSM::Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+        return false;
     }
 
     void RFB::ClientDecoder::sendFlush(void) {
