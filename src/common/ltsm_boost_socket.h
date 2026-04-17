@@ -31,117 +31,108 @@
 #include <stdexcept>
 #include <openssl/ssl.h>
 
+#include <boost/utility/base_from_member.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
 #include "ltsm_sockets.h"
 #include "ltsm_async_socket.h"
 
 namespace LTSM {
-    class BoostSocket : public NetworkStream {
-    public:
-        virtual void closeSocket(void) = 0;
-    };
+    //
+    using AsioSocket = boost::asio::ip::tcp::socket;
+    using AsioSslStream = boost::asio::ssl::stream<AsioSocket>;
+    using AsioSslContext = boost::asio::ssl::context;
 
-    template <typename Stream>
-    class BoostStream : public BoostSocket {
-      protected:
-        AsyncSocket<Stream> stream_;
+    namespace AsioTls {
+        enum class HandshakeType { Client, Srrver };
 
-      public:
-        explicit BoostStream(Stream && st) : stream_{std::move(st)} {}
+        class AsyncStream : protected boost::base_from_member<AsioSslContext>, protected AsyncSocket<AsioSslStream>, public NetworkStream {
+            bool ssl_connected = false;
 
-        Stream & native(void) {
-            return stream_.socket();
-        }
+          public:
+            explicit AsyncStream(const boost::asio::any_io_executor & ex, const AsioSslContext::method & method)
+                : boost::base_from_member<AsioSslContext>(AsioSslContext{method})
+                , AsyncSocket<AsioSslStream>(AsioSslStream{AsioSocket{ex}, boost::base_from_member<AsioSslContext>::member}) {}
 
-        const Stream & native(void) const {
-            return stream_.socket();
-        }
+            explicit AsyncStream(AsioSocket && sock, const AsioSslContext::method & method)
+                : boost::base_from_member<AsioSslContext>(AsioSslContext{method})
+                , AsyncSocket<AsioSslStream>(AsioSslStream{std::move(sock), boost::base_from_member<AsioSslContext>::member}) {}
 
-        void closeSocket(void) override {
-            boost::system::error_code ec;
-            native().close(ec);
-        }
-
-        bool hasInput(void) const override {
-            return 0 < native().available();
-        }
-
-        size_t hasData(void) const override {
-            return native().available();
-        }
-
-        void sendRaw(const void* ptr, size_t len) override {
-            boost::asio::write(native(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
-            NetworkStream::bytesOut += len;
-        }
-
-        void recvRaw(void* ptr, size_t len) const override {
-            boost::asio::read(const_cast<Stream &>(native()), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
-            NetworkStream::bytesIn += len;
-        }
-    };
-
-    template <typename Stream>
-    class BoostSslStream : public BoostSocket {
-      protected:
-        boost::asio::ssl::context ssl_ctx_;
-
-        using SslStream = boost::asio::ssl::stream<Stream>;
-        AsyncSocket<SslStream> stream_;
-
-      public:
-        explicit BoostSslStream(Stream && st, const boost::asio::ssl::context::method & method)
-            : ssl_ctx_{method}, stream_{SslStream{std::move(st), ssl_ctx_}} {}
-
-        boost::asio::ssl::context & context(void) {
-            return ssl_ctx_;
-        }
-
-        boost::asio::ssl::stream<Stream> & native(void) {
-            return stream_.socket();
-        }
-
-        const boost::asio::ssl::stream<Stream> & native(void) const {
-            return stream_.socket();
-        }
-
-        void closeSocket(void) override {
-            boost::system::error_code ec;
-            native().shutdown(ec);
-            native().lowest_layer().close(ec);
-        }
-
-        void setCipherSuite(const char* list) {
-            if(list) {
-                auto ssl = native().native_handle();
-                SSL_set_cipher_list(ssl, list);
+            inline AsioSslContext & ssl_context(void) {
+                return boost::base_from_member<boost::asio::ssl::context>::member;
             }
-        }
 
-        bool hasInput(void) const override {
-            if(auto ssl = const_cast<SslStream &>(native()).native_handle()) {
-                return 0 < SSL_pending(ssl) ||
-                    0 < native().lowest_layer().available();
+            inline const AsioSslContext & ssl_context(void) const {
+                return boost::base_from_member<boost::asio::ssl::context>::member;
             }
-            return false;
-        }
 
-        size_t hasData(void) const override {
-            auto ssl = const_cast<SslStream &>(native()).native_handle();
-            return ssl ? SSL_pending(ssl) : 0;
-        }
+            inline AsioSslStream & ssl_stream(void) {
+                return AsyncSocket<AsioSslStream>::socket();
+            }
 
-        void sendRaw(const void* ptr, size_t len) override {
-            boost::asio::write(native(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
-            NetworkStream::bytesOut += len;
-        }
+            inline const AsioSslStream & ssl_stream(void) const {
+                return AsyncSocket<AsioSslStream>::socket();
+            }
 
-        void recvRaw(void* ptr, size_t len) const override {
-            boost::asio::read(const_cast<SslStream &>(native()), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
-            NetworkStream::bytesIn += len;
-        }
-    };
+            void sslHandshake(const HandshakeType & type) {
+                ssl_stream().handshake(type == HandshakeType::Client ?
+                    boost::asio::ssl::stream_base::client : boost::asio::ssl::stream_base::server);
+                ssl_connected = true;
+            }
+
+            void closeSocket(void) {
+                boost::system::error_code ec;
+                if(ssl_connected) {
+                    ssl_stream().shutdown(ec);
+                }
+                ssl_stream().lowest_layer().close(ec);
+            }
+
+            void setCipherSuite(const char* list) {
+                if(list) {
+                    auto ssl = ssl_stream().native_handle();
+                    SSL_set_cipher_list(ssl, list);
+                }
+            }
+
+            bool hasInput(void) const override {
+                if(ssl_connected) {
+                    if(auto ssl = const_cast<AsioSslStream &>(ssl_stream()).native_handle()) {
+                        return 0 < SSL_pending(ssl) ||
+                           0 < ssl_stream().lowest_layer().available();
+                    }
+                    return false;
+                }
+                return 0 < ssl_stream().lowest_layer().available();
+            }
+
+            size_t hasData(void) const override {
+                if(ssl_connected) {
+                    auto ssl = const_cast<AsioSslStream &>(ssl_stream()).native_handle();
+                    return ssl ? SSL_pending(ssl) : 0;
+                }
+                return ssl_stream().lowest_layer().available();
+            }
+
+            void sendRaw(const void* ptr, size_t len) override {
+                if(ssl_connected) {
+                    boost::asio::write(ssl_stream(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+                } else {
+                    boost::asio::write(ssl_stream().next_layer(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
+                }
+                NetworkStream::bytesOut += len;
+            }
+
+            void recvRaw(void* ptr, size_t len) const override {
+                if(ssl_connected) {
+                    boost::asio::read(const_cast<AsioSslStream &>(ssl_stream()), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+                } else {
+                    boost::asio::read(const_cast<AsioSslStream &>(ssl_stream()).next_layer(), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
+                }
+                NetworkStream::bytesIn += len;
+            }
+        };
+    } // AsioTls
 } // LTSM
 
 #endif // _LTSM_BOOST_SOCKETS_

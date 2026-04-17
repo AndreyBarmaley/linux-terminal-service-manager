@@ -38,7 +38,7 @@ namespace LTSM {
         class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
             PixelFormat serverPf;
 
-            std::unique_ptr<BoostSocket> socket; /// socket layer
+            std::unique_ptr<AsioTls::AsyncStream> socket; /// socket layer
             std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
             std::unique_ptr<DecodingBase> decoder;
 

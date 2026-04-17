@@ -43,8 +43,7 @@ using namespace boost;
 namespace LTSM {
     /* RFB::ClientDecoder */
     void RFB::ClientDecoder::setSocketStreamMode(asio::ip::tcp::socket && sock) {
-        using BoostStreamSock = BoostStream<asio::ip::tcp::socket>;
-        socket = std::make_unique<BoostStreamSock>(std::move(sock));
+        socket = std::make_unique<AsioTls::AsyncStream>(std::move(sock), asio::ssl::context::tlsv12_client);
         streamIn = streamOut = socket.get();
     }
 
@@ -181,37 +180,29 @@ namespace LTSM {
             return false;
         }
 
-        // create ssl socket
-        using BoostSock = asio::ip::tcp::socket;
-        using BoostStreamSock = BoostStream<BoostSock>;
-        using BoostSslStreamSock = BoostSslStream<BoostSock>;
-
-        auto sock = static_cast<BoostStreamSock*>(socket.get());
-
+        // TLS handshake
         try {
-            auto ssl_sock = std::make_unique<BoostSslStreamSock>(std::move(sock->native()),
-                    asio::ssl::context::tlsv12_client);
-            ssl_sock->setCipherSuite("AECDH-AES256-SHA:@SECLEVEL=0");
-            ssl_sock->native().handshake(asio::ssl::stream_base::client);
-
             if(mode == RFB::SECURITY_VENCRYPT02_X509NONE) {
                 if(sec.caFile.empty()) {
-                    ssl_sock->context().set_default_verify_paths();
+                    socket->ssl_context().set_default_verify_paths();
                 } else {
-                    ssl_sock->context().load_verify_file(sec.caFile);
+                    socket->ssl_context().load_verify_file(sec.caFile);
                 }
-                ssl_sock->context().use_certificate_chain_file(sec.certFile);
-                ssl_sock->context().use_private_key_file(sec.keyFile, asio::ssl::context::pem);
-                ssl_sock->context().set_verify_mode(asio::ssl::verify_peer);
-                socket = std::move(ssl_sock);
+                socket->ssl_context().use_certificate_chain_file(sec.certFile);
+                socket->ssl_context().use_private_key_file(sec.keyFile, asio::ssl::context::pem);
+                socket->ssl_context().set_verify_mode(asio::ssl::verify_peer);
             } else {
-                ssl_sock->context().set_verify_mode(asio::ssl::verify_none);
-                socket = std::move(ssl_sock);
+                socket->ssl_context().set_verify_mode(asio::ssl::verify_none);
             }
-        } catch(gnutls::exception & err) {
-            Application::error("boost ssl error: {}, code: {}", err.what(), err.get_code());
+
+            socket->setCipherSuite("AECDH-AES256-SHA:@SECLEVEL=0");
+            socket->sslHandshake(AsioTls::HandshakeType::Client);
+        } catch(system::system_error & err) {
+            auto ec = err.code();
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             return false;
         }
+
         streamIn = streamOut = socket.get();
         return true;
     }
@@ -554,6 +545,7 @@ namespace LTSM {
 
                 try {
                     recvLtsmProto(*this);
+                    continue;
                 } catch(const std::exception& err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                     rfbMessagesShutdown();
