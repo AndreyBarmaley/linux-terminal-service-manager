@@ -326,7 +326,7 @@ void LTSM_Sessions::showClicked(void) {
         auto xvfb = selectedRow->xvfbInfo();
         QStringList args;
         args << "--title" << QString("\"Display:%1 (%2)\"").arg(xvfb.display).arg(xvfb.user) << "--auth" << xvfb.authfile <<
-                "--display" << QString::number(xvfb.display);
+                "--display" << QString(":%1").arg(xvfb.display);
         process.start(sdl2x11.absoluteFilePath(), args, QIODevice::NotOpen);
         ui->pushButtonShow->setEnabled(false);
     }

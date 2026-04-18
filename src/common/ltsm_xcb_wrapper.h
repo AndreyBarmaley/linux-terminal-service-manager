@@ -625,6 +625,7 @@ namespace LTSM {
             /// exception: xcb_error
             Connector(int displayNum, const AuthCookie* = nullptr);
 
+            int getFd(void);
             bool connectorDisplayConnect(int displayNum, const AuthCookie* = nullptr);
 
             size_t depthFromBpp(size_t bitsPerPixel) const;

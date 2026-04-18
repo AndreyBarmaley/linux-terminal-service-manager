@@ -20,12 +20,14 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <iomanip>
 #include <stdexcept>
 
+#include <boost/asio.hpp>
 #include "xcb/damage.h"
 
 #include "ltsm_tools.h"
@@ -33,15 +35,26 @@
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
+using namespace std::chrono_literals;
+using namespace boost;
+
 namespace LTSM {
     class SDL2X11 : protected XCB::RootDisplay, protected SDL::Window, public XCB::SelectionSource, public XCB::SelectionRecipient {
-        XCB::Region damage;
-        XCB::ShmIdShared shm;
+        asio::io_context ioc_;
+        boost::asio::signal_set signals_{ioc_};
+        asio::strand<boost::asio::any_io_executor> sdl_strand_{ioc_.get_executor()};
+        asio::strand<boost::asio::any_io_executor> x11_strand_{ioc_.get_executor()};
+        asio::cancellation_signal sdl_cancel_;
+        asio::cancellation_signal x11_cancel_;
+
+        XCB::Region damage_;
+        XCB::ShmIdShared shm_;
+
         std::unique_ptr<char, void(*)(void*)> clientClipboard{ nullptr, SDL_free };
 
       public:
-        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel)
-            : XCB::RootDisplay(display), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, 0, accel) {
+        SDL2X11(const char* title, int winsz_w, int winsz_h, bool accel)
+            : XCB::RootDisplay(-1), SDL::Window(title, width(), height(), winsz_w, winsz_h, 0, accel) {
         }
 
         /*
@@ -52,18 +65,18 @@ namespace LTSM {
                         auto dsz = XCB::RootDisplay::size();
                         auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
 
-                        shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+                        shm_ = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
                     }
                 }
         */
 
         void xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) override {
-            damage.join(rt.x, rt.y, rt.width, rt.height);
+            damage_.join(rt.x, rt.y, rt.width, rt.height);
         }
 
         void xcbRandrScreenChangedEvent(const XCB::Size & dsz, const xcb_randr_notify_event_t & ne) override {
             SDL::Window::resize(dsz.width, dsz.height);
-            damage.assign(0, 0, dsz.width, dsz.height);
+            damage_.assign(0, 0, dsz.width, dsz.height);
         }
 
         void xcbXkbGroupChangedEvent(int group) override {
@@ -135,7 +148,65 @@ namespace LTSM {
             return {};
         }
 
-        bool sdlEventProcessing(bool & quit) {
+        void sdlKeyEvent(const SDL_KeyboardEvent* ev) {
+            // fast close
+            if(ev->keysym.sym == SDLK_ESCAPE) {
+                Application::warning("{}: {}", NS_FuncNameV, "escape quit");
+                throw system::system_error(asio::error::operation_aborted);
+            }
+
+            asio::post(x11_strand_, [this, keysym = ev->keysym, pressed = (ev->type == SDL_KEYDOWN)](){
+                if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
+                    int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
+                    auto keycode = XCB::RootDisplay::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
+                    test->screenInputKeycode(keycode, pressed);
+                }
+            });
+        }
+
+        void sdlMouseButtonEvent(const SDL_MouseButtonEvent* ev) {
+            auto [coordX, coordY] = SDL::Window::scaleCoord(ev->x, ev->y);
+            asio::post(x11_strand_, [this, button = ev->button, pos = XCB::Point(coordX, coordY), pressed = (ev->type == SDL_MOUSEBUTTONDOWN)](){
+                if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
+                    test->screenInputButton(button, pos, pressed);
+                }
+            });
+        }
+
+        void sdlMouseMotionEvent(const SDL_MouseButtonEvent* ev) {
+            auto [coordX, coordY] = SDL::Window::scaleCoord(ev->x, ev->y);
+            asio::post(x11_strand_, [this, pos = XCB::Point(coordX, coordY)](){
+                if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
+                    test->screenInputMove(pos);
+                }
+            });
+        }
+
+        void sdlMouseWheelEvent(const SDL_MouseWheelEvent* ev) {
+            int coordX, coordY;
+            SDL_GetMouseState(& coordX, & coordY);
+            asio::post(x11_strand_, [this, wheelY = ev->y, pos = XCB::Point(coordX, coordY)](){
+                if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
+                    if(wheelY > 0) {
+                        test->screenInputButtonClick(4, pos);
+                    } else if(wheelY < 0) {
+                        test->screenInputButtonClick(5, pos);
+                    }
+                }
+            });
+        }
+
+        void sdlClipboardEvent(void) {
+            if(clientClipboard.reset(SDL_GetClipboardText()); !!clientClipboard) {
+                asio::post(x11_strand_, [this](){
+                    if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
+                        paste->setSelectionOwner(*this);
+                    }
+                });
+            }
+        }
+
+        bool sdlEventProcessing(void) {
             auto ev = SDL::Window::pollEvent();
 
             if(! ev.isValid()) {
@@ -151,74 +222,36 @@ namespace LTSM {
                     if(ev.window()->event == SDL_WINDOWEVENT_EXPOSED) {
                         renderPresent(false);
                     }
+
                     break;
 
                 case SDL_KEYUP:
                 case SDL_KEYDOWN:
-
-                    // fast close
-                    if(ev.key()->keysym.sym == SDLK_ESCAPE) {
-                        quit = true;
-                        break;
-                    }
-
-                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
-                        const SDL_Keysym & keysym = ev.key()->keysym;
-                        int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
-                        auto keycode = XCB::RootDisplay::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
-                        test->screenInputKeycode(keycode, ev.type() == SDL_KEYDOWN /* presed */);
-                    }
-
+                    sdlKeyEvent(ev.key());
                     break;
 
                 case SDL_MOUSEBUTTONUP:
                 case SDL_MOUSEBUTTONDOWN:
-                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
-                        auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                        test->screenInputButton(ev.button()->button, XCB::Point(coordX, coordY), ev.type() == SDL_MOUSEBUTTONDOWN /* presed */);
-                    }
-
+                    sdlMouseButtonEvent(ev.button());
                     break;
 
                 case SDL_MOUSEMOTION:
-                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
-                        auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                        test->screenInputMove(XCB::Point(coordX, coordY));
-                    }
-
+                    sdlMouseMotionEvent(ev.button());
                     break;
 
                 case SDL_MOUSEWHEEL:
-                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST))) {
-                        if(ev.wheel()->y > 0) {
-                            int coordX, coordY;
-                            SDL_GetMouseState(& coordX, & coordY);
-                            test->screenInputButtonClick(4, XCB::Point(coordX, coordY));
-                        } else if(ev.wheel()->y < 0) {
-                            int coordX, coordY;
-                            SDL_GetMouseState(& coordX, & coordY);
-                            test->screenInputButtonClick(5, XCB::Point(coordX, coordY));
-                        }
-                    }
-
+                    sdlMouseWheelEvent(ev.wheel());
                     break;
 
                 case SDL_CLIPBOARDUPDATE:
                     if(SDL_HasClipboardText()) {
-                        clientClipboard.reset(SDL_GetClipboardText());
-
-                        if(clientClipboard) {
-                            if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE))) {
-                                paste->setSelectionOwner(*this);
-                            }
-                        }
+                        sdlClipboardEvent();
                     }
-
                     break;
 
                 case SDL_QUIT:
-                    Application::warning("{}: {}", NS_FuncNameV, "SDL quit event");
-                    throw sdl_error(NS_FuncNameS);
+                    Application::warning("{}: {}", NS_FuncNameV, "sdl quit");
+                    throw system::system_error(asio::error::operation_aborted);
 
                 default:
                     break;
@@ -227,51 +260,128 @@ namespace LTSM {
             return true;
         }
 
-        int start(void) {
+        asio::awaitable<void> sdlEventsLoop(void) {
+            auto ex = co_await asio::this_coro::executor;
+            asio::steady_timer timer{ex};
+
+            try {
+                for(;;) {
+                    while(sdlEventProcessing()) {
+                        std::this_thread::yield();
+                    }
+
+                    timer.expires_after(40ms);
+                    co_await timer.async_wait(asio::use_awaitable);
+                }
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                }
+                asio::post(ioc_, std::bind(&SDL2X11::stop, this));
+            }
+        }
+
+        asio::awaitable<void> renderProcess(void) {
+            co_await asio::dispatch(x11_strand_, asio::use_awaitable);
             const size_t bytePerPixel = bitsPerPixel() >> 3;
-            bool quit = false;
 
-            selectionChangedEvent();
+            if(auto reply = copyRootImageRegion(damage_)) {
+                const size_t alignRowBytes = reply->size() > (damage_.width * damage_.height * bytePerPixel) ?
+                                                     reply->size() / damage_.height - damage_.width * bytePerPixel : 0;
 
-            while(! quit) {
-                bool delay = ! sdlEventProcessing(quit);
+                co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
 
-                // processing xcb events
-                while(auto ev = XCB::RootDisplay::pollEvent()) {
+                SDL_Rect dstrt = { damage_.x, damage_.y, damage_.width, damage_.height };
+                auto format = SDL_MasksToPixelFormatEnum(reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask, 0);
+
+                if(SDL_PIXELFORMAT_UNKNOWN == format) {
+                    Application::error("{}: %s failed", NS_FuncNameV, "format");
+                    throw system::system_error(asio::error::operation_aborted);
+                }
+
+                auto tx = createTexture(damage_.width, damage_.height, format);
+                tx.updateRect(nullptr, reply->data(), damage_.width * bytePerPixel + alignRowBytes);
+                renderTexture(tx.get(), nullptr, nullptr, & dstrt);
+                renderPresent();
+
+                co_await asio::dispatch(x11_strand_, asio::use_awaitable);
+            }
+        }
+
+        asio::awaitable<void> x11EventsLoop(void) {
+            auto ex = co_await asio::this_coro::executor;
+            asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
+
+            try {
+                for(;;) {
                     if(auto err = XCB::RootDisplay::hasError()) {
                         Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
-                        return EXIT_SUCCESS;
-                    }
-                }
-
-                if(! damage.isEmpty()) {
-                    delay = false;
-
-                    if(auto reply = copyRootImageRegion(damage)) {
-                        const size_t alignRowBytes = reply->size() > (damage.width * damage.height * bytePerPixel) ?
-                                                     reply->size() / damage.height - damage.width * bytePerPixel : 0;
-                        SDL_Rect dstrt = { damage.x, damage.y, damage.width, damage.height };
-                        auto format = SDL_MasksToPixelFormatEnum(reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask, 0);
-
-                        if(SDL_PIXELFORMAT_UNKNOWN == format) {
-                            throw sdl_error("unknown pixel format");
-                        }
-
-                        auto tx = createTexture(damage.width, damage.height, format);
-                        tx.updateRect(nullptr, reply->data(), damage.width * bytePerPixel + alignRowBytes);
-                        renderTexture(tx.get(), nullptr, nullptr, & dstrt);
-                        renderPresent();
-
-                        XCB::RootDisplay::rootDamageSubtrack(damage);
+                        throw system::system_error(asio::error::operation_aborted);
                     }
 
-                    damage.reset();
-                }
+                    co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
 
-                if(delay) {
-                    SDL_Delay(5);
+                    while(auto ev = XCB::RootDisplay::pollEvent()) {
+                        std::this_thread::yield();
+                    }
+
+                    if(damage_.isEmpty()) {
+                        continue;
+                    }
+
+                    co_await renderProcess();
+                    XCB::RootDisplay::rootDamageSubtrack(damage_);
+                    damage_.reset();
                 }
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                }
+                asio::post(ioc_, std::bind(&SDL2X11::stop, this));
             }
+
+            sd.release();
+        }
+
+        asio::awaitable<void> signalsHandler(void) {
+            signals_.add(SIGTERM);
+            signals_.add(SIGINT);
+
+            try {
+                for(;;) {
+                    int signal = co_await signals_.async_wait(asio::use_awaitable);
+                    if(signal == SIGTERM || signal == SIGINT) {
+                        asio::post(ioc_, std::bind(&SDL2X11::stop, this));
+                        co_return;
+                    }
+                }
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+        void stop(void) {
+            sdl_cancel_.emit(asio::cancellation_type::terminal);
+            x11_cancel_.emit(asio::cancellation_type::terminal);
+            signals_.cancel();
+        }
+
+        int start(void) {
+
+            asio::co_spawn(ioc_, signalsHandler(), asio::detached);
+
+            asio::co_spawn(sdl_strand_, sdlEventsLoop(),
+                asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
+
+            asio::co_spawn(x11_strand_, x11EventsLoop(),
+                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
+
+            // initial selection
+            asio::post(x11_strand_, std::bind(&SDL2X11::selectionChangedEvent, this));
+
+            ioc_.run();
 
             return EXIT_SUCCESS;
         }
@@ -280,18 +390,18 @@ namespace LTSM {
 
 int printHelp(const char* prog) {
     std::cout << "usage: " << prog <<
-                 " --display <num> [--auth <xauthfile>] [--title <title>] [--scale <width>x<height>] [--accel] [--debug] [--syslog]" << std::endl;
+                 " --display <:num> [--auth <xauthfile>] [--title <title>] [--scale <width>x<height>] [--accel] [--debug] [--syslog]" << std::endl;
     return EXIT_SUCCESS;
 }
 
 int main(int argc, const char** argv) {
-    int display = -1;
     int winsz_w = 0;
     int winsz_h = 0;
     bool accel = false;
-    std::string xauth;
-    std::string geometry;
-    std::string title = "SDL2X11";
+    const char* xauth = nullptr;
+    const char* display = nullptr;
+    const char* title = "SDL2X11";
+
     LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
     LTSM::Application::setDebugLevel(LTSM::DebugLevel::Info);
 
@@ -308,52 +418,49 @@ int main(int argc, const char** argv) {
         }
     }
 
-    if(1 < argc) {
-        if(0 == std::strcmp(argv[1], "--help") || 0 == std::strcmp(argv[1], "-h")) {
+    for(int it = 1; it < argc; ++it) {
+        if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {
             return printHelp(argv[0]);
-        }
+        } else if(0 == std::strcmp(argv[it], "--debug")) {
+            LTSM::Application::setDebugLevel(LTSM::DebugLevel::Debug);
+        } else if(0 == std::strcmp(argv[it], "--accel")) {
+            accel = true;
+        } else if(0 == std::strcmp(argv[it], "--syslog")) {
+            LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog, "ltsm_sdl2x11");
+        } else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc) {
+            xauth = argv[it + 1];
+        } else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc) {
+            title = argv[it + 1];
+        } else if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc) {
+            const char* val = argv[it + 1];
+            size_t idx;
 
-        for(int it = 1; it < argc; ++it) {
-            if(0 == std::strcmp(argv[it], "--debug")) {
-                LTSM::Application::setDebugLevel(LTSM::DebugLevel::Debug);
-            } else if(0 == std::strcmp(argv[it], "--accel")) {
-                accel = true;
-            } else if(0 == std::strcmp(argv[it], "--syslog")) {
-                LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog, "ltsm_sdl2x11");
-            } else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc) {
-                xauth.assign(argv[it + 1]);
-            } else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc) {
-                title.assign(argv[it + 1]);
-            } else if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc) {
-                const char* val = argv[it + 1];
-                size_t idx;
-
-                try {
-                    winsz_w = std::stoi(val, & idx, 0);
-                    winsz_h = std::stoi(val + idx + 1, nullptr, 0);
-                } catch(const std::invalid_argument &) {
-                    std::cerr << "invalid scale" << std::endl;
-                    return printHelp(argv[0]);
-                }
-            } else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc) {
-                const char* val = argv[it + 1];
-
-                try {
-                    display = std::stoi(val[0] == ':' ? & val[1] : val, nullptr, 0);
-                } catch(const std::invalid_argument &) {
-                    std::cerr << "invalid display" << std::endl;
-                    return printHelp(argv[0]);
-                }
+            try {
+                winsz_w = std::stoi(val, & idx, 0);
+                winsz_h = std::stoi(val + idx + 1, nullptr, 0);
+            } catch(const std::invalid_argument &) {
+                std::cerr << "invalid scale" << std::endl;
+                return printHelp(argv[0]);
             }
-        }
+        } else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc) {
+            display = argv[it + 1];
 
-        if(xauth.size()) {
-            setenv("XAUTHORITY", xauth.c_str(), 1);
         }
     }
 
-    if(argc < 2 || display < 0) {
+    if(display) {
+        if(display[0] != ':') {
+            std::cerr << "invalid display format" << std::endl;
+            return printHelp(argv[0]);
+        }
+        setenv("DISPLAY", display, 1);
+    } else {
+        std::cerr << "display not found" << std::endl;
         return printHelp(argv[0]);
+    }
+
+    if(xauth) {
+        setenv("XAUTHORITY", xauth, 1);
     }
 
     if(0 > SDL_Init(SDL_INIT_VIDEO)) {
@@ -361,8 +468,7 @@ int main(int argc, const char** argv) {
     }
 
     try {
-        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h, accel);
-        return app.start();
+        return LTSM::SDL2X11(title, winsz_w, winsz_h, accel).start();
     } catch(const std::exception & err) {
         std::cerr << "exception: " << err.what() << std::endl;
     }

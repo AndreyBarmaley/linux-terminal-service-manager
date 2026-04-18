@@ -369,9 +369,10 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_libsdl2x11)
     set(CUR_TARGET ltsm_sdl2x11)
 
-    CommonDefaults(SDL)
+    CommonDefaults(SDL BOOST)
 
     add_executable(${CUR_TARGET} tools/sdl2x11/ltsm_sdl2x11.cpp)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_BOOST)
 
     target_include_directories(${CUR_TARGET} PRIVATE common)
     add_subdirectory(common ${CUR_TARGET}_common)
