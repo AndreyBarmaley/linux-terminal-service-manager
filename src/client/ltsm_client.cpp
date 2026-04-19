@@ -265,10 +265,14 @@ namespace LTSM {
     ClientApp::ClientApp(int argc, const char** argv)
         : Application("ltsm_client")
 #ifdef LTSM_WITH_X11
-        , RFB::X11Client(ioc_) {
+        , RFB::X11Client(ioc())
 #else
-        , RFB::WinClient(ioc_) {
+        , RFB::WinClient(ioc())
 #endif
+        , signals_{ioc()}
+        , sdl_strand_{ioc().get_executor()}
+        , x11_strand_{ioc().get_executor()} {
+
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 #ifdef LTSM_WITH_GNUTLS
@@ -330,9 +334,7 @@ namespace LTSM {
 #endif
         }
 
-        if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size()) {
-            pkcs11Auth.clear();
-        }
+        updateSecurity();    
 
         // fullscreen
         if(windowFullScreen()) {
@@ -360,7 +362,7 @@ namespace LTSM {
                     break;
             }
         }
-    
+
         appStart = std::chrono::steady_clock::now();
     }
 
@@ -687,9 +689,9 @@ namespace LTSM {
 #endif
     }
 
-    int ClientApp::start(void) {
-        if(! ClientDecoder::socketConnect(host, port)) {
-            return -1;
+    void ClientApp::updateSecurity(void) {
+        if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size()) {
+            pkcs11Auth.clear();
         }
 
         if(rfbsec.passwdFile.empty()) {
@@ -737,6 +739,12 @@ namespace LTSM {
             Application::debug(DebugType::Gss, "{}: used kerberos, remote service: {}, local name: {}",
                                 NS_FuncNameV, rfbsec.krb5Service, rfbsec.krb5Name);
         }
+    }
+
+    int ClientApp::start(void) {
+        if(! ClientDecoder::socketConnect(host, port)) {
+            return -1;
+        }
 
         // connected
         if(! rfbHandshake(rfbsec)) {
@@ -744,7 +752,7 @@ namespace LTSM {
         }
 
         // asio::thread_pool thread_pool{concurency_};
-    
+
         // rfb thread: process rfb messages
         auto thrfb = std::thread([this]() {
             this->rfbMessagesLoop();

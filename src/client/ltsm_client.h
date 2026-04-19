@@ -52,15 +52,30 @@ namespace LTSM {
         std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
     };
 
-    class ClientApp : public Application,
+    class BoostContext {
+        const int concurency_ = std::thread::hardware_concurrency();
+        boost::asio::io_context ioc_{concurency_ < 4 ? concurency_ : 4};
+
+        protected:
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
+
+        public:
+        BoostContext() = default;
+        ~BoostContext() = default;
+    };
+
+    class ClientApp : public BoostContext, public Application,
 #ifdef LTSM_WITH_X11
         public RFB::X11Client
 #else
         public RFB::WinClient
 #endif
     {
-        const int concurency_ = std::thread::hardware_concurrency();
-        boost::asio::io_context ioc_{concurency_ < 4 ? concurency_ : 4};
+        boost::asio::signal_set signals_;
+        boost::asio::strand<boost::asio::any_io_executor> sdl_strand_;
+        boost::asio::strand<boost::asio::any_io_executor> x11_strand_;
+        boost::asio::cancellation_signal sdl_cancel_;
+        boost::asio::cancellation_signal x11_cancel_;
 
         PixelFormat clientPf;
         RFB::SecurityInfo rfbsec;
@@ -148,6 +163,7 @@ namespace LTSM {
 
         void parseCommand(std::string_view cmd, std::string_view arg);
         void loadConfig(const std::filesystem::path &);
+        void updateSecurity(void);
 
       public:
         ClientApp(int argc, const char** argv);

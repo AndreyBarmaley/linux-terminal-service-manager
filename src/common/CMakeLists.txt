@@ -1,10 +1,9 @@
 if(APPLE)
     target_include_directories(${CUR_TARGET} PRIVATE mingw)
 elseif(UNIX)
-    #find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
-    #find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
-    #target_link_libraries(${CUR_TARGET} PUBLIC ${XKBFILE_LIBRARY} ${X11_LIBRARY})
+    set(LTSM_WITH_EXECUTION_PAR ON)
 elseif(MINGW)
+    set(LTSM_WITH_EXECUTION_PAR ON)
     target_include_directories(${CUR_TARGET} PUBLIC mingw)
 endif()
 
@@ -21,12 +20,14 @@ target_sources(${CUR_TARGET} PRIVATE
     ltsm_framebuffer.cpp
     ltsm_xcb_types.cpp)
 
-if(LTSM_CENTOS7)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_CENTOS7)
-endif()
-
 if(LTSM_WITH_FB_PARALLELS)
     target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_FB_PARALLELS)
+endif()
+
+if(LTSM_WITH_EXECUTION_PAR)
+    find_package(TBB REQUIRED)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_EXECUTION_PAR)
+    target_link_libraries(${CUR_TARGET} PRIVATE TBB::tbb)
 endif()
 
 if(LTSM_WITH_STD_MAP)

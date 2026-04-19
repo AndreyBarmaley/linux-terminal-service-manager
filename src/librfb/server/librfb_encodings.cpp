@@ -918,14 +918,10 @@ namespace LTSM {
                         jpegSamp = TJSAMP_444;
                         fullscreenUpdate = true;
                     }
-
-#ifndef LTSM_CENTOS7
                     else if(0 == str.compare(it, 3, "411")) {
                         jpegSamp = TJSAMP_411;
                         fullscreenUpdate = true;
                     }
-
-#endif
                     else if(0 == str.compare(it, 4, "gray")) {
                         jpegSamp = TJSAMP_GRAY;
                         fullscreenUpdate = true;

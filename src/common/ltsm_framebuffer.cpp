@@ -28,11 +28,7 @@
 #include <algorithm>
 #include <exception>
 
-#if __GNUC__ < 9
-#define LTSM_CENTOS7
-#endif
-
-#if not defined(__APPLE__) && not defined(LTSM_CENTOS7)
+#ifdef LTSM_WITH_EXECUTION_PAR
 #include <execution>
 #endif
 
@@ -172,12 +168,12 @@ namespace LTSM {
     }
 
     uint32_t PixelMapPalette::findColorIndex(const uint32_t & col) const {
-#if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
+#ifdef LTSM_WITH_EXECUTION_PAR
+        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair) {
             return pair.first == col;
         });
 #else
-        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair) {
+        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
             return pair.first == col;
         });
 #endif
@@ -185,12 +181,12 @@ namespace LTSM {
     }
 
     uint32_t PixelMapWeight::maxWeightPixel(void) const {
-#if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
+#ifdef LTSM_WITH_EXECUTION_PAR
+        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;
         });
 #else
-        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2) {
+        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;
         });
 #endif
