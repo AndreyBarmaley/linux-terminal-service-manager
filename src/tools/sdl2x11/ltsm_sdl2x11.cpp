@@ -21,11 +21,10 @@
  ***************************************************************************/
 
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <iomanip>
 #include <stdexcept>
+#include <filesystem>
 
 #include <boost/asio.hpp>
 #include "xcb/damage.h"
@@ -53,8 +52,8 @@ namespace LTSM {
         std::unique_ptr<char, void(*)(void*)> clientClipboard{ nullptr, SDL_free };
 
       public:
-        SDL2X11(const char* title, int winsz_w, int winsz_h, bool accel)
-            : XCB::RootDisplay(-1), SDL::Window(title, width(), height(), winsz_w, winsz_h, 0, accel) {
+        SDL2X11(const char* title, const XCB::Size & winsz, bool accel)
+            : XCB::RootDisplay(-1), SDL::Window(title, XCB::RootDisplay::size(), winsz, 0, accel) {
         }
 
         /*
@@ -75,7 +74,7 @@ namespace LTSM {
         }
 
         void xcbRandrScreenChangedEvent(const XCB::Size & dsz, const xcb_randr_notify_event_t & ne) override {
-            SDL::Window::resize(dsz.width, dsz.height);
+            SDL::Window::resize(dsz);
             damage_.assign(0, 0, dsz.width, dsz.height);
         }
 
@@ -299,10 +298,11 @@ namespace LTSM {
                     throw system::system_error(asio::error::operation_aborted);
                 }
 
-                auto tx = createTexture(damage_.width, damage_.height, format);
-                tx.updateRect(nullptr, reply->data(), damage_.width * bytePerPixel + alignRowBytes);
-                renderTexture(tx.get(), nullptr, nullptr, & dstrt);
-                renderPresent();
+                if(auto tx = createTexture(damage_.toSize(), format); tx.isValid()) {
+                    tx.updateRect(nullptr, reply->data(), damage_.width * bytePerPixel + alignRowBytes);
+                    renderTexture(tx.get(), nullptr, nullptr, & dstrt);
+                    renderPresent();
+                }
 
                 co_await asio::dispatch(x11_strand_, asio::use_awaitable);
             }
@@ -395,8 +395,7 @@ int printHelp(const char* prog) {
 }
 
 int main(int argc, const char** argv) {
-    int winsz_w = 0;
-    int winsz_h = 0;
+    LTSM::XCB::Size winsz;
     bool accel = false;
     const char* xauth = nullptr;
     const char* display = nullptr;
@@ -409,12 +408,10 @@ int main(int argc, const char** argv) {
         size_t idx;
 
         try {
-            winsz_w = std::stoi(val, & idx, 0);
-            winsz_h = std::stoi(val + idx + 1, nullptr, 0);
+            winsz.width = std::abs(std::stoi(val, & idx, 0));
+            winsz.height = std::abs(std::stoi(val + idx + 1, nullptr, 0));
         } catch(const std::invalid_argument &) {
             std::cerr << "invalid scale" << std::endl;
-            winsz_w = 0;
-            winsz_h = 0;
         }
     }
 
@@ -436,8 +433,8 @@ int main(int argc, const char** argv) {
             size_t idx;
 
             try {
-                winsz_w = std::stoi(val, & idx, 0);
-                winsz_h = std::stoi(val + idx + 1, nullptr, 0);
+                winsz.width = std::abs(std::stoi(val, & idx, 0));
+                winsz.height = std::abs(std::stoi(val + idx + 1, nullptr, 0));
             } catch(const std::invalid_argument &) {
                 std::cerr << "invalid scale" << std::endl;
                 return printHelp(argv[0]);
@@ -448,27 +445,34 @@ int main(int argc, const char** argv) {
         }
     }
 
-    if(display) {
-        if(display[0] != ':') {
-            std::cerr << "invalid display format" << std::endl;
-            return printHelp(argv[0]);
-        }
-        setenv("DISPLAY", display, 1);
-    } else {
+    if(! display) {
         std::cerr << "display not found" << std::endl;
+        return printHelp(argv[0]);
+    } else if(display[0] != ':') {
+        std::cerr << "invalid display format: " << display << std::endl;
         return printHelp(argv[0]);
     }
 
-    if(xauth) {
-        setenv("XAUTHORITY", xauth, 1);
+    if(xauth &&
+        !std::filesystem::exists(xauth)) {
+        std::cerr << "xauth not exists: " << xauth << std::endl;
+        return -1;
     }
 
     if(0 > SDL_Init(SDL_INIT_VIDEO)) {
         return -1;
     }
 
+    if(display) {
+        setenv("DISPLAY", display, 1);
+    }
+
+    if(xauth) {
+        setenv("XAUTHORITY", xauth, 1);
+    }
+
     try {
-        return LTSM::SDL2X11(title, winsz_w, winsz_h, accel).start();
+        return LTSM::SDL2X11(title, winsz, accel).start();
     } catch(const std::exception & err) {
         std::cerr << "exception: " << err.what() << std::endl;
     }

@@ -27,163 +27,147 @@
 #include "ltsm_sdl_wrapper.h"
 
 namespace LTSM {
-    bool SDL::Surface::isValid(void) const {
-        return get();
-    }
-
+    // Surface
     int SDL::Surface::width(void) const {
-        return get() ? get()->w : 0;
+        assertm(!! ptr_, "invalid surface");
+        return ptr_->w;
     }
 
     int SDL::Surface::height(void) const {
-        return get() ? get()->h : 0;
+        assertm(!! ptr_, "invalid surface");
+        return ptr_->h;
     }
 
-    bool SDL::Texture::isValid(void) const {
-        return get();
-    }
+    // Texture
+    std::pair<int, int> SDL::Texture::size(void) const {
+        assertm(!! ptr_, "invalid texture");
+        std::pair<int, int> sz;
 
-    int SDL::Texture::width(void) const {
-        if(get()) {
-            int width = 0;
-
-            if(0 != SDL_QueryTexture(get(), nullptr, nullptr, & width, nullptr)) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
-
-            return width;
-        }
-
-        return 0;
-    }
-
-    int SDL::Texture::height(void) const {
-        if(isValid()) {
-            int height = 0;
-
-            if(0 != SDL_QueryTexture(get(), nullptr, nullptr, nullptr, & height)) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
-
-            return height;
-        }
-
-        return 0;
-    }
-
-    void SDL::Texture::updateRect(const SDL_Rect* rect, const void* pixels, int pitch) {
-        if(isValid()) {
-            if(0 != SDL_UpdateTexture(get(), rect, pixels, pitch)) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_UpdateTexture", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
-        }
-    }
-
-    SDL::Window::Window(const std::string & title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags, bool accel) {
-        if(winsz_w <= 0) {
-            winsz_w = rendsz_w;
-        }
-
-        if(winsz_h <= 0) {
-            winsz_h = rendsz_h;
-        }
-
-        // SDL part
-        _window.reset(SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winsz_w, winsz_h, flags));
-
-        if(! _window) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateWindow", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        _accel = accel;
-        _renderer.reset(SDL_CreateRenderer(_window.get(), -1, accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE));
-
-        if(accel && ! _renderer) {
-            _accel = false;
-            _renderer.reset(SDL_CreateRenderer(_window.get(), -1, SDL_RENDERER_SOFTWARE));
-            Application::warning("{}: {} hardware accel failed, switch to software", NS_FuncNameV, "SDL_CreateRenderTexture");
-        }
-
-        if(! _renderer) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateRender", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, rendsz_w, rendsz_h));
-
-        if(! _display) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateTexture", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        SDL_SetRenderDrawBlendMode(_renderer.get(), SDL_BLENDMODE_BLEND);
-        SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
-        renderClear(& black, _display.get());
-        renderReset();
-    }
-
-    SDL::Window::~Window() {
-        _display.reset();
-        _renderer.reset();
-        _window.reset();
-    }
-
-    bool SDL::Window::resize(uint16_t newsz_w, uint16_t newsz_h) {
-        Application::debug(DebugType::Sdl, "{}: new size: {}x{}", NS_FuncNameV, newsz_w, newsz_h);
-
-        newsz_w = std::max(newsz_w, static_cast<uint16_t>(640));
-        newsz_h = std::max(newsz_h, static_cast<uint16_t>(480));
-
-        int winsz_w, winsz_h;
-        SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
-
-        if(winsz_w != newsz_w || winsz_h != newsz_h) {
-            SDL_SetWindowSize(_window.get(), newsz_w, newsz_h);
-            _display.reset();
-            _renderer.reset();
-            _renderer.reset(SDL_CreateRenderer(_window.get(), -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE)));
-
-            if(! _renderer) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateRenderer", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
-
-            _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, newsz_w, newsz_h));
-
-            if(! _display) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateTexture", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
-
-            SDL_SetRenderDrawBlendMode(_renderer.get(), SDL_BLENDMODE_BLEND);
-            SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
-            renderClear(& black, _display.get());
-            renderReset();
-            return true;
-        }
-
-        return false;
-    }
-
-    std::pair<int, int> SDL::Window::geometry(void) const {
-        int width, height;
-
-        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, & width, & height)) {
+        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, & sz.first, & sz.second)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
 
-        return std::make_pair(width, height);
+        return sz;
+    }
+
+    int SDL::Texture::width(void) const {
+        assertm(!! ptr_, "invalid texture");
+        int width = 0;
+
+        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, & width, nullptr)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        return width;
+    }
+
+    int SDL::Texture::height(void) const {
+        assertm(!! ptr_, "invalid texture");
+        int height = 0;
+
+        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, nullptr, & height)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        return height;
+    }
+
+    void SDL::Texture::updateRect(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
+        assertm(!! ptr_, "invalid texture");
+
+        if(0 != SDL_UpdateTexture(ptr_.get(), rect, pixels, pitch)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_UpdateTexture", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+    }
+
+    SDL::Window::Window(const std::string & title, const XCB::Size & rendsz, const XCB::Size & winsz, int flags, bool accel) :
+        render_sz_{rendsz}, window_sz_{winsz}, flags_{flags}, accel_{accel} {
+
+        if(winsz.isEmpty()) {
+            window_sz_ = render_sz_;
+        }
+
+        // SDL part
+        window_.reset(SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_sz_.width, window_sz_.height, flags_));
+
+        if(! window_) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateWindow", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        Application::debug(DebugType::Sdl, "{}: create window, size: {}, flags: {:#08x}", NS_FuncNameV, window_sz_, flags);
+        resize(window_sz_);
+    }
+
+    SDL::Window::~Window() {
+        display_.reset();
+        renderer_.reset();
+        window_.reset();
+    }
+
+    void SDL::Window::resize(const XCB::Size & newsz) {
+
+        uint16_t newsz_w = std::max(newsz.width, static_cast<uint16_t>(640));
+        uint16_t newsz_h = std::max(newsz.height, static_cast<uint16_t>(480));
+
+        assertm(!! window_.get(), "invalid window");
+
+        if(window_sz_.width != newsz_w || window_sz_.height != newsz_h) {
+            window_sz_ = XCB::Size(newsz_w, newsz_h);
+            Application::debug(DebugType::Sdl, "{}: size: {}", NS_FuncNameV, window_sz_);
+            SDL_SetWindowSize(window_.get(), window_sz_.width, window_sz_.height);
+        }
+
+        display_.reset();
+        renderer_.reset();
+
+        renderer_.reset(SDL_CreateRenderer(window_.get(), -1, (accel_ ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE)));
+
+        if(accel_ && ! renderer_) {
+            accel_ = false;
+            renderer_.reset(SDL_CreateRenderer(window_.get(), -1, SDL_RENDERER_SOFTWARE));
+            Application::warning("{}: {} hardware accel failed, switch to software", NS_FuncNameV, "SDL_CreateRenderTexture");
+        }
+
+        if(! renderer_) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateRenderer", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        Application::debug(DebugType::Sdl, "{}: create render, size: {}, accel: {}", NS_FuncNameV, render_sz_, accel_);
+        display_.reset(SDL_CreateTexture(renderer_.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, render_sz_.width, render_sz_.height));
+
+        if(! display_) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateTexture", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
+        SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
+
+        renderClear(& black, display_.get());
+        renderReset();
+    }
+
+    XCB::Size SDL::Window::geometry(void) const {
+        int width, height;
+
+        if(0 != SDL_QueryTexture(display_.get(), nullptr, nullptr, & width, & height)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        return XCB::Size(width, height);
     }
 
     uint32_t SDL::Window::pixelFormat(void) const {
         uint32_t format;
 
-        if(0 != SDL_QueryTexture(_display.get(), & format, nullptr, nullptr, nullptr)) {
+        if(0 != SDL_QueryTexture(display_.get(), & format, nullptr, nullptr, nullptr)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
@@ -206,53 +190,52 @@ namespace LTSM {
             }
         }
 
-        if(0 != SDL_SetRenderTarget(_renderer.get(), target)) {
+        if(0 != SDL_SetRenderTarget(renderer_.get(), target)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_SetRenderTarget", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
     }
 
     void SDL::Window::renderClear(const SDL_Color* col, SDL_Texture* target) {
-        renderReset(target ? target : _display.get());
+        renderReset(target ? target : display_.get());
 
-        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a)) {
+        if(0 != SDL_SetRenderDrawColor(renderer_.get(), col->r, col->g, col->b, col->a)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderDrawColor", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
 
-        if(0 != SDL_RenderClear(_renderer.get())) {
+        if(0 != SDL_RenderClear(renderer_.get())) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderClear", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
     }
 
     void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target) {
-        renderReset(target ? target : _display.get());
+        renderReset(target ? target : display_.get());
 
-        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a)) {
+        if(0 != SDL_SetRenderDrawColor(renderer_.get(), col->r, col->g, col->b, col->a)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderDrawColor", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
 
         if(rt->w == 1 && rt->h == 1) {
-            if(0 != SDL_RenderDrawPoint(_renderer.get(), rt->x, rt->y)) {
+            if(0 != SDL_RenderDrawPoint(renderer_.get(), rt->x, rt->y)) {
                 Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderDrawPoint", SDL_GetError());
                 throw sdl_error(NS_FuncNameS);
             }
-        } else if(0 != SDL_RenderFillRect(_renderer.get(), rt)) {
+        } else if(0 != SDL_RenderFillRect(renderer_.get(), rt)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderFillRect", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
     }
 
-    void SDL::Window::renderTexture(SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
-        if(source) {
-            renderReset(target ? target : _display.get());
+    void SDL::Window::renderTexture(const SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
+        assertm(source, "invalid texture");
+        renderReset(target ? target : display_.get());
 
-            if(0 != SDL_RenderCopy(_renderer.get(), source, srcrt, dstrt)) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
+        if(0 != SDL_RenderCopy(renderer_.get(), const_cast<SDL_Texture*>(source), srcrt, dstrt)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
         }
     }
 
@@ -260,33 +243,38 @@ namespace LTSM {
         renderReset();
 
         if(sync) {
-            if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr)) {
+            if(0 != SDL_RenderCopy(renderer_.get(), display_.get(), nullptr, nullptr)) {
                 Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy", SDL_GetError());
                 throw sdl_error(NS_FuncNameS);
             }
         }
 
-        SDL_RenderPresent(_renderer.get());
+        SDL_RenderPresent(renderer_.get());
     }
 
     bool SDL::Window::isValid(void) const {
-        return _window && _renderer && _display;
+        return window_ && renderer_ && display_;
     }
 
     SDL::GenericEvent SDL::Window::pollEvent(void) {
-        return GenericEvent(SDL_PollEvent(& _event) ? & _event : nullptr);
+        return GenericEvent(SDL_PollEvent(& event_) ? & event_ : nullptr);
     }
 
-    SDL::Texture SDL::Window::createTexture(int width, int height, uint32_t format) const {
-        return Texture(SDL_CreateTexture(_renderer.get(), format, SDL_TEXTUREACCESS_STATIC, width, height));
+    SDL::Texture SDL::Window::createTexture(const XCB::Size & tsz, uint32_t format) const {
+        if(auto ptr = SDL_CreateTexture(renderer_.get(), format, SDL_TEXTUREACCESS_STATIC, tsz.width, tsz.height)) {
+            return Texture(ptr);
+        }
+
+        Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateTexture", SDL_GetError());
+        throw sdl_error(NS_FuncNameS);
     }
 
     std::pair<int, int> SDL::Window::scaleCoord(int posx, int posy) const {
         std::pair<int, int> res(0, 0);
         int winsz_w, winsz_h, rendsz_w, rendsz_h;
-        SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
+        SDL_GetWindowSize(window_.get(), &winsz_w, &winsz_h);
 
-        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, &rendsz_w, &rendsz_h)) {
+        if(0 != SDL_QueryTexture(display_.get(), nullptr, nullptr, &rendsz_w, &rendsz_h)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }

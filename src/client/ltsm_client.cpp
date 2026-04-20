@@ -1119,26 +1119,30 @@ namespace LTSM {
             // resize event
             if(ue->code == LocalEvent::Resize ||
                ue->code == LocalEvent::ResizeCont) {
-                uint16_t width = (ptrdiff_t) ue->data1;
-                uint16_t height = (ptrdiff_t) ue->data2;
+                XCB::Size windowSz((ptrdiff_t) ue->data1, (ptrdiff_t) ue->data2);
                 bool contUpdateResume = ue->code == LocalEvent::ResizeCont;
-
                 cursors.clear();
 
-                if(windowFullScreen()) {
-                    window = std::make_unique<SDL::Window>(windowTitle, width, height, 0, 0, windowFlags, windowAccel);
-                } else {
-                    window->resize(width, height);
+                try {
+                    if(windowFullScreen()) {
+                        window = std::make_unique<SDL::Window>(windowTitle, windowSz, windowSz, windowFlags, windowAccel);
+                    } else {
+                        window->resize(windowSz);
+                    }
+                } catch(const std::exception & err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    return false;
                 }
 
-                auto pair = window->geometry();
-                windowSize = XCB::Size(pair.first, pair.second);
-                displayResizeEvent(windowSize);
+                // get real size
+                windowSz = window->geometry();
+                displayResizeEvent(windowSz);
+
                 // full update
                 sendFrameBufferUpdate(false);
 
                 if(contUpdateResume) {
-                    sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
+                    sendContinuousUpdates(true, {0, 0, windowSz.width, windowSz.height});
                 }
 
                 return true;
@@ -1287,7 +1291,7 @@ namespace LTSM {
         bool eventResize = false;
 
         if(! window) {
-            window = std::make_unique<SDL::Window>(windowTitle, wsz.width, wsz.height, 0, 0, windowFlags, windowAccel);
+            window = std::make_unique<SDL::Window>(windowTitle, wsz, wsz, windowFlags, windowAccel);
             eventResize = true;
         }
 
@@ -1304,9 +1308,7 @@ namespace LTSM {
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
 
         if(eventResize) {
-            auto pair = window->geometry();
-            windowSize = XCB::Size(pair.first, pair.second);
-            displayResizeEvent(windowSize);
+            displayResizeEvent(window->geometry());
         }
     }
 
