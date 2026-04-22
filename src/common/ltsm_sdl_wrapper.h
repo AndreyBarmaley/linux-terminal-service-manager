@@ -53,10 +53,7 @@ namespace LTSM {
                 return !! ptr_;
             }
 
-            std::pair<int, int> size(void) const;
-
-            int width(void) const;
-            int height(void) const;
+            XCB::Size size(void) const;
 
             inline SDL_Texture* get(void) {
                 return ptr_.get();
@@ -148,10 +145,14 @@ namespace LTSM {
             ~Window();
 
             bool isValid(void) const;
-            void resize(const XCB::Size &);
+            void resize(const XCB::Size & /* render sz */, const XCB::Size & /* window sz */);
+
+            inline void resize(const XCB::Size & nsz) {
+                resize(nsz, nsz);
+            }
 
             uint32_t pixelFormat(void) const;
-            XCB::Size geometry(void) const;
+            const XCB::Size& geometry(void) const;
 
             inline SDL_Texture* display(void) {
                 return display_.get();

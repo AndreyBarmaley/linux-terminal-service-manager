@@ -1119,7 +1119,7 @@ namespace LTSM {
             // resize event
             if(ue->code == LocalEvent::Resize ||
                ue->code == LocalEvent::ResizeCont) {
-                XCB::Size windowSz((ptrdiff_t) ue->data1, (ptrdiff_t) ue->data2);
+                const XCB::Size windowSz((ptrdiff_t) ue->data1, (ptrdiff_t) ue->data2);
                 bool contUpdateResume = ue->code == LocalEvent::ResizeCont;
                 cursors.clear();
 
@@ -1135,14 +1135,14 @@ namespace LTSM {
                 }
 
                 // get real size
-                windowSz = window->geometry();
-                displayResizeEvent(windowSz);
+                windowSize = window->geometry();
+                displayResizeEvent(windowSize);
 
                 // full update
                 sendFrameBufferUpdate(false);
 
                 if(contUpdateResume) {
-                    sendContinuousUpdates(true, {0, 0, windowSz.width, windowSz.height});
+                    sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
                 }
 
                 return true;
@@ -1308,7 +1308,8 @@ namespace LTSM {
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
 
         if(eventResize) {
-            displayResizeEvent(window->geometry());
+            windowSize = window->geometry();
+            displayResizeEvent(windowSize);
         }
     }
 

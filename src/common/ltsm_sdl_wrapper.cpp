@@ -39,40 +39,16 @@ namespace LTSM {
     }
 
     // Texture
-    std::pair<int, int> SDL::Texture::size(void) const {
+    XCB::Size SDL::Texture::size(void) const {
         assertm(!! ptr_, "invalid texture");
-        std::pair<int, int> sz;
+        int width, height;
 
-        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, & sz.first, & sz.second)) {
+        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, & width, & height)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
 
-        return sz;
-    }
-
-    int SDL::Texture::width(void) const {
-        assertm(!! ptr_, "invalid texture");
-        int width = 0;
-
-        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, & width, nullptr)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        return width;
-    }
-
-    int SDL::Texture::height(void) const {
-        assertm(!! ptr_, "invalid texture");
-        int height = 0;
-
-        if(0 != SDL_QueryTexture(ptr_.get(), nullptr, nullptr, nullptr, & height)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        return height;
+        return XCB::Size(width, height);
     }
 
     void SDL::Texture::updateRect(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
@@ -100,7 +76,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Sdl, "{}: create window, size: {}, flags: {:#08x}", NS_FuncNameV, window_sz_, flags);
-        resize(window_sz_);
+        resize(render_sz_, window_sz_);
     }
 
     SDL::Window::~Window() {
@@ -109,22 +85,20 @@ namespace LTSM {
         window_.reset();
     }
 
-    void SDL::Window::resize(const XCB::Size & newsz) {
-
-        uint16_t newsz_w = std::max(newsz.width, static_cast<uint16_t>(640));
-        uint16_t newsz_h = std::max(newsz.height, static_cast<uint16_t>(480));
+    void SDL::Window::resize(const XCB::Size & rsz, const XCB::Size & wsz) {
 
         assertm(!! window_.get(), "invalid window");
 
-        if(window_sz_.width != newsz_w || window_sz_.height != newsz_h) {
-            window_sz_ = XCB::Size(newsz_w, newsz_h);
-            Application::debug(DebugType::Sdl, "{}: size: {}", NS_FuncNameV, window_sz_);
-            SDL_SetWindowSize(window_.get(), window_sz_.width, window_sz_.height);
-        }
+        render_sz_.width = std::max(rsz.width, static_cast<uint16_t>(640));
+        render_sz_.height = std::max(rsz.height, static_cast<uint16_t>(480));
+
+        window_sz_.width = std::max(wsz.width, static_cast<uint16_t>(640));
+        window_sz_.height = std::max(wsz.height, static_cast<uint16_t>(480));
+
+        Application::debug(DebugType::Sdl, "{}: render size: {}, window size: {}", NS_FuncNameV, render_sz_, window_sz_);
+        SDL_SetWindowSize(window_.get(), window_sz_.width, window_sz_.height);
 
         display_.reset();
-        renderer_.reset();
-
         renderer_.reset(SDL_CreateRenderer(window_.get(), -1, (accel_ ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE)));
 
         if(accel_ && ! renderer_) {
@@ -149,19 +123,18 @@ namespace LTSM {
         SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
         SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
 
+        if(window_sz_ == render_sz_) {
+            SDL_ResetHint(SDL_HINT_RENDER_SCALE_QUALITY);
+        } else {
+            SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+        }
+
         renderClear(& black, display_.get());
         renderReset();
     }
 
-    XCB::Size SDL::Window::geometry(void) const {
-        int width, height;
-
-        if(0 != SDL_QueryTexture(display_.get(), nullptr, nullptr, & width, & height)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        return XCB::Size(width, height);
+    const XCB::Size & SDL::Window::geometry(void) const {
+        return window_sz_;
     }
 
     uint32_t SDL::Window::pixelFormat(void) const {
