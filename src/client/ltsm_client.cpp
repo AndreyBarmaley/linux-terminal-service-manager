@@ -803,6 +803,40 @@ namespace LTSM {
         signals_.cancel();
     }
 
+#ifdef __UNIX__
+    asio::awaitable<void> ClientApp::x11EventsLoop(void) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
+
+        try {
+            for(;;) {
+                if(auto err = XCB::RootDisplay::hasError()) {
+                    Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
+                    throw system::system_error(asio::error::operation_aborted);
+                }
+
+                co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+
+                while(auto ev = XCB::RootDisplay::pollEvent()) {
+                    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
+                        uint16_t opcode = 0;
+                        if(extXkb->isEventError(ev, & opcode)) {
+                            Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "xkb", opcode);
+                        }
+                    }
+                }
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        }
+
+        sd.release();
+    }
+#endif
+
     int ClientApp::start(void) {
         if(! ClientDecoder::socketConnect(host, port)) {
             return -1;
@@ -813,48 +847,22 @@ namespace LTSM {
             return -1;
         }
 
-
         // rfb thread: process rfb messages
         auto thrfb = std::thread([this]() {
             this->rfbMessagesLoop();
         });
-
-#ifdef __UNIX__
-        // xcb thread: wait xkb event
-        auto thxcb = std::thread([this]() {
-            while(this->rfbMessagesRunning()) {
-
-                if(auto err = XCB::RootDisplay::hasError()) {
-                    Application::warning("{}: x11 error: {}", NS_FuncNameV, err);
-                    this->rfbMessagesShutdown();
-                    break;
-                }
-
-                if(auto ev = XCB::RootDisplay::pollEvent()) {
-                    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
-                        uint16_t opcode = 0;
-
-                        if(extXkb->isEventError(ev, & opcode)) {
-                            Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "xkb", opcode);
-                        }
-                    }
-                }
-
-                std::this_thread::sleep_for(50ms);
-            }
-        });
-#endif
 
         if(isContinueUpdatesSupport()) {
             sendContinuousUpdates(true, { XCB::Point(0, 0), windowSize });
         }
 
         asio::co_spawn(ioc(), signalsHandler(), asio::detached);
+#ifdef __UNIX__
+        asio::co_spawn(x11_strand_, x11EventsLoop(),
+                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
+#endif
 
         // asio::thread_pool thread_pool{concurency_};
-        // asio::co_spawn(sdl_strand_, sdlEventsLoop(),
-        //        asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
-
         ioc().run();
 
         rfbMessagesShutdown();
@@ -863,11 +871,6 @@ namespace LTSM {
             thrfb.join();
         }
 
-#ifdef __UNIX__
-        if(thxcb.joinable()) {
-            thxcb.join();
-        }
-#endif
         return 0;
     }
 
@@ -1164,7 +1167,7 @@ namespace LTSM {
     }
 
     void ClientApp::clientRecvFBUpdateEvent(void) {
-        asio::post(sdl_strand_, [this](){
+        asio::dispatch(sdl_strand_, [this](){
             sdlRenderFrame();
         });
     }
@@ -1286,7 +1289,7 @@ namespace LTSM {
         }
 
         // move strand
-        asio::post(sdl_strand_, [wrt, pixel, this](){
+        asio::dispatch(sdl_strand_, [wrt, pixel, this](){
             auto col = clientPf.color(pixel);
             auto dstrt = SDL_Rect{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
             auto dstcol = SDL_Color{ .r = col.r, .g = col.g, .b = col.b, .a = 255 };
@@ -1312,7 +1315,7 @@ namespace LTSM {
         }
 
         // move strand
-        asio::post(sdl_strand_, [wrt, buf = std::move(buf), pitch, sdlFormat, this](){
+        asio::dispatch(sdl_strand_, [wrt, buf = std::move(buf), pitch, sdlFormat, this](){
             auto tx = window->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
             tx.updateRect(nullptr, buf.data(), pitch);
             const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
@@ -1451,25 +1454,31 @@ namespace LTSM {
     }
 
     void ClientApp::clientRecvLtsmHandshakeEvent(int flags) {
-        std::vector<std::string> names;
-        int group = 0;
-
 #ifdef __UNIX__
-
-        if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
-            names = extXkb->getNames();
-            group = extXkb->getLayoutGroup();
-        }
-
-#endif
-        sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
+        asio::co_spawn(x11_strand_, [this]() -> asio::awaitable<void> {
+            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
+                auto names = extXkb->getNames();
+                auto group = extXkb->getLayoutGroup();
+                // switch to rfb_strand
+                co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+                this->sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), names,
                                   (0 <= group && group < names.size() ? names[group] : ""));
+            }
+            co_return;
+        }, asio::detached);
+#else
+        asio::dispatch(rfb_strand_, [this]() {
+            this->sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), {}, "");
+        });
+#endif
     }
 
 #ifdef __UNIX__
     void ClientApp::xcbXkbGroupChangedEvent(int group) {
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb) {
-            sendSystemKeyboardChange(extXkb->getNames(), group);
+            asio::dispatch(rfb_strand_, [names = extXkb->getNames(), group, this]() {
+                this->sendSystemKeyboardChange(names, group);
+            });
         }
     }
 #endif

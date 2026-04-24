@@ -149,6 +149,9 @@ namespace LTSM {
         void loadConfig(const std::filesystem::path &);
         void updateSecurity(void);
 
+#ifdef __UNIX__
+        boost::asio::awaitable<void> x11EventsLoop(void);
+#endif
         boost::asio::awaitable<void> signalsHandler(void);
         boost::asio::awaitable<void> windowResizedEvent(const XCB::Size &);
         boost::asio::awaitable<void> sdlEventsLoop(void);
