@@ -48,7 +48,7 @@ namespace LTSM {
             virtual void fillPixel(const XCB::Region &, uint32_t pixel) = 0;
 
             virtual void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, const PixelFormat &) = 0;
-            virtual void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&& buf, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) = 0;
+            virtual void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
             virtual int clientPrefferedVideoEncoding(void) const { return 0; }
@@ -111,9 +111,9 @@ namespace LTSM {
                 owner->updateRawPixels(wrt, std::move(buf), pitch, pf);
             }
 
-            void updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint8_t depth,
+            void updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf,
                                   uint32_t pitch, uint32_t sdlFormat) override {
-                owner->updateRawPixels2(wrt, std::move(buf), depth, pitch, sdlFormat);
+                owner->updateRawPixels2(wrt, std::move(buf), pitch, sdlFormat);
             }
 
             XCB::Size clientSize(void) const override {

@@ -104,7 +104,7 @@ namespace LTSM {
         if(accel_ && ! renderer_) {
             accel_ = false;
             renderer_.reset(SDL_CreateRenderer(window_.get(), -1, SDL_RENDERER_SOFTWARE));
-            Application::warning("{}: {} hardware accel failed, switch to software", NS_FuncNameV, "SDL_CreateRenderTexture");
+            Application::warning("{}: {} hardware accel failed, switch to software", NS_FuncNameV, "SDL_CreateRenderer");
         }
 
         if(! renderer_) {
@@ -229,8 +229,8 @@ namespace LTSM {
         return window_ && renderer_ && display_;
     }
 
-    SDL::Texture SDL::Window::createTexture(const XCB::Size & tsz, uint32_t format) const {
-        if(auto ptr = SDL_CreateTexture(renderer_.get(), format, SDL_TEXTUREACCESS_STATIC, tsz.width, tsz.height)) {
+    SDL::Texture SDL::Window::createTexture(const XCB::Size & tsz, const SDL_TextureAccess & access, uint32_t format) const {
+        if(auto ptr = SDL_CreateTexture(renderer_.get(), format, access, tsz.width, tsz.height)) {
             return Texture(ptr);
         }
 

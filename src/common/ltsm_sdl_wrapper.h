@@ -145,7 +145,7 @@ namespace LTSM {
             void renderPresent(bool sync = true);
             void setFullScreen(bool state);
 
-            Texture createTexture(const XCB::Size &, uint32_t format = TEXTURE_FMT) const;
+            Texture createTexture(const XCB::Size &, const SDL_TextureAccess & access = SDL_TEXTUREACCESS_STATIC, uint32_t format = TEXTURE_FMT) const;
 
             static int convertScanCodeToKeySym(SDL_Scancode);
 

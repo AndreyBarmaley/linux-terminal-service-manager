@@ -149,7 +149,7 @@ namespace LTSM {
         */
     }
 
-    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, std::vector<uint8_t>&& buf, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
+    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) {
         // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
         Application::warning("{}: not implemented", NS_FuncNameV);
     }

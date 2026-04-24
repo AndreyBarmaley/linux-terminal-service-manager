@@ -533,10 +533,10 @@ namespace LTSM {
 #endif
 
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-                    cli->updateRawPixels2(reg, std::move(jpegData), 32, pitch, SDL_PIXELFORMAT_RGBX8888);
+                    cli->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_RGBX8888);
 #else
                     // deb10, turbojpeg-1.5.2
-                    cli->updateRawPixels2(reg, std::move(jpegData), 32, pitch, SDL_PIXELFORMAT_XBGR8888);
+                    cli->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_XBGR8888);
 #endif
                 }
             } else {

@@ -1300,57 +1300,24 @@ namespace LTSM {
             return;
         }
 
-        const uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
-
-        if(sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
-            return updateRawPixels2(wrt, std::move(buf), pf.bitsPerPixel(), pitch, sdlFormat);
-        }
-
-        if(auto ptr = SDL_CreateRGBSurfaceFrom(buf.data(), wrt.width, wrt.height,
-                                     pf.bitsPerPixel(), pitch, pf.rmask(), pf.gmask(), pf.bmask(), pf.amask())) {
-            // move strand
-            asio::post(sdl_strand_, [wrt, buf = std::move(buf), sf = SDL::Surface(ptr), this](){
-                this->updateRawPixels3(wrt, sf);
-            });
-        } else {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                               "SDL_CreateRGBSurfaceFrom", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
+        if(auto sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(),
+            pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
+            updateRawPixels2(wrt, std::move(buf), pitch, sdlFormat);
         }
     }
 
-    void ClientApp::updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
+    void ClientApp::updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) {
         if(wrt.isEmpty()) {
             return;
         }
 
-        if(auto ptr = SDL_CreateRGBSurfaceWithFormatFrom(buf.data(), wrt.width, wrt.height,
-                                               depth, pitch, sdlFormat)) {
-            // move strand
-            asio::post(sdl_strand_, [wrt, buf = std::move(buf), sf = SDL::Surface(ptr), this](){
-                this->updateRawPixels3(wrt, sf);
-            });
-        } else {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                               "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-    }
-
-    void ClientApp::updateRawPixels3(const XCB::Region & wrt, const SDL::Surface & frame) {
-        if(wrt.isEmpty()) {
-            return;
-        }
-
-        if(auto ptr = SDL_CreateTextureFromSurface(window->render(), const_cast<SDL_Surface*>(frame.get()))) {
+        // move strand
+        asio::post(sdl_strand_, [wrt, buf = std::move(buf), pitch, sdlFormat, this](){
+            auto tx = window->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
+            tx.updateRect(nullptr, buf.data(), pitch);
             const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
-            SDL::Texture tx(ptr);
             window->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
-        } else {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                               "SDL_CreateTextureFromSurface", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
+        });
     }
 
     const PixelFormat & ClientApp::clientFormat(void) const {

@@ -597,9 +597,9 @@ namespace LTSM {
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            // FIXME move data
             const size_t bufsz = localFrame->linesize[0] * localFrame->height;
             std::vector<uint8_t> buf{localFrame->data[0], localFrame->data[0]+bufsz};
+
             cli.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), std::move(buf), localFrame->linesize[0], pf);
             av_frame_unref(remoteFrame.get());
         }
