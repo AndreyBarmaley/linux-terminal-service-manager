@@ -43,7 +43,7 @@
 #include "librfb_winclient.h"
 #endif
 
-#define LTSM_CLIENT_VERSION 20260312
+#define LTSM_CLIENT_VERSION 20260412
 
 namespace LTSM {
     struct ColorCursor {
@@ -72,10 +72,15 @@ namespace LTSM {
 #endif
     {
         boost::asio::signal_set signals_;
+        boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+        boost::asio::cancellation_signal rfb_cancel_;
         boost::asio::strand<boost::asio::any_io_executor> sdl_strand_;
-        boost::asio::strand<boost::asio::any_io_executor> x11_strand_;
         boost::asio::cancellation_signal sdl_cancel_;
+#ifdef __UNIX__
+        boost::asio::strand<boost::asio::any_io_executor> x11_strand_;
         boost::asio::cancellation_signal x11_cancel_;
+#endif
+        std::unordered_map<uint32_t, ColorCursor> cursors;
 
         PixelFormat clientPf;
         RFB::SecurityInfo rfbsec;
@@ -94,19 +99,10 @@ namespace LTSM {
         int audioEncoding = 0;
 
         std::unique_ptr<SDL::Window> window;
-        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfback { nullptr, SDL_FreeSurface };
-
-        std::unordered_map<uint32_t, ColorCursor> cursors;
-
         XCB::Size windowSize;
-        std::mutex renderLock;
 
         std::chrono::time_point<std::chrono::steady_clock> appStart;
-        std::chrono::time_point<std::chrono::steady_clock> keyPress;
-        std::chrono::time_point<std::chrono::steady_clock> dropStart;
-
         std::atomic<bool> focusLost{false};
-        std::atomic<bool> needUpdate{false};
 
         int xcbDpi = 0;
         int port = 5900;
@@ -118,7 +114,6 @@ namespace LTSM {
         //        std::mutex clipboardLock;
 
         XCB::Size primarySize;
-        SDL_Event sdlEvent;
 
         bool ltsmSupport = true;
         bool windowAccel = true;
@@ -133,27 +128,17 @@ namespace LTSM {
       protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const XCB::Region &, const void*, uint32_t pitch, const PixelFormat &) override;
-        void updateRawPixels2(const XCB::Region &, const void*, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
-        void updateRawPixels3(const XCB::Region &, SDL_Surface*);
+        void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, const PixelFormat &) override;
+        void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&&, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
+        void updateRawPixels3(const XCB::Region &, const SDL::Surface &);
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
         int clientPrefferedVideoEncoding(void) const override;
         int clientPrefferedAudioEncoding(void) const override;
 
-        bool sdlEventProcessing(void);
         bool pushEventWindowResize(const XCB::Size &);
         int startSocket(std::string_view host, int port) const;
-
-        bool sdlMouseEvent(const SDL::GenericEvent &);
-        bool sdlKeyboardEvent(const SDL::GenericEvent &);
-        bool sdlWindowEvent(const SDL::GenericEvent &);
-        bool sdlDropFileEvent(const SDL::GenericEvent &);
-        bool sdlUserEvent(const SDL::GenericEvent &);
-        bool sdlQuitEvent(void);
-
-        void windowResizedEvent(int, int);
 
         json_plain clientOptions(void) const;
         json_plain clientEnvironments(void) const;
@@ -164,6 +149,21 @@ namespace LTSM {
         void parseCommand(std::string_view cmd, std::string_view arg);
         void loadConfig(const std::filesystem::path &);
         void updateSecurity(void);
+
+        boost::asio::awaitable<void> signalsHandler(void);
+        boost::asio::awaitable<void> windowResizedEvent(const XCB::Size &);
+        boost::asio::awaitable<void> sdlEventsLoop(void);
+        boost::asio::awaitable<bool> sdlEventProcessing(void);
+        boost::asio::awaitable<void> sdlMouseMotion(SDL_Event &&);
+        boost::asio::awaitable<void> sdlMouseButton(SDL_Event &&);
+        boost::asio::awaitable<void> sdlMouseWheel(SDL_Event &&);
+        boost::asio::awaitable<void> sdlWindowEvent(SDL_Event &&);
+        boost::asio::awaitable<void> sdlKeyboardEvent(SDL_Event &&);
+        boost::asio::awaitable<void> sdlDropCompleteEvent(SDL_Event &&);
+        boost::asio::awaitable<void> sdlUserEvent(SDL_Event &&);
+
+        void sdlRenderFrame(void) const;
+        void stop(void);
 
       public:
         ClientApp(int argc, const char** argv);

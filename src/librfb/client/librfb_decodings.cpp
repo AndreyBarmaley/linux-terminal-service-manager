@@ -67,7 +67,7 @@ namespace LTSM {
     void RFB::DecoderStream::recvRegionUpdatePixels(const XCB::Region & reg) {
         uint32_t pitch = reg.width * clientFormat().bytePerPixel();
         auto pixels = recvData(static_cast<size_t>(pitch) * reg.height);
-        updateRawPixels(reg, pixels.data(), pitch, serverFormat());
+        updateRawPixels(reg, std::move(pixels), pitch, serverFormat());
     }
 
     int RFB::DecoderStream::recvCPixel(void) {
@@ -447,7 +447,7 @@ namespace LTSM {
 
         uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
         auto pixels = zlib->recvData(static_cast<size_t>(pitch) * reg.height);
-        cli.updateRawPixels(reg, pixels.data(), pitch, cli.serverFormat());
+        cli.updateRawPixels(reg, std::move(pixels), pitch, cli.serverFormat());
     }
 
 #ifdef LTSM_DECODING
@@ -463,7 +463,7 @@ namespace LTSM {
         auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
         auto rawsz = pitch * reg.height;
 
-        auto runJob = [](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream * cli) {
+        auto runJob = [](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli) {
             // thread buf
             BinaryBuf bb(rawsz);
 
@@ -475,7 +475,7 @@ namespace LTSM {
             }
 
             bb.resize(ret);
-            cli->updateRawPixels(reg, bb.data(), pitch, cli->serverFormat());
+            cli->updateRawPixels(reg, std::move(bb), pitch, cli->serverFormat());
         };
 
         if(1 < threads) {
@@ -504,7 +504,7 @@ namespace LTSM {
         auto jpgsz = cli.recvIntBE32();
         auto jpgbuf = cli.recvData(jpgsz);
 
-        auto runJob = [](std::vector<uint8_t> buf, XCB::Region reg, DecoderStream * cli) {
+        auto runJob = [](std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli) {
             std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitDecompress(), tjDestroy };
 
             if(jpeg) {
@@ -516,10 +516,10 @@ namespace LTSM {
                 auto pitch = reg.width * tjPixelSize[pixfmt];
 
                 // thread buf
-                auto jpegData = tjAlloc(pitch * reg.height);
+                std::vector<uint8_t> jpegData(pitch * reg.height);
 
                 if(0 > tjDecompress2(jpeg.get(), buf.data(), buf.size(),
-                                     jpegData, reg.width, 0, reg.height, TJPF_BGRX, TJFLAG_FASTDCT)) {
+                                     jpegData.data(), reg.width, 0, reg.height, pixfmt, TJFLAG_FASTDCT)) {
 #ifdef tjGetErrorCode
                     int err = tjGetErrorCode(jpeg.get());
                     const char* str = tjGetErrorStr2(jpeg.get());
@@ -533,12 +533,11 @@ namespace LTSM {
 #endif
 
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-                    cli->updateRawPixels2(reg, jpegData, 32, pitch, SDL_PIXELFORMAT_RGBX8888);
+                    cli->updateRawPixels2(reg, std::move(jpegData), 32, pitch, SDL_PIXELFORMAT_RGBX8888);
 #else
                     // deb10, turbojpeg-1.5.2
-                    cli->updateRawPixels2(reg, jpegData, 32, pitch, SDL_PIXELFORMAT_XBGR8888);
+                    cli->updateRawPixels2(reg, std::move(jpegData), 32, pitch, SDL_PIXELFORMAT_XBGR8888);
 #endif
-                    tjFree(jpegData);
                 }
             } else {
                 Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
@@ -574,11 +573,11 @@ namespace LTSM {
         auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
         auto rawsz = pitch * reg.height;
 
-        auto runJob = [this](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream * cli) {
+        auto runJob = [this](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli) {
             auto bb = this->decodeBGRx(buf, reg.toSize(), cli->serverFormat(), pitch);
             assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
 
-            cli->updateRawPixels(reg, bb.data(), pitch, cli->serverFormat());
+            cli->updateRawPixels(reg, std::move(bb), pitch, cli->serverFormat());
         };
 
         if(1 < threads) {

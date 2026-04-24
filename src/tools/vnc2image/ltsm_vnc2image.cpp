@@ -137,8 +137,8 @@ namespace LTSM {
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const XCB::Region & reg, const void* ptr, uint32_t pitch, const PixelFormat & pf) {
-        FrameBuffer fb((uint8_t*) ptr, XCB::Region{0, 0, reg.width, reg.height}, pf, pitch);
+    void Vnc2Image::updateRawPixels(const XCB::Region & reg, std::vector<uint8_t>&& buf, uint32_t pitch, const PixelFormat & pf) {
+        FrameBuffer fb(buf.data(), XCB::Region{0, 0, reg.width, reg.height}, pf, pitch);
         fbPtr->blitRegion(fb, fb.region(), reg.topLeft());
 
         /*
@@ -149,7 +149,7 @@ namespace LTSM {
         */
     }
 
-    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, const void* ptr, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
+    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, std::vector<uint8_t>&& buf, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
         // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
         Application::warning("{}: not implemented", NS_FuncNameV);
     }

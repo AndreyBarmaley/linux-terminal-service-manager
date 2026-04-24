@@ -206,19 +206,19 @@ namespace LTSM {
         }
 
         bool sdlEventProcessing(void) {
-            auto ev = SDL::Window::pollEvent();
+            SDL_Event ev;
 
-            if(! ev.isValid()) {
+            if(! SDL_PollEvent(&ev)) {
                 return false;
             }
 
-            switch(ev.type()) {
+            switch(ev.type) {
                 case SDL_TEXTINPUT:
                     // handleTextInput: ev.text
                     break;
 
                 case SDL_WINDOWEVENT:
-                    if(ev.window()->event == SDL_WINDOWEVENT_EXPOSED) {
+                    if(ev.window.event == SDL_WINDOWEVENT_EXPOSED) {
                         renderPresent(false);
                     }
 
@@ -226,20 +226,20 @@ namespace LTSM {
 
                 case SDL_KEYUP:
                 case SDL_KEYDOWN:
-                    sdlKeyEvent(ev.key());
+                    sdlKeyEvent(&ev.key);
                     break;
 
                 case SDL_MOUSEBUTTONUP:
                 case SDL_MOUSEBUTTONDOWN:
-                    sdlMouseButtonEvent(ev.button());
+                    sdlMouseButtonEvent(&ev.button);
                     break;
 
                 case SDL_MOUSEMOTION:
-                    sdlMouseMotionEvent(ev.button());
+                    sdlMouseMotionEvent(&ev.button);
                     break;
 
                 case SDL_MOUSEWHEEL:
-                    sdlMouseWheelEvent(ev.wheel());
+                    sdlMouseWheelEvent(&ev.wheel);
                     break;
 
                 case SDL_CLIPBOARDUPDATE:
@@ -298,11 +298,11 @@ namespace LTSM {
                     throw system::system_error(asio::error::operation_aborted);
                 }
 
-                if(auto tx = createTexture(damage_.toSize(), format); tx.isValid()) {
-                    tx.updateRect(nullptr, reply->data(), damage_.width * bytePerPixel + alignRowBytes);
-                    renderTexture(tx.get(), nullptr, nullptr, & dstrt);
-                    renderPresent();
-                }
+                auto tx = createTexture(damage_.toSize(), format);
+                tx.updateRect(nullptr, reply->data(), damage_.width * bytePerPixel + alignRowBytes);
+
+                renderTexture(tx.get(), nullptr, nullptr, & dstrt);
+                renderPresent();
 
                 co_await asio::dispatch(x11_strand_, asio::use_awaitable);
             }

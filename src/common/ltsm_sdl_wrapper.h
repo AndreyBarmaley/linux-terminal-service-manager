@@ -47,6 +47,7 @@ namespace LTSM {
           public:
             explicit Texture(SDL_Texture* ptr = nullptr)
                 : ptr_{ptr, SDL_DestroyTexture} {}
+            explicit Texture(Texture&&) = default;
             ~Texture() = default;
 
             inline bool isValid(void) const {
@@ -68,13 +69,26 @@ namespace LTSM {
           public:
             explicit Surface(SDL_Surface* ptr = nullptr)
                 : ptr_{ptr, SDL_FreeSurface} {}
+            explicit Surface(Surface&&) = default;
             ~Surface() = default;
 
             inline bool isValid(void) const {
                 return !! ptr_;
             }
 
+            inline void reset(SDL_Surface* sf) {
+                return ptr_.reset(sf);
+            }
+
+            inline const SDL_PixelFormat* format(void) const {
+                return ptr_->format;
+            }
+
             inline SDL_Surface* get(void) {
+                return ptr_.get();
+            }
+
+            inline const SDL_Surface* get(void) const {
                 return ptr_.get();
             }
 
@@ -82,52 +96,7 @@ namespace LTSM {
             int height(void) const;
         };
 
-        struct GenericEvent {
-            const SDL_Event* ptr_;
-
-            explicit GenericEvent(const SDL_Event* ev) : ptr_(ev) {}
-            ~GenericEvent() = default;
-
-            inline bool isValid(void) const {
-                return ptr_;
-            }
-
-            inline int type(void) const {
-                return ptr_->type;
-            }
-
-            inline const SDL_KeyboardEvent* key(void) const {
-                return & ptr_->key;
-            }
-
-            inline const SDL_MouseMotionEvent* motion(void) const {
-                return & ptr_->motion;
-            }
-
-            inline const SDL_MouseButtonEvent* button(void) const {
-                return & ptr_->button;
-            }
-
-            inline const SDL_MouseWheelEvent* wheel(void) const {
-                return & ptr_->wheel;
-            }
-
-            inline const SDL_WindowEvent* window(void) const {
-                return & ptr_->window;
-            }
-
-            inline const SDL_DropEvent* drop(void) const {
-                return & ptr_->drop;
-            }
-
-            inline const SDL_UserEvent* user(void) const {
-                return & ptr_->user;
-            }
-        };
-
         class Window {
-            SDL_Event event_;
-
             std::unique_ptr<SDL_Window, void(*)(SDL_Window*)> window_{ nullptr, SDL_DestroyWindow };
             std::unique_ptr<SDL_Renderer, void(*)(SDL_Renderer*)> renderer_{ nullptr, SDL_DestroyRenderer };
             std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> display_{ nullptr, SDL_DestroyTexture };
@@ -174,10 +143,10 @@ namespace LTSM {
 
             void renderReset(SDL_Texture* target = nullptr);
             void renderPresent(bool sync = true);
+            void setFullScreen(bool state);
 
             Texture createTexture(const XCB::Size &, uint32_t format = TEXTURE_FMT) const;
 
-            GenericEvent pollEvent(void);
             static int convertScanCodeToKeySym(SDL_Scancode);
 
             std::pair<int, int> scaleCoord(int posx, int posy) const;

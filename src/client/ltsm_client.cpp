@@ -270,8 +270,12 @@ namespace LTSM {
         , RFB::WinClient(ioc())
 #endif
         , signals_{ioc()}
+        , rfb_strand_{ioc().get_executor()}
         , sdl_strand_{ioc().get_executor()}
-        , x11_strand_{ioc().get_executor()} {
+#ifdef __UNIX__
+        , x11_strand_{ioc().get_executor()}
+#endif
+        {
 
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
@@ -741,6 +745,64 @@ namespace LTSM {
         }
     }
 
+    asio::awaitable<void> ClientApp::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+    asio::awaitable<void> ClientApp::sdlEventsLoop(void) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
+
+        try {
+            for(;;) {
+                bool events = co_await sdlEventProcessing();
+
+                if(events) {
+                    std::this_thread::yield();
+                    continue;
+                }
+
+                timer.expires_after(30ms);
+                co_await timer.async_wait(asio::use_awaitable);
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        }
+    }
+
+    void ClientApp::sdlRenderFrame(void) const {
+        window->renderPresent(true);
+    }
+
+    void ClientApp::stop(void) {
+        this->rfbMessagesShutdown();
+
+        rfb_cancel_.emit(asio::cancellation_type::terminal);
+        sdl_cancel_.emit(asio::cancellation_type::terminal);
+#ifdef __UNIX__
+        x11_cancel_.emit(asio::cancellation_type::terminal);
+#endif
+        signals_.cancel();
+    }
+
     int ClientApp::start(void) {
         if(! ClientDecoder::socketConnect(host, port)) {
             return -1;
@@ -751,7 +813,6 @@ namespace LTSM {
             return -1;
         }
 
-        // asio::thread_pool thread_pool{concurency_};
 
         // rfb thread: process rfb messages
         auto thrfb = std::thread([this]() {
@@ -788,90 +849,16 @@ namespace LTSM {
             sendContinuousUpdates(true, { XCB::Point(0, 0), windowSize });
         }
 
-        // main thread: sdl processing
-        //        auto clipboardDelay = std::chrono::steady_clock::now();
-        //        std::thread thclip;
+        asio::co_spawn(ioc(), signalsHandler(), asio::detached);
 
-        while(true) {
-            if(! rfbMessagesRunning()) {
-                break;
-            }
+        // asio::thread_pool thread_pool{concurency_};
+        // asio::co_spawn(sdl_strand_, sdlEventsLoop(),
+        //        asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
 
-            if(! dropFiles.empty() &&
-               std::chrono::steady_clock::now() - dropStart > 700ms) {
-                ChannelClient::sendSystemTransferFiles(dropFiles);
-                dropFiles.clear();
-            }
-
-            /*
-                        // send clipboard
-                        if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
-                                ! focusLost && SDL_HasClipboardText())
-                        {
-                            if(thclip.joinable())
-                            {
-                                thclip.join();
-                            }
-                            else
-                            {
-                                thclip = std::thread([this]() mutable
-                                {
-                                    if(auto ptr = SDL_GetClipboardText())
-                                    {
-                                        const std::scoped_lock guard{ this->clipboardLock };
-                                        auto clipboardBufSdl = std::string_view{ ptr };
-
-                                        if(clipboardBufRemote != clipboardBufSdl &&
-                                                clipboardBufLocal != clipboardBufSdl)
-                                        {
-                                            clipboardBufLocal = clipboardBufSdl;
-                                            this->sendCutTextEvent(clipboardBufSdl.data(), clipboardBufSdl.size(), false);
-                                        }
-
-                                        SDL_free(ptr);
-                                    }
-                                });
-                            }
-
-                            clipboardDelay = std::chrono::steady_clock::now();
-                        }
-            */
-            if(needUpdate && sfback) {
-                const std::scoped_lock guard{ renderLock };
-                SDL_Texture* tx = SDL_CreateTextureFromSurface(window->render(), sfback.get());
-
-                if(! tx) {
-                    Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                       "SDL_CreateTextureFromSurface", SDL_GetError());
-                    throw sdl_error(NS_FuncNameS);
-                }
-
-                window->renderReset();
-
-                if(0 != SDL_RenderCopy(window->render(), tx, nullptr, nullptr)) {
-                    Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy",
-                                       SDL_GetError());
-                    throw sdl_error(NS_FuncNameS);
-                }
-
-                SDL_RenderPresent(window->render());
-                SDL_DestroyTexture(tx);
-                needUpdate = false;
-            }
-
-            if(! sdlEventProcessing()) {
-                continue;
-            }
-        }
+        ioc().run();
 
         rfbMessagesShutdown();
 
-        /*
-                if(thclip.joinable())
-                {
-                    thclip.join();
-                }
-        */
         if(thrfb.joinable()) {
             thrfb.join();
         }
@@ -884,51 +871,37 @@ namespace LTSM {
         return 0;
     }
 
-    bool ClientApp::sdlMouseEvent(const SDL::GenericEvent & ev) {
-        // left 0x01, middle 0x02, right 0x04, scrollUp: 0x08,
-        // scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
-        switch(ev.type()) {
-            case SDL_MOUSEMOTION:
-                if(auto me = ev.motion()) {
-                    sendPointerEvent(0xFF & me->state, me->x, me->y);
-                    return true;
-                }
+    asio::awaitable<void> ClientApp::sdlMouseMotion(SDL_Event && ev) {
+        const auto & me = ev.motion;
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        sendPointerEvent(0xFF & me.state, me.x, me.y);
+        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
+    }
 
-                break;
+    asio::awaitable<void> ClientApp::sdlMouseButton(SDL_Event && ev) {
+        const auto & be = ev.button;
+        const uint8_t buttons = ev.type == SDL_MOUSEBUTTONDOWN ? SDL_BUTTON(be.button) : 0;
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        sendPointerEvent(buttons, be.x, be.y);
+        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
+    }
 
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-                if(auto be = ev.button()) {
-                    sendPointerEvent(ev.type() == SDL_MOUSEBUTTONDOWN ? SDL_BUTTON(be->button) : 0, be->x, be->y);
-                    return true;
-                }
+    asio::awaitable<void> ClientApp::sdlMouseWheel(SDL_Event && ev) {
+        const auto & we = ev.wheel;
 
-                break;
-
-            case SDL_MOUSEWHEEL:
-
-                // scroll up
-                if(auto we = ev.wheel()) {
-                    if(0 == we->y) {
-                        return false;
-                    }
-
-                    int mouseX, mouseY;
-                    [[maybe_unused]] auto state = SDL_GetMouseState(& mouseX, & mouseY);
-
-                    // press/release up/down
-                    sendPointerEvent(SDL_BUTTON(0 < we->y ? SDL_BUTTON_X1 : SDL_BUTTON_X2), mouseX, mouseY);
-
-                    SDL_GetMouseState(& mouseX, & mouseY);
-                    sendPointerEvent(0, mouseX, mouseY);
-                    return true;
-                }
-
-            default:
-                break;
+        if(0 == we.y) {
+            co_return;
         }
 
-        return false;
+        int mouseX, mouseY;
+        [[maybe_unused]] auto state = SDL_GetMouseState(& mouseX, & mouseY);
+
+        // press/release up/down
+        const uint8_t buttons = SDL_BUTTON(0 < we.y ? SDL_BUTTON_X1 : SDL_BUTTON_X2);
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        sendPointerEvent(buttons, mouseX, mouseY);
+        sendPointerEvent(0, mouseX, mouseY);
+        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
     }
 
     const char* sdlWindowEventName(uint8_t id) {
@@ -1000,208 +973,200 @@ namespace LTSM {
         return "unknown";
     }
 
-    bool ClientApp::sdlWindowEvent(const SDL::GenericEvent & ev) {
-        if(auto we = ev.window()) {
-            Application::debug(DebugType::App, "{}: window event: {}", NS_FuncNameV, sdlWindowEventName(we->event));
-
-            switch(we->event) {
-                case SDL_WINDOWEVENT_EXPOSED:
-                    window->renderPresent(false);
-                    return true;
-
-                case SDL_WINDOWEVENT_FOCUS_GAINED:
-                    focusLost = false;
-                    return true;
-
-                case SDL_WINDOWEVENT_FOCUS_LOST:
-                    focusLost = true;
-                    return true;
-
-                case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    Application::debug(DebugType::App, "{}: size changed: [{}, {}]",
-                                       NS_FuncNameV, we->data1, we->data2);
-                    return true;
-
-                case SDL_WINDOWEVENT_RESIZED:
-                    Application::debug(DebugType::App, "{}: event resized: [{}, {}]",
-                                       NS_FuncNameV, we->data1, we->data2);
-                    windowResizedEvent(we->data1, we->data2);
-                    return true;
-
-                default:
-                    break;
-            }
+    asio::awaitable<void> ClientApp::windowResizedEvent(const XCB::Size & wsz) {
+        auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
+        // skip: starting window resized
+        if(time.count() > 3) {
+            windowSize = wsz;
+            co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+            sendSetDesktopSize(wsz);
+            sendFrameBufferUpdate(false);
+            co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
         }
-
-        return false;
     }
 
-    bool ClientApp::sdlKeyboardEvent(const SDL::GenericEvent & ev) {
-        if(auto ke = ev.key()) {
-            // pressed
-            if(ke->state == SDL_PRESSED) {
-                Application::debug(DebugType::App, "{}: SDL Keysym - scancode: {:#010x}, keycode: {:#010x}",
-                                   NS_FuncNameV, static_cast<int>(ke->keysym.scancode), ke->keysym.sym);
+    asio::awaitable<void> ClientApp::sdlWindowEvent(SDL_Event && ev) {
+        const auto & we = ev.window;
+        Application::debug(DebugType::App, "{}: window event: {}", NS_FuncNameV, sdlWindowEventName(we.event));
 
-                // ctrl + F10 -> fast close
-                if(ke->keysym.sym == SDLK_F10 &&
-                   (KMOD_CTRL & SDL_GetModState())) {
-                    Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F10", "close application");
-                    return sdlQuitEvent();
+        switch(we.event) {
+            case SDL_WINDOWEVENT_EXPOSED:
+                window->renderPresent(false);
+                break;
+
+            case SDL_WINDOWEVENT_FOCUS_GAINED:
+                focusLost = false;
+                break;
+
+            case SDL_WINDOWEVENT_FOCUS_LOST:
+                focusLost = true;
+                break;
+
+            case SDL_WINDOWEVENT_SIZE_CHANGED:
+                Application::debug(DebugType::App, "{}: size changed: [{}, {}]",
+                                   NS_FuncNameV, we.data1, we.data2);
+                break;
+
+            case SDL_WINDOWEVENT_RESIZED:
+                Application::debug(DebugType::App, "{}: event resized: [{}, {}]",
+                                   NS_FuncNameV, we.data1, we.data2);
+                co_await windowResizedEvent(XCB::Size(we.data1, we.data2));
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    asio::awaitable<void> ClientApp::sdlKeyboardEvent(SDL_Event && ev) {
+        const auto & ke = ev.key;
+
+        // pressed
+        if(ke.state == SDL_PRESSED) {
+            Application::debug(DebugType::App, "{}: SDL Keysym - scancode: {:#010x}, keycode: {:#010x}",
+                               NS_FuncNameV, static_cast<int>(ke.keysym.scancode), ke.keysym.sym);
+
+            // ctrl + F10 -> fast close
+            if(ke.keysym.sym == SDLK_F10 &&
+               (KMOD_CTRL & SDL_GetModState())) {
+                Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F10", "close application");
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                co_return;
+            }
+
+            // ctrl + F11 -> fullscreen toggle
+            if(ke.keysym.sym == SDLK_F11 &&
+               (KMOD_CTRL & SDL_GetModState())) {
+                Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F11", "fullscreen toggle");
+
+                if(windowFullScreen()) {
+                    windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
+                    window->setFullScreen(false);
+                } else {
+                    window->setFullScreen(true);
+                    windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
                 }
 
-                // ctrl + F11 -> fullscreen toggle
-                if(ke->keysym.sym == SDLK_F11 &&
-                   (KMOD_CTRL & SDL_GetModState())) {
-                    Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F11", "fullscreen toggle");
-
-                    if(windowFullScreen()) {
-                        SDL_SetWindowFullscreen(window->get(), 0);
-                        windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
-                    } else {
-                        SDL_SetWindowFullscreen(window->get(), SDL_WINDOW_FULLSCREEN);
-                        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-                    }
-
-                    return true;
-                }
-
-                // key press delay 200 ms
-                if(std::chrono::steady_clock::now() - keyPress < 200ms) {
-                    keyPress = std::chrono::steady_clock::now();
-                    return true;
-                }
+                co_return;
             }
-
-            // continue, released
-            if(ke->keysym.sym == 0x40000000 && ! capslockEnable) {
-                auto mod = SDL_GetModState();
-                SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
-                Application::debug(DebugType::App, "{}: CAPS reset", NS_FuncNameV);
-                return true;
-            }
-
-            if(20250808 <= remoteLtsmVersion()) {
-                sendSystemKeyboardEvent(ev.type() == SDL_KEYDOWN, ke->keysym.scancode, ke->keysym.sym);
-                return true;
-            }
-
-#ifdef __UNIX__
-            int xksym = SDL::Window::convertScanCodeToKeySym(ke->keysym.scancode);
-
-            if(xksym == 0) {
-                xksym = ke->keysym.sym;
-            }
-
-            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb) {
-                int group = extXkb->getLayoutGroup();
-                auto keycodeGroup = keysymToKeycodeGroup(xksym);
-
-                if(group != keycodeGroup.second) {
-                    xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
-                }
-            }
-
-#else
-            int xksym = ke->keysym.sym;
-#endif
-            sendKeyEvent(ke->state == SDL_PRESSED, xksym);
-            return true;
         }
 
-        return false;
+        if(ke.keysym.sym == 0x40000000 && ! capslockEnable) {
+            auto mod = SDL_GetModState();
+            SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
+            Application::debug(DebugType::App, "{}: CAPS reset", NS_FuncNameV);
+            co_return;
+        }
+
+        const bool pressed = ev.type == SDL_KEYDOWN;
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        sendSystemKeyboardEvent(pressed, ke.keysym.scancode, ke.keysym.sym);
+        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
+        co_return;
     }
 
     enum LocalEvent { Resize = 776, ResizeCont = 777 };
 
-    bool ClientApp::sdlUserEvent(const SDL::GenericEvent & ev) {
-        if(auto ue = ev.user()) {
-            // resize event
-            if(ue->code == LocalEvent::Resize ||
-               ue->code == LocalEvent::ResizeCont) {
-                const XCB::Size windowSz((ptrdiff_t) ue->data1, (ptrdiff_t) ue->data2);
-                bool contUpdateResume = ue->code == LocalEvent::ResizeCont;
-                cursors.clear();
+    asio::awaitable<void> ClientApp::sdlUserEvent(SDL_Event && ev) {
+        const auto & ue = ev.user;
+        // resize event
+        if(ue.code == LocalEvent::Resize ||
+           ue.code == LocalEvent::ResizeCont) {
+            const XCB::Size windowSz((ptrdiff_t) ue.data1, (ptrdiff_t) ue.data2);
+            bool contUpdateResume = ue.code == LocalEvent::ResizeCont;
+            cursors.clear();
 
-                try {
-                    if(windowFullScreen()) {
-                        window = std::make_unique<SDL::Window>(windowTitle, windowSz, windowSz, windowFlags, windowAccel);
-                    } else {
-                        window->resize(windowSz);
-                    }
-                } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                    return false;
-                }
-
-                // get real size
-                windowSize = window->geometry();
-                displayResizeEvent(windowSize);
-
-                // full update
-                sendFrameBufferUpdate(false);
-
-                if(contUpdateResume) {
-                    sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
-                }
-
-                return true;
+            try {
+                window->resize(windowSz);
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                co_return;
             }
-        }
 
-        return false;
+            // get real size
+            windowSize = window->geometry();
+
+            co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+            displayResizeEvent(windowSize);
+            // full update
+            sendFrameBufferUpdate(false);
+            if(contUpdateResume) {
+                sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
+            }
+            co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
+        }
+        co_return;
     }
 
-    bool ClientApp::sdlDropFileEvent(const SDL::GenericEvent & ev) {
-        if(auto de = ev.drop()) {
-            std::unique_ptr<char, void(*)(void*)> drop{ de->file, SDL_free };
-            dropFiles.emplace_front(drop.get());
-            dropStart = std::chrono::steady_clock::now();
-            return true;
+    asio::awaitable<void> ClientApp::sdlDropCompleteEvent(SDL_Event && ev) {
+        if(! dropFiles.empty()) {
+            co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+            ChannelClient::sendSystemTransferFiles(std::move(dropFiles));
+            co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
+            dropFiles.clear();
         }
-
-        return false;
     }
 
-    bool ClientApp::sdlQuitEvent(void) {
-        RFB::ClientDecoder::rfbMessagesShutdown();
-        return true;
-    }
+    asio::awaitable<bool> ClientApp::sdlEventProcessing(void) {
+        SDL_Event ev;
 
-    bool ClientApp::sdlEventProcessing(void) {
-        const std::scoped_lock guard{ renderLock };
-
-        if(! SDL_PollEvent(& sdlEvent)) {
-            return false;
+        if(! SDL_PollEvent(& ev)) {
+            co_return false;
         }
 
-        const SDL::GenericEvent ev(& sdlEvent);
-
-        switch(ev.type()) {
+        switch(ev.type) {
             case SDL_MOUSEMOTION:
+                co_await sdlMouseMotion(std::move(ev));
+                break;
+
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
+                co_await sdlMouseButton(std::move(ev));
+                break;
+
             case SDL_MOUSEWHEEL:
-                return sdlMouseEvent(ev);
+                co_await sdlMouseWheel(std::move(ev));
+                break;
 
             case SDL_WINDOWEVENT:
-                return sdlWindowEvent(ev);
+                co_await sdlWindowEvent(std::move(ev));
+                break;
 
             case SDL_KEYDOWN:
             case SDL_KEYUP:
-                return sdlKeyboardEvent(ev);
+                co_await sdlKeyboardEvent(std::move(ev));
+                break;
 
             case SDL_DROPFILE:
-                return sdlDropFileEvent(ev);
+                if(ev.drop.file) {
+                    dropFiles.emplace_front(ev.drop.file);
+                    SDL_free(ev.drop.file);
+                }
+                break;
+
+            case SDL_DROPCOMPLETE:
+                co_await sdlDropCompleteEvent(std::move(ev));
+                break;
 
             case SDL_USEREVENT:
-                return sdlUserEvent(ev);
+                co_await sdlUserEvent(std::move(ev));
+                break;
 
             case SDL_QUIT:
-                return sdlQuitEvent();
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                break;
+
+            default:
+                co_return false;
         }
 
-        return false;
+        co_return true;
+    }
+
+    void ClientApp::clientRecvFBUpdateEvent(void) {
+        asio::post(sdl_strand_, [this](){
+            sdlRenderFrame();
+        });
     }
 
     bool ClientApp::pushEventWindowResize(const XCB::Size & nsz) {
@@ -1239,7 +1204,6 @@ namespace LTSM {
 
     void ClientApp::clientRecvDecodingDesktopSizeEvent(int status, int err,
             const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens) {
-        needUpdate = false;
 
         Application::debug(DebugType::App, "{}: status: {}, error: {}, size:: {}",
                             NS_FuncNameV, status, err, nsz);
@@ -1279,20 +1243,13 @@ namespace LTSM {
         }
     }
 
-    void ClientApp::clientRecvFBUpdateEvent(void) {
-        if(! needUpdate) {
-            needUpdate = true;
-        }
-    }
-
     void ClientApp::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
         Application::info("{}: size: {}", NS_FuncNameV, wsz);
-        const std::scoped_lock guard{ renderLock };
-        bool eventResize = false;
+        bool initialized = false;
 
         if(! window) {
             window = std::make_unique<SDL::Window>(windowTitle, wsz, wsz, windowFlags, windowAccel);
-            eventResize = true;
+            initialized = true;
         }
 
         int bpp;
@@ -1306,10 +1263,16 @@ namespace LTSM {
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
+        windowSize = window->geometry();
 
-        if(eventResize) {
-            windowSize = window->geometry();
-            displayResizeEvent(windowSize);
+        if(initialized) {
+            // start sdl loop
+            asio::co_spawn(sdl_strand_, sdlEventsLoop(),
+                    asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
+
+            asio::post(rfb_strand_, [wsz = windowSize, this]() {
+                this->displayResizeEvent(wsz);
+            });
         }
     }
 
@@ -1317,93 +1280,75 @@ namespace LTSM {
         fillPixel({dst, XCB::Size{1, 1}}, pixel);
     }
 
-    void ClientApp::fillPixel(const XCB::Region & dst, uint32_t pixel) {
-        const std::scoped_lock guard{ renderLock };
-
-        if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height) {
-            sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
-                                              clientPf.bitsPerPixel(),
-                                              clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
-
-            if(! sfback) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                   "SDL_CreateSurface", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
+    void ClientApp::fillPixel(const XCB::Region & wrt, uint32_t pixel) {
+        if(wrt.isEmpty()) {
+            return;
         }
 
-        SDL_Rect dstrt{ .x = dst.x, .y = dst.y, .w = dst.width, .h = dst.height };
-        auto col = clientPf.color(pixel);
-        Uint32 color = SDL_MapRGB(sfback->format, col.r, col.g, col.b);
-
-        if(0 > SDL_FillRect(sfback.get(), &dstrt, color)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_FillRect",
-                               SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
+        // move strand
+        asio::post(sdl_strand_, [wrt, pixel, this](){
+            auto col = clientPf.color(pixel);
+            auto dstrt = SDL_Rect{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
+            auto dstcol = SDL_Color{ .r = col.r, .g = col.g, .b = col.b, .a = 255 };
+            window->renderColor(&dstcol, &dstrt);
+        });
     }
 
-    void ClientApp::updateRawPixels(const XCB::Region & wrt, const void* data,
+    void ClientApp::updateRawPixels(const XCB::Region & wrt, std::vector<uint8_t>&& buf,
                                   uint32_t pitch, const PixelFormat & pf) {
-        uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
-
-        if(sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
-            return updateRawPixels2(wrt, data, pf.bitsPerPixel(), pitch, sdlFormat);
+        if(wrt.isEmpty()) {
+            return;
         }
 
-        // lock part
-        const std::scoped_lock guard{ renderLock };
+        const uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
-        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
-            SDL_CreateRGBSurfaceFrom((void*) data, wrt.width, wrt.height,
-                                     pf.bitsPerPixel(), pitch, pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()),
-            SDL_FreeSurface};
+        if(sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
+            return updateRawPixels2(wrt, std::move(buf), pf.bitsPerPixel(), pitch, sdlFormat);
+        }
 
-        if(! sfframe) {
+        if(auto ptr = SDL_CreateRGBSurfaceFrom(buf.data(), wrt.width, wrt.height,
+                                     pf.bitsPerPixel(), pitch, pf.rmask(), pf.gmask(), pf.bmask(), pf.amask())) {
+            // move strand
+            asio::post(sdl_strand_, [wrt, buf = std::move(buf), sf = SDL::Surface(ptr), this](){
+                this->updateRawPixels3(wrt, sf);
+            });
+        } else {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV,
                                "SDL_CreateRGBSurfaceFrom", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
-
-        updateRawPixels3(wrt, sfframe.get());
     }
 
-    void ClientApp::updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
-        // lock part
-        const std::scoped_lock guard{ renderLock };
+    void ClientApp::updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
+        if(wrt.isEmpty()) {
+            return;
+        }
 
-        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
-            SDL_CreateRGBSurfaceWithFormatFrom((void*) data, wrt.width, wrt.height,
-                                               depth, pitch, sdlFormat),
-            SDL_FreeSurface};
-
-        if(! sfframe) {
+        if(auto ptr = SDL_CreateRGBSurfaceWithFormatFrom(buf.data(), wrt.width, wrt.height,
+                                               depth, pitch, sdlFormat)) {
+            // move strand
+            asio::post(sdl_strand_, [wrt, buf = std::move(buf), sf = SDL::Surface(ptr), this](){
+                this->updateRawPixels3(wrt, sf);
+            });
+        } else {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV,
                                "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
-
-        updateRawPixels3(wrt, sfframe.get());
     }
 
-    void ClientApp::updateRawPixels3(const XCB::Region & wrt, SDL_Surface* sfframe) {
-        if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height) {
-            sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
-                                              clientPf.bitsPerPixel(),
-                                              clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
-
-            if(! sfback) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                   "SDL_CreateSurface", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
+    void ClientApp::updateRawPixels3(const XCB::Region & wrt, const SDL::Surface & frame) {
+        if(wrt.isEmpty()) {
+            return;
         }
 
-        SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
-
-        if(0 > SDL_BlitSurface(sfframe, nullptr, sfback.get(), & dstrt)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_BlitSurface",
-                               SDL_GetError());
+        if(auto ptr = SDL_CreateTextureFromSurface(window->render(), const_cast<SDL_Surface*>(frame.get()))) {
+            const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
+            SDL::Texture tx(ptr);
+            window->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
+        } else {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV,
+                               "SDL_CreateTextureFromSurface", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
     }
@@ -1424,33 +1369,6 @@ namespace LTSM {
         return audioEncoding;
     }
 
-    /*
-        void ClientApp::clientRecvCutTextEvent(std::vector<uint8_t> && buf)
-        {
-            bool zeroInserted = false;
-
-            if(buf.back() != 0)
-            {
-                buf.push_back(0);
-                zeroInserted = true;
-            }
-
-            const std::scoped_lock guard{ clipboardLock };
-            clipboardBufRemote.swap(buf);
-
-            if(0 != SDL_SetClipboardText(reinterpret_cast<const char*>
-                                         (clipboardBufRemote.data())))
-            {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                   "SDL_SetClipboardText", SDL_GetError());
-            }
-
-            if(zeroInserted)
-            {
-                clipboardBufRemote.pop_back();
-            }
-        }
-    */
     void ClientApp::clientRecvRichCursorEvent(const XCB::Region & reg,
                                             std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {
         uint32_t key = Tools::crc32b(pixels);
@@ -1727,15 +1645,6 @@ namespace LTSM {
         return true;
     }
 
-    void ClientApp::windowResizedEvent(int width, int height) {
-        auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
-        // skip: starting window resized
-        if(time.count() > 3) {
-            windowSize = XCB::Size(width, height);
-            sendSetDesktopSize(windowSize);
-            sendFrameBufferUpdate(false);
-        }
-    }
 }
 
 using namespace LTSM;
@@ -1797,6 +1706,9 @@ int main(int argc, const char** argv)
         std::cerr << "sdl init video failed" << std::endl;
         return -1;
     }
+
+    // enable drop file
+    SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
 
     bool programRestarting = true;
     int res = 0;

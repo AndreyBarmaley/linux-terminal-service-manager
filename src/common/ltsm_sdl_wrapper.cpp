@@ -229,10 +229,6 @@ namespace LTSM {
         return window_ && renderer_ && display_;
     }
 
-    SDL::GenericEvent SDL::Window::pollEvent(void) {
-        return GenericEvent(SDL_PollEvent(& event_) ? & event_ : nullptr);
-    }
-
     SDL::Texture SDL::Window::createTexture(const XCB::Size & tsz, uint32_t format) const {
         if(auto ptr = SDL_CreateTexture(renderer_.get(), format, SDL_TEXTUREACCESS_STATIC, tsz.width, tsz.height)) {
             return Texture(ptr);
@@ -255,6 +251,10 @@ namespace LTSM {
         res.first = posx * rendsz_w / winsz_w;
         res.second = posy * rendsz_h / winsz_h;
         return res;
+    }
+
+    void SDL::Window::setFullScreen(bool state) {
+        SDL_SetWindowFullscreen(window_.get(), state ? SDL_WINDOW_FULLSCREEN : 0);
     }
 
 #ifdef __UNIX__

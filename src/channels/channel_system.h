@@ -626,7 +626,7 @@ namespace LTSM {
         void sendSystemKeyboardEvent(bool pressed, int scancode, int keycode);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
-        bool sendSystemTransferFiles(std::forward_list<std::string>);
+        bool sendSystemTransferFiles(std::forward_list<std::string> &&);
         void sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode &, const Channel::Opts &);
         void sendSystemChannelClose(uint8_t channel);
         void sendSystemChannelConnected(uint8_t channel, int flags, bool noerror);
