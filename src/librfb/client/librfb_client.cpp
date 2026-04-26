@@ -36,6 +36,7 @@
 #endif
 
 #include "ltsm_byte_stream.h"
+#include <boost/system/system_error.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
 using namespace std::chrono_literals;
@@ -537,6 +538,10 @@ namespace LTSM {
         Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
         auto cur = std::chrono::steady_clock::now();
 
+        if(isContinueUpdatesSupport()) {
+            co_await sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() });
+        }
+
         while(rfbMessages) {
             auto now = std::chrono::steady_clock::now();
 
@@ -547,37 +552,20 @@ namespace LTSM {
                 cur = now;
             }
 
-            //if(! hasInput()) {
-            //    std::this_thread::sleep_for(5ms);
-            //    continue;
-            //}
-
             int msgType = co_await socket->async_recv_byte();
 
             if(msgType == PROTOCOL_LTSM) {
                 if(0 == serverLtsmVersion) {
                     Application::error("{}: server not supported: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
-                    rfbMessagesShutdown();
-                    co_return;
+                    throw system::system_error(asio::error::operation_aborted);
                 }
 
-                try {
-                    recvLtsmProto(*this);
-                } catch(const std::exception& err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                    rfbMessagesShutdown();
-                    co_return;
-                }
+                recvLtsmProto(*this);
             }
 
             switch(msgType) {
                 case SERVER_FB_UPDATE:
-                    try {
-                        recvFBUpdateEvent();
-                    } catch(const std::exception & err) {
-                        rfbMessagesShutdown();
-                    }
-
+                    recvFBUpdateEvent();
                     break;
 
                 case SERVER_SET_COLOURMAP:
@@ -598,8 +586,7 @@ namespace LTSM {
 
                 default: {
                     Application::error("{}: unknown message: {:#04x}", NS_FuncNameV, msgType);
-                    rfbMessagesShutdown();
-                    co_return;
+                    throw system::system_error(asio::error::operation_aborted);
                 }
             }
         }
@@ -817,6 +804,25 @@ namespace LTSM {
 
         co_await send_lock_.async_lock();
         co_await socket->async_send_buf(asio::buffer(sb.rawbuf()));
+        send_lock_.unlock();
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
+                           (enable ? "enable" : "disable"), reg);
+
+        StreamBuf sb(10);
+
+        sb.writeInt8(CLIENT_CONTINUOUS_UPDATES).
+            writeInt8(enable ? 1 : 0).
+            writeIntBE16(reg.x).
+            writeIntBE16(reg.y).
+            writeIntBE16(reg.width).
+            writeIntBE16(reg.height);
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_send_buf(asio::buffer(sb.rawbuf()));
+        continueUpdatesProcessed = enable;
         send_lock_.unlock();
     }
 

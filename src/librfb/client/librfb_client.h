@@ -90,6 +90,7 @@ namespace LTSM {
             boost::asio::awaitable<void> sendEncodingsAwait(const std::list<int> &) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
+            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, const XCB::Region &);
 #endif
             void sendPixelFormat(void);
             void sendEncodings(const std::list<int> &);

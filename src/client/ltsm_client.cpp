@@ -847,16 +847,19 @@ namespace LTSM {
             return -1;
         }
 
-        // rfb thread: process rfb messages
-        auto thrfb = std::thread([this]() {
-            this->rfbMessagesLoop();
-        });
-
-        if(isContinueUpdatesSupport()) {
-            sendContinuousUpdates(true, { XCB::Point(0, 0), windowSize });
-        }
-
         asio::co_spawn(ioc(), signalsHandler(), asio::detached);
+
+        asio::co_spawn(rfb_strand_, [this]() -> asio::awaitable<void> {
+            try {
+                co_await this->rfbMessagesLoopAwait();
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbMessagesLoopAwait", ec.message(), ec.value());
+                }
+            }
+            co_return;
+        }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
+
 #ifdef __UNIX__
         asio::co_spawn(x11_strand_, x11EventsLoop(),
                 asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
@@ -865,13 +868,7 @@ namespace LTSM {
         // asio::thread_pool thread_pool{concurency_};
         ioc().run();
 
-        rfbMessagesShutdown();
-
-        if(thrfb.joinable()) {
-            thrfb.join();
-        }
-
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     asio::awaitable<void> ClientApp::sdlMouseMotion(SDL_Event && ev) {
