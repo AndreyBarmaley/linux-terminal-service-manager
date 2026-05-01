@@ -538,10 +538,6 @@ namespace LTSM {
         Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
         auto cur = std::chrono::steady_clock::now();
 
-        if(isContinueUpdatesSupport()) {
-            co_await sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() });
-        }
-
         while(rfbMessages) {
             auto now = std::chrono::steady_clock::now();
 

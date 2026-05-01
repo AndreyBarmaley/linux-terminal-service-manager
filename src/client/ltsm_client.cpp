@@ -856,6 +856,7 @@ namespace LTSM {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "rfbMessagesLoopAwait", ec.message(), ec.value());
                 }
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
             }
             co_return;
         }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
@@ -864,6 +865,9 @@ namespace LTSM {
         asio::co_spawn(x11_strand_, x11EventsLoop(),
                 asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
+        if(isContinueUpdatesSupport()) {
+            //co_await sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() });
+        }
 
         // asio::thread_pool thread_pool{concurency_};
         ioc().run();
