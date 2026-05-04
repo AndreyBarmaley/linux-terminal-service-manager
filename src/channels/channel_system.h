@@ -569,6 +569,9 @@ namespace LTSM {
         Channel::Planned* findPlanned(uint8_t);
         bool channelPlannedCreate(uint8_t, const Channel::Planned &);
 
+#ifdef LTSM_WITH_BOOST
+        void recvLtsmProto(uint8_t channel, std::vector<uint8_t> &&);
+#endif
         void recvLtsmProto(const NetworkStream &);
         void sendLtsmProto(NetworkStream &, std::mutex &, uint8_t channel, std::span<const uint8_t>);
 

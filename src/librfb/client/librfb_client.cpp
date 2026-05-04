@@ -556,7 +556,7 @@ namespace LTSM {
                     throw system::system_error(asio::error::operation_aborted);
                 }
 
-                recvLtsmProto(*this);
+                co_await recvLtsmProtoAwait();
             }
 
             switch(msgType) {
@@ -820,6 +820,205 @@ namespace LTSM {
         co_await socket->async_send_buf(asio::buffer(sb.rawbuf()));
         continueUpdatesProcessed = enable;
         send_lock_.unlock();
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvLtsmProtoAwait(void) {
+        uint8_t version, channel;
+        uint16_t length;
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_recv_values(version, channel, length);
+        endian::big_to_native_inplace(length);
+
+        if(version != LtsmProtocolVersion) {
+            Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
+            throw channel_error(NS_FuncNameS);
+        }
+
+        auto buf = co_await socket->async_recv_buf<BinaryBuf>(length);
+        send_lock_.unlock();
+
+        ChannelClient::recvLtsmProto(channel, std::move(buf));
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvFBUpdateEventAwait(void) {
+        auto start = std::chrono::steady_clock::now();
+
+        uint8_t padding;
+        uint16_t numRects;
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_recv_values(padding, numRects);
+
+        endian::big_to_native_inplace(numRects);
+        const auto bufsz = static_cast<uint32_t>(numRects) * (8 /* region */ + sizeof(int32_t) /* enc type */);
+        auto buf = co_await socket->async_recv_buf<BinaryBuf>(bufsz);
+        send_lock_.unlock();
+    
+        StreamBufRef sb(buf.data(), buf.size());
+        Application::debug(DebugType::Rfb, "{}: num rects: {}", NS_FuncNameV, numRects);
+
+        while(0 < numRects--) {
+            XCB::Region reg;
+
+            reg.x = sb.readIntBE16();
+            reg.y = sb.readIntBE16();
+            reg.width = sb.readIntBE16();
+            reg.height = sb.readIntBE16();
+            int32_t encodingType = sb.readIntBE32();
+
+            Application::debug(DebugType::Rfb, "{}: region: {}, encodingType: {}",
+                               NS_FuncNameV, reg, RFB::encodingName(encodingType));
+
+            switch(encodingType) {
+                case ENCODING_LTSM:
+                    co_await recvDecodingLtsmAwait(reg);
+                    break;
+
+                case ENCODING_LAST_RECT:
+                    co_await recvDecodingLastRectAwait(reg);
+                    numRects = 0;
+                    break;
+
+                case ENCODING_LTSM_CURSOR:
+                    co_await recvDecodingLtsmCursorAwait(reg);
+                    break;
+
+                case ENCODING_RICH_CURSOR:
+                    co_await recvDecodingRichCursorAwait(reg);
+                    break;
+
+                case ENCODING_EXT_DESKTOP_SIZE:
+                    co_await recvDecodingExtDesktopSizeAwait(reg.x, reg.y, reg.toSize());
+                    break;
+
+                case RFB::ENCODING_DESKTOP_SIZE:
+                    Application::warning("{}: {}", NS_FuncNameV, "old desktop_size");
+                    break;
+
+                default:
+                    updateRegion(encodingType, reg);
+                    break;
+            }
+        }
+
+        if(decoder) {
+            decoder->waitUpdateComplete();
+        }
+
+        if(Application::isDebugLevel(DebugLevel::Trace)) {
+            auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
+            Application::debug(DebugType::Rfb, "{}: update time: {}us", NS_FuncNameV, dt.count());
+        }
+
+        clientRecvFBUpdateEvent();
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmAwait(const XCB::Region & reg) {
+        Application::info("{}: success", NS_FuncNameV);
+
+        co_await send_lock_.async_lock();
+        uint32_t type = co_await socket->async_recv_be32();
+
+        // type 0: handshake part
+        if(type == 0) {
+            // ltsm 1.1 ver: flags
+            // ltsm 2.1 ver: version
+            serverLtsmVersion = co_await socket->async_recv_be32();
+
+            asio::post(socket->socket().get_executor(),
+                std::bind(&ClientDecoder::clientRecvLtsmHandshakeEvent, this, 0 /* flags */));
+        }
+        // type 1: data part
+        else if(type == 1) {
+            // type: LTSM version
+            auto len = co_await socket->async_recv_be32();
+            auto buf = co_await socket->async_recv_buf<BinaryBuf>(len);
+
+            asio::post(socket->socket().get_executor(),
+                std::bind(&ClientDecoder::clientRecvLtsmDataEvent, this, std::move(buf)));
+        } else {
+            Application::error("{}: unknown type: {}", NS_FuncNameV, type);
+            throw rfb_error(NS_FuncNameS);
+        }
+        send_lock_.unlock();
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingLastRectAwait(const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmCursorAwait(const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+
+        uint32_t cursorId, rawsz;
+        BinaryBuf buf;
+
+        co_await send_lock_.async_lock();
+        co_await socket->async_recv_values(cursorId, rawsz);
+
+        endian::big_to_native_inplace(cursorId);
+        endian::big_to_native_inplace(rawsz);
+
+        if(rawsz) {
+            auto zipsz = co_await socket->async_recv_be32();
+
+            if(zipsz) {
+                auto zip = co_await socket->async_recv_buf<BinaryBuf>(zipsz);
+                buf = Tools::zlibUncompress(zip, rawsz);
+            } else {
+                buf = co_await socket->async_recv_buf<BinaryBuf>(rawsz);
+            }
+        }
+        send_lock_.unlock();
+
+        clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingRichCursorAwait(const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+        const auto bufsz = static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel();
+        const auto masksz = std::floor((static_cast<size_t>(reg.width) + 7) / 8) * reg.height;
+
+        co_await send_lock_.async_lock();
+        auto buf = co_await socket->async_recv_buf<BinaryBuf>(bufsz);
+        auto mask = co_await socket->async_recv_buf<BinaryBuf>(masksz);
+        send_lock_.unlock();
+
+        Application::trace(DebugType::Rfb, "{}: bufsz: {}, masksz: {}", NS_FuncNameV, buf.size(), mask.size());
+        clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size & sz) {
+        Application::info("{}: status: {}, error: {}, size: {}", NS_FuncNameV, status, err, sz);
+
+        co_await send_lock_.async_lock();
+        uint8_t numOfScreens = co_await socket->async_recv_byte();
+        const auto bufsz = static_cast<uint32_t>(numOfScreens) *
+            (sizeof(uint32_t) /* screen id */ + 8 /* region */ + sizeof(uint32_t) /* flags */);
+        auto buf = co_await socket->async_recv_buf<BinaryBuf>(bufsz);
+        send_lock_.unlock();
+
+        StreamBufRef sb(buf.data(), buf.size());
+        std::vector<RFB::ScreenInfo> screens(numOfScreens);
+
+        for(auto & screen : screens) {
+            screen.id = sb.readIntBE32();
+            auto posx = sb.readIntBE16();
+            auto posy = sb.readIntBE16();
+            screen.width = sb.readIntBE16();
+            screen.height = sb.readIntBE16();
+            auto flags = sb.readIntBE32();
+
+            Application::debug(DebugType::Rfb, "{}: screen: {}, area: {}, flags: {:#010x}",
+                               NS_FuncNameV, screen.id, XCB::Region(posx, posy, screen.width, screen.height), flags);
+        }
+
+        clientRecvDecodingDesktopSizeEvent(status, err, sz, screens);
+        co_return;
     }
 
 #endif
@@ -1223,7 +1422,7 @@ namespace LTSM {
             // type: LTSM version
             auto len = recvIntBE32();
             auto buf = recvData(len);
-            clientRecvLtsmDataEvent(buf);
+            clientRecvLtsmDataEvent(std::move(buf));
         } else {
             Application::error("{}: unknown type: {}", NS_FuncNameV, type);
             throw rfb_error(NS_FuncNameS);

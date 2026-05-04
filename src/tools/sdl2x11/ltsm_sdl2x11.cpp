@@ -298,7 +298,7 @@ namespace LTSM {
                     throw system::system_error(asio::error::operation_aborted);
                 }
 
-                auto tx = createTexture(damage_.toSize(), format);
+                auto tx = createTexture(damage_.toSize(), SDL_TEXTUREACCESS_STATIC, format);
                 tx.updateRect(nullptr, reply->data(), damage_.width * bytePerPixel + alignRowBytes);
 
                 renderTexture(tx.get(), nullptr, nullptr, & dstrt);

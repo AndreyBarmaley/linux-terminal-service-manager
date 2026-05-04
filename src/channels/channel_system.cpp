@@ -963,6 +963,21 @@ void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, int flags,
                         push("id", channel).flush());
 }
 
+#ifdef LTSM_WITH_BOOST
+void LTSM::ChannelClient::recvLtsmProto(uint8_t channel, std::vector<uint8_t> && buf)
+{
+    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
+
+    if(channelDebug == channel) {
+        auto str = Tools::hexString(buf, 2);
+        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, buf.size(), str);
+    }
+
+    recvLtsmEvent(channel, std::move(buf));
+}
+#endif
+
 void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
     int version = ns.recvInt8();
 

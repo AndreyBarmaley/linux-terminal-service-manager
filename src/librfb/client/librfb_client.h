@@ -91,6 +91,15 @@ namespace LTSM {
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
             boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, const XCB::Region &);
+
+            boost::asio::awaitable<void> recvLtsmProtoAwait(void);
+
+            boost::asio::awaitable<void> recvFBUpdateEventAwait(void);
+            boost::asio::awaitable<void> recvDecodingLtsmAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingLastRectAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingLtsmCursorAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingRichCursorAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
 #endif
             void sendPixelFormat(void);
             void sendEncodings(const std::list<int> &);
@@ -144,7 +153,7 @@ namespace LTSM {
 
             // client decoder events
             virtual void clientRecvLtsmHandshakeEvent(int flags) { /* empty */ }
-            virtual void clientRecvLtsmDataEvent(const std::vector<uint8_t> &) { /* empty */ }
+            virtual void clientRecvLtsmDataEvent(std::vector<uint8_t>) { /* empty */ }
 
             virtual void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                     const std::vector<RFB::ScreenInfo> &) { /* empty */ }
