@@ -782,7 +782,10 @@ namespace LTSM {
         } catch(const system::system_error& err) {
             if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                 Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
             }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             asio::post(ioc(), std::bind(&ClientApp::stop, this));
         }
     }
@@ -811,6 +814,7 @@ namespace LTSM {
             for(;;) {
                 if(auto err = XCB::RootDisplay::hasError()) {
                     Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
                     throw system::system_error(asio::error::operation_aborted);
                 }
 
@@ -828,7 +832,10 @@ namespace LTSM {
         } catch(const system::system_error& err) {
             if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                 Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
             }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             asio::post(ioc(), std::bind(&ClientApp::stop, this));
         }
 
@@ -854,10 +861,12 @@ namespace LTSM {
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "rfbMessagesLoopAwait", ec.message(), ec.value());
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 }
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "rfbMessagesLoopAwait", err.what());
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
             }
-            co_return;
         }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
 
 #ifdef __UNIX__

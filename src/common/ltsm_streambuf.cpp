@@ -453,7 +453,7 @@ namespace LTSM {
 
     /* StreamBuf */
     StreamBuf::StreamBuf(size_t reserve) {
-        vec.reserve(reserve);
+        vec.reserve(Tools::alignUp(reserve, 8));
         it = vec.begin();
     }
 
