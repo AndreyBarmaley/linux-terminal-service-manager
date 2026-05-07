@@ -784,6 +784,9 @@ namespace LTSM {
                 Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
             asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", "rfbMessagesLoopAwait", err.what());
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
         }
     }
 
@@ -830,6 +833,9 @@ namespace LTSM {
                 Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
             asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
         }
 
         sd.release();
@@ -855,6 +861,9 @@ namespace LTSM {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "rfbMessagesLoopAwait", ec.message(), ec.value());
                 }
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "rfbMessagesLoopAwait", err.what());
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
             }
             co_return;

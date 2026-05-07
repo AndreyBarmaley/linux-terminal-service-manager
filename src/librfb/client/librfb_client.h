@@ -104,15 +104,16 @@ namespace LTSM {
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
             boost::asio::awaitable<void> recvFBUpdateEventAwait(void);
+            boost::asio::awaitable<void> recvColorMapEventAwait(void);
+            boost::asio::awaitable<void> recvBellEventAwait(void);
+            boost::asio::awaitable<void> recvCutTextEventAwait(void);
+            boost::asio::awaitable<void> recvContinuousUpdatesEventAwait(void);
+
             boost::asio::awaitable<void> recvDecodingLtsmAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingLastRectAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingLtsmCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingRichCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
-            boost::asio::awaitable<void> recvColorMapEventAwait(void);
-            boost::asio::awaitable<void> recvBellEventAwait(void);
-            boost::asio::awaitable<void> recvCutTextEventAwait(void);
-            boost::asio::awaitable<void> recvContinuousUpdatesEventAwait(void);
 #else
             void sendPixelFormat(void);
             void sendEncodings(const std::list<int> &);
@@ -142,7 +143,7 @@ namespace LTSM {
             }
 
             bool socketConnect(std::string_view host, uint16_t port);
-            void updateRegion(int type, const XCB::Region &);
+            void recvDecodingUpdateRegion(int type, const XCB::Region &);
             bool isClientFFmpegEncoding(void) const;
 
           public:

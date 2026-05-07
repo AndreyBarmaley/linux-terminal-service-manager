@@ -572,8 +572,11 @@ namespace LTSM {
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
         Application::info("{}: !!! start", NS_FuncNameV);
-        auto len = cli.recvIntBE32();
+        size_t len = cli.recvIntBE32();
         Application::info("{}: !!! size: {}", NS_FuncNameV, len);
+        if(len > 10000000){
+            throw std::runtime_error("!!!!! 10000000");
+        }
         auto buf = cli.recvData(len);
         Application::info("{}: !!! buf: {}", NS_FuncNameV, len);
 
