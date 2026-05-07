@@ -33,7 +33,7 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
-    RFB::WinClient::WinClient(boost::asio::io_context& ctx) : ClientDecoder(ctx) {
+    RFB::WinClient::WinClient(const boost::asio::any_io_executor& ctx) : ClientDecoder(ctx) {
     }
 
     void RFB::WinClient::extClipboardSendEvent(const std::vector<uint8_t> & buf) {

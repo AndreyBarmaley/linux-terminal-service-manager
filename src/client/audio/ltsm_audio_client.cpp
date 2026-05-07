@@ -226,7 +226,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! format) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
         return false;
     }
 
@@ -249,7 +249,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! player) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
         return false;
     }
 
@@ -259,7 +259,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     reply.writeIntLE16(AudioOp::ProtoVer);
     // encoding type
     reply.writeIntLE16(format->type);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 

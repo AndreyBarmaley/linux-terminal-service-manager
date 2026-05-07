@@ -37,27 +37,30 @@ namespace LTSM {
     namespace RFB {
         /* ClientDecoder */
         class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
-            PixelFormat serverPf;
 
-            mutable async_mutex send_lock_;
-            std::unique_ptr<AsioTls::AsyncStream> socket; /// socket layer
-            //boost::asio::strand<boost::asio::any_io_executor> send_order_;
+            boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+            boost::asio::steady_timer incr_update_timer_;
 
-            std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
-            std::unique_ptr<DecodingBase> decoder;
+            mutable async_mutex socket_lock_;
+            std::unique_ptr<AsioTls::AsyncStream> socket_; /// socket layer
+            std::unique_ptr<DecodingBase> decoder_;
 
-            NetworkStream* streamIn;
-            NetworkStream* streamOut;
+            NetworkStream* stream_in_;
+            NetworkStream* stream_out_;
 
             std::atomic<bool> rfbMessages{true};
-            std::mutex sendLock;
 
-            bool serverTrueColor = true;
-            bool serverBigEndian = false;
+#ifndef LTSM_WITH_BOOST
+            std::mutex send_lock_;
+#endif
+
+            PixelFormat server_pf_;
+            int server_ltsm_version_ = 0;
+            bool server_true_color_ = true;
+            bool server_big_endian_ = false;
+
             bool continueUpdatesSupport = false;
             bool continueUpdatesProcessed = false;
-
-            int serverLtsmVersion = 0;
 
           protected:
             friend class DecodingRaw;
@@ -66,6 +69,8 @@ namespace LTSM {
             friend class DecodingTRLE;
             friend class DecodingZlib;
             friend class DecodingFFmpeg;
+
+            inline const boost::asio::strand<boost::asio::any_io_executor> & rfb_strand(void) const { return rfb_strand_; }
 
             // network stream interface
             void sendFlush(void) override;
@@ -91,63 +96,82 @@ namespace LTSM {
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
             boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, const XCB::Region &);
+            boost::asio::awaitable<void> sendSetDesktopSizeAwait(const XCB::Size &);
+            boost::asio::awaitable<void> sendCutTextEventAwait(std::span<const uint8_t>, bool ext);
+            boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>);
+
+            boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
-
             boost::asio::awaitable<void> recvFBUpdateEventAwait(void);
             boost::asio::awaitable<void> recvDecodingLtsmAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingLastRectAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingLtsmCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingRichCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
-#endif
+            boost::asio::awaitable<void> recvColorMapEventAwait(void);
+            boost::asio::awaitable<void> recvBellEventAwait(void);
+            boost::asio::awaitable<void> recvCutTextEventAwait(void);
+            boost::asio::awaitable<void> recvContinuousUpdatesEventAwait(void);
+#else
             void sendPixelFormat(void);
             void sendEncodings(const std::list<int> &);
             void sendFrameBufferUpdate(bool incr);
             void sendFrameBufferUpdate(const XCB::Region &, bool incr);
-            void sendSetDesktopSize(const XCB::Size &);
             void sendContinuousUpdates(bool enable, const XCB::Region &);
+            void sendSetDesktopSize(const XCB::Size &);
+            void sendLtsmChannel(uint8_t channel, std::span<const uint8_t>);
+            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
 
+            void recvLtsmProto(void);
             void recvFBUpdateEvent(void);
-            void recvColorMapEvent(void);
-            void recvBellEvent(void);
-            void recvCutTextEvent(void);
-            void recvContinuousUpdatesEvent(void);
-
             void recvDecodingLtsm(const XCB::Region &);
-            void recvChannelSystem(const std::vector<uint8_t> &) override;
-            bool isUserSession(void) const override {
-                return true;
-            }
-
             void recvDecodingLastRect(const XCB::Region &);
             void recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
             void recvDecodingRichCursor(const XCB::Region &);
             void recvDecodingLtsmCursor(const XCB::Region &);
+            void recvColorMapEvent(void);
+            void recvBellEvent(void);
+            void recvCutTextEvent(void);
+            void recvContinuousUpdatesEvent(void);
+#endif
+
+            void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
+            bool isUserSession(void) const override {
+                return true;
+            }
 
             bool socketConnect(std::string_view host, uint16_t port);
             void updateRegion(int type, const XCB::Region &);
             bool isClientFFmpegEncoding(void) const;
 
           public:
-            ClientDecoder(boost::asio::io_context&);
+            ClientDecoder(const boost::asio::any_io_executor&);
 
             bool rfbHandshake(const SecurityInfo &);
-            bool rfbMessagesRunning(void) const;
+
+            inline bool rfbMessagesRunning(void) const {
+                return !!rfbMessages;
+            }
 
 #ifdef LTSM_WITH_BOOST
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
-#endif
+            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym);
+            boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy);
+#else
             void rfbMessagesLoop(void);
+            void sendKeyEvent(bool pressed, uint32_t keysym);
+            void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
+#endif
+
+            void sendCutText(std::span<const uint8_t>, bool ext);
 
             void rfbMessagesShutdown(void);
             bool isContinueUpdatesSupport(void) const;
             bool isContinueUpdatesProcessed(void) const;
 
-            void sendKeyEvent(bool pressed, uint32_t keysym);
-            void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
-            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
-            void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) override;
+            void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override;
+            void sendLtsmChannelData(uint8_t channel, std::string&&) override;
 
             static std::list<int> supportedEncodings(bool extclip = false);
 
@@ -172,7 +196,7 @@ namespace LTSM {
             }
 
             inline int remoteLtsmVersion(void) const {
-                return serverLtsmVersion;
+                return server_ltsm_version_;
             }
 
             virtual uint32_t frameRateOption(void) const { return 16; }

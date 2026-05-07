@@ -81,13 +81,16 @@ namespace LTSM {
             }
 
             void closeSocket(void) {
-                boost::system::error_code ec;
+                if(auto& sock = ssl_stream().lowest_layer(); sock.is_open()) {
+                    boost::system::error_code ec;
+                    sock.cancel(ec);
 
-                if(ssl_connected) {
-                    ssl_stream().shutdown(ec);
+                    if(ssl_connected) {
+                        ssl_stream().shutdown(ec);
+                    }
+
+                    sock.close(ec);
                 }
-
-                ssl_stream().lowest_layer().close(ec);
             }
 
             void setCipherSuite(const char* list) {

@@ -574,7 +574,7 @@ namespace LTSM {
                 }
 
                 try {
-                    recvLtsmProto(*this);
+                    recvLtsmProto();
                     continue;
                 } catch(const std::exception & err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -622,6 +622,27 @@ namespace LTSM {
                     break;
             }
         }
+    }
+
+    void RFB::ServerEncoder::recvLtsmProto(void) {
+        int version = recvInt8();
+
+        if(version != LtsmProtocolVersion) {
+            Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
+            throw channel_error(NS_FuncNameS);
+        }
+        
+        auto channel = recvInt8();
+        auto length = recvIntBE16();
+        auto buf = recvData(length);
+
+        if(channelDebug == channel) {
+            auto str = Tools::hexString(buf, 2);
+            Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, length, str);
+        }
+
+        ChannelListener::recvLtsmEvent(channel, std::move(buf));
     }
 
     void RFB::ServerEncoder::recvPixelFormat(void) {
@@ -756,7 +777,7 @@ namespace LTSM {
                                      ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
 
             ExtClip::remoteExtClipTypeTextSz = 20 * 1024 * 1024;
-            sendExtClipboardCaps();
+            sendExtClipboardCapsEvent();
         }
 
         serverRecvSetEncodingsEvent(recvEncodings);
@@ -817,7 +838,7 @@ namespace LTSM {
             }
 
             auto buffer = recvData(std::abs(length));
-            recvExtClipboardCaps(StreamBuf(std::move(buffer)));
+            recvExtClipboardCapsEvent(std::move(buffer));
         }
     }
 
@@ -1289,13 +1310,50 @@ namespace LTSM {
                 encoder->getType() == RFB::ENCODING_LTSM_AV1 || encoder->getType() == RFB::ENCODING_LTSM_VP8);
     }
 
-    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::span<const uint8_t> buf) {
-        if(clientLtsmSupported) {
-            sendLtsmProto(*this, sendLock, channel, buf);
+    void RFB::ServerEncoder::sendLtsmChannel(uint8_t channel, std::span<const uint8_t> buf) {
+        if(! clientLtsmSupported) {
+            return;
         }
+
+        Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
+
+        if(buf.empty()) {
+            Application::warning("{}: empty data", NS_FuncNameV);
+            return;
+        }
+
+        assert(0xFFFF >= buf.size());
+
+        const std::scoped_lock guard{sendLock};
+        sendInt8(RFB::PROTOCOL_LTSM);
+
+        // version
+        sendInt8(LtsmProtocolVersion);
+        //channel
+        sendInt8(channel);
+
+        // data
+        sendIntBE16(buf.size());
+
+        if(channelDebug == channel) {
+            auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
+            Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, buf.size(), str);
+        }
+
+        sendRaw(buf.data(), buf.size());
+        sendFlush();
     }
 
-    void RFB::ServerEncoder::recvChannelSystem(const std::vector<uint8_t> & buf) {
+    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {
+        sendLtsmChannel(channel, buf);
+    }
+
+    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::string&& buf) {
+        sendLtsmChannel(channel, { (const uint8_t*) buf.data(), buf.size() });
+    }
+
+    void RFB::ServerEncoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {
         JsonContent jc;
         jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
 

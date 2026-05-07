@@ -329,7 +329,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
         replyWriteShareRootInfo(reply, shareRoot);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -376,7 +376,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -407,7 +407,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 */
@@ -456,7 +456,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
         reply.writeIntLE32(ret);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -489,7 +489,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
         opens.remove(fdh);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -521,7 +521,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.writeIntLE32(error);
         Application::error("{}: {} failed, error: {}, code: {}, offset: {}",
                            NS_FuncNameV, "lseek", strerror(error), error, offset);
-        owner->sendLtsmChannelData(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
         return true;
     }
 
@@ -552,6 +552,6 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.write(buf);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }

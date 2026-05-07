@@ -119,7 +119,7 @@ namespace LTSM {
             size_t hasData(void) const override;
 
             // channel listenner interface
-            void recvChannelSystem(const std::vector<uint8_t> &) override;
+            void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
 
             //
             std::string serverEncryptionInfo(void) const;
@@ -153,6 +153,7 @@ namespace LTSM {
                 return true;
             }
 
+            void recvLtsmProto(void);
             void recvPixelFormat(void);
             void recvSetEncodings(void);
             void recvKeyCode(void);
@@ -185,7 +186,9 @@ namespace LTSM {
             void sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
             void sendEncodingLtsmData(std::span<const uint8_t>);
-            void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) override final;
+            void sendLtsmChannel(uint8_t channel, std::span<const uint8_t>);
+            void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override final;
+            void sendLtsmChannelData(uint8_t channel, std::string&&) override final;
 
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);

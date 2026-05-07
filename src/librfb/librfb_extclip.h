@@ -114,8 +114,8 @@ namespace LTSM {
             ExtClip() = default;
             virtual ~ExtClip() = default;
 
-            void sendExtClipboardCaps(void);
-            void recvExtClipboardCaps(StreamBuf &&);
+            void sendExtClipboardCapsEvent(void);
+            void recvExtClipboardCapsEvent(std::vector<uint8_t> &&);
 
             void setExtClipboardRemoteCaps(int);
             int extClipboardRemoteCaps(void) const;

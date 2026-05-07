@@ -41,7 +41,7 @@ namespace LTSM {
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
-        : Application("ltsm_vnc2image"), ClientDecoder(ioc_) {
+        : Application("ltsm_vnc2image"), ClientDecoder(ioc_.get_executor()) {
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 
@@ -88,7 +88,12 @@ namespace LTSM {
         // process rfb message background
         try {
             if(rfbHandshake(rfbsec)) {
+#ifdef LTSM_WITH_BOOST
+                auto res = boost::asio::co_spawn(ioc_, rfbMessagesLoopAwait(), boost::asio::use_future);
+                res.wait();
+#else
                 rfbMessagesLoop();
+#endif
             }
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());

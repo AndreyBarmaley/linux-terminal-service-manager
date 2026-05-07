@@ -316,7 +316,7 @@ void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&
     }
 
     if(channel == static_cast<uint8_t>(ChannelType::System)) {
-        recvChannelSystem(buf);
+        recvChannelSystemEvent(buf);
     } else {
         recvChannelData(channel, std::move(buf));
     }
@@ -963,7 +963,6 @@ void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, int flags,
                         push("id", channel).flush());
 }
 
-#ifdef LTSM_WITH_BOOST
 void LTSM::ChannelClient::recvLtsmProto(uint8_t channel, std::vector<uint8_t> && buf)
 {
     Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
@@ -975,62 +974,6 @@ void LTSM::ChannelClient::recvLtsmProto(uint8_t channel, std::vector<uint8_t> &&
     }
 
     recvLtsmEvent(channel, std::move(buf));
-}
-#endif
-
-void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
-    int version = ns.recvInt8();
-
-    if(version != LtsmProtocolVersion) {
-        Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
-        throw channel_error(NS_FuncNameS);
-    }
-
-    auto channel = ns.recvInt8();
-    auto length = ns.recvIntBE16();
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, length);
-
-    auto buf = ns.recvData(length);
-
-    if(channelDebug == channel) {
-        auto str = Tools::hexString(buf, 2);
-        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           NS_FuncNameV, channel, length, str);
-    }
-
-    recvLtsmEvent(channel, std::move(buf));
-}
-
-void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLock,
-                                        uint8_t channel, std::span<const uint8_t> buf) {
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
-
-    if(buf.empty()) {
-        Application::warning("{}: empty data", NS_FuncNameV);
-        return;
-    }
-
-    assert(0xFFFF >= buf.size());
-
-    const std::scoped_lock guard{sendLock};
-    ns.sendInt8(RFB::PROTOCOL_LTSM);
-
-    // version
-    ns.sendInt8(LtsmProtocolVersion);
-    //channel
-    ns.sendInt8(channel);
-
-    // data
-    ns.sendIntBE16(buf.size());
-
-    if(channelDebug == channel) {
-        auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
-        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           NS_FuncNameV, channel, buf.size(), str);
-    }
-
-    ns.sendRaw(buf.data(), buf.size());
-    ns.sendFlush();
 }
 
 void LTSM::ChannelClient::setChannelDebug(const uint8_t & channel, const bool & debug) {
@@ -1483,7 +1426,7 @@ void LTSM::Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
             continue;
         } else {
             auto & buf = st->getBuf();
-            owner->sendLtsmChannelData(st->cid(), buf);
+            owner->sendLtsmChannelData(st->cid(), std::move(buf));
         }
     }
 

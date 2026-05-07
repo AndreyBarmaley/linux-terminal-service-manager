@@ -34,7 +34,7 @@ using namespace std::chrono_literals;
 using namespace boost;
 
 namespace LTSM {
-    RFB::X11Client::X11Client(asio::io_context & ctx) : ClientDecoder(ctx) {
+    RFB::X11Client::X11Client(const asio::any_io_executor& ctx) : ClientDecoder(ctx) {
         if(! displayConnect(-1,
                             XCB::InitModules::Xkb | XCB::InitModules::SelCopy | XCB::InitModules::SelPaste, nullptr)) {
             throw xcb_error(NS_FuncNameS);
@@ -43,7 +43,7 @@ namespace LTSM {
 
     void RFB::X11Client::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        sendCutTextEvent(buf, true);
+        sendCutText(buf, true);
     }
 
     uint16_t RFB::X11Client::extClipboardLocalTypes(void) const {
@@ -122,7 +122,7 @@ namespace LTSM {
                 const std::scoped_lock guard{ clientLock };
                 ptr->clientClipboard.assign(buf.begin(), buf.end());
             } else {
-                ptr->sendCutTextEvent(buf, false);
+                ptr->sendCutText(buf, false);
             }
         }
     }

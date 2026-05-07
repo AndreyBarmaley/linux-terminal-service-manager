@@ -22,6 +22,10 @@
 
 #include <algorithm>
 
+#ifdef LTSM_WITH_BOOST
+#include <boost/asio/post.hpp>
+#endif
+
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "librfb_decodings.h"
@@ -130,16 +134,16 @@ namespace LTSM {
     }
 
     // DecodingBase
-    RFB::DecodingBase::DecodingBase(int v) : type(v) {
-        Application::info("{}: init decoding: {}", NS_FuncNameV, encodingName(type));
+    RFB::DecodingBase::DecodingBase(int v) : type_(v) {
+        Application::info("{}: init decoding: {}", NS_FuncNameV, encodingName(type_));
     }
 
-    int RFB::DecodingBase::getType(void) const {
-        return type;
+    int RFB::DecodingBase::type(void) const {
+        return type_;
     }
 
     void RFB::DecodingBase::setThreads(int v) {
-        threads = v;
+        threads_ = v;
     }
 
     void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
@@ -478,7 +482,7 @@ namespace LTSM {
             cli->updateRawPixels(reg, std::move(bb), pitch, cli->serverFormat());
         };
 
-        if(1 < threads) {
+        if(1 < threads()) {
             jobs.emplace_back(runJob, rawsz, pitch, std::move(lz4buf), reg, & cli);
         } else {
             runJob(rawsz, pitch, std::move(lz4buf), reg, & cli);
@@ -544,7 +548,7 @@ namespace LTSM {
             }
         };
 
-        if(1 < threads) {
+        if(1 < threads()) {
             jobs.emplace_back(runJob, std::move(jpgbuf), reg, & cli);
         } else {
             runJob(std::move(jpgbuf), reg, & cli);
@@ -567,34 +571,47 @@ namespace LTSM {
     void RFB::DecodingQOI::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
+        Application::info("{}: !!! start", NS_FuncNameV);
         auto len = cli.recvIntBE32();
+        Application::info("{}: !!! size: {}", NS_FuncNameV, len);
         auto buf = cli.recvData(len);
+        Application::info("{}: !!! buf: {}", NS_FuncNameV, len);
 
-        auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
-        auto rawsz = pitch * reg.height;
+        uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
+        uint32_t rawsz = pitch * reg.height;
 
-        auto runJob = [this](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli) {
-            auto bb = this->decodeBGRx(buf, reg.toSize(), cli->serverFormat(), pitch);
+        auto runJob = [this, pitch, rawsz, reg, buf = std::move(buf), st = &cli]() {
+            auto bb = this->decodeBGRx(buf, reg.toSize(), st->serverFormat(), pitch);
             assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
 
-            cli->updateRawPixels(reg, std::move(bb), pitch, cli->serverFormat());
+            st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
         };
 
-        if(1 < threads) {
-            jobs.emplace_back(runJob, rawsz, pitch, std::move(buf), reg, & cli);
+        if(1 < threads()) {
+#ifdef LTSM_WITH_BOOST
+            boost::asio::post(jobs_, std::move(runJob));
+#else
+            jobs_.emplace_back(std::move(runJob));
+#endif
         } else {
-            runJob(rawsz, pitch, std::move(buf), reg, & cli);
+            runJob();
         }
     }
 
     void RFB::DecodingQOI::waitUpdateComplete(void) {
-        for(auto & job : jobs) {
+#ifdef LTSM_WITH_BOOST
+        Application::info("{}: !!! wait", NS_FuncNameV);
+        jobs_.wait();
+        Application::info("{}: !!! complete", NS_FuncNameV);
+#else
+        for(auto & job : jobs_) {
             if(job.joinable()) {
                 job.join();
             }
         }
 
-        jobs.clear();
+        jobs_.clear();
+#endif
     }
 
     namespace QOI {

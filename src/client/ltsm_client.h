@@ -53,13 +53,15 @@ namespace LTSM {
     };
 
     class BoostContext {
-        const int concurency_ = std::thread::hardware_concurrency();
-        boost::asio::io_context ioc_{concurency_ < 4 ? concurency_ : 4};
+        const int concurency_ = 2;
+        boost::asio::io_context ioc_{concurency_};
 
-        protected:
+      protected:
         inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline size_t concurency(void) const { return concurency_; }
+        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 
-        public:
+      public:
         BoostContext() = default;
         ~BoostContext() = default;
     };
@@ -72,7 +74,6 @@ namespace LTSM {
 #endif
     {
         boost::asio::signal_set signals_;
-        boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
         boost::asio::cancellation_signal rfb_cancel_;
         boost::asio::strand<boost::asio::any_io_executor> sdl_strand_;
         boost::asio::cancellation_signal sdl_cancel_;

@@ -175,6 +175,10 @@ namespace LTSM {
                 return delay;
             }
 
+            std::vector<uint8_t> & getBuf(void) {
+                return buf;
+            }
+
             const std::vector<uint8_t> & getBuf(void) const {
                 return buf;
             }
@@ -569,13 +573,8 @@ namespace LTSM {
         Channel::Planned* findPlanned(uint8_t);
         bool channelPlannedCreate(uint8_t, const Channel::Planned &);
 
-#ifdef LTSM_WITH_BOOST
         void recvLtsmProto(uint8_t channel, std::vector<uint8_t> &&);
-#endif
-        void recvLtsmProto(const NetworkStream &);
-        void sendLtsmProto(NetworkStream &, std::mutex &, uint8_t channel, std::span<const uint8_t>);
-
-        virtual void recvChannelSystem(const std::vector<uint8_t> &) = 0;
+        virtual void recvChannelSystemEvent(const std::vector<uint8_t> &) = 0;
         void recvChannelData(uint8_t channel, std::vector<uint8_t> &&);
 
         virtual bool isUserSession(void) const {
@@ -637,7 +636,8 @@ namespace LTSM {
 
         void recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
 
-        virtual void sendLtsmChannelData(uint8_t channel, std::span<const uint8_t>) = 0;
+        virtual void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) = 0;
+        virtual void sendLtsmChannelData(uint8_t channel, std::string&&) = 0;
 
         virtual bool serverSide(void) const {
             return false;
@@ -649,10 +649,6 @@ namespace LTSM {
 
         virtual const char* pkcs11Library(void) const {
             return nullptr;
-        }
-
-        inline void sendLtsmChannelData(uint8_t channel, std::string_view str) {
-            sendLtsmChannelData(channel, std::span<const uint8_t>{(const uint8_t*) str.data(), str.size()});
         }
     };
 

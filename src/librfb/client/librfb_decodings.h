@@ -30,6 +30,10 @@
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 
+#ifdef LTSM_WITH_BOOST
+#include <boost/asio/thread_pool.hpp>
+#endif
+
 namespace LTSM {
     namespace RFB {
         /// DecoderStream
@@ -131,9 +135,8 @@ namespace LTSM {
 
         /// DecodingBase
         class DecodingBase {
-          protected:
-            const int type = 0;
-            int threads = 4;
+            const int type_ = 0;
+            uint32_t threads_ = 4;
 
           public:
             DecodingBase(int v);
@@ -144,7 +147,8 @@ namespace LTSM {
 
             virtual void waitUpdateComplete(void) { /* empty */ }
 
-            int getType(void) const;
+            int type(void) const;
+            size_t threads(void) const { return threads_; }
             void setThreads(int);
         };
 
@@ -164,7 +168,7 @@ namespace LTSM {
             DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
             bool isCoRRE(void) const {
-                return getType() == ENCODING_CORRE;
+                return type() == ENCODING_CORRE;
             }
         };
 
@@ -182,7 +186,7 @@ namespace LTSM {
             DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
             bool isZlibHex(void) const {
-                return getType() == ENCODING_ZLIBHEX;
+                return type() == ENCODING_ZLIBHEX;
             }
         };
 
@@ -199,7 +203,7 @@ namespace LTSM {
             DecodingTRLE(bool zlib);
 
             bool isZRLE(void) const {
-                return getType() == ENCODING_ZRLE;
+                return type() == ENCODING_ZRLE;
             }
         };
 
@@ -242,7 +246,12 @@ namespace LTSM {
 #ifdef LTSM_DECODING_QOI
         /// DecodingQOI
         class DecodingQOI : public DecodingBase {
-            std::list<std::thread> jobs;
+
+#ifdef LTSM_WITH_BOOST
+            boost::asio::thread_pool jobs_;
+#else
+            std::list<std::thread> jobs_;
+#endif
 
           protected:
             BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, const PixelFormat &, uint32_t pitch) const;
@@ -251,7 +260,11 @@ namespace LTSM {
             void updateRegion(DecoderStream &, const XCB::Region &) override;
             void waitUpdateComplete(void) override;
 
+#ifdef LTSM_WITH_BOOST
+            DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI), jobs_{threads()} {}
+#else
             DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI) {}
+#endif
         };
 #endif
 #endif

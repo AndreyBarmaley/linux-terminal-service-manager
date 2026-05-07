@@ -66,7 +66,7 @@ namespace LTSM {
             void xcbDisplayConnectedEvent(void) override;
 
           public:
-            X11Client(boost::asio::io_context&);
+            X11Client(const boost::asio::any_io_executor&);
         };
     }
 }
