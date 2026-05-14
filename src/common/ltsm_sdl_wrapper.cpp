@@ -87,6 +87,9 @@ namespace LTSM {
 
     void SDL::Window::resize(const XCB::Size & rsz, const XCB::Size & wsz) {
 
+        display_.reset();
+        renderer_.reset();
+
         assertm(!! window_.get(), "invalid window");
 
         render_sz_.width = std::max(rsz.width, static_cast<uint16_t>(640));
@@ -98,10 +101,9 @@ namespace LTSM {
         Application::debug(DebugType::Sdl, "{}: render size: {}, window size: {}", NS_FuncNameV, render_sz_, window_sz_);
         SDL_SetWindowSize(window_.get(), window_sz_.width, window_sz_.height);
 
-        display_.reset();
         renderer_.reset(SDL_CreateRenderer(window_.get(), -1, (accel_ ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE)));
 
-        if(accel_ && ! renderer_) {
+        if(! renderer_ && accel_) {
             accel_ = false;
             renderer_.reset(SDL_CreateRenderer(window_.get(), -1, SDL_RENDERER_SOFTWARE));
             Application::warning("{}: {} hardware accel failed, switch to software", NS_FuncNameV, "SDL_CreateRenderer");

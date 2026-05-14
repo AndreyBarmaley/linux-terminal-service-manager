@@ -572,14 +572,8 @@ namespace LTSM {
     void RFB::DecodingQOI::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
-        Application::info("{}: !!! start", NS_FuncNameV);
         size_t len = cli.recvIntBE32();
-        Application::info("{}: !!! size: {}", NS_FuncNameV, len);
-        if(len > 10000000){
-            throw std::runtime_error("!!!!! 10000000");
-        }
         auto buf = cli.recvData(len);
-        Application::info("{}: !!! buf: {}", NS_FuncNameV, len);
 
         uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
         uint32_t rawsz = pitch * reg.height;
@@ -587,7 +581,6 @@ namespace LTSM {
         auto runJob = [this, pitch, rawsz, reg, buf = std::move(buf), st = &cli]() {
             auto bb = this->decodeBGRx(buf, reg.toSize(), st->serverFormat(), pitch);
             assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
-
             st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
         };
 
@@ -604,9 +597,7 @@ namespace LTSM {
 
     void RFB::DecodingQOI::waitUpdateComplete(void) {
 #ifdef LTSM_WITH_BOOST
-        Application::info("{}: !!! wait", NS_FuncNameV);
         jobs_.wait();
-        Application::info("{}: !!! complete", NS_FuncNameV);
 #else
         for(auto & job : jobs_) {
             if(job.joinable()) {

@@ -75,6 +75,7 @@ namespace LTSM {
     {
         boost::asio::signal_set signals_;
         boost::asio::cancellation_signal rfb_cancel_;
+        boost::asio::io_context sdl_ctx_;
         boost::asio::strand<boost::asio::any_io_executor> sdl_strand_;
         boost::asio::cancellation_signal sdl_cancel_;
 #ifdef __UNIX__
@@ -99,8 +100,8 @@ namespace LTSM {
         int videoEncoding = 0;
         int audioEncoding = 0;
 
-        std::unique_ptr<SDL::Window> window;
-        XCB::Size windowSize;
+        std::unique_ptr<SDL::Window> window_;
+        XCB::Size windowSize_;
 
         std::chrono::time_point<std::chrono::steady_clock> appStart;
         std::atomic<bool> focusLost{false};
@@ -165,6 +166,7 @@ namespace LTSM {
         boost::asio::awaitable<void> sdlDropCompleteEvent(SDL_Event &&);
         boost::asio::awaitable<void> sdlUserEvent(SDL_Event &&);
 
+        void sdlWindowInit(const XCB::Size &);
         void sdlRenderFrame(void) const;
         void stop(void);
 

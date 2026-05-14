@@ -102,6 +102,7 @@ namespace LTSM {
             boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>);
 
             boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
+            boost::asio::awaitable<void> recvFBUpdateRegionAwait(void);
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
             boost::asio::awaitable<void> recvFBUpdateEventAwait(void);
