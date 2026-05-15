@@ -983,7 +983,7 @@ namespace LTSM {
         // format -
         // u8: padding
         // u16: num rects
-        
+
         //co_await socket_lock_.async_lock();
         [[maybe_unused]] const auto pad1 = co_await socket_->async_recv_byte();
         const uint16_t numRects = co_await socket_->async_recv_be16();

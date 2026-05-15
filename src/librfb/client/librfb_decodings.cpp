@@ -579,9 +579,11 @@ namespace LTSM {
         uint32_t rawsz = pitch * reg.height;
 
         auto runJob = [this, pitch, rawsz, reg, buf = std::move(buf), st = &cli]() {
-            auto bb = this->decodeBGRx(buf, reg.toSize(), st->serverFormat(), pitch);
+            active_tasks_.fetch_add(1, std::memory_order_relaxed);
+            auto bb = decodeBGRx(buf, reg.toSize(), st->serverFormat(), pitch);
             assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
             st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
+            active_tasks_.fetch_sub(1, std::memory_order_release);
         };
 
         if(1 < threads()) {
@@ -597,7 +599,9 @@ namespace LTSM {
 
     void RFB::DecodingQOI::waitUpdateComplete(void) {
 #ifdef LTSM_WITH_BOOST
-        jobs_.wait();
+        while(active_tasks_.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
 #else
         for(auto & job : jobs_) {
             if(job.joinable()) {

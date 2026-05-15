@@ -126,6 +126,7 @@ namespace LTSM {
         bool capslockEnable = true;
         bool audioEnable = false;
         bool pcscEnable = false;
+        mutable bool updatePresent = false;
 
       protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;

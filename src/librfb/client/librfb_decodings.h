@@ -249,6 +249,7 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_BOOST
             boost::asio::thread_pool jobs_;
+            std::atomic<uint16_t> active_tasks_{0};
 #else
             std::list<std::thread> jobs_;
 #endif

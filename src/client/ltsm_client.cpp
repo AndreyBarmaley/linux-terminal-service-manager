@@ -791,7 +791,10 @@ namespace LTSM {
     }
 
     void ClientApp::sdlRenderFrame(void) const {
-        window_->renderPresent();
+        if(updatePresent) {
+            window_->renderPresent();
+            updatePresent = false;
+        }
     }
 
     void ClientApp::stop(void) {
@@ -853,7 +856,7 @@ namespace LTSM {
             return -1;
         }
 
-        // clientRecvPixelFormatEvent not received
+        // SDL failed or clientRecvPixelFormatEvent not received
         if(! window_) {
             Application::error("{}: window empty", NS_FuncNameV);
             return -1;
@@ -1190,10 +1193,6 @@ namespace LTSM {
         co_return true;
     }
 
-    void ClientApp::clientRecvFBUpdateEvent(void) {
-        asio::dispatch(sdl_strand_, std::bind(&ClientApp::sdlRenderFrame, this));
-    }
-
     bool ClientApp::pushEventWindowResize(const XCB::Size & nsz) {
 
         if(windowSize_ == nsz) {
@@ -1277,10 +1276,10 @@ namespace LTSM {
     }
 
     void ClientApp::sdlWindowInit(const XCB::Size & wsz) {
-        window_ = std::make_unique<SDL::Window>(windowTitle, wsz, wsz, windowFlags, windowAccel);
-
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
+
+        window_ = std::make_unique<SDL::Window>(windowTitle, wsz, wsz, windowFlags, windowAccel);
 
         if(SDL_TRUE != SDL_PixelFormatEnumToMasks(window_->pixelFormat(), &bpp, &rmask,
                 &gmask, &bmask, &amask)) {
@@ -1314,6 +1313,7 @@ namespace LTSM {
             auto dstrt = SDL_Rect{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
             auto dstcol = SDL_Color{ .r = col.r, .g = col.g, .b = col.b, .a = 255 };
             window_->renderColor(&dstcol, &dstrt);
+            updatePresent = true;
         });
     }
 
@@ -1336,16 +1336,21 @@ namespace LTSM {
 
         // move strand
         asio::dispatch(sdl_strand_, [this, wrt, buf = std::move(buf), pitch, sdlFormat](){
-            //Application::info("{}: !!! rt {}, zero: {}", "updateRawPixels2", rt, std::all_of());
-
             auto tx = window_->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
             tx.updateRect(nullptr, buf.data(), pitch);
             const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
             try {
                 window_->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
+                updatePresent = true;
             } catch(const std::exception& err) {
                 Application::error("{}: {} failed, exception: {}", "updateRawPixels2", err.what());
             }
+        });
+    }
+
+    void ClientApp::clientRecvFBUpdateEvent(void) {
+        asio::dispatch(sdl_strand_, [this](){
+            sdlRenderFrame();
         });
     }
 
@@ -1481,32 +1486,28 @@ namespace LTSM {
 
     void ClientApp::clientRecvLtsmHandshakeEvent(int flags) {
 #ifdef __UNIX__
-        asio::co_spawn(x11_strand_, [this]() -> asio::awaitable<void> {
+        asio::post(x11_strand_, [this]() {
             if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
-                auto names = extXkb->getNames();
-                auto group = extXkb->getLayoutGroup();
                 // switch to rfb_strand
-                co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
-                sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), names,
+                asio::post(rfb_strand(), [this, names=extXkb->getNames(), group=extXkb->getLayoutGroup()]() {
+                    sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), names,
                                   (0 <= group && group < names.size() ? names[group] : ""));
+                });
             }
-            co_return;
-        }, asio::detached);
+        });
 #else
-        asio::co_spawn(rfb_strand(), [this]() -> asio::awaitable<void> {
+        asio::post(rfb_strand(), [this]() {
             sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), {}, "");
-            co_return;
-        }, asio::detached);
+        });
 #endif
     }
 
 #ifdef __UNIX__
     void ClientApp::xcbXkbGroupChangedEvent(int group) {
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb) {
-            asio::co_spawn(rfb_strand(), [this, names = extXkb->getNames(), group]() -> asio::awaitable<void> {
+            asio::post(rfb_strand(), [this, names = extXkb->getNames(), group]() {
                 sendSystemKeyboardChange(names, group);
-                co_return;
-            }, asio::detached);
+            });
         }
     }
 #endif
