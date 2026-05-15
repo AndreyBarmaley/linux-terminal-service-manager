@@ -1082,7 +1082,7 @@ namespace LTSM {
             co_return;
         }
 
-        const bool pressed = ev.type == SDL_KEYDOWN;
+        const bool pressed = ke.state == SDL_PRESSED;
         co_spawn(rfb_strand(), [this, pressed, scancode=ke.keysym.scancode, sym=ke.keysym.sym]() ->asio::awaitable<void> {
             sendSystemKeyboardEvent(pressed, scancode, sym);
             co_return;
