@@ -31,7 +31,6 @@
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
-#include "ltsm_async_mutex.h"
 #include "ltsm_boost_socket.h"
 
 namespace LTSM {
@@ -42,7 +41,6 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::steady_timer incr_update_timer_;
 
-            mutable async_mutex socket_lock_;
             std::unique_ptr<AsioTls::AsyncStream> socket_; /// socket layer
             std::unique_ptr<DecodingBase> decoder_;
 
@@ -144,7 +142,7 @@ namespace LTSM {
                 return true;
             }
 
-            bool socketConnect(std::string_view host, uint16_t port);
+            bool socketConnect(std::string_view host, uint16_t port, bool no_delay = false);
             void recvDecodingUpdateRegion(int type, const XCB::Region &);
             bool isClientFFmpegEncoding(void) const;
 

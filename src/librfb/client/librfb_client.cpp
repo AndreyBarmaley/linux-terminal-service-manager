@@ -47,17 +47,21 @@ namespace LTSM {
     /* RFB::ClientDecoder */
     RFB::ClientDecoder::ClientDecoder(const asio::any_io_executor& ctx)
         : rfb_strand_{ctx}
-        , incr_update_timer_{rfb_strand_}
-        , socket_lock_{rfb_strand_} {
+        , incr_update_timer_{rfb_strand_} {
         socket_ = std::make_unique<AsioTls::AsyncStream>(rfb_strand_, asio::ssl::context::tlsv12_client);
     }
 
-    bool RFB::ClientDecoder::socketConnect(std::string_view host, uint16_t port) {
+    bool RFB::ClientDecoder::socketConnect(std::string_view host, uint16_t port, bool no_delay) {
         if(socket_) {
             try {
                 asio::ip::tcp::resolver resolver{rfb_strand_};
                 auto endpoints = resolver.resolve(host, std::to_string(port));
                 asio::connect(socket_->ssl_stream().lowest_layer(), endpoints);
+                // set no delay
+                if(no_delay) {
+                    boost::asio::ip::tcp::no_delay option(true);
+                    socket_->ssl_stream().lowest_layer().set_option(option);
+                }
                 stream_in_ = stream_out_ = socket_.get();
                 return true;
             } catch(system::system_error& err) {
@@ -435,7 +439,6 @@ namespace LTSM {
         channelsShutdown();
         incr_update_timer_.cancel();
         socket_->closeSocket();
-        socket_lock_.cancel();
         rfbMessages = false;
     }
 
@@ -556,8 +559,6 @@ namespace LTSM {
 
         while(rfbMessages) {
             co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-
-            co_await socket_lock_.async_lock();
             int msgType = co_await socket_->async_recv_byte();
 
             switch(msgType) {
@@ -590,8 +591,6 @@ namespace LTSM {
                     throw system::system_error(asio::error::operation_aborted);
                 }
             }
-
-            socket_lock_.unlock();
         }
 
         co_return;
@@ -766,9 +765,7 @@ namespace LTSM {
             writeInt8(pf.bshift()).
             writeZero(3); // padding
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -787,9 +784,7 @@ namespace LTSM {
             sb.writeIntBE32(val);
         }
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -811,9 +806,7 @@ namespace LTSM {
             writeIntBE16(reg.width).
             writeIntBE16(reg.height);
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -830,10 +823,8 @@ namespace LTSM {
             writeIntBE16(reg.width).
             writeIntBE16(reg.height);
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
         continueUpdatesProcessed = enable;
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -858,9 +849,7 @@ namespace LTSM {
             // flag
             writeIntBE32(0);
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -875,9 +864,7 @@ namespace LTSM {
             writeZero(2).
             writeIntBE32(keysym);
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -891,9 +878,7 @@ namespace LTSM {
             writeIntBE16(posx).
             writeIntBE16(posy);
 
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -920,9 +905,7 @@ namespace LTSM {
         }
 
         // send
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_values(asio::buffer(sb.rawbuf()), asio::buffer(buf.data(), buf.size()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -946,9 +929,7 @@ namespace LTSM {
         }
 
         // send
-        co_await socket_lock_.async_lock();
         co_await socket_->async_send_values(asio::buffer(sb.rawbuf()), asio::buffer(buf.data(), buf.size()));
-        socket_lock_.unlock();
         co_return;
     }
 
@@ -960,7 +941,6 @@ namespace LTSM {
 
         Application::debug(DebugType::Rfb, "{}", NS_FuncNameV);
 
-        //co_await socket_lock_.async_lock();
         const uint8_t version = co_await socket_->async_recv_byte();
 
         if(version != LtsmProtocolVersion) {
@@ -970,9 +950,7 @@ namespace LTSM {
 
         const uint8_t channel = co_await socket_->async_recv_byte();
         const uint16_t length = co_await socket_->async_recv_be16();
-
         auto buf = co_await socket_->async_recv_buf<BinaryBuf>(length);
-        //socket_lock_.unlock();
 
         ChannelClient::recvLtsmProto(channel, std::move(buf));
         co_return;
@@ -984,10 +962,8 @@ namespace LTSM {
         // u8: padding
         // u16: num rects
 
-        //co_await socket_lock_.async_lock();
         [[maybe_unused]] const auto pad1 = co_await socket_->async_recv_byte();
         const uint16_t numRects = co_await socket_->async_recv_be16();
-        //socket_lock_.unlock();
     
         Application::debug(DebugType::Rfb, "{}: num rects: {}", NS_FuncNameV, numRects);
 
@@ -1054,9 +1030,7 @@ namespace LTSM {
                 break;
 
             default:
-                //co_await socket_lock_.async_lock();
                 recvDecodingUpdateRegion(encodingType, reg);
-                //socket_lock_.unlock();
                 break;
         }
         
@@ -1164,14 +1138,12 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvColorMapEventAwait(void) {
-        //co_await socket_lock_.async_lock();
         [[maybe_unused]] const auto pad1 = co_await socket_->async_recv_byte();
         const uint16_t firstColor = co_await socket_->async_recv_be16();
         const uint16_t numColors = co_await socket_->async_recv_be16();
 
         const auto bufsz = static_cast<uint32_t>(numColors) * 3 /* rgb - 3 bytes */;
         auto buf = co_await socket_->async_recv_buf<BinaryBuf>(bufsz);
-        //socket_lock_.unlock();
 
         Application::debug(DebugType::Rfb, "{}: num colors: {}, first color: {}", NS_FuncNameV, numColors, firstColor);
 
@@ -1197,7 +1169,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvCutTextEventAwait(void) {
-        //co_await socket_lock_.async_lock();
         [[maybe_unused]] const auto pad1 = co_await socket_->async_recv_byte();
         [[maybe_unused]] const auto pad2 = co_await socket_->async_recv_byte();
         [[maybe_unused]] const auto pad3 = co_await socket_->async_recv_byte();
@@ -1209,7 +1180,6 @@ namespace LTSM {
         }
 
         auto buf = co_await socket_->async_recv_buf<BinaryBuf>(std::abs(length));
-        //socket_lock_.unlock();
 
         if(0 == length) {
             co_return;

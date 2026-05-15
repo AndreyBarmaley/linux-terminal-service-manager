@@ -116,7 +116,7 @@ namespace LTSM {
 #ifdef LTSM_WITH_PCSC
         "[--smartcard] " <<
 #endif
-        "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
+        "[--noxkb] [--nocaps] [--nodelay] [--loop] [--seamless <path>] " << std::endl;
         std::cout << std::endl << "arguments:" << std::endl <<
                                   "    --debug <types> (allow types: [all],xcb,rfb,clip,sock,tls,chnl,conn,enc,x11srv,x11cli,audio,fuse,pcsc,pkcs11,sdl,app,ldap,gss,mgr)" << std::endl <<
                                   "    --trace (big more debug)" << std::endl <<
@@ -135,6 +135,7 @@ namespace LTSM {
                                   "    --resize (allow resizable window)" << std::endl <<
                                   "    --extclip (extclip support)" << std::endl <<
                                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
+                                  "    --nodelay (socket NO_DELAY option enable)" << std::endl <<
 #ifdef LTSM_WITH_GNUTLS
                                   "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
 #endif
@@ -418,7 +419,9 @@ namespace LTSM {
         }
 
 #endif
-        else if(cmd == "--noxkb") {
+        else if(cmd == "--nodelay") {
+            socketNoDelay = true;
+        } else if(cmd == "--noxkb") {
             useXkb = false;
         } else if(cmd == "--loop") {
             alwaysRunning = true;
@@ -847,7 +850,7 @@ namespace LTSM {
 #endif
 
     int ClientApp::start(void) {
-        if(! ClientDecoder::socketConnect(host, port)) {
+        if(! ClientDecoder::socketConnect(host, port, socketNoDelay)) {
             return -1;
         }
 
