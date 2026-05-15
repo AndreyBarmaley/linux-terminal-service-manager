@@ -1064,9 +1064,9 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmAwait(const XCB::Region & reg) {
-        Application::info("{}: success", NS_FuncNameV);
 
         uint32_t type = co_await socket_->async_recv_be32();
+        Application::info("{}: success, type: {}", NS_FuncNameV, type);
 
         // type 0: handshake part
         if(type == 0) {
@@ -1074,7 +1074,7 @@ namespace LTSM {
             // ltsm 2.1 ver: version
             server_ltsm_version_ = co_await socket_->async_recv_be32();
 
-            ClientDecoder::clientRecvLtsmHandshakeEvent(0 /* flags */);
+            clientRecvLtsmHandshakeEvent(0 /* flags */);
         }
         // type 1: data part
         else if(type == 1) {
@@ -1082,7 +1082,7 @@ namespace LTSM {
             auto len = co_await socket_->async_recv_be32();
             auto buf = co_await socket_->async_recv_buf<BinaryBuf>(len);
 
-            ClientDecoder::clientRecvLtsmDataEvent(std::move(buf));
+            clientRecvLtsmDataEvent(std::move(buf));
         } else {
             Application::error("{}: unknown type: {}", NS_FuncNameV, type);
             throw rfb_error(NS_FuncNameS);
