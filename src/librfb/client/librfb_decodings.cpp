@@ -456,7 +456,6 @@ namespace LTSM {
     }
 
 #ifdef LTSM_DECODING
-
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
     void RFB::DecodingLZ4::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
@@ -468,7 +467,7 @@ namespace LTSM {
         auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
         auto rawsz = pitch * reg.height;
 
-        auto runJob = [](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli) {
+        auto runJob = [buf = std::move(lz4buf), reg, rawsz, pitch, st = &cli]() {
             // thread buf
             BinaryBuf bb(rawsz);
 
@@ -480,24 +479,10 @@ namespace LTSM {
             }
 
             bb.resize(ret);
-            cli->updateRawPixels(reg, std::move(bb), pitch, cli->serverFormat());
+            st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
         };
 
-        if(1 < threads()) {
-            jobs.emplace_back(runJob, rawsz, pitch, std::move(lz4buf), reg, & cli);
-        } else {
-            runJob(rawsz, pitch, std::move(lz4buf), reg, & cli);
-        }
-    }
-
-    void RFB::DecodingLZ4::waitUpdateComplete(void) {
-        for(auto & job : jobs) {
-            if(job.joinable()) {
-                job.join();
-            }
-        }
-
-        jobs.clear();
+        postJob(std::move(runJob));
     }
 #endif // LTSM_DECODING_LZ4
 
@@ -509,7 +494,7 @@ namespace LTSM {
         auto jpgsz = cli.recvIntBE32();
         auto jpgbuf = cli.recvData(jpgsz);
 
-        auto runJob = [](std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli) {
+        auto runJob = [buf = std::move(jpgbuf), reg, st = &cli]() {
             std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitDecompress(), tjDestroy };
 
             if(jpeg) {
@@ -538,10 +523,10 @@ namespace LTSM {
 #endif
 
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-                    cli->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_RGBX8888);
+                    st->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_RGBX8888);
 #else
                     // deb10, turbojpeg-1.5.2
-                    cli->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_XBGR8888);
+                    st->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_XBGR8888);
 #endif
                 }
             } else {
@@ -549,21 +534,7 @@ namespace LTSM {
             }
         };
 
-        if(1 < threads()) {
-            jobs.emplace_back(runJob, std::move(jpgbuf), reg, & cli);
-        } else {
-            runJob(std::move(jpgbuf), reg, & cli);
-        }
-    }
-
-    void RFB::DecodingTJPG::waitUpdateComplete(void) {
-        for(auto & job : jobs) {
-            if(job.joinable()) {
-                job.join();
-            }
-        }
-
-        jobs.clear();
+        postJob(std::move(runJob));
     }
 #endif // LTSM_DECODING_TJPG
 
@@ -579,38 +550,12 @@ namespace LTSM {
         uint32_t rawsz = pitch * reg.height;
 
         auto runJob = [this, pitch, rawsz, reg, buf = std::move(buf), st = &cli]() {
-            active_tasks_.fetch_add(1, std::memory_order_relaxed);
             auto bb = decodeBGRx(buf, reg.toSize(), st->serverFormat(), pitch);
             assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
             st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
-            active_tasks_.fetch_sub(1, std::memory_order_release);
         };
 
-        if(1 < threads()) {
-#ifdef LTSM_WITH_BOOST
-            boost::asio::post(jobs_, std::move(runJob));
-#else
-            jobs_.emplace_back(std::move(runJob));
-#endif
-        } else {
-            runJob();
-        }
-    }
-
-    void RFB::DecodingQOI::waitUpdateComplete(void) {
-#ifdef LTSM_WITH_BOOST
-        while(active_tasks_.load(std::memory_order_acquire)) {
-            std::this_thread::yield();
-        }
-#else
-        for(auto & job : jobs_) {
-            if(job.joinable()) {
-                job.join();
-            }
-        }
-
-        jobs_.clear();
-#endif
+        postJob(std::move(runJob));
     }
 
     namespace QOI {

@@ -49,10 +49,6 @@ namespace LTSM {
 
             std::atomic<bool> rfbMessages{true};
 
-#ifndef LTSM_WITH_BOOST
-            std::mutex send_lock_;
-#endif
-
             PixelFormat server_pf_;
             int server_ltsm_version_ = 0;
             bool server_true_color_ = true;
@@ -89,7 +85,6 @@ namespace LTSM {
             bool authGssApiInit(const SecurityInfo &);
 #endif
 
-#ifdef LTSM_WITH_BOOST
             boost::asio::awaitable<void> sendPixelFormatAwait(void) const;
             boost::asio::awaitable<void> sendEncodingsAwait(const std::list<int> &) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
@@ -114,28 +109,6 @@ namespace LTSM {
             boost::asio::awaitable<void> recvDecodingLtsmCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingRichCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
-#else
-            void sendPixelFormat(void);
-            void sendEncodings(const std::list<int> &);
-            void sendFrameBufferUpdate(bool incr);
-            void sendFrameBufferUpdate(const XCB::Region &, bool incr);
-            void sendContinuousUpdates(bool enable, const XCB::Region &);
-            void sendSetDesktopSize(const XCB::Size &);
-            void sendLtsmChannel(uint8_t channel, std::span<const uint8_t>);
-            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
-
-            void recvLtsmProto(void);
-            void recvFBUpdateEvent(void);
-            void recvDecodingLtsm(const XCB::Region &);
-            void recvDecodingLastRect(const XCB::Region &);
-            void recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
-            void recvDecodingRichCursor(const XCB::Region &);
-            void recvDecodingLtsmCursor(const XCB::Region &);
-            void recvColorMapEvent(void);
-            void recvBellEvent(void);
-            void recvCutTextEvent(void);
-            void recvContinuousUpdatesEvent(void);
-#endif
 
             void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
             bool isUserSession(void) const override {
@@ -155,15 +128,9 @@ namespace LTSM {
                 return !!rfbMessages;
             }
 
-#ifdef LTSM_WITH_BOOST
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
             boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym);
             boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy);
-#else
-            void rfbMessagesLoop(void);
-            void sendKeyEvent(bool pressed, uint32_t keysym);
-            void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
-#endif
 
             void sendCutText(std::span<const uint8_t>, bool ext);
 

@@ -25,12 +25,14 @@
 #define _LIBRFB_DECODINGS_
 
 #include <list>
+#include <atomic>
 #include <thread>
 
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 
 #ifdef LTSM_WITH_BOOST
+#include <boost/asio/post.hpp>
 #include <boost/asio/thread_pool.hpp>
 #endif
 
@@ -219,53 +221,60 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING
 
+        class DecodingJobs : public DecodingBase {
+            boost::asio::thread_pool jobs_;
+            std::atomic<uint16_t> active_tasks_{0};
+
+          public:
+            DecodingJobs(int v) : DecodingBase(v), jobs_{threads()} {}
+
+            void waitUpdateComplete(void) override {
+                while(active_tasks_.load(std::memory_order_acquire)) {
+                    std::this_thread::yield();
+                }
+            }
+
+            template<typename Callable>
+            void postJob(Callable&& func) {
+                boost::asio::post(jobs_, [this, func=std::forward<Callable>(func)]() {
+                    active_tasks_.fetch_add(1, std::memory_order_relaxed);
+                    func();
+                    active_tasks_.fetch_sub(1, std::memory_order_release);
+                });
+            }
+        };
+
 #ifdef LTSM_DECODING_LZ4
         /// DecodingLZ4
-        class DecodingLZ4 : public DecodingBase {
-            std::list<std::thread> jobs;
+        class DecodingLZ4 : public DecodingJobs {
 
           public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
-            void waitUpdateComplete(void) override;
 
-            DecodingLZ4() : DecodingBase(ENCODING_LTSM_LZ4) {}
+            DecodingLZ4() : DecodingJobs(ENCODING_LTSM_LZ4) {}
         };
 #endif
 #ifdef LTSM_DECODING_TJPG
         /// DecodingTJPG
-        class DecodingTJPG : public DecodingBase {
-            std::list<std::thread> jobs;
+        class DecodingTJPG : public DecodingJobs {
 
           public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
-            void waitUpdateComplete(void) override;
 
-            DecodingTJPG() : DecodingBase(ENCODING_LTSM_TJPG) {}
+            DecodingTJPG() : DecodingJobs(ENCODING_LTSM_TJPG) {}
         };
 #endif
 #ifdef LTSM_DECODING_QOI
         /// DecodingQOI
-        class DecodingQOI : public DecodingBase {
-
-#ifdef LTSM_WITH_BOOST
-            boost::asio::thread_pool jobs_;
-            std::atomic<uint16_t> active_tasks_{0};
-#else
-            std::list<std::thread> jobs_;
-#endif
+        class DecodingQOI : public DecodingJobs {
 
           protected:
             BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, const PixelFormat &, uint32_t pitch) const;
 
           public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
-            void waitUpdateComplete(void) override;
 
-#ifdef LTSM_WITH_BOOST
-            DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI), jobs_{threads()} {}
-#else
-            DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI) {}
-#endif
+            DecodingQOI() : DecodingJobs(ENCODING_LTSM_QOI) {}
         };
 #endif
 #endif
