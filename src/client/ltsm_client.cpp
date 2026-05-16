@@ -779,7 +779,7 @@ namespace LTSM {
                     continue;
                 }
 
-                timer.expires_after(30ms);
+                timer.expires_after(10ms);
                 co_await timer.async_wait(asio::use_awaitable);
             }
         } catch(const system::system_error& err) {
@@ -790,13 +790,6 @@ namespace LTSM {
         } catch(const std::exception& err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             asio::post(ioc(), std::bind(&ClientApp::stop, this));
-        }
-    }
-
-    void ClientApp::sdlRenderFrame(void) const {
-        if(updatePresent) {
-            window_->renderPresent();
-            updatePresent = false;
         }
     }
 
@@ -1316,7 +1309,6 @@ namespace LTSM {
             auto dstrt = SDL_Rect{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
             auto dstcol = SDL_Color{ .r = col.r, .g = col.g, .b = col.b, .a = 255 };
             window_->renderColor(&dstcol, &dstrt);
-            updatePresent = true;
         });
     }
 
@@ -1339,12 +1331,9 @@ namespace LTSM {
 
         // move strand
         asio::dispatch(sdl_strand_, [this, wrt, buf = std::move(buf), pitch, sdlFormat](){
-            auto tx = window_->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
-            tx.updateRect(nullptr, buf.data(), pitch);
             const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
             try {
-                window_->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
-                updatePresent = true;
+                window_->renderDisplayUpdateRaw(&dstrt, buf.data(), pitch);
             } catch(const std::exception& err) {
                 Application::error("{}: {} failed, exception: {}", "updateRawPixels2", err.what());
             }
@@ -1353,7 +1342,7 @@ namespace LTSM {
 
     void ClientApp::clientRecvFBUpdateEvent(void) {
         asio::dispatch(sdl_strand_, [this](){
-            sdlRenderFrame();
+            window_->renderPresent();
         });
     }
 

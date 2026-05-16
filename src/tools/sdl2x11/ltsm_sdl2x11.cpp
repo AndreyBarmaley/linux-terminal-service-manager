@@ -219,7 +219,7 @@ namespace LTSM {
 
                 case SDL_WINDOWEVENT:
                     if(ev.window.event == SDL_WINDOWEVENT_EXPOSED) {
-                        renderPresent(false);
+                        renderPresent();
                     }
 
                     break;

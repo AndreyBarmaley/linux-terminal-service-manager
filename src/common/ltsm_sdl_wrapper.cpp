@@ -114,8 +114,10 @@ namespace LTSM {
             throw sdl_error(NS_FuncNameS);
         }
 
+        SDL_GetRendererInfo(renderer_.get(), &info_);
+
         Application::debug(DebugType::Sdl, "{}: create render, size: {}, accel: {}", NS_FuncNameV, render_sz_, accel_);
-        display_.reset(SDL_CreateTexture(renderer_.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, render_sz_.width, render_sz_.height));
+        display_.reset(SDL_CreateTexture(renderer_.get(), pixelFormat(), SDL_TEXTUREACCESS_TARGET, render_sz_.width, render_sz_.height));
 
         if(! display_) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_CreateTexture", SDL_GetError());
@@ -123,7 +125,6 @@ namespace LTSM {
         }
 
         SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
-        SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
 
         if(window_sz_ == render_sz_) {
             SDL_ResetHint(SDL_HINT_RENDER_SCALE_QUALITY);
@@ -131,26 +132,16 @@ namespace LTSM {
             SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
         }
 
-        renderClear(& black, display_.get());
-        renderReset();
+        SDL_RenderClear(renderer_.get());
+        SDL_RenderPresent(renderer_.get());
     }
 
     const XCB::Size & SDL::Window::geometry(void) const {
         return window_sz_;
     }
 
-    uint32_t SDL::Window::pixelFormat(void) const {
-        uint32_t format;
-
-        if(0 != SDL_QueryTexture(display_.get(), & format, nullptr, nullptr, nullptr)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        return format;
-    }
-
     void SDL::Window::renderReset(SDL_Texture* target) {
+
         if(target) {
             int access;
 
@@ -183,6 +174,10 @@ namespace LTSM {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderClear", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
+
+        if(target == display_.get()) {
+            changed_ = true;
+        }
     }
 
     void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target) {
@@ -202,6 +197,10 @@ namespace LTSM {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderFillRect", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
+
+        if(target == display_.get()) {
+            changed_ = true;
+        }
     }
 
     void SDL::Window::renderTexture(const SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
@@ -212,26 +211,42 @@ namespace LTSM {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy", SDL_GetError());
             throw sdl_error(NS_FuncNameS);
         }
+
+        if(target == display_.get()) {
+            changed_ = true;
+        }
     }
 
-    void SDL::Window::renderPresent(bool sync) {
-        renderReset();
+    void SDL::Window::renderDisplayUpdateRaw(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
+        assertm(!! display_, "invalid texture");
 
-        if(sync) {
+        if(0 != SDL_UpdateTexture(display_.get(), rect, pixels, pitch)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_UpdateTexture", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+
+        changed_ = true;
+    }
+
+    void SDL::Window::renderPresent(void) {
+        if(changed_) {
+            renderReset();
+
             if(0 != SDL_RenderCopy(renderer_.get(), display_.get(), nullptr, nullptr)) {
                 Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy", SDL_GetError());
                 throw sdl_error(NS_FuncNameS);
             }
+        
+            SDL_RenderPresent(renderer_.get());
+            changed_ = false;
         }
-
-        SDL_RenderPresent(renderer_.get());
-    }
-
-    bool SDL::Window::isValid(void) const {
-        return window_ && renderer_ && display_;
     }
 
     SDL::Texture SDL::Window::createTexture(const XCB::Size & tsz, const SDL_TextureAccess & access, uint32_t format) const {
+        if(0 == format) {
+            format = pixelFormat();
+        }
+
         if(auto ptr = SDL_CreateTexture(renderer_.get(), format, access, tsz.width, tsz.height)) {
             return Texture(ptr);
         }

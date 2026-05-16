@@ -30,12 +30,6 @@
 #include "ltsm_xcb_types.h"
 
 namespace LTSM {
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-    inline static const int TEXTURE_FMT = SDL_PIXELFORMAT_ARGB32;
-#else
-    inline static const int TEXTURE_FMT = SDL_PIXELFORMAT_BGRA32;
-#endif
-
     struct sdl_error : public std::runtime_error {
         explicit sdl_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
@@ -97,6 +91,8 @@ namespace LTSM {
         };
 
         class Window {
+            SDL_RendererInfo info_;
+
             std::unique_ptr<SDL_Window, void(*)(SDL_Window*)> window_{ nullptr, SDL_DestroyWindow };
             std::unique_ptr<SDL_Renderer, void(*)(SDL_Renderer*)> renderer_{ nullptr, SDL_DestroyRenderer };
             std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> display_{ nullptr, SDL_DestroyTexture };
@@ -106,6 +102,7 @@ namespace LTSM {
 
             int flags_ = 0;
             bool accel_ = false;
+            bool changed_ = false;
 
           protected:
 
@@ -113,14 +110,12 @@ namespace LTSM {
             Window(const std::string & title, const XCB::Size & rendsz, const XCB::Size & winsz = {}, int flags = 0, bool accel = true);
             ~Window();
 
-            bool isValid(void) const;
             void resize(const XCB::Size & /* render sz */, const XCB::Size & /* window sz */);
 
             inline void resize(const XCB::Size & nsz) {
                 resize(nsz, nsz);
             }
 
-            uint32_t pixelFormat(void) const;
             const XCB::Size& geometry(void) const;
 
             inline SDL_Texture* display(void) {
@@ -135,17 +130,31 @@ namespace LTSM {
                 return window_.get();
             }
 
+            const SDL_RendererInfo & renderInfo(void) const {
+                return info_;
+            }
+
+            inline uint32_t pixelFormat(void) const {
+                return info_.texture_formats[0];
+            }
+
+            inline bool isValid(void) const {
+                return !! display_;
+            }
+    
             void renderClear(const SDL_Color*, SDL_Texture* target = nullptr);
             void renderColor(const SDL_Color*, const SDL_Rect*, SDL_Texture* target = nullptr);
 
             void renderTexture(const SDL_Texture* source, const SDL_Rect* srcrt = nullptr, SDL_Texture* target = nullptr,
                                const SDL_Rect* dstrt = nullptr);
 
+            void renderDisplayUpdateRaw(const SDL_Rect* dstrt, const void* pixels, uint32_t pitch);
+
             void renderReset(SDL_Texture* target = nullptr);
-            void renderPresent(bool sync = true);
+            void renderPresent(void);
             void setFullScreen(bool state);
 
-            Texture createTexture(const XCB::Size &, const SDL_TextureAccess & access = SDL_TEXTUREACCESS_STATIC, uint32_t format = TEXTURE_FMT) const;
+            Texture createTexture(const XCB::Size &, const SDL_TextureAccess & access = SDL_TEXTUREACCESS_STATIC, uint32_t format = 0) const;
 
             static int convertScanCodeToKeySym(SDL_Scancode);
 

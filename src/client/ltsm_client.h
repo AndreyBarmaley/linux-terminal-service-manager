@@ -127,7 +127,6 @@ namespace LTSM {
         bool capslockEnable = true;
         bool audioEnable = false;
         bool pcscEnable = false;
-        mutable bool updatePresent = false;
 
       protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
@@ -169,7 +168,6 @@ namespace LTSM {
         boost::asio::awaitable<void> sdlUserEvent(SDL_Event &&);
 
         void sdlWindowInit(const XCB::Size &);
-        void sdlRenderFrame(void) const;
         void stop(void);
 
       public:
