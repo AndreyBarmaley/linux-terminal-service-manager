@@ -106,7 +106,6 @@ namespace LTSM {
 
         std::chrono::time_point<std::chrono::steady_clock> appStart;
         std::atomic<uint16_t> decoder_jobs_{0};
-        std::atomic<bool> focusLost{false};
 
         int xcbDpi = 0;
         int port = 5900;
@@ -129,6 +128,7 @@ namespace LTSM {
         bool capslockEnable = true;
         bool audioEnable = false;
         bool pcscEnable = false;
+        bool focusLost = false;
 
       protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
