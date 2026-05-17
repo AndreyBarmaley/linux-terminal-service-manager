@@ -502,12 +502,10 @@ namespace LTSM {
                 return;
             }
 
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-            const int pixfmt = TJPF_RGBX;
-#else
+            // TJPF: RGBX, BGRX, XRGB, XBGR
+            // from lowest to highest memory address
             const int pixfmt = TJPF_BGRX;
-#endif
-            auto pitch = reg.width * tjPixelSize[pixfmt];
+            const auto pitch = reg.width * tjPixelSize[pixfmt];
 
             // thread buf
             std::vector<uint8_t> jpegData(pitch * reg.height);
@@ -523,17 +521,11 @@ namespace LTSM {
 #endif
                 return;
             }
-#ifndef SDL_PIXELFORMAT_XBGR8888
- // deb10, turbojpeg-1.5.2
- #define SDL_PIXELFORMAT_XBGR8888 SDL_PIXELFORMAT_ABGR8888
-#endif
 
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-            const uint32_t serverFormat = SDL_PIXELFORMAT_RGBX8888;
-#else
-            const uint32_t serverFormat = SDL_PIXELFORMAT_XBGR8888;
-#endif
-            st->updateRawPixels2(reg, std::move(jpegData), pitch, serverFormat);
+
+            // format transformed: jpg pixel data only in this format
+            const PixelFormat jpgFormat = platformBigEndian() ? XRGB32 : BGRX32;
+            st->updateRawPixels(reg, std::move(jpegData), pitch, jpgFormat);
         };
 
         postJob(std::move(runJob));

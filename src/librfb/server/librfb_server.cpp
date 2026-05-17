@@ -1056,6 +1056,13 @@ namespace LTSM {
             return;
         }
 
+        if(compatible == RFB::ENCODING_LTSM_QOI && 24 != serverBitsPerPixel()) {
+            const int change = RFB::ENCODING_LTSM_LZ4;
+            Application::notice("{}: server bitsPerPixel({}), {} not supported, change to: {}",
+                NS_FuncNameV, serverBitsPerPixel(), RFB::encodingName(compatible), RFB::encodingName(change));
+            compatible = change;
+        }
+
         switch(compatible) {
             case RFB::ENCODING_RAW:
                 encoder = std::make_unique<EncodingRaw>();

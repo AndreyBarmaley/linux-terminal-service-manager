@@ -991,11 +991,10 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-        const int pixFmt = TJPF_RGBX;
-#else
+        // TJPF: RGBX, BGRX, XRGB, XBGR
+        // from lowest to highest memory address
+        // Xorg always 0xXXRRGGBB
         const int pixFmt = TJPF_BGRX;
-#endif
 
         long unsigned int jpegSize = tjBufSize(reg.width, reg.height, jpegSamp);
         // thread buffer
@@ -1004,11 +1003,9 @@ namespace LTSM {
         int ret = 0;
 
         if(fb.pixelFormat().bitsPerPixel() != 24) {
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-            auto fb2 = fb.copyRegionFormat(reg, BGRX32);
-#else
-            auto fb2 = fb.copyRegionFormat(reg, RGBX32);
-#endif
+            const auto jpgPixelFormat = platformBigEndian() ? XRGB32 : BGRX32;
+            auto fb2 = fb.copyRegionFormat(reg, jpgPixelFormat);
+
             ret = tjCompress2(jpeg.get(), fb2.pitchData(0), reg.width, fb2.pitchSize(), reg.height, pixFmt,
                               & jpegBuf, & jpegSize, jpegSamp, jpegQuality, TJFLAG_FASTDCT | TJFLAG_NOREALLOC);
         } else if(fb.width() == reg.width) {

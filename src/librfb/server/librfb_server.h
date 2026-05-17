@@ -207,6 +207,10 @@ namespace LTSM {
                 return false;
             }
 
+            virtual size_t serverBitsPerPixel(void) const {
+                return 24;
+            }
+
             virtual void encoderInitEvent(EncodingBase*) { /* empty */ }
 
             virtual uint32_t frameRateOption(void) const {

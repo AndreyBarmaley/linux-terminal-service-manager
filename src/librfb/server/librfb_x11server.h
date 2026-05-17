@@ -80,7 +80,8 @@ namespace LTSM {
             void serverScreenUpdateRequest(void) override;
             void serverScreenUpdateRequest(const XCB::Region &) override;
             XcbFrameBuffer serverFrameBuffer(const XCB::Region &) const override;
-
+            size_t serverBitsPerPixel(void) const override;
+            
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
             std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
