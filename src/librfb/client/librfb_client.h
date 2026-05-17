@@ -129,7 +129,7 @@ namespace LTSM {
             }
 
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
-            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym);
+            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode);
             boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy);
 
             void sendCutText(std::span<const uint8_t>, bool ext);

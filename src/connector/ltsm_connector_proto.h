@@ -75,7 +75,7 @@ namespace LTSM::Connector {
         RFB::SecurityInfo rfbSecurityInfo(void) const override;
         int rfbUserKeycode(uint32_t) const override;
 
-        void serverRecvKeyEvent(bool pressed, uint32_t keysym) override;
+        void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) override;
         void serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
 
         // dbus virtual signals

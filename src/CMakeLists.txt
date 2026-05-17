@@ -354,7 +354,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_x11vnc)
     set(CUR_TARGET ltsm_x11vnc)
 
-    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB)
+    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB SDL)
 
     add_executable(${CUR_TARGET} tools/x11vnc/ltsm_x11vnc.cpp tools/x11vnc/ltsm_connector_x11vnc.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)

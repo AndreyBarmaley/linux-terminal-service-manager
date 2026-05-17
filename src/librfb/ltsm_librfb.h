@@ -119,6 +119,7 @@ namespace LTSM {
 
         const int ENCODING_LTSM = 0x4C54534D;
         const int ENCODING_LTSM_CURSOR = 0x4C54534E;
+        const int ENCODING_LTSM_KEYB = 0x4B455942;
         const int ENCODING_LTSM_H264 = 0x48464D50;
         const int ENCODING_LTSM_AV1 = 0x41563100;
         const int ENCODING_LTSM_VP8 = 0x56503800;

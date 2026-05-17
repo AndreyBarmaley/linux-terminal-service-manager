@@ -1078,11 +1078,10 @@ namespace LTSM {
             co_return;
         }
 
+        // sizeof(ke.keysym.scancode) = 4, sizeof(ke.keysym.sym) = 4
         const bool pressed = ke.state == SDL_PRESSED;
-        co_spawn(rfb_strand(), [this, pressed, scancode=ke.keysym.scancode, sym=ke.keysym.sym]() ->asio::awaitable<void> {
-            sendSystemKeyboardEvent(pressed, scancode, sym);
-            co_return;
-        }, asio::detached);
+
+        co_spawn(rfb_strand(), sendKeyEventAwait(pressed, ke.keysym.sym, ke.keysym.scancode), asio::detached);
         co_return;
     }
 

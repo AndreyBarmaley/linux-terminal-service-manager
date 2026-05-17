@@ -732,7 +732,13 @@ namespace LTSM {
                 case RFB::ENCODING_LTSM_H264:
                 case RFB::ENCODING_LTSM_AV1:
                 case RFB::ENCODING_LTSM_VP8:
+                case RFB::ENCODING_LTSM_CURSOR:
                     clientLtsmSupported = true;
+                    break;
+
+                case RFB::ENCODING_LTSM_KEYB:
+                    clientLtsmSupported = true;
+                    clientLtsmKeyboard = true;
                     break;
 
                 case RFB::ENCODING_CONTINUOUS_UPDATES:
@@ -797,12 +803,20 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::recvKeyCode(void) {
-        // RFB: 6.4.4
-        bool pressed = recvInt8();
-        recvSkip(2);
-        uint32_t keysym = recvIntBE32();
-        Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keysym);
-        serverRecvKeyEvent(pressed, keysym);
+        if(clientLtsmKeyboard) {
+            bool pressed = recvInt8();
+            uint16_t scancode = recvIntBE16();
+            uint32_t keycode = recvIntBE32();
+            Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}, scancode: {:#06x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keycode, scancode);
+            serverRecvKeyEvent(pressed, keycode, scancode);
+        } else {
+            // RFB: 6.4.4
+            bool pressed = recvInt8();
+            recvSkip(2);
+            uint32_t keycode = recvIntBE32();
+            Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keycode);
+            serverRecvKeyEvent(pressed, keycode, 0);
+        }
     }
 
     void RFB::ServerEncoder::recvPointer(void) {
@@ -1302,6 +1316,10 @@ namespace LTSM {
 
     bool RFB::ServerEncoder::isClientLtsmSupported(void) const {
         return clientLtsmSupported;
+    }
+
+    bool RFB::ServerEncoder::isClientLtsmKeyboard(void) const {
+        return clientLtsmKeyboard;
     }
 
     bool RFB::ServerEncoder::isClientFFmpegEncoding(void) const {

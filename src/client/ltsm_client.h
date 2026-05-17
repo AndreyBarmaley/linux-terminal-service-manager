@@ -43,7 +43,7 @@
 #include "librfb_winclient.h"
 #endif
 
-#define LTSM_CLIENT_VERSION 20260412
+#define LTSM_CLIENT_VERSION 20260510
 
 namespace LTSM {
     struct ColorCursor {

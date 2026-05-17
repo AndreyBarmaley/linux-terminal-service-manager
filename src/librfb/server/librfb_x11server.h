@@ -122,7 +122,7 @@ namespace LTSM {
             // server encoder events
             void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) override;
             void serverRecvSetEncodingsEvent(const std::vector<int> &) override;
-            void serverRecvKeyEvent(bool pressed, uint32_t keysym) override;
+            void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) override;
             void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
             void serverRecvCutTextEvent(std::vector<uint8_t> &&) override;
             void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) override;

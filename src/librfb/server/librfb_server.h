@@ -82,6 +82,7 @@ namespace LTSM {
             NetworkStream* streamOut = nullptr;
 
             bool clientLtsmSupported = false;
+            bool clientLtsmKeyboard = false;
             bool clientVideoSupported = false;
             bool clientTrueColor = true;
             bool clientBigEndian = false;
@@ -129,6 +130,7 @@ namespace LTSM {
             void setEncodingOptions(const std::forward_list<std::string> &, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;
+            bool isClientLtsmKeyboard(void) const;
             bool isClientFFmpegEncoding(void) const;
             bool isClientSupportedEncoding(int) const;
             bool isContinueUpdatesProcessed(void) const;
@@ -214,7 +216,7 @@ namespace LTSM {
             // server encoder events
             virtual void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) { /* empty */ }
             virtual void serverRecvSetEncodingsEvent(const std::vector<int> &) { /* empty */ }
-            virtual void serverRecvKeyEvent(bool pressed, uint32_t keysym) { /* empty */ }
+            virtual void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) { /* empty */ }
             virtual void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) { /* empty */ }
             virtual void serverRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
             virtual void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) { /* empty */ }

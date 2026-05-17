@@ -28,6 +28,7 @@
 #include <thread>
 
 #include "ltsm_application.h"
+#include "ltsm_sdl_wrapper.h"
 #include "librfb_x11server.h"
 
 #ifdef LTSM_ENCODING_FFMPEG
@@ -305,10 +306,31 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keysym) {
-        auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST));
+    void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
+        if(! xcbAllowMessages()) {
+            return;
+        }
 
-        if(xcbAllowMessages() && test) {
+        auto keysym = keycode;
+
+        if(isClientLtsmKeyboard()) {
+            auto x11sym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
+
+            if(x11sym) {
+                keysym = static_cast<uint32_t>(x11sym);
+            }
+
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtension(XCB::Module::XKB))) {
+                int group = xkb->getLayoutGroup();
+                auto keycodeGroup = keysymToKeycodeGroup(x11sym);
+
+                if(group != keycodeGroup.second) {
+                    keysym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                }
+            }
+        }
+
+        if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST))) {
             auto keycode = rfbUserKeycode(keysym);
 
             if(! keycode) {

@@ -467,6 +467,7 @@ namespace LTSM {
             ENCODING_LTSM_VP8,
 #endif
 #endif
+            ENCODING_LTSM_KEYB,
             ENCODING_LTSM_CURSOR,
             // compatible RFB encodings
             ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
@@ -726,16 +727,25 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendKeyEventAwait(bool pressed, uint32_t keysym) {
+    asio::awaitable<void> RFB::ClientDecoder::sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) {
         Application::debug(DebugType::Rfb, "{}: keysym: {:#010x}, pressed: {}", NS_FuncNameV, keysym, (int) pressed);
 
+        // support: ENCODING_LTSM_KEYB
+        const bool ltsmKeybSupport = true; 
         StreamBuf sb(8);
 
-        sb.writeInt8(RFB::CLIENT_EVENT_KEY).
-            writeInt8(pressed ? 1 : 0).
-            // padding
-            writeZero(2).
-            writeIntBE32(keysym);
+        if(ltsmKeybSupport) {
+            sb.writeInt8(RFB::CLIENT_EVENT_KEY).
+                writeInt8(pressed ? 1 : 0).
+                writeIntBE16(scancode).
+                writeIntBE32(keysym);
+        } else {
+            sb.writeInt8(RFB::CLIENT_EVENT_KEY).
+                writeInt8(pressed ? 1 : 0).
+                // padding
+                writeZero(2).
+                writeIntBE32(keysym);
+        }
 
         co_await socket_->async_send_buf(asio::buffer(sb.rawbuf()));
         co_return;

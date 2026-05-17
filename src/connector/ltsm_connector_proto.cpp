@@ -28,7 +28,6 @@
 #include "ltsm_tools.h"
 #include "ltsm_connector_proto.h"
 #include "ltsm_xcb_wrapper.h"
-#include "ltsm_sdl_wrapper.h"
 #include "ltsm_channels.h"
 
 using namespace std::chrono_literals;
@@ -327,8 +326,8 @@ namespace LTSM::Connector {
         return it != _keymap.end() ? it->second : 0;
     }
 
-    void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keysym) {
-        X11Server::serverRecvKeyEvent(pressed, keysym);
+    void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
+        X11Server::serverRecvKeyEvent(pressed, keycode, scancode);
         _idleSessionTp = std::chrono::steady_clock::now();
     }
 
@@ -399,24 +398,9 @@ namespace LTSM::Connector {
             auto scancode = jo.getInteger("scancode");
             auto keycode = jo.getInteger("keycode");
 
-            auto xksym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
-
-            if(xksym == 0) {
-                xksym = keycode;
-            }
-
-            if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
-                int group = xkb->getLayoutGroup();
-                auto keycodeGroup = keysymToKeycodeGroup(xksym);
-
-                if(group != keycodeGroup.second) {
-                    xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
-                }
-            }
-
             //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#010x}, keycode: {}", NS_FuncNameV, (int) pressed, scancode, keycode);
 
-            serverRecvKeyEvent(pressed, xksym);
+            serverRecvKeyEvent(pressed, keycode, scancode);
             X11Server::serverScreenUpdateRequest();
         }
     }
