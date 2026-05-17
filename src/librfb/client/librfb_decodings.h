@@ -27,17 +27,24 @@
 #include <list>
 #include <atomic>
 #include <thread>
+#include <functional>
 
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 
 #ifdef LTSM_WITH_BOOST
 #include <boost/asio/post.hpp>
-#include <boost/asio/thread_pool.hpp>
+#endif
+
+#ifdef LTSM_DECODING_TJPG
+#include "turbojpeg.h"
 #endif
 
 namespace LTSM {
     namespace RFB {
+        using VectorBuf = std::vector<uint8_t>;
+        using PostDecoderJobCb = std::function<VectorBuf(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &)>;
+
         /// DecoderStream
         class DecoderStream : public NetworkStream {
           public:
@@ -57,8 +64,15 @@ namespace LTSM {
             virtual void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
-            virtual int clientPrefferedVideoEncoding(void) const { return 0; }
-            virtual int clientPrefferedAudioEncoding(void) const { return 0; }
+            virtual int clientPrefferedVideoEncoding(void) const {
+                return 0;
+            }
+            virtual int clientPrefferedAudioEncoding(void) const {
+                return 0;
+            }
+
+            virtual void postDecoderJob(PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) = 0;
+            virtual void waitDecoderJobs(void) = 0;
         };
 
         /// DecoderWrapper
@@ -122,6 +136,14 @@ namespace LTSM {
                 owner->updateRawPixels2(wrt, std::move(buf), pitch, sdlFormat);
             }
 
+            void postDecoderJob(RFB::PostDecoderJobCb && cb, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) override {
+                owner->postDecoderJob(std::move(cb), std::move(buf), reg, pitch, pf);
+            }
+
+            void waitDecoderJobs(void) override {
+                owner->waitDecoderJobs();
+            }
+
             XCB::Size clientSize(void) const override {
                 return owner->clientSize();
             }
@@ -147,10 +169,10 @@ namespace LTSM {
             virtual void updateRegion(DecoderStream &, const XCB::Region &) = 0;
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
 
-            virtual void waitUpdateComplete(void) { /* empty */ }
-
             int type(void) const;
-            size_t threads(void) const { return threads_; }
+            size_t threads(void) const {
+                return threads_;
+            }
             void setThreads(int);
         };
 
@@ -220,61 +242,47 @@ namespace LTSM {
         };
 
 #ifdef LTSM_DECODING
-
-        class DecodingJobs : public DecodingBase {
-            boost::asio::thread_pool jobs_;
-            std::atomic<uint16_t> active_tasks_{0};
-
-          public:
-            DecodingJobs(int v) : DecodingBase(v), jobs_{threads()} {}
-
-            void waitUpdateComplete(void) override {
-                while(active_tasks_.load(std::memory_order_acquire)) {
-                    std::this_thread::yield();
-                }
-            }
-
-            template<typename Callable>
-            void postJob(Callable&& func) {
-                boost::asio::post(jobs_, [this, func=std::forward<Callable>(func)]() {
-                    active_tasks_.fetch_add(1, std::memory_order_relaxed);
-                    func();
-                    active_tasks_.fetch_sub(1, std::memory_order_release);
-                });
-            }
-        };
-
 #ifdef LTSM_DECODING_LZ4
         /// DecodingLZ4
-        class DecodingLZ4 : public DecodingJobs {
+        class DecodingLZ4 : public DecodingBase {
+
+          protected:
+            std::vector<uint8_t> decodeLZ4(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
-            DecodingLZ4() : DecodingJobs(ENCODING_LTSM_LZ4) {}
+            DecodingLZ4() : DecodingBase(ENCODING_LTSM_LZ4) {}
         };
 #endif
 #ifdef LTSM_DECODING_TJPG
         /// DecodingTJPG
-        class DecodingTJPG : public DecodingJobs {
+        class DecodingTJPG : public DecodingBase {
+
+            // TJPF: RGBX, BGRX, XRGB, XBGR
+            // from lowest to highest memory address
+            const int pixfmt = TJPF_BGRX;
+
+          protected:
+            std::vector<uint8_t> decodeJPG(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
-            DecodingTJPG() : DecodingJobs(ENCODING_LTSM_TJPG) {}
+            DecodingTJPG() : DecodingBase(ENCODING_LTSM_TJPG) {}
         };
 #endif
 #ifdef LTSM_DECODING_QOI
         /// DecodingQOI
-        class DecodingQOI : public DecodingJobs {
+        class DecodingQOI : public DecodingBase {
 
           protected:
-            BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, const PixelFormat &, uint32_t pitch) const;
+            std::vector<uint8_t> decodeBGRx(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
-            DecodingQOI() : DecodingJobs(ENCODING_LTSM_QOI) {}
+            DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI) {}
         };
 #endif
 #endif

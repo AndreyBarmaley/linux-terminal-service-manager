@@ -159,6 +159,15 @@ namespace LTSM {
         Application::warning("{}: not implemented", NS_FuncNameV);
     }
 
+    void Vnc2Image::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf1, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) {
+        auto buf2 = func(buf1, reg, pitch, pf);
+        assertm(buf2.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
+        updateRawPixels(reg, std::move(buf2), pitch, pf);
+    }
+
+    void Vnc2Image::waitDecoderJobs(void) {
+    }
+
     const PixelFormat & Vnc2Image::clientFormat(void) const {
         return fbPtr->pixelFormat();
     }

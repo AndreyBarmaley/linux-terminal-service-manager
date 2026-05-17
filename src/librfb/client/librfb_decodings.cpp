@@ -208,61 +208,62 @@ namespace LTSM {
         auto flag = cli.recvInt8();
 
         Application::trace(DebugType::Enc, "{}: sub encoding mask: {:#04x}, sub region: {}",
-            NS_FuncNameV, flag, reg);
+                           NS_FuncNameV, flag, reg);
 
         if(flag & RFB::HEXTILE_RAW) {
             Application::trace(DebugType::Enc, "{}: type: {}", NS_FuncNameV, "raw");
             cli.recvRegionUpdatePixels(reg);
-        } else {
-            if(flag & RFB::HEXTILE_BACKGROUND) {
-                bgColor = cli.recvPixel();
-                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "background", bgColor);
-            }
+            return;
+        }
 
-            cli.fillPixel(reg, bgColor);
+        if(flag & RFB::HEXTILE_BACKGROUND) {
+            bgColor = cli.recvPixel();
+            Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "background", bgColor);
+        }
 
-            if(flag & HEXTILE_FOREGROUND) {
-                fgColor = cli.recvPixel();
-                flag &= ~HEXTILE_COLOURED;
+        cli.fillPixel(reg, bgColor);
 
-                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "foreground", fgColor);
-            }
+        if(flag & HEXTILE_FOREGROUND) {
+            fgColor = cli.recvPixel();
+            flag &= ~HEXTILE_COLOURED;
 
-            if(flag & HEXTILE_SUBRECTS) {
-                int subRects = cli.recvInt8();
-                XCB::Region dst;
+            Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "foreground", fgColor);
+        }
 
-                Application::trace(DebugType::Enc, "{}: type: {}, count: {}", NS_FuncNameV, "subrects", subRects);
+        if(flag & HEXTILE_SUBRECTS) {
+            int subRects = cli.recvInt8();
+            XCB::Region dst;
 
-                while(0 < subRects--) {
-                    auto pixel = fgColor;
+            Application::trace(DebugType::Enc, "{}: type: {}, count: {}", NS_FuncNameV, "subrects", subRects);
 
-                    if(flag & HEXTILE_COLOURED) {
-                        pixel = cli.recvPixel();
+            while(0 < subRects--) {
+                auto pixel = fgColor;
 
-                        Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "colored", pixel);
-                    }
+                if(flag & HEXTILE_COLOURED) {
+                    pixel = cli.recvPixel();
 
-                    auto val1 = cli.recvInt8();
-                    auto val2 = cli.recvInt8();
-                    dst.x = (0x0F & (val1 >> 4));
-                    dst.y = (0x0F & val1);
-                    dst.width = 1 + (0x0F & (val2 >> 4));
-                    dst.height = 1 + (0x0F & val2);
-
-                    Application::trace(DebugType::Enc, "{}: type: {}, region: {}, pixel: {:#010x}",
-                                       NS_FuncNameV, "subrects", dst, pixel);
-
-                    dst.x += reg.x;
-                    dst.y += reg.y;
-
-                    if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height) {
-                        Application::error("{}: {}", NS_FuncNameV, "sub region out of range");
-                        throw rfb_error(NS_FuncNameS);
-                    }
-
-                    cli.fillPixel(dst, pixel);
+                    Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "colored", pixel);
                 }
+
+                auto val1 = cli.recvInt8();
+                auto val2 = cli.recvInt8();
+                dst.x = (0x0F & (val1 >> 4));
+                dst.y = (0x0F & val1);
+                dst.width = 1 + (0x0F & (val2 >> 4));
+                dst.height = 1 + (0x0F & val2);
+
+                Application::trace(DebugType::Enc, "{}: type: {}, region: {}, pixel: {:#010x}",
+                                   NS_FuncNameV, "subrects", dst, pixel);
+
+                dst.x += reg.x;
+                dst.y += reg.y;
+
+                if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height) {
+                    Application::error("{}: {}", NS_FuncNameV, "sub region out of range");
+                    throw rfb_error(NS_FuncNameS);
+                }
+
+                cli.fillPixel(dst, pixel);
             }
         }
     }
@@ -308,136 +309,134 @@ namespace LTSM {
             }
 
             Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "raw");
-        } else
-
+        } else if(1 == type) {
             // trle solid
-            if(1 == type) {
-                auto solid = cli.recvCPixel();
-                cli.fillPixel(reg, solid);
+            auto solid = cli.recvCPixel();
+            cli.fillPixel(reg, solid);
 
-                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "solid", solid);
-            } else if(2 <= type && type <= 16) {
-                size_t field = 1;
+            Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "solid", solid);
+        } else if(2 <= type && type <= 16) {
+            size_t field = 1;
 
-                if(4 < type) {
-                    field = 4;
-                } else if(2 < type) {
-                    field = 2;
+            if(4 < type) {
+                field = 4;
+            } else if(2 < type) {
+                field = 2;
+            }
+
+            size_t bits = field * reg.width;
+            size_t rowsz = bits >> 3;
+
+            if((rowsz << 3) < bits) {
+                rowsz++;
+            }
+
+            // recv palette
+            std::vector<int> palette(type);
+
+            for(auto & val : palette) {
+                val = cli.recvCPixel();
+            }
+
+            Application::trace(DebugType::Enc, "{}: type: {}, size: {}", NS_FuncNameV, "packed palette", palette.size());
+
+            // recv packed rows
+            for(int oy = 0; oy < reg.height; ++oy) {
+                Tools::StreamBitsUnpack sb(cli.recvData(rowsz), reg.width, field);
+
+                for(int ox = reg.width - 1; 0 <= ox; --ox) {
+                    auto pos = reg.topLeft() + XCB::Point(ox, oy);
+                    auto index = sb.popValue(field);
+
+                    Application::trace(DebugType::Enc, "{}: type: {}, pos: {}, index: {}", NS_FuncNameV, "packed palette", pos, index);
+
+                    if(index >= palette.size()) {
+                        Application::error("{}: {}", NS_FuncNameV, "index out of range");
+                        throw rfb_error(NS_FuncNameS);
+                    }
+
+                    cli.setPixel(pos, palette[index]);
                 }
+            }
 
-                size_t bits = field * reg.width;
-                size_t rowsz = bits >> 3;
+            Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "packed palette");
+        } else if((17 <= type && type <= 127) || type == 129) {
+            Application::error("{}: {}", NS_FuncNameV, "invalid trle type");
+            throw rfb_error(NS_FuncNameS);
+        } else if(128 == type) {
+            Application::trace(DebugType::Enc, "{}: type: {}", NS_FuncNameV, "plain rle");
 
-                if((rowsz << 3) < bits) {
-                    rowsz++;
-                }
+            auto coord = XCB::PointIterator(0, 0, reg.toSize());
 
-                // recv palette
-                std::vector<int> palette(type);
+            while(coord.isValid()) {
+                auto pixel = cli.recvCPixel();
+                auto runLength = cli.recvRunLength();
 
-                for(auto & val : palette) {
-                    val = cli.recvCPixel();
-                }
+                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}, length: {}", NS_FuncNameV, "plain rle", pixel, runLength);
 
-                Application::trace(DebugType::Enc, "{}: type: {}, size: {}", NS_FuncNameV, "packed palette", palette.size());
+                while(runLength--) {
+                    cli.setPixel(reg.topLeft() + coord, pixel);
+                    ++coord;
 
-                // recv packed rows
-                for(int oy = 0; oy < reg.height; ++oy) {
-                    Tools::StreamBitsUnpack sb(cli.recvData(rowsz), reg.width, field);
-
-                    for(int ox = reg.width - 1; 0 <= ox; --ox) {
-                        auto pos = reg.topLeft() + XCB::Point(ox, oy);
-                        auto index = sb.popValue(field);
-
-                        Application::trace(DebugType::Enc, "{}: type: {}, pos: {}, index: {}", NS_FuncNameV, "packed palette", pos, index);
-
-                        if(index >= palette.size()) {
-                            Application::error("{}: {}", NS_FuncNameV, "index out of range");
-                            throw rfb_error(NS_FuncNameS);
-                        }
-
-                        cli.setPixel(pos, palette[index]);
+                    if(! coord.isValid() && runLength) {
+                        Application::error("{}: {}", NS_FuncNameV, "plain rle: coord out of range");
+                        throw rfb_error(NS_FuncNameS);
                     }
                 }
+            }
 
-                Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "packed palette");
-            } else if((17 <= type && type <= 127) || type == 129) {
-                Application::error("{}: {}", NS_FuncNameV, "invalid trle type");
-                throw rfb_error(NS_FuncNameS);
-            } else if(128 == type) {
-                Application::trace(DebugType::Enc, "{}: type: {}", NS_FuncNameV, "plain rle");
+            Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "plain rle");
+        } else if(130 <= type) {
+            size_t palsz = type - 128;
+            std::vector<int> palette(palsz);
 
-                auto coord = XCB::PointIterator(0, 0, reg.toSize());
+            for(auto & val : palette) {
+                val = cli.recvCPixel();
+            }
 
-                while(coord.isValid()) {
-                    auto pixel = cli.recvCPixel();
+            Application::trace(DebugType::Enc, "{}: type: {}, size: {}", NS_FuncNameV, "rle palette", palsz);
+
+            auto coord = XCB::PointIterator(0, 0, reg.toSize());
+
+            while(coord.isValid()) {
+                auto index = cli.recvInt8();
+
+                if(index < 128) {
+                    if(index >= palette.size()) {
+                        Application::error("{}: {}", NS_FuncNameV, "index out of range");
+                        throw rfb_error(NS_FuncNameS);
+                    }
+
+                    auto pixel = palette[index];
+                    cli.setPixel(reg.topLeft() + coord, pixel);
+                    ++coord;
+                } else {
+                    index -= 128;
+
+                    if(index >= palette.size()) {
+                        Application::error("{}: {}", NS_FuncNameV, "index out of range");
+                        throw rfb_error(NS_FuncNameS);
+                    }
+
+                    auto pixel = palette[index];
                     auto runLength = cli.recvRunLength();
 
-                    Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}, length: {}", NS_FuncNameV, "plain rle", pixel, runLength);
+                    Application::trace(DebugType::Enc, "{}: type: {}, index: {}, length: {}", NS_FuncNameV, "rle palette", index, runLength);
 
                     while(runLength--) {
                         cli.setPixel(reg.topLeft() + coord, pixel);
                         ++coord;
 
                         if(! coord.isValid() && runLength) {
-                            Application::error("{}: {}", NS_FuncNameV, "plain rle: coord out of range");
+                            Application::error("{}: {}", NS_FuncNameV, "rle palette: coord out of range");
                             throw rfb_error(NS_FuncNameS);
                         }
                     }
                 }
-
-                Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "plain rle");
-            } else if(130 <= type) {
-                size_t palsz = type - 128;
-                std::vector<int> palette(palsz);
-
-                for(auto & val : palette) {
-                    val = cli.recvCPixel();
-                }
-
-                Application::trace(DebugType::Enc, "{}: type: {}, size: {}", NS_FuncNameV, "rle palette", palsz);
-
-                auto coord = XCB::PointIterator(0, 0, reg.toSize());
-
-                while(coord.isValid()) {
-                    auto index = cli.recvInt8();
-
-                    if(index < 128) {
-                        if(index >= palette.size()) {
-                            Application::error("{}: {}", NS_FuncNameV, "index out of range");
-                            throw rfb_error(NS_FuncNameS);
-                        }
-
-                        auto pixel = palette[index];
-                        cli.setPixel(reg.topLeft() + coord, pixel);
-                        ++coord;
-                    } else {
-                        index -= 128;
-
-                        if(index >= palette.size()) {
-                            Application::error("{}: {}", NS_FuncNameV, "index out of range");
-                            throw rfb_error(NS_FuncNameS);
-                        }
-
-                        auto pixel = palette[index];
-                        auto runLength = cli.recvRunLength();
-
-                        Application::trace(DebugType::Enc, "{}: type: {}, index: {}, length: {}", NS_FuncNameV, "rle palette", index, runLength);
-
-                        while(runLength--) {
-                            cli.setPixel(reg.topLeft() + coord, pixel);
-                            ++coord;
-
-                            if(! coord.isValid() && runLength) {
-                                Application::error("{}: {}", NS_FuncNameV, "rle palette: coord out of range");
-                                throw rfb_error(NS_FuncNameS);
-                            }
-                        }
-                    }
-                }
-
-                Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "rle palette");
             }
+
+            Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "rle palette");
+        }
     }
 
     RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB) {
@@ -461,28 +460,27 @@ namespace LTSM {
     void RFB::DecodingLZ4::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
-        auto lz4sz = cli.recvIntBE32();
-        auto lz4buf = cli.recvData(lz4sz);
+        auto len = cli.recvIntBE32();
+        auto buf = cli.recvData(len);
+        const uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
 
-        auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
-        auto rawsz = pitch * reg.height;
+        auto runJob = std::bind(&DecodingLZ4::decodeLZ4, this,
+                                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+        // move job to thread pool
+        cli.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, cli.serverFormat());
+    }
 
-        auto runJob = [buf = std::move(lz4buf), reg, rawsz, pitch, st = &cli]() {
-            // thread buf
-            BinaryBuf bb(rawsz);
+    std::vector<uint8_t> RFB::DecodingLZ4::decodeLZ4(const std::vector<uint8_t> & buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
+        std::vector<uint8_t> res(pitch * reg.height);
+        int ret = LZ4_decompress_safe((const char*) buf.data(), (char*) res.data(), buf.size(), res.size());
 
-            int ret = LZ4_decompress_safe((const char*) buf.data(), (char*) bb.data(), buf.size(), bb.size());
+        if(0 >= ret) {
+        Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_decompress_safe_continue", ret);
+            throw rfb_error(NS_FuncNameS);
+        }
 
-            if(ret <= 0) {
-                Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_decompress_safe_continue", ret);
-                throw rfb_error(NS_FuncNameS);
-            }
-
-            bb.resize(ret);
-            st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
-        };
-
-        postJob(std::move(runJob));
+        res.resize(ret);
+        return res;
     }
 #endif // LTSM_DECODING_LZ4
 
@@ -491,44 +489,42 @@ namespace LTSM {
     void RFB::DecodingTJPG::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
-        auto jpgsz = cli.recvIntBE32();
-        auto jpgbuf = cli.recvData(jpgsz);
+        auto len = cli.recvIntBE32();
+        auto buf = cli.recvData(len);
+        const uint32_t pitch = reg.width * tjPixelSize[pixfmt];
 
-        auto runJob = [buf = std::move(jpgbuf), reg, st = &cli]() {
-            std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitDecompress(), tjDestroy };
+        auto runJob = std::bind(&DecodingTJPG::decodeJPG, this,
+                                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+        // format transformed: jpg pixel data only in this format
+        const PixelFormat jpgFormat = platformBigEndian() ? XRGB32 : BGRX32;
+        // move job to thread pool
+        cli.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, jpgFormat);
+    }
 
-            if(!jpeg) {
-                Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
-                return;
-            }
+    std::vector<uint8_t> RFB::DecodingTJPG::decodeJPG(const std::vector<uint8_t> & buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
+        std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitDecompress(), tjDestroy };
 
-            // TJPF: RGBX, BGRX, XRGB, XBGR
-            // from lowest to highest memory address
-            const int pixfmt = TJPF_BGRX;
-            const auto pitch = reg.width * tjPixelSize[pixfmt];
+        if(! jpeg) {
+        Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
+            throw rfb_error(NS_FuncNameS);
+        }
 
-            // thread buf
-            std::vector<uint8_t> jpegData(pitch * reg.height);
+        // thread buf
+        std::vector<uint8_t> res(pitch * reg.height);
 
-            if(0 > tjDecompress2(jpeg.get(), buf.data(), buf.size(),
-                                     jpegData.data(), reg.width, 0, reg.height, pixfmt, TJFLAG_FASTDCT)) {
+        if(0 > tjDecompress2(jpeg.get(), buf.data(), buf.size(),
+            res.data(), reg.width, 0, reg.height, pixfmt, TJFLAG_FASTDCT)) {
 #ifdef tjGetErrorCode
-                int err = tjGetErrorCode(jpeg.get());
-                const char* str = tjGetErrorStr2(jpeg.get());
-                Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "tjDecompress", str, err);
+            int err = tjGetErrorCode(jpeg.get());
+            const char* str = tjGetErrorStr2(jpeg.get());
+            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "tjDecompress", str, err);
 #else
-                Application::error("{}: {} failed, error: `{}'", NS_FuncNameV, "tjDecompress", tjGetErrorStr());
+            Application::error("{}: {} failed, error: `{}'", NS_FuncNameV, "tjDecompress", tjGetErrorStr());
 #endif
-                return;
-            }
+            throw rfb_error(NS_FuncNameS);
+        }
 
-
-            // format transformed: jpg pixel data only in this format
-            const PixelFormat jpgFormat = platformBigEndian() ? XRGB32 : BGRX32;
-            st->updateRawPixels(reg, std::move(jpegData), pitch, jpgFormat);
-        };
-
-        postJob(std::move(runJob));
+        return res;
     }
 #endif // LTSM_DECODING_TJPG
 
@@ -537,19 +533,14 @@ namespace LTSM {
     void RFB::DecodingQOI::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
-        size_t len = cli.recvIntBE32();
+        auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);
+        const uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
 
-        uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
-        uint32_t rawsz = pitch * reg.height;
-
-        auto runJob = [this, pitch, rawsz, reg, buf = std::move(buf), st = &cli]() {
-            auto bb = decodeBGRx(buf, reg.toSize(), st->serverFormat(), pitch);
-            assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
-            st->updateRawPixels(reg, std::move(bb), pitch, st->serverFormat());
-        };
-
-        postJob(std::move(runJob));
+        auto runJob = std::bind(&DecodingQOI::decodeBGRx, this,
+                                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+        // move job to thread pool
+        cli.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, cli.serverFormat());
     }
 
     namespace QOI {
@@ -581,7 +572,7 @@ namespace LTSM {
         }
     }
 
-    BinaryBuf RFB::DecodingQOI::decodeBGRx(const std::vector<uint8_t> & buf, const XCB::Size & rsz, const PixelFormat & clientPf, uint32_t pitch) const {
+    std::vector<uint8_t> RFB::DecodingQOI::decodeBGRx(const std::vector<uint8_t> & buf, const XCB::Region & rsz, uint32_t pitch, const PixelFormat & pf) const {
         std::array<int64_t, 64> hashes;
         hashes.fill(-1);
 
@@ -589,8 +580,8 @@ namespace LTSM {
         std::uint8_t run = 0;
 
         StreamBufRef sb(buf.data(), buf.size());
-        BinaryBuf res(static_cast<size_t>(pitch) * rsz.height, 0);
-        FrameBuffer fb(res.data(), XCB::Region{0, 0, rsz.width, rsz.height}, clientPf, pitch);
+        std::vector<uint8_t> res(static_cast<size_t>(pitch) * rsz.height, 0);
+        FrameBuffer fb(res.data(), XCB::Region{0, 0, rsz.width, rsz.height}, pf, pitch);
 
         for(int16_t py = 0; py < rsz.height; ++py) {
             for(int16_t px = 0; px < rsz.width; ++px) {
@@ -613,7 +604,7 @@ namespace LTSM {
                     col.g = sb.readInt8();
                     col.b = sb.readInt8();
 
-                    prevPixel = QOI::packBGRx(col, clientPf);
+                    prevPixel = QOI::packBGRx(col, pf);
                     fb.setPixel(XCB::Point{px, py}, prevPixel);
                     hashes[QOI::hashIndex64RGB(col)] = prevPixel;
                     continue;
@@ -636,13 +627,13 @@ namespace LTSM {
                 }
 
                 if((type & QOI::Tag::MASK2) == QOI::Tag::DIFF) {
-                    auto col = QOI::unpackBGRx(prevPixel, clientPf);
+                    auto col = QOI::unpackBGRx(prevPixel, pf);
 
                     col.r += ((type >> 4) & 0x03) - 2;
                     col.g += ((type >> 2) & 0x03) - 2;
                     col.b += (type & 0x03) - 2;
 
-                    prevPixel = QOI::packBGRx(col, clientPf);
+                    prevPixel = QOI::packBGRx(col, pf);
                     fb.setPixel(XCB::Point{px, py}, prevPixel);
                     hashes[QOI::hashIndex64RGB(col)] = prevPixel;
                     continue;
@@ -652,13 +643,13 @@ namespace LTSM {
                     auto lm = sb.readInt8();
                     int8_t vg = (type & 0x3f) - 32;
 
-                    auto col = QOI::unpackBGRx(prevPixel, clientPf);
+                    auto col = QOI::unpackBGRx(prevPixel, pf);
 
                     col.r += vg - 8 + ((lm >> 4) & 0x0f);
                     col.g += vg;
                     col.b += vg - 8 + (lm & 0x0f);
 
-                    prevPixel = QOI::packBGRx(col, clientPf);
+                    prevPixel = QOI::packBGRx(col, pf);
                     fb.setPixel(XCB::Point{px, py}, prevPixel);
                     hashes[QOI::hashIndex64RGB(col)] = prevPixel;
                     continue;

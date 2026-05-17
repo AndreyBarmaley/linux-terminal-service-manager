@@ -53,7 +53,7 @@ namespace LTSM {
     };
 
     class BoostContext {
-        const int concurency_ = 2;
+        const int concurency_ = 4;
         boost::asio::io_context ioc_{concurency_};
 
       protected:
@@ -73,6 +73,7 @@ namespace LTSM {
         public RFB::WinClient
 #endif
     {
+        boost::asio::thread_pool thread_pool_{concurency()};
         boost::asio::signal_set signals_;
         boost::asio::cancellation_signal rfb_cancel_;
         boost::asio::io_context sdl_ctx_;
@@ -104,6 +105,7 @@ namespace LTSM {
         XCB::Size windowSize_;
 
         std::chrono::time_point<std::chrono::steady_clock> appStart;
+        std::atomic<uint16_t> decoder_jobs_{0};
         std::atomic<bool> focusLost{false};
 
         int xcbDpi = 0;
@@ -133,6 +135,8 @@ namespace LTSM {
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
         void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, const PixelFormat &) override;
         void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, uint32_t sdlFormat) override;
+        void postDecoderJob(RFB::PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
+        void waitDecoderJobs(void) override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 

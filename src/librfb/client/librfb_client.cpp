@@ -854,9 +854,7 @@ namespace LTSM {
             co_await recvFBUpdateRegionAwait();
         }
 
-        if(decoder_) {
-            decoder_->waitUpdateComplete();
-        }
+        waitDecoderJobs();
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);

@@ -882,16 +882,14 @@ namespace LTSM {
             asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() }), asio::detached);
         }
 
-        asio::thread_pool pool{concurency()};
-
         for(auto it = 0; it < concurency(); ++it) {
-            asio::post(pool, [this](){ ioc().run(); });
+            asio::post(thread_pool_, [this](){ ioc().run(); });
         }
 
         Application::info("{}: client running", NS_FuncNameV);
 
         sdl_ctx_.run();
-        pool.join();
+        thread_pool_.join();
 
         return EXIT_SUCCESS;
     }
@@ -1317,6 +1315,11 @@ namespace LTSM {
             return;
         }
 
+        if(buf.size() < pitch * wrt.height) {
+            Application::error("{}: invalid buffer, size: {}, pitch: {}, reg: {}", NS_FuncNameV, buf.size(), pitch, wrt);
+            return;
+        }
+
         const uint32_t rgbmask = pf.bitsPerPixel() == 24 ?
             0 : pf.rmask() | pf.gmask() | pf.bmask();
 
@@ -1348,6 +1351,21 @@ namespace LTSM {
                 Application::error("{}: {} failed, exception: {}", "updateRawPixels2", err.what());
             }
         });
+    }
+
+    void ClientApp::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) {
+        // decoder job
+        boost::asio::post(ioc(), [this, job=std::move(func), buf1=std::move(buf), pitch, reg, pf]() {
+            decoder_jobs_.fetch_add(1, std::memory_order_relaxed);
+            updateRawPixels(reg, job(buf1, reg, pitch, pf), pitch, pf);
+            decoder_jobs_.fetch_sub(1, std::memory_order_release);
+        });
+    }
+
+    void ClientApp::waitDecoderJobs(void) {
+        while(decoder_jobs_.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
     }
 
     void ClientApp::clientRecvFBUpdateEvent(void) {

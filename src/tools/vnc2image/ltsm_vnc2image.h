@@ -52,6 +52,8 @@ namespace LTSM {
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
         void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, const PixelFormat &) override;
         void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, uint32_t sdlFormat) override;
+        void postDecoderJob(RFB::PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
+        void waitDecoderJobs(void) override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
