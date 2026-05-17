@@ -114,7 +114,6 @@ namespace LTSM::Connector {
         void systemTransferFiles(const JsonObject &) override;
         void systemClientVariables(const JsonObject &) override;
         void systemKeyboardChange(const JsonObject &) override;
-        void systemKeyboardEvent(const JsonObject &) override;
         void systemCursorFailed(const JsonObject & jo) override;
 
         bool noVncMode(void) const override;

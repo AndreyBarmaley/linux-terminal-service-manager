@@ -64,7 +64,6 @@ namespace LTSM {
         static const std::string_view ClientVariables{"ClientVariables"};
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
-        static const std::string_view KeyboardEvent{"KeyboardEvent"};
         static const std::string_view CursorFailed{"CursorFailed"};
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
@@ -586,7 +585,6 @@ namespace LTSM {
         virtual void systemClientVariables(const JsonObject &) { /* empty */ }
         virtual void systemCursorFailed(const JsonObject &) { /* empty */ }
         virtual void systemKeyboardChange(const JsonObject &) { /* empty */ }
-        virtual void systemKeyboardEvent(const JsonObject &) { /* empty */ }
         virtual void systemChannelError(const JsonObject &) { /* empty */ }
         virtual void systemTransferFiles(const JsonObject &) { /* empty */ }
         virtual void systemLoginSuccess(const JsonObject &) { /* empty */ }
@@ -625,7 +623,6 @@ namespace LTSM {
         virtual ~ChannelClient() = default;
 
         void sendSystemCursorFailed(int cursorId);
-        void sendSystemKeyboardEvent(bool pressed, int scancode, int keycode);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
         bool sendSystemTransferFiles(std::forward_list<std::string> &&);

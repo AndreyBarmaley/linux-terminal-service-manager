@@ -387,24 +387,6 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::systemKeyboardEvent(const JsonObject & jo) {
-        // event supported
-        if(20250808 > _ltsmClientVersion) {
-            return;
-        }
-
-        if(xcbAllowMessages()) {
-            auto pressed = jo.getBoolean("pressed");
-            auto scancode = jo.getInteger("scancode");
-            auto keycode = jo.getInteger("keycode");
-
-            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#010x}, keycode: {}", NS_FuncNameV, (int) pressed, scancode, keycode);
-
-            serverRecvKeyEvent(pressed, keycode, scancode);
-            X11Server::serverScreenUpdateRequest();
-        }
-    }
-
     void ConnectorLtsm::systemKeyboardChange(const JsonObject & jo) {
         auto layout = jo.getString("layout");
 

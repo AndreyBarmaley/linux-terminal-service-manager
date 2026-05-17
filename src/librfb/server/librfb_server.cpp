@@ -1401,8 +1401,6 @@ namespace LTSM {
             systemClientVariables(jo);
         } else if(cmd == SystemCommand::KeyboardChange) {
             systemKeyboardChange(jo);
-        } else if(cmd == SystemCommand::KeyboardEvent) {
-            systemKeyboardEvent(jo);
         } else if(cmd == SystemCommand::CursorFailed) {
             systemCursorFailed(jo);
         } else if(cmd == SystemCommand::TransferFiles) {
