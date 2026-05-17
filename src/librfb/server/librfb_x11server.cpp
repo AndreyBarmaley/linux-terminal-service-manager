@@ -682,10 +682,6 @@ namespace LTSM {
         }
     }
 
-    size_t RFB::X11Server::serverBitsPerPixel(void) const {
-        return XCB::RootDisplay::bitsPerPixel();
-    }
-
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
         Application::debug(DebugType::X11Srv, "{}: region: {}", NS_FuncNameV, reg);
         auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);

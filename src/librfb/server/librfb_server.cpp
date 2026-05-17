@@ -1056,10 +1056,10 @@ namespace LTSM {
             return;
         }
 
-        if(compatible == RFB::ENCODING_LTSM_QOI && 24 != serverBitsPerPixel()) {
+        if(compatible == RFB::ENCODING_LTSM_QOI && 3 > serverFormat().bytePerPixel()) {
             const int change = RFB::ENCODING_LTSM_LZ4;
-            Application::notice("{}: server bitsPerPixel({}), {} not supported, change to: {}",
-                NS_FuncNameV, serverBitsPerPixel(), RFB::encodingName(compatible), RFB::encodingName(change));
+            Application::notice("{}: server bpp({}), {} not supported, change to: {}",
+                NS_FuncNameV, serverFormat().bytePerPixel(), RFB::encodingName(compatible), RFB::encodingName(change));
             compatible = change;
         }
 
