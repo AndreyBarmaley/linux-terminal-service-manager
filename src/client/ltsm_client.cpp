@@ -1317,8 +1317,11 @@ namespace LTSM {
             return;
         }
 
+        const uint32_t rgbmask = pf.bitsPerPixel() == 24 ?
+            0 : pf.rmask() | pf.gmask() | pf.bmask();
+
         if(auto sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(),
-            pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
+            pf.rmask(), pf.gmask(), pf.bmask(), ~rgbmask); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
             updateRawPixels2(wrt, std::move(buf), pitch, sdlFormat);
         }
     }
@@ -1332,7 +1335,15 @@ namespace LTSM {
         asio::dispatch(sdl_strand_, [this, wrt, buf = std::move(buf), pitch, sdlFormat](){
             const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
             try {
-                window_->renderDisplayUpdateRaw(&dstrt, buf.data(), pitch);
+                if(sdlFormat == window_->pixelFormat()) {
+                    window_->renderDisplayUpdateRaw(&dstrt, buf.data(), pitch);
+                } else {
+                    Application::warning("{}: pixels not optimal: <{}, {}>",
+                        "updateRawPixels2", SDL_GetPixelFormatName(sdlFormat), SDL_GetPixelFormatName(window_->pixelFormat()));
+                    auto tx = window_->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
+                    tx.updateRect(nullptr, buf.data(), pitch);
+                    window_->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
+                }
             } catch(const std::exception& err) {
                 Application::error("{}: {} failed, exception: {}", "updateRawPixels2", err.what());
             }

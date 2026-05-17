@@ -163,7 +163,11 @@ namespace LTSM {
     }
 
     void SDL::Window::renderClear(const SDL_Color* col, SDL_Texture* target) {
-        renderReset(target ? target : display_.get());
+        if(!target) {
+            target = display_.get();
+        }
+
+        renderReset(target);
 
         if(0 != SDL_SetRenderDrawColor(renderer_.get(), col->r, col->g, col->b, col->a)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderDrawColor", SDL_GetError());
@@ -181,7 +185,11 @@ namespace LTSM {
     }
 
     void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target) {
-        renderReset(target ? target : display_.get());
+        if(!target) {
+            target = display_.get();
+        }
+
+        renderReset(target);
 
         if(0 != SDL_SetRenderDrawColor(renderer_.get(), col->r, col->g, col->b, col->a)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderDrawColor", SDL_GetError());
@@ -205,7 +213,12 @@ namespace LTSM {
 
     void SDL::Window::renderTexture(const SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
         assertm(source, "invalid texture");
-        renderReset(target ? target : display_.get());
+
+        if(!target) {
+            target = display_.get();
+        }
+
+        renderReset(target);
 
         if(0 != SDL_RenderCopy(renderer_.get(), const_cast<SDL_Texture*>(source), srcrt, dstrt)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy", SDL_GetError());

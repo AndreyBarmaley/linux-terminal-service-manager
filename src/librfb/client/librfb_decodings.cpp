@@ -497,41 +497,43 @@ namespace LTSM {
         auto runJob = [buf = std::move(jpgbuf), reg, st = &cli]() {
             std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitDecompress(), tjDestroy };
 
-            if(jpeg) {
+            if(!jpeg) {
+                Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
+                return;
+            }
+
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-                const int pixfmt = TJPF_RGBX;
+            const int pixfmt = TJPF_RGBX;
 #else
-                const int pixfmt = TJPF_BGRX;
+            const int pixfmt = TJPF_BGRX;
 #endif
-                auto pitch = reg.width * tjPixelSize[pixfmt];
+            auto pitch = reg.width * tjPixelSize[pixfmt];
 
-                // thread buf
-                std::vector<uint8_t> jpegData(pitch * reg.height);
+            // thread buf
+            std::vector<uint8_t> jpegData(pitch * reg.height);
 
-                if(0 > tjDecompress2(jpeg.get(), buf.data(), buf.size(),
+            if(0 > tjDecompress2(jpeg.get(), buf.data(), buf.size(),
                                      jpegData.data(), reg.width, 0, reg.height, pixfmt, TJFLAG_FASTDCT)) {
 #ifdef tjGetErrorCode
-                    int err = tjGetErrorCode(jpeg.get());
-                    const char* str = tjGetErrorStr2(jpeg.get());
-                    Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "tjDecompress", str, err);
+                int err = tjGetErrorCode(jpeg.get());
+                const char* str = tjGetErrorStr2(jpeg.get());
+                Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "tjDecompress", str, err);
 #else
-                    Application::error("{}: {} failed, error: `{}'", NS_FuncNameV, "tjDecompress", tjGetErrorStr());
+                Application::error("{}: {} failed, error: `{}'", NS_FuncNameV, "tjDecompress", tjGetErrorStr());
 #endif
-                } else {
+                return;
+            }
 #ifndef SDL_PIXELFORMAT_XBGR8888
-#define SDL_PIXELFORMAT_XBGR8888 SDL_PIXELFORMAT_ABGR8888
+ // deb10, turbojpeg-1.5.2
+ #define SDL_PIXELFORMAT_XBGR8888 SDL_PIXELFORMAT_ABGR8888
 #endif
 
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-                    st->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_RGBX8888);
+            const uint32_t serverFormat = SDL_PIXELFORMAT_RGBX8888;
 #else
-                    // deb10, turbojpeg-1.5.2
-                    st->updateRawPixels2(reg, std::move(jpegData), pitch, SDL_PIXELFORMAT_XBGR8888);
+            const uint32_t serverFormat = SDL_PIXELFORMAT_XBGR8888;
 #endif
-                }
-            } else {
-                Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
-            }
+            st->updateRawPixels2(reg, std::move(jpegData), pitch, serverFormat);
         };
 
         postJob(std::move(runJob));
