@@ -24,9 +24,7 @@
 #ifndef _LIBRFB_DECODINGS_
 #define _LIBRFB_DECODINGS_
 
-#include <list>
-#include <atomic>
-#include <thread>
+#include <vector>
 #include <functional>
 
 #include "ltsm_librfb.h"
@@ -160,7 +158,6 @@ namespace LTSM {
         /// DecodingBase
         class DecodingBase {
             const int type_ = 0;
-            uint32_t threads_ = 4;
 
           public:
             DecodingBase(int v);
@@ -170,10 +167,6 @@ namespace LTSM {
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
 
             int type(void) const;
-            size_t threads(void) const {
-                return threads_;
-            }
-            void setThreads(int);
         };
 
         /// DecodingRaw

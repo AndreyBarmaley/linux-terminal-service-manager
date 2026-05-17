@@ -74,9 +74,7 @@ namespace LTSM {
 
     void RFB::ClientDecoder::sendFlush(void) {
         try {
-            if(rfbMessagesRunning()) {
-                stream_out_->sendFlush();
-            }
+            stream_out_->sendFlush();
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             rfbMessagesShutdown();
@@ -85,9 +83,7 @@ namespace LTSM {
 
     void RFB::ClientDecoder::sendRaw(const void* ptr, size_t len) {
         try {
-            if(rfbMessagesRunning()) {
-                stream_out_->sendRaw(ptr, len);
-            }
+            stream_out_->sendRaw(ptr, len);
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             rfbMessagesShutdown();
@@ -96,9 +92,7 @@ namespace LTSM {
 
     void RFB::ClientDecoder::recvRaw(void* ptr, size_t len) const {
         try {
-            if(rfbMessagesRunning()) {
-                stream_in_->recvRaw(ptr, len);
-            }
+            stream_in_->recvRaw(ptr, len);
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
@@ -107,9 +101,7 @@ namespace LTSM {
 
     bool RFB::ClientDecoder::hasInput(void) const {
         try {
-            if(rfbMessagesRunning()) {
-                return stream_in_->hasInput();
-            }
+            return stream_in_->hasInput();
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
@@ -120,9 +112,7 @@ namespace LTSM {
 
     size_t RFB::ClientDecoder::hasData(void) const {
         try {
-            if(rfbMessagesRunning()) {
-                return stream_in_->hasData();
-            }
+            return stream_in_->hasData();
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
@@ -439,7 +429,6 @@ namespace LTSM {
         channelsShutdown();
         incr_update_timer_.cancel();
         socket_->closeSocket();
-        rfbMessages = false;
     }
 
     std::list<int> RFB::ClientDecoder::supportedEncodings(bool extclip) {
@@ -557,7 +546,7 @@ namespace LTSM {
         // request incr update job
         asio::co_spawn(rfb_strand_, rfbRequestIncrUpdate(), asio::detached);
 
-        while(rfbMessages) {
+        while(true) {
             co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
             int msgType = co_await socket_->async_recv_byte();
 

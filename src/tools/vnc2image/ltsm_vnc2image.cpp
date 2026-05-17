@@ -103,7 +103,6 @@ namespace LTSM {
     }
 
     void Vnc2Image::decoderInitEvent(RFB::DecodingBase* decoder) {
-        decoder->setThreads(1);
         tp = std::chrono::steady_clock::now();
     }
 

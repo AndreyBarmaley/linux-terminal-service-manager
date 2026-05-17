@@ -143,10 +143,6 @@ namespace LTSM {
         return type_;
     }
 
-    void RFB::DecodingBase::setThreads(int v) {
-        threads_ = v;
-    }
-
     void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
 

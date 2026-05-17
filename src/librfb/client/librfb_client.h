@@ -26,7 +26,6 @@
 
 #include <mutex>
 #include <memory>
-#include <atomic>
 
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
@@ -46,8 +45,6 @@ namespace LTSM {
 
             NetworkStream* stream_in_;
             NetworkStream* stream_out_;
-
-            std::atomic<bool> rfbMessages{true};
 
             PixelFormat server_pf_;
             int server_ltsm_version_ = 0;
@@ -123,10 +120,6 @@ namespace LTSM {
             ClientDecoder(const boost::asio::any_io_executor&);
 
             bool rfbHandshake(const SecurityInfo &);
-
-            inline bool rfbMessagesRunning(void) const {
-                return !!rfbMessages;
-            }
 
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
             boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode);
