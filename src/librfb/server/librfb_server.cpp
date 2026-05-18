@@ -1061,7 +1061,7 @@ namespace LTSM {
             return;
         }
 
-        if(compatible == RFB::ENCODING_LTSM_QOI && 3 > serverFormat().bytePerPixel()) {
+        if(compatible == RFB::ENCODING_LTSM_QOI && 24 != serverFormat().depth()) {
             const int change = RFB::ENCODING_LTSM_LZ4;
             Application::notice("{}: server bpp({}), {} not supported, change to: {}",
                 NS_FuncNameV, serverFormat().bytePerPixel(), RFB::encodingName(compatible), RFB::encodingName(change));

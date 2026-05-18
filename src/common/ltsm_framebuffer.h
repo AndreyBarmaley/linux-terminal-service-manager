@@ -101,6 +101,14 @@ namespace LTSM {
                    redShift == pf.redShift && greenShift == pf.greenShift && blueShift == pf.blueShift && (skipAlpha ? true : alphaShift == pf.alphaShift);
         }
 
+#ifdef LTSM_WITH_SDL
+        uint32_t sdlPixelFormat(void) const;
+#endif
+
+#ifdef LTSM_WITH_FFMPEG
+        int ffmpegPixelFormat(void) const;
+#endif
+
         uint32_t depth(void) const;
         uint32_t rmask(void) const;
         uint32_t gmask(void) const;

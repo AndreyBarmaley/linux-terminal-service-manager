@@ -27,7 +27,6 @@
 #include "ltsm_application.h"
 #include "ltsm_tools.h"
 #include "librfb_ffmpeg.h"
-#include "ffmpeg_tools.h"
 
 namespace LTSM {
     namespace FFMPEG {
@@ -83,26 +82,8 @@ namespace LTSM {
     }
 
     AVPixelFormat RFB::FFmpegBase::localFormat(const PixelFormat & pf) const {
-        if(32 == pf.bitsPerPixel()) {
-            if(32 == pf.depth()) {
-                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
-            }
-
-            if(30 == pf.depth()) {
-                return platformBigEndian() ? AV_PIX_FMT_X2RGB10 : AV_PIX_FMT_X2BGR10;
-            }
-
-            if(24 == pf.depth()) {
-                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
-            }
-        }
-
-        if(16 == pf.bitsPerPixel()) {
-            return platformBigEndian() ? AV_PIX_FMT_BGR565 : AV_PIX_FMT_RGB565;
-        }
-
-        if(15 == pf.bitsPerPixel()) {
-            return platformBigEndian() ? AV_PIX_FMT_BGR555 : AV_PIX_FMT_RGB555;
+        if(auto format = pf.ffmpegPixelFormat(); format != AV_PIX_FMT_NONE) {
+            return (AVPixelFormat) format;
         }
 
         Application::error("{}: {} failed, bpp: {}, depth: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
@@ -458,6 +439,7 @@ namespace LTSM {
         localFrame->width = csz.width;
         localFrame->height = csz.height;
         localFrame->format = localFormat(clientFormat);
+        ffmpegPixelFormat = clientFormat;
 
         int ret = av_image_get_buffer_size((AVPixelFormat) localFrame->format, localFrame->width, localFrame->height, 1);
         if(0 > ret) {
@@ -475,17 +457,6 @@ namespace LTSM {
         if(int ret = av_image_fill_arrays(localFrame->data, localFrame->linesize, localData.get(),
                                       (AVPixelFormat) localFrame->format, localFrame->width, localFrame->height, 1); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "av_image_fill_arrays", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
-        // init pixel format
-        int bpp;
-        uint32_t rmask, gmask, bmask, amask;
-
-        if(Tools::AV_PixelFormatEnumToMasks((AVPixelFormat) localFrame->format, & bpp, & rmask, & gmask, & bmask, & amask, false)) {
-            ffmpegPixelFormat = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        } else {
-            Application::error("{}: unknown pixel format: {}, id: {}", NS_FuncNameV, av_get_pix_fmt_name((AVPixelFormat) localFrame->format), localFrame->format);
             throw ffmpeg_error(NS_FuncNameS);
         }
 

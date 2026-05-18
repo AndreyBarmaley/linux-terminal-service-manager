@@ -32,6 +32,16 @@
 #include <execution>
 #endif
 
+#ifdef LTSM_WITH_SDL
+#include "SDL.h"
+#endif
+
+#ifdef LTSM_WITH_FFMPEG
+extern "C" {
+#include "libavformat/avformat.h"
+}
+#endif
+
 #include "ltsm_tools.h"
 #include "ltsm_font_psf.h"
 #include "ltsm_application.h"
@@ -152,6 +162,53 @@ namespace LTSM {
     uint32_t PixelFormat::convertTo(uint32_t pixel, const PixelFormat & pf) const {
         return convertPixelFromTo(pixel, *this, pf);
     }
+
+#ifdef LTSM_WITH_SDL
+    uint32_t PixelFormat::sdlPixelFormat(void) const {
+        if(auto fmt = SDL_MasksToPixelFormatEnum(bitsPerPixel(),
+            rmask(), gmask(), bmask(), amask()); fmt != SDL_PIXELFORMAT_UNKNOWN) {
+            return fmt;
+        }
+
+        if(32 == bitsPerPixel() && 30 == depth()) {
+            return SDL_PIXELFORMAT_ARGB2101010;
+        }
+
+        return SDL_PIXELFORMAT_UNKNOWN;
+    }
+#endif
+
+#ifdef LTSM_WITH_FFMPEG
+    int PixelFormat::ffmpegPixelFormat(void) const {
+        if(15 == bitsPerPixel()) {
+            return platformBigEndian() ? AV_PIX_FMT_BGR555 : AV_PIX_FMT_RGB555;
+        }
+
+        if(16 == bitsPerPixel()) {
+            return platformBigEndian() ? AV_PIX_FMT_BGR565 : AV_PIX_FMT_RGB565;
+        }
+
+        if(24 == bitsPerPixel()) {
+            return platformBigEndian() ? AV_PIX_FMT_BGR24 : AV_PIX_FMT_RGB24;
+        }
+        
+        if(32 == bitsPerPixel()) {
+            if(32 == depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            }
+
+            if(30 == depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_X2RGB10 : AV_PIX_FMT_X2BGR10;
+            }
+
+            if(24 == depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            }
+        }
+
+        return AV_PIX_FMT_NONE;
+    }
+#endif
 
     fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), allocated(1) {
         uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;

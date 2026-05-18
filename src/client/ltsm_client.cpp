@@ -1320,9 +1320,7 @@ namespace LTSM {
             return;
         }
 
-        if(auto sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(),
-            pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
-
+        if(auto sdlFormat = pf.sdlPixelFormat(); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
             const bool optimal = SDL_PIXELLAYOUT(sdlFormat) == SDL_PIXELLAYOUT(window_->pixelFormat());
 
             if(! optimal && clientPf.bitsPerPixel() == pf.bitsPerPixel()) {
@@ -1346,7 +1344,8 @@ namespace LTSM {
                 }
             });
         } else {
-            Application::error("{}: {} failed", NS_FuncNameV, "SDL_MasksToPixelFormatEnum");
+            Application::error("{}: {} failed, pixel format - bpp: {}, depth: {}, red({:#010x}), green({:#010x}), blue({:#010x}), alpha({:#010x})",
+                NS_FuncNameV, "SDL_MasksToPixelFormatEnum", pf.bitsPerPixel(), pf.depth(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
         }
     }
 
