@@ -426,8 +426,6 @@ namespace LTSM {
     */
 
     void RFB::DecodingFFmpeg::resizedEvent(const XCB::Size & nsz) {
-        std::scoped_lock guard{ lockUpdate };
-
         Application::debug(DebugType::Enc, "{}: received", NS_FuncNameV);
 
         if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != nsz) {
@@ -570,8 +568,6 @@ namespace LTSM {
         if(0 == len) {
             return;
         }
-
-        std::scoped_lock guard{ lockUpdate };
 
         if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != cli.clientSize()) {
             initLocalContext(cli.clientSize(), cli.clientFormat());

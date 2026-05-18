@@ -168,8 +168,6 @@ namespace LTSM {
             const AVCodec* codec = nullptr;
 #endif
 
-            std::mutex lockUpdate;
-
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
             const int fps;
 

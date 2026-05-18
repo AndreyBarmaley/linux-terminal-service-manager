@@ -586,17 +586,25 @@ namespace LTSM {
         co_return;
     }
 
-    bool RFB::ClientDecoder::isClientFFmpegEncoding(void) const {
-        return decoder_ &&
-            (decoder_->type() == RFB::ENCODING_LTSM_H264 ||
-                decoder_->type() == RFB::ENCODING_LTSM_AV1 || decoder_->type() == RFB::ENCODING_LTSM_VP8);
+    bool RFB::ClientDecoder::isDecoderFFmpeg(void) const {
+        if(decoder_) {
+            switch(decoder_->type()) {
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
+                    return true;
+
+                default: break;
+            }
+        }
+        return false;
     }
 
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz) {
         Application::info("{}: display resized, new size: {}", NS_FuncNameV, dsz);
 #ifdef LTSM_DECODING_FFMPEG
         // event background
-        if(isClientFFmpegEncoding()) {
+        if(isDecoderFFmpeg()) {
             std::thread([this, sz = dsz]() {
                 this->decoder_->resizedEvent(sz);
             }).detach();

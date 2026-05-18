@@ -210,7 +210,7 @@ namespace LTSM {
             if(auto frameRate = frameRateOption()) {
                 int delayTimeout = 1000 / frameRate;
 
-                if(isClientFFmpegEncoding()) {
+                if(isEncoderFFmpeg()) {
                     // ffmpeg encoding: fixed fps
                     fullscreenUpdateReq = true;
                 } else if(xcbNoDamageOption()) {

@@ -114,7 +114,6 @@ namespace LTSM {
 
             bool socketConnect(std::string_view host, uint16_t port, bool no_delay = false);
             void recvDecodingUpdateRegion(int type, const XCB::Region &);
-            bool isClientFFmpegEncoding(void) const;
 
           public:
             ClientDecoder(const boost::asio::any_io_executor&);
@@ -130,6 +129,7 @@ namespace LTSM {
             void rfbMessagesShutdown(void);
             bool isContinueUpdatesSupport(void) const;
             bool isContinueUpdatesProcessed(void) const;
+            bool isDecoderFFmpeg(void) const;
 
             void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override;
             void sendLtsmChannelData(uint8_t channel, std::string&&) override;

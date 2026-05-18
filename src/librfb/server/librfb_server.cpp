@@ -902,7 +902,7 @@ namespace LTSM {
         Application::info("{}: display resized, new size: {}", NS_FuncNameV, dsz);
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
-        if(isClientFFmpegEncoding()) {
+        if(isEncoderFFmpeg()) {
     	    std::thread([this, sz = dsz]() {
                 this->encoder->resizedEvent(sz);
     	    }).detach();
@@ -1334,10 +1334,18 @@ namespace LTSM {
         return clientLtsmKeyboard;
     }
 
-    bool RFB::ServerEncoder::isClientFFmpegEncoding(void) const {
-	return encoder &&
-            (encoder->getType() == RFB::ENCODING_LTSM_H264 ||
-                encoder->getType() == RFB::ENCODING_LTSM_AV1 || encoder->getType() == RFB::ENCODING_LTSM_VP8);
+    bool RFB::ServerEncoder::isEncoderFFmpeg(void) const {
+        if(encoder) {
+            switch(encoder->getType()) {
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
+                    return true;
+
+                default: break;
+            }
+        }
+        return false;
     }
 
     void RFB::ServerEncoder::sendLtsmChannel(uint8_t channel, std::span<const uint8_t> buf) {
@@ -1430,7 +1438,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts, uint32_t frameRate) {
         if(encoder) {
-    	    if(isClientFFmpegEncoding()) {
+    	    if(isEncoderFFmpeg()) {
         	encoder->setFps(frameRate);
         	serverScreenUpdateRequest();
             }

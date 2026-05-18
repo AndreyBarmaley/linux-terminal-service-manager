@@ -131,9 +131,9 @@ namespace LTSM {
 
             bool isClientLtsmSupported(void) const;
             bool isClientLtsmKeyboard(void) const;
-            bool isClientFFmpegEncoding(void) const;
             bool isClientSupportedEncoding(int) const;
             bool isContinueUpdatesProcessed(void) const;
+            bool isEncoderFFmpeg(void) const;
 
             bool isUpdateProcessed(void) const;
             void waitUpdateProcess(void);
