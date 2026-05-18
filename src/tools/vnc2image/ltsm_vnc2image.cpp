@@ -153,11 +153,6 @@ namespace LTSM {
         */
     }
 
-    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) {
-        // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
-        Application::warning("{}: not implemented", NS_FuncNameV);
-    }
-
     void Vnc2Image::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf1, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) {
         auto buf2 = func(buf1, reg, pitch, pf);
         assertm(buf2.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");

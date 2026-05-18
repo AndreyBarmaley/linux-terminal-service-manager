@@ -498,9 +498,9 @@ namespace LTSM {
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::notice("{}: server pf - bpp: {}, depth: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
+        Application::notice("{}: server pf - bpp: {}, depth: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                             NS_FuncNameV, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
-                            pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
+                            pf.rmask(), pf.gmask(), pf.bmask());
         clientPf = serverFormat();
         // send pixel format
         sendInt8(pf.bitsPerPixel());
@@ -662,8 +662,8 @@ namespace LTSM {
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
-                            NS_FuncNameV, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
+        Application::debug(DebugType::Rfb, "{}: red({},{}), green({},{}), blue({},{})",
+                            NS_FuncNameV, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel) {
             case 32:
@@ -685,6 +685,11 @@ namespace LTSM {
         clientTrueColor = trueColor;
         clientBigEndian = bigEndian;
         clientPf = PixelFormat(bitsPerPixel, redMax, greenMax, blueMax, 0, redShift, greenShift, blueShift, 0);
+
+        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
+                            NS_FuncNameV, bitsPerPixel, depth, (int) bigEndian,
+                            clientPf.rmask(), clientPf.gmask(), clientPf.bmask());
+
         colourMap.clear();
         serverRecvPixelFormatEvent(clientPf, clientBigEndian);
     }

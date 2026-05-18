@@ -59,7 +59,6 @@ namespace LTSM {
             virtual void fillPixel(const XCB::Region &, uint32_t pixel) = 0;
 
             virtual void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, const PixelFormat &) = 0;
-            virtual void updateRawPixels2(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
             virtual int clientPrefferedVideoEncoding(void) const {
@@ -127,11 +126,6 @@ namespace LTSM {
             void updateRawPixels(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint32_t pitch,
                                  const PixelFormat & pf) override {
                 owner->updateRawPixels(wrt, std::move(buf), pitch, pf);
-            }
-
-            void updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf,
-                                  uint32_t pitch, uint32_t sdlFormat) override {
-                owner->updateRawPixels2(wrt, std::move(buf), pitch, sdlFormat);
             }
 
             void postDecoderJob(RFB::PostDecoderJobCb && cb, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) override {

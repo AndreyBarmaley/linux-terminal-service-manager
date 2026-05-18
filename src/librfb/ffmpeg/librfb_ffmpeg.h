@@ -98,9 +98,23 @@ namespace LTSM {
     };
 
     namespace RFB {
+        class FFmpegBase {
+          public:
+            FFmpegBase() = default;
+            virtual ~FFmpegBase() = default;
+
+            inline AVPixelFormat ffmpegFormat(void) const {
+                return AV_PIX_FMT_YUV420P;
+            }
+
+            AVPixelFormat localFormat(const PixelFormat &) const;
+        };
+
 #ifdef LTSM_ENCODING_FFMPEG
         /// EncodingFFmpeg
-        class EncodingFFmpeg : public EncodingBase {
+        class EncodingFFmpeg : public FFmpegBase, public EncodingBase {
+            PixelFormat ffmpegPixelFormat;
+
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
             std::unique_ptr<AVFrame, AVFrameDeleter> frame;
@@ -115,27 +129,19 @@ namespace LTSM {
             std::mutex lockUpdate;
             std::chrono::steady_clock::time_point updatePoint;
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            const AVPixelFormat remoteFormat{AV_PIX_FMT_BGR0};
-#else
-            const AVPixelFormat remoteFormat{AV_PIX_FMT_0RGB};
-#endif
-
-            const AVPixelFormat localFormat{AV_PIX_FMT_YUV420P};
-
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
             int fps = 16;
             // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
             int64_t pts = 0;
 
           protected:
-            void initContext(const XCB::Size &);
+            void initContext(const XCB::Size &, const PixelFormat &);
 
           public:
             void resizedEvent(const XCB::Size &) override;
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 
-            EncodingFFmpeg(int type);
+            explicit EncodingFFmpeg(int type);
             ~EncodingFFmpeg() = default;
 
             const char* getTypeName(void) const override;
@@ -146,8 +152,8 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING_FFMPEG
         /// DecodingFFmpeg
-        class DecodingFFmpeg : public DecodingBase {
-            PixelFormat pf;
+        class DecodingFFmpeg : public FFmpegBase, public DecodingBase {
+            PixelFormat ffmpegPixelFormat;
 
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
@@ -162,21 +168,13 @@ namespace LTSM {
             const AVCodec* codec = nullptr;
 #endif
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            const AVPixelFormat localFormat{AV_PIX_FMT_BGR0};
-#else
-            const AVPixelFormat localFormat{AV_PIX_FMT_0RGB};
-#endif
-
-            const AVPixelFormat remoteFormat{AV_PIX_FMT_YUV420P};
-
             std::mutex lockUpdate;
 
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
             const int fps;
 
           protected:
-            void initLocalContext(const XCB::Size &);
+            void initLocalContext(const XCB::Size &, const PixelFormat &);
             void initRemoteContext(const XCB::Size &);
             void initSwScaller(void);
 
@@ -184,7 +182,7 @@ namespace LTSM {
             void resizedEvent(const XCB::Size &) override;
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
-            DecodingFFmpeg(int type, int fps = 25);
+            explicit DecodingFFmpeg(int type, int fps = 25);
             ~DecodingFFmpeg() = default;
         };
 

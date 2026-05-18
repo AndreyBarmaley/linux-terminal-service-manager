@@ -1300,7 +1300,7 @@ namespace LTSM {
             return;
         }
 
-        // move strand
+        // move to strand
         asio::dispatch(sdl_strand_, [this, wrt, pixel](){
             auto col = clientPf.color(pixel);
             auto dstrt = SDL_Rect{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
@@ -1320,37 +1320,34 @@ namespace LTSM {
             return;
         }
 
-        const uint32_t rgbmask = pf.bitsPerPixel() == 24 ?
-            0 : pf.rmask() | pf.gmask() | pf.bmask();
-
         if(auto sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(),
-            pf.rmask(), pf.gmask(), pf.bmask(), ~rgbmask); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
-            updateRawPixels2(wrt, std::move(buf), pitch, sdlFormat);
-        }
-    }
+            pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
 
-    void ClientApp::updateRawPixels2(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint32_t pitch, uint32_t sdlFormat) {
-        if(wrt.isEmpty()) {
-            return;
-        }
+            const bool optimal = SDL_PIXELLAYOUT(sdlFormat) == SDL_PIXELLAYOUT(window_->pixelFormat());
 
-        // move strand
-        asio::dispatch(sdl_strand_, [this, wrt, buf = std::move(buf), pitch, sdlFormat](){
-            const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
-            try {
-                if(sdlFormat == window_->pixelFormat()) {
-                    window_->renderDisplayUpdateRaw(&dstrt, buf.data(), pitch);
-                } else {
-                    Application::warning("{}: pixels not optimal: <{}, {}>",
-                        "updateRawPixels2", SDL_GetPixelFormatName(sdlFormat), SDL_GetPixelFormatName(window_->pixelFormat()));
-                    auto tx = window_->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
-                    tx.updateRect(nullptr, buf.data(), pitch);
-                    window_->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
-                }
-            } catch(const std::exception& err) {
-                Application::error("{}: {} failed, exception: {}", "updateRawPixels2", err.what());
+            if(! optimal && clientPf.bitsPerPixel() == pf.bitsPerPixel()) {
+                Application::warning("{}: pixels not optimal, decoder: {}, local: {}",
+                    NS_FuncNameV, SDL_GetPixelFormatName(sdlFormat), SDL_GetPixelFormatName(window_->pixelFormat()));
             }
-        });
+
+            // move to strand
+            asio::dispatch(sdl_strand_, [this, wrt, buf = std::move(buf), pitch, sdlFormat, optimal](){
+                const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
+                try {
+                    if(optimal) {
+                        window_->renderDisplayUpdateRaw(&dstrt, buf.data(), pitch);
+                    } else {
+                        auto tx = window_->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
+                        tx.updateRect(nullptr, buf.data(), pitch);
+                        window_->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
+                    }
+                } catch(const std::exception& err) {
+                    Application::error("{}: {} failed, exception: {}", NS_FuncNameV, err.what());
+                }
+            });
+        } else {
+            Application::error("{}: {} failed", NS_FuncNameV, "SDL_MasksToPixelFormatEnum");
+        }
     }
 
     void ClientApp::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) {

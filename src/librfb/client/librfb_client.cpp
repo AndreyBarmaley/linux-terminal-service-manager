@@ -384,13 +384,14 @@ namespace LTSM {
         int bshift = recvInt8();
         recvSkip(3);
         server_pf_ = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
-        Application::debug(DebugType::Rfb, "{}: remote pixel format: bpp: {}, depth: {}, bigendian: {}, true color: {}, red({},{}), green({},{}), blue({},{})",
+        Application::info("{}: remote pixel format: bpp: {}, depth: {}, bigendian: {}, true color: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                            NS_FuncNameV, server_pf_.bitsPerPixel(), depth, (int) server_big_endian_, (int) server_true_color_,
-                           server_pf_.rmax(), server_pf_.rshift(), server_pf_.gmax(), server_pf_.gshift(), server_pf_.bmax(), server_pf_.bshift());
+                           server_pf_.rmask(), server_pf_.gmask(), server_pf_.bmask());
 
         // check server format
         switch(bpp) {
             case 32:
+            case 24:
             case 16:
             case 8:
                 break;
@@ -605,9 +606,9 @@ namespace LTSM {
 
     asio::awaitable<void> RFB::ClientDecoder::sendPixelFormatAwait(void) const {
         const auto & pf = clientFormat();
-        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
+        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                            NS_FuncNameV, pf.bitsPerPixel(), (int) platformBigEndian(),
-                           pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
+                           pf.rmask(), pf.gmask(), pf.bmask());
 
         StreamBuf sb(20);
 
