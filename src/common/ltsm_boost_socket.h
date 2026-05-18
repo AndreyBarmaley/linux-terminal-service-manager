@@ -51,11 +51,11 @@ namespace LTSM {
 
           public:
             explicit AsyncStream(const boost::asio::any_io_executor & ex, const AsioSslContext::method & method)
-                : boost::base_from_member<AsioSslContext>(AsioSslContext{method})
+                : boost::base_from_member<AsioSslContext>(method)
                 , AsyncSocket<AsioSslStream>(AsioSslStream{AsioSocket{ex}, boost::base_from_member<AsioSslContext>::member}) {}
 
             explicit AsyncStream(AsioSocket && sock, const AsioSslContext::method & method)
-                : boost::base_from_member<AsioSslContext>(AsioSslContext{method})
+                : boost::base_from_member<AsioSslContext>(method)
                 , AsyncSocket<AsioSslStream>(AsioSslStream{std::move(sock), boost::base_from_member<AsioSslContext>::member}) {}
 
             inline AsioSslContext & ssl_context(void) {

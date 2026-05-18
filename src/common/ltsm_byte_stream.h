@@ -42,7 +42,7 @@
 */
 
 namespace byte {
-    class ostream : public std::ostream {
+    class ostream {
         std::ostream & st;
 
       protected:
@@ -63,7 +63,7 @@ namespace byte {
         }
 
       public:
-        ostream(std::ostream & os) : st(os) {}
+        explicit ostream(std::ostream & os) : st(os) {}
 
         inline ostream & write_be64(uint64_t val) {
             return write_be<uint64_t>(val);
@@ -105,7 +105,7 @@ namespace byte {
         }
     };
 
-    class istream : public std::istream {
+    class istream {
         std::istream & st;
 
       protected:
@@ -126,7 +126,7 @@ namespace byte {
         }
 
       public:
-        istream(std::istream & is) : st(is) {}
+        explicit istream(std::istream & is) : st(is) {}
 
         inline uint64_t read_be64(void) {
             return read_be<uint64_t>();
