@@ -84,7 +84,17 @@ namespace LTSM {
 
     AVPixelFormat RFB::FFmpegBase::localFormat(const PixelFormat & pf) const {
         if(32 == pf.bitsPerPixel()) {
-            return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            if(32 == pf.depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            }
+
+            if(30 == pf.depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_X2RGB10 : AV_PIX_FMT_X2BGR10;
+            }
+
+            if(24 == pf.depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            }
         }
 
         if(16 == pf.bitsPerPixel()) {
@@ -95,7 +105,8 @@ namespace LTSM {
             return platformBigEndian() ? AV_PIX_FMT_BGR555 : AV_PIX_FMT_RGB555;
         }
 
-        Application::error("{}: {} failed", NS_FuncNameV, "pixel format");
+        Application::error("{}: {} failed, bpp: {}, depth: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
+            NS_FuncNameV, "pixel format", pf.bitsPerPixel(), pf.depth(), pf.rmask(), pf.gmask(), pf.bmask());
         throw ffmpeg_error(NS_FuncNameS);
     }
 
