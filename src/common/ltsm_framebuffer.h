@@ -101,6 +101,7 @@ namespace LTSM {
                    redShift == pf.redShift && greenShift == pf.greenShift && blueShift == pf.blueShift && (skipAlpha ? true : alphaShift == pf.alphaShift);
         }
 
+        uint32_t depth(void) const;
         uint32_t rmask(void) const;
         uint32_t gmask(void) const;
         uint32_t bmask(void) const;

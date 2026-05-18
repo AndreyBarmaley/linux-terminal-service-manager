@@ -56,6 +56,11 @@ namespace LTSM {
           bitsPixel(bpp), bytePixel(bpp >> 3) {
     }
 
+    uint32_t PixelFormat::depth(void) const {
+        return std::popcount(redMax) + std::popcount(greenMax) +
+            std::popcount(blueMax) + std::popcount(alphaMax);
+    }
+
     uint32_t PixelFormat::rmask(void) const {
         return static_cast<uint32_t>(redMax) << redShift;
     }
