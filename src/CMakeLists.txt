@@ -337,7 +337,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_vnc2image)
     set(CUR_TARGET ltsm_vnc2image)
 
-    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST OPENSSL)
+    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST OPENSSL SDL)
 
     add_executable(${CUR_TARGET})
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
