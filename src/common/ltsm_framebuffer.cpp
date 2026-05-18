@@ -87,19 +87,19 @@ namespace LTSM {
         return static_cast<uint32_t>(alphaMax) << alphaShift;
     }
 
-    uint8_t PixelFormat::red(uint32_t pixel) const {
+    uint16_t PixelFormat::red(uint32_t pixel) const {
         return (pixel >> redShift) & redMax;
     }
 
-    uint8_t PixelFormat::green(uint32_t pixel) const {
+    uint16_t PixelFormat::green(uint32_t pixel) const {
         return (pixel >> greenShift) & greenMax;
     }
 
-    uint8_t PixelFormat::blue(uint32_t pixel) const {
+    uint16_t PixelFormat::blue(uint32_t pixel) const {
         return (pixel >> blueShift) & blueMax;
     }
 
-    uint8_t PixelFormat::alpha(uint32_t pixel) const {
+    uint16_t PixelFormat::alpha(uint32_t pixel) const {
         return (pixel >> alphaShift) & alphaMax;
     }
 
@@ -125,7 +125,7 @@ namespace LTSM {
         return (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
-    uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2) {
+    uint32_t convertMax(uint16_t col1, uint16_t max1, uint16_t max2) {
         // count2: max2 + 1 (zero)
         // count1: max1 + 1 (zero)
         return max1 ? (col1 * (max2 + 1)) / (max1 + 1) : 0;
