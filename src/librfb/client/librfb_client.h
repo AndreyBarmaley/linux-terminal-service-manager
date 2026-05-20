@@ -106,6 +106,7 @@ namespace LTSM {
             boost::asio::awaitable<void> recvDecodingLtsmCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingRichCursorAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
+            boost::asio::awaitable<void> recvDecodingUpdateRegionAwait(int type, const XCB::Region &);
 
             void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
             bool isUserSession(void) const override {
@@ -113,7 +114,6 @@ namespace LTSM {
             }
 
             bool socketConnect(std::string_view host, uint16_t port, bool no_delay = false);
-            void recvDecodingUpdateRegion(int type, const XCB::Region &);
 
           public:
             ClientDecoder(const boost::asio::any_io_executor&);

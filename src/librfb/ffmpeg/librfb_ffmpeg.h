@@ -178,7 +178,7 @@ namespace LTSM {
 
           public:
             void resizedEvent(const XCB::Size &) override;
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
 
             explicit DecodingFFmpeg(int type, int fps = 25);
             ~DecodingFFmpeg() = default;

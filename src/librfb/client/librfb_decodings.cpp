@@ -143,13 +143,15 @@ namespace LTSM {
         return type_;
     }
 
-    void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
+    void RFB::DecodingRaw::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+        Application::debug(DebugType::Enc, "{}: decoding region {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        cli.recvRegionUpdatePixels(reg);
+        const uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
+        // server transform pixels to client format
+        cli.updateRawPixels(reg, std::move(buf), pitch, cli.clientFormat());
     }
 
-    void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingRRE::updateRegionStream(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
 
         auto subRects = cli.recvIntBE32();
@@ -189,7 +191,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::DecodingHexTile::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingHexTile::updateRegionStream(DecoderStream & cli, const XCB::Region & reg) {
         if(16 < reg.width || 16 < reg.height) {
             Application::error("{}: invalid hextile region: {}", NS_FuncNameV, reg);
             throw rfb_error(NS_FuncNameS);
@@ -197,10 +199,10 @@ namespace LTSM {
 
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
-        updateRegionColors(cli, reg);
+        updateRegionStreamColors(cli, reg);
     }
 
-    void RFB::DecodingHexTile::updateRegionColors(DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingHexTile::updateRegionStreamColors(DecoderStream & cli, const XCB::Region & reg) {
         auto flag = cli.recvInt8();
 
         Application::trace(DebugType::Enc, "{}: sub encoding mask: {:#04x}, sub region: {}",
@@ -270,7 +272,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::DecodingTRLE::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingTRLE::updateRegionStream(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
 
         const XCB::Size bsz(64, 64);
@@ -439,11 +441,10 @@ namespace LTSM {
         zlib = std::make_unique<ZLib::InflateStream>();
     }
 
-    void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
+    void RFB::DecodingZlib::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+        Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        cli.recvZlibData(zlib.get(), false);
-        //DecoderWrapper wrap(zlib.get(), & cli)
+        zlib->appendData(buf);
 
         uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
         auto pixels = zlib->recvData(static_cast<size_t>(pitch) * reg.height);
@@ -453,13 +454,10 @@ namespace LTSM {
 #ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
-    void RFB::DecodingLZ4::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
+    void RFB::DecodingLZ4::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+        Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        auto len = cli.recvIntBE32();
-        auto buf = cli.recvData(len);
         const uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
-
         auto runJob = std::bind(&DecodingLZ4::decodeLZ4, this,
                                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
         // move job to thread pool
@@ -482,13 +480,10 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING_TJPG
     /// DecodingTJPG
-    void RFB::DecodingTJPG::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
+    void RFB::DecodingTJPG::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+        Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        auto len = cli.recvIntBE32();
-        auto buf = cli.recvData(len);
         const uint32_t pitch = reg.width * tjPixelSize[pixfmt];
-
         auto runJob = std::bind(&DecodingTJPG::decodeJPG, this,
                                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
         // format transformed: jpg pixel data only in this format
@@ -526,13 +521,10 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING_QOI
     /// DecodingQOI
-    void RFB::DecodingQOI::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
+    void RFB::DecodingQOI::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+        Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        auto len = cli.recvIntBE32();
-        auto buf = cli.recvData(len);
         const uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
-
         auto runJob = std::bind(&DecodingQOI::decodeBGRx, this,
                                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
         // move job to thread pool

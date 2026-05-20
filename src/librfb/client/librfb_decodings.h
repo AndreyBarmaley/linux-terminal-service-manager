@@ -40,8 +40,7 @@
 
 namespace LTSM {
     namespace RFB {
-        using VectorBuf = std::vector<uint8_t>;
-        using PostDecoderJobCb = std::function<VectorBuf(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &)>;
+        using PostDecoderJobCb = std::function<BinaryBuf(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &)>;
 
         /// DecoderStream
         class DecoderStream : public NetworkStream {
@@ -157,7 +156,8 @@ namespace LTSM {
             DecodingBase(int v);
             virtual ~DecodingBase() = default;
 
-            virtual void updateRegion(DecoderStream &, const XCB::Region &) = 0;
+            virtual void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) { /* empty */ }
+            virtual void updateRegionStream(DecoderStream &, const XCB::Region &) { /* empty */ }
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
 
             int type(void) const;
@@ -166,7 +166,7 @@ namespace LTSM {
         /// DecodingRaw
         class DecodingRaw : public DecodingBase {
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
 
             DecodingRaw() : DecodingBase(ENCODING_RAW) {}
         };
@@ -174,7 +174,7 @@ namespace LTSM {
         /// DecodingRRE
         class DecodingRRE : public DecodingBase {
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionStream(DecoderStream &, const XCB::Region &) override;
 
             DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
@@ -189,10 +189,10 @@ namespace LTSM {
             int fgColor = -1;
 
           protected:
-            void updateRegionColors(DecoderStream &, const XCB::Region &);
+            void updateRegionStreamColors(DecoderStream &, const XCB::Region &);
 
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionStream(DecoderStream &, const XCB::Region &) override;
 
             DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
@@ -209,7 +209,7 @@ namespace LTSM {
             void updateSubRegion(DecoderStream &, const XCB::Region &);
 
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionStream(DecoderStream &, const XCB::Region &) override;
 
             DecodingTRLE(bool zlib);
 
@@ -223,7 +223,7 @@ namespace LTSM {
             std::unique_ptr<ZLib::InflateStream> zlib;
 
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
 
             DecodingZlib();
         };
@@ -237,7 +237,7 @@ namespace LTSM {
             std::vector<uint8_t> decodeLZ4(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
 
             DecodingLZ4() : DecodingBase(ENCODING_LTSM_LZ4) {}
         };
@@ -254,7 +254,7 @@ namespace LTSM {
             std::vector<uint8_t> decodeJPG(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
 
             DecodingTJPG() : DecodingBase(ENCODING_LTSM_TJPG) {}
         };
@@ -267,7 +267,7 @@ namespace LTSM {
             std::vector<uint8_t> decodeBGRx(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
-            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
 
             DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI) {}
         };

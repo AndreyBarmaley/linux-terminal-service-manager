@@ -1,7 +1,7 @@
 project(ltsm_test_framebuf2)
 set(CUR_TARGET ltsm_test_framebuf2)
 
-CommonDefaults(FFMPEG ENCODER JSON ZLIB)
+CommonDefaults(FFMPEG ENCODER JSON ZLIB SDL)
 
 add_executable(${CUR_TARGET} main.cpp)
 

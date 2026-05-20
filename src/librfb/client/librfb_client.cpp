@@ -909,7 +909,7 @@ namespace LTSM {
                 break;
 
             default:
-                recvDecodingUpdateRegion(encodingType, reg);
+                co_await recvDecodingUpdateRegionAwait(encodingType, reg);
                 break;
         }
         
@@ -1114,7 +1114,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::ClientDecoder::recvDecodingUpdateRegion(int type, const XCB::Region & reg) {
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingUpdateRegionAwait(int type, const XCB::Region & reg) {
         if(! decoder_ || type != decoder_->type()) {
             switch(type) {
                 case ENCODING_RAW:
@@ -1186,7 +1186,35 @@ namespace LTSM {
             decoderInitEvent(decoder_.get());
         }
 
-        decoder_->updateRegion(*this, reg);
+        switch(decoder_->type()) {
+            case ENCODING_RAW:
+                {
+                    auto len = static_cast<uint32_t>(reg.width) * reg.height * clientFormat().bytePerPixel();
+                    auto buf = co_await socket_->async_recv_buf<BinaryBuf>(len);
+                    decoder_->updateRegionBuf(std::move(buf), *this, reg);
+                }
+                break;
+
+            case ENCODING_LTSM_QOI:
+            case ENCODING_LTSM_LZ4:
+            case ENCODING_LTSM_TJPG:
+            case ENCODING_LTSM_H264:
+            case ENCODING_LTSM_AV1:
+            case ENCODING_LTSM_VP8:
+            case ENCODING_ZLIB:
+                {
+                    auto len = co_await socket_->async_recv_be32();
+                    auto buf = co_await socket_->async_recv_buf<BinaryBuf>(len);
+                    decoder_->updateRegionBuf(std::move(buf), *this, reg);
+                }
+                break;
+
+            default:
+                decoder_->updateRegionStream(*this, reg);
+                break;
+        }
+
+        co_return;
     }
 
     void RFB::ClientDecoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {

@@ -541,15 +541,8 @@ namespace LTSM {
         Application::debug(DebugType::Enc, "{}: success", NS_FuncNameV);
     }
 
-    void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::trace(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
-
-        auto len = cli.recvIntBE32();
-        auto buf = cli.recvData(len);
-
-        if(0 == len) {
-            return;
-        }
+    void RFB::DecodingFFmpeg::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+        Application::trace(DebugType::Enc, "{}: decoding region {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != cli.clientSize()) {
             initLocalContext(cli.clientSize(), cli.clientFormat());
@@ -562,8 +555,9 @@ namespace LTSM {
         }
 
         // The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
-        if(len % AV_INPUT_BUFFER_PADDING_SIZE) {
-            buf.resize(buf.size() + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
+        const auto len = buf.size();
+        if(buf.size() % AV_INPUT_BUFFER_PADDING_SIZE) {
+            buf.resize(len + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
         }
 
         remotePacket->data = buf.data();
