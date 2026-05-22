@@ -117,23 +117,6 @@ namespace LTSM {
         return length;
     }
 
-    size_t RFB::DecoderStream::recvZlibData(ZLib::InflateStream* zlib, bool uint16sz) {
-        size_t zipsz = 0;
-
-        if(uint16sz) {
-            zipsz = recvIntBE16();
-        } else {
-            zipsz = recvIntBE32();
-        }
-
-        auto zip = recvData(zipsz);
-
-        Application::trace(DebugType::Enc, "{}: compress data length: {}", NS_FuncNameV, zip.size());
-
-        zlib->appendData(zip);
-        return zipsz;
-    }
-
     // DecodingBase
     RFB::DecodingBase::DecodingBase(int v) : type_(v) {
         Application::info("{}: init decoding: {}", NS_FuncNameV, encodingName(type_));
@@ -268,7 +251,7 @@ namespace LTSM {
 
     RFB::DecodingTRLE::DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE) {
         if(zip) {
-            zlib = std::make_unique<ZLib::InflateStream>();
+            zlib = std::make_unique<ZLib::InflateBase>();
         }
     }
 
@@ -278,8 +261,13 @@ namespace LTSM {
         const XCB::Size bsz(64, 64);
 
         if(isZRLE()) {
-            cli.recvZlibData(zlib.get(), false);
-            DecoderWrapper wrap(zlib.get(), & cli);
+            auto zipsz = cli.recvIntBE32();
+            auto zipin = cli.recvData(zipsz);
+
+            auto buf = zlib->inflateData(zipin);
+            Application::trace(DebugType::Enc, "{}: inflate data, in length: {}, out length: {}", NS_FuncNameV, zipin.size(), buf.size());
+
+            DecoderWrapper wrap(std::move(buf), & cli);
 
             for(const auto & reg0 : reg.XCB::Region::divideBlocks(bsz)) {
                 updateSubRegion(wrap, reg0);
@@ -438,16 +426,16 @@ namespace LTSM {
     }
 
     RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB) {
-        zlib = std::make_unique<ZLib::InflateStream>();
+        zlib = std::make_unique<ZLib::InflateBase>();
     }
 
     void RFB::DecodingZlib::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        zlib->appendData(buf);
+        const uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
+        auto pixels = zlib->inflateData(buf);
 
-        uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
-        auto pixels = zlib->recvData(static_cast<size_t>(pitch) * reg.height);
+        assert(pixels.size() >= static_cast<size_t>(pitch) * reg.height);
         cli.updateRawPixels(reg, std::move(pixels), pitch, cli.serverFormat());
     }
 

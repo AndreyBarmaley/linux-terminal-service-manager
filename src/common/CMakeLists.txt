@@ -171,6 +171,7 @@ else()
 endif()
 
 if(LTSM_WITH_ZLIB)
+    target_sources(${CUR_TARGET} PRIVATE ltsm_zlib.cpp)
     target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_ZLIB)
     target_link_libraries(${CUR_TARGET} PUBLIC z)
 endif()

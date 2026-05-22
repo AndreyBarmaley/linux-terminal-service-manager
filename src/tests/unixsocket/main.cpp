@@ -103,6 +103,7 @@ int main() {
 
     auto len = sock2.recvIntBE32();
     auto buf2 = sock2.recvData(len);
+/*
     auto zlib2 = std::make_unique<ZLib::InflateStream>();
     zlib2->appendData(buf2);
 
@@ -134,7 +135,7 @@ int main() {
 
     zlib1.reset();
     zlib2.reset();
-
+*/
     // tls part
     auto priority = "NORMAL:+ANON-ECDH:+ANON-DH";
 

@@ -1134,7 +1134,7 @@ bool LTSM::Channel::Remote2Local::writeData(void) {
     transfer1 += buf.size();
 
     if(zlib) {
-        auto buf2 = zlib->inflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
+        auto buf2 = zlib->inflateData(buf);
         buf.swap(buf2);
         // Application::debug(DebugType::Channels, "{}: inflate, size1: {}, size2: {}", NS_FuncNameV, buf.size(), buf2.size());
     }

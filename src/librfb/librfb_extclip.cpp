@@ -300,16 +300,17 @@ namespace LTSM {
             auto len = sb.readIntBE32();
 
             if(len) {
-                auto zlib = std::make_unique<ZLib::InflateStream>();
-                zlib->appendData(sb.read(len));
+                auto zlib = std::make_unique<ZLib::InflateBase>();
+                auto buf = zlib->inflateData(sb.read(len));
+                StreamBufRef sbr(buf.data(), buf.size());
 
                 // The header is followed by a Zlib stream which contains a pair of size and data for each format
                 for(uint64_t it = 1; it <= 0x80000000; it <<= 1) {
                     if(auto type = static_cast<uint32_t>(it); localProvideTypes & type) {
-                        auto len = zlib->recvIntBE32();
-                        auto raw = zlib->recvData(len);
+                        auto len = sbr.readIntBE32();
+                        auto raw = sbr.read(len);
 
-                        extClipboardRemoteDataEvent(type, raw);
+                        extClipboardRemoteDataEvent(type, std::move(raw));
                         localProvideTypes &= ~type;
                     }
                 }

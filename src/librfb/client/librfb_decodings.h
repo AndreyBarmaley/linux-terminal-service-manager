@@ -48,7 +48,6 @@ namespace LTSM {
             int recvPixel(void);
             int recvCPixel(void);
             size_t recvRunLength(void);
-            size_t recvZlibData(ZLib::InflateStream*, bool uint16sz = false);
             void recvRegionUpdatePixels(const XCB::Region &);
 
             virtual const PixelFormat & serverFormat(void) const = 0;
@@ -73,78 +72,80 @@ namespace LTSM {
 
         /// DecoderWrapper
         class DecoderWrapper : public DecoderStream {
-          protected:
-            NetworkStream* stream = nullptr;
-            DecoderStream* owner = nullptr;
+            std::vector<uint8_t> buf_;
+            StreamBufRef sb_;
+
+            DecoderStream* owner_ = nullptr;
 
           public:
-            DecoderWrapper(NetworkStream* ns, DecoderStream* st) : stream(ns), owner(st) {}
+            DecoderWrapper(std::vector<uint8_t> && buf, DecoderStream* st) : buf_(std::move(buf)), owner_(st) {
+                sb_.reset(buf_.data(), buf_.size());
+            }
 
             DecoderWrapper(const DecoderWrapper &) = delete;
             DecoderWrapper & operator=(const DecoderWrapper &) = delete;
 
 #ifdef LTSM_WITH_GNUTLS
             void setupTLS(gnutls::session* ses) const override {
-                stream->setupTLS(ses);
+                throw rfb_error(NS_FuncNameS + " usupported");
             }
 
 #endif
-
             bool hasInput(void) const override {
-                return stream->hasInput();
+                return sb_.last();
             }
 
             size_t hasData(void) const override {
-                return stream->hasData();
+                return sb_.last();
             }
 
             void sendRaw(const void* ptr, size_t len) override {
-                stream->sendRaw(ptr, len);
+                throw rfb_error(NS_FuncNameS + " usupported");
             }
 
             void recvRaw(void* ptr, size_t len) const override {
-                stream->recvRaw(ptr, len);
+                sb_.readTo(ptr, len);
             }
 
             const PixelFormat & serverFormat(void) const override {
-                return owner->serverFormat();
+                return owner_->serverFormat();
             }
 
             const PixelFormat & clientFormat(void) const override {
-                return owner->clientFormat();
+                return owner_->clientFormat();
             }
 
             void setPixel(const XCB::Point & pt, uint32_t pixel) override {
-                owner->setPixel(pt, pixel);
+                owner_->setPixel(pt, pixel);
             }
 
             void fillPixel(const XCB::Region & rt, uint32_t pixel) override {
-                owner->fillPixel(rt, pixel);
+                owner_->fillPixel(rt, pixel);
             }
 
             void updateRawPixels(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint32_t pitch,
                                  const PixelFormat & pf) override {
-                owner->updateRawPixels(wrt, std::move(buf), pitch, pf);
+                owner_->updateRawPixels(wrt, std::move(buf), pitch, pf);
             }
 
             void postDecoderJob(RFB::PostDecoderJobCb && cb, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) override {
-                owner->postDecoderJob(std::move(cb), std::move(buf), reg, pitch, pf);
+                owner_->postDecoderJob(std::move(cb), std::move(buf), reg, pitch, pf);
             }
 
             void waitDecoderJobs(void) override {
-                owner->waitDecoderJobs();
+                owner_->waitDecoderJobs();
             }
 
             XCB::Size clientSize(void) const override {
-                return owner->clientSize();
+                return owner_->clientSize();
             }
 
             int clientPrefferedVideoEncoding(void) const override {
-                return owner->clientPrefferedVideoEncoding();
+                return owner_->clientPrefferedVideoEncoding();
             }
 
             int clientPrefferedAudioEncoding(void) const override {
-                return owner->clientPrefferedAudioEncoding();
+                return owner_->clientPrefferedAudioEncoding();
             }
         };
 
@@ -203,7 +204,7 @@ namespace LTSM {
 
         /// DecodingTRLE
         class DecodingTRLE : public DecodingBase {
-            std::unique_ptr<ZLib::InflateStream> zlib;
+            std::unique_ptr<ZLib::InflateBase> zlib;
 
           protected:
             void updateSubRegion(DecoderStream &, const XCB::Region &);
@@ -220,7 +221,7 @@ namespace LTSM {
 
         /// DecodingZlib
         class DecodingZlib : public DecodingBase {
-            std::unique_ptr<ZLib::InflateStream> zlib;
+            std::unique_ptr<ZLib::InflateBase> zlib;
 
           public:
             void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;

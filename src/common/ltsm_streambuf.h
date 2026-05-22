@@ -32,7 +32,7 @@
 
 #include "ltsm_compat.h"
 
-#define LTSM_STREAMBUF_VERSION 20240810
+#define LTSM_STREAMBUF_VERSION 20260520
 
 namespace LTSM {
     /// @brief: byte array interface
@@ -301,6 +301,7 @@ namespace LTSM {
         uint8_t peek(void) const override;
         void skip(size_t) const override;
 
+        void readTo(void* ptr, size_t len) const;
         const uint8_t* data(void) const;
 
         uint16_t peekIntLE16(void) const;

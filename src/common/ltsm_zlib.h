@@ -27,59 +27,43 @@
 #include <vector>
 #include <iterator>
 
+#include "ltsm_compat.h"
 #include <zlib.h>
-#include "ltsm_tools.h"
-#include "ltsm_application.h"
+
+namespace LTSM {
+    struct zlib_error : public std::runtime_error {
+        explicit zlib_error(std::string_view what) : std::runtime_error(view2string(what)) {}
+    };
+}
 
 namespace LTSM::Tools {
-    std::vector<uint8_t> zlibCompress(std::span<const uint8_t> cont) {
-        const auto & data = reinterpret_cast<const Bytef*>(cont.data());
-        const auto & size = cont.size();
+    std::vector<uint8_t> zlibCompress(std::span<const uint8_t> cont);
+    std::vector<uint8_t> zlibUncompress(std::span<const uint8_t> cont, size_t real = 0);
+}
 
-        if(data && size) {
-            uLong dstsz = ::compressBound(size);
-            std::vector<uint8_t> res(dstsz);
-            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz, data, size);
-            if(ret == Z_OK) {
-                res.resize(dstsz);
-                return res;
-            } else {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "compress", ret);
-                throw std::runtime_error(NS_FuncNameS);
-            }
-        }
+namespace LTSM::ZLib {
+    /// @brief: zlib compress input stream only
+    class InflateBase {
+      protected:
+        z_stream zs{};
 
-        return {};
-    }
+      public:
+        InflateBase();
+        virtual ~InflateBase();
 
-    template<typename Cont>
-    std::vector<uint8_t> zlibUncompress(const Cont & cont, size_t real = 0) {
-        auto data = std::data(cont);
-        auto size = std::size(cont);
+        InflateBase(const InflateBase &) = delete;
+        InflateBase & operator=(const InflateBase &) = delete;
 
-        if(data && size) {
-            uLong dstsz = real ? real : size * 7;
-            std::vector<uint8_t> res(dstsz);
-            int ret = Z_BUF_ERROR;
+        InflateBase(InflateBase &&) noexcept = default;
+        InflateBase & operator=(InflateBase &&) noexcept = default;
 
-            while(Z_BUF_ERROR ==
-                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                      reinterpret_cast<const Bytef*>(data), size))) {
-                dstsz = res.size() * 2;
-                res.resize(dstsz);
-            }
+        std::vector<uint8_t> inflateData(const std::vector<uint8_t> & buf);
+        void reset(void);
 
-            if(ret == Z_OK) {
-                res.resize(dstsz);
-                return res;
-            } else {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "uncompress", ret);
-                throw std::runtime_error(NS_FuncNameS);
-            }
-        }
-
-        return {};
-    }
+      protected:
+        /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
+        std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH);
+    };
 }
 
 #endif // _LTSM_ZLIB_
