@@ -101,8 +101,8 @@ jobs:
       shell: bash
       run: |
         echo "Build Manual"
-        cmake -B build -DLTSM_BUILD_SERVER=on -DLTSM_BUILD_CLIENT=on -DLTSM_BUILD_TOOLS=on
-        cmake --build build
+        cmake -B build -DLTSM_BUILD_SERVER=on -DLTSM_BUILD_CLIENT=on -DLTSM_BUILD_TOOLS=on -DCMAKE_BUILD_TYPE=Debug
+        codeql database create my-cpp-db --language=cpp --command "cmake --build build"
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
