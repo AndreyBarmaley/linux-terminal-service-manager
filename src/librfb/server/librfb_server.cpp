@@ -731,6 +731,7 @@ namespace LTSM {
 
             switch(encoding) {
                 case RFB::ENCODING_LTSM:
+                case RFB::ENCODING_LTSM_ZQOI:
                 case RFB::ENCODING_LTSM_QOI:
                 case RFB::ENCODING_LTSM_LZ4:
                 case RFB::ENCODING_LTSM_TJPG:
@@ -1043,6 +1044,7 @@ namespace LTSM {
             RFB::ENCODING_LTSM_VP8,
 #endif
 #ifdef LTSM_ENCODING
+            RFB::ENCODING_LTSM_ZQOI,
             RFB::ENCODING_LTSM_QOI,
             RFB::ENCODING_LTSM_LZ4,
             RFB::ENCODING_LTSM_TJPG,
@@ -1061,7 +1063,8 @@ namespace LTSM {
             return;
         }
 
-        if(compatible == RFB::ENCODING_LTSM_QOI && 24 != serverFormat().depth()) {
+        if((compatible == RFB::ENCODING_LTSM_QOI ||
+            compatible == RFB::ENCODING_LTSM_ZQOI) && 24 != serverFormat().depth()) {
             const int change = RFB::ENCODING_LTSM_LZ4;
             Application::notice("{}: server bpp({}), {} not supported, change to: {}",
                 NS_FuncNameV, serverFormat().bytePerPixel(), RFB::encodingName(compatible), RFB::encodingName(change));
@@ -1116,8 +1119,12 @@ namespace LTSM {
 #endif
 #ifdef LTSM_ENCODING
 
+            case RFB::ENCODING_LTSM_ZQOI:
+                encoder = std::make_unique<EncodingQOI>(true);
+                break;
+
             case RFB::ENCODING_LTSM_QOI:
-                encoder = std::make_unique<EncodingQOI>();
+                encoder = std::make_unique<EncodingQOI>(false);
                 break;
 
             case RFB::ENCODING_LTSM_LZ4:

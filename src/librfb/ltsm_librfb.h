@@ -126,6 +126,7 @@ namespace LTSM {
         const int ENCODING_LTSM_LZ4 = 0x4C5A3400;
         const int ENCODING_LTSM_TJPG = 0x544A5047;
         const int ENCODING_LTSM_QOI = 0x514F4900;
+        const int ENCODING_LTSM_ZQOI = 0x5A514F49;
         const int ENCODING_LTSM_OPUS = 0x4F505553;
         const int ENCODING_LTSM_PCM = 0x50434D00;
         const int PROTOCOL_LTSM = 119;

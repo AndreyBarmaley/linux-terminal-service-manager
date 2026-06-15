@@ -33,7 +33,6 @@
 #include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_audio_session.h"
-#include "ltsm_byte_streambuf.h"
 
 using namespace std::chrono_literals;
 using namespace boost;
@@ -90,34 +89,33 @@ namespace LTSM {
 #endif
 #endif
 
-        asio::streambuf sb;
-        byte::streambuf bs(sb);
+        StreamBuf sb(32);
 
         // send initialize packet
-        bs.write_le16(AudioOp::Init);
+        sb.writeIntLE16(AudioOp::Init);
         // send proto ver
-        bs.write_le16(AudioOp::ProtoVer);
+        sb.writeIntLE16(AudioOp::ProtoVer);
 
         int numenc = 1;
 #ifdef LTSM_WITH_OPUS
         numenc++;
 #endif
         // send num encodings
-        bs.write_le16(numenc);
+        sb.writeIntLE16(numenc);
         // encoding type PCM
-        bs.write_le16(AudioEncoding::PCM);
-        bs.write_le16(channels_);
-        bs.write_le32(44100);
-        bs.write_le16(bitsPerSample);
+        sb.writeIntLE16(AudioEncoding::PCM);
+        sb.writeIntLE16(channels_);
+        sb.writeIntLE32(44100);
+        sb.writeIntLE16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
         // encoding type OPUS
-        bs.write_le16(AudioEncoding::OPUS);
-        bs.write_le16(channels_);
-        bs.write_le32(48000);
-        bs.write_le16(bitsPerSample);
+        sb.writeIntLE16(AudioEncoding::OPUS);
+        sb.writeIntLE16(channels_);
+        sb.writeIntLE32(48000);
+        sb.writeIntLE16(bitsPerSample);
 #endif
 
-        co_await async_send_buf(sb);
+        co_await async_send_buf(asio::buffer(sb.rawbuf()));
 
         auto cmd = co_await async_recv_le16();
         auto err = co_await async_recv_le16();
@@ -128,7 +126,7 @@ namespace LTSM {
         }
 
         if(err) {
-            auto str = co_await async_recv_buf<std::string>(err);
+            auto str = co_await async_recv_string(err);
             Application::error("{}: recv error: {}", NS_FuncNameV, str);
             throw audio_error(NS_FuncNameS);
         }
@@ -249,7 +247,7 @@ namespace LTSM {
                 }
                 // send all buffers
                 try {
-                    co_await async_send_buf(buffers);
+                    co_await async_send_buffers(buffers);
                 } catch(const system::system_error& err) {
                     auto ec = err.code();
                     if(ec != asio::error::operation_aborted) {

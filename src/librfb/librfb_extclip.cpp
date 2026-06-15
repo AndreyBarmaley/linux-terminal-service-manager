@@ -300,8 +300,7 @@ namespace LTSM {
             auto len = sb.readIntBE32();
 
             if(len) {
-                auto zlib = std::make_unique<ZLib::InflateBase>();
-                auto buf = zlib->inflateData(sb.read(len));
+                auto buf = ZLib::inflate(sb.read(len));
                 StreamBufRef sbr(buf.data(), buf.size());
 
                 // The header is followed by a Zlib stream which contains a pair of size and data for each format
@@ -413,7 +412,7 @@ namespace LTSM {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: types: {:#06x}", NS_FuncNameV, types);
 
-        auto zlib = std::make_unique<ZLib::DeflateStream>();
+        StreamBuf sb;
 
         for(const auto & type : {
                 ExtClipCaps::TypeText, ExtClipCaps::TypeRtf, ExtClipCaps::TypeHtml, ExtClipCaps::TypeDib, ExtClipCaps::TypeFiles
@@ -421,14 +420,14 @@ namespace LTSM {
             if(types & type) {
                 auto buf = extClipboardLocalData(type);
 
-                zlib->sendIntBE32(buf.size());
-                zlib->sendData(buf);
+                sb.writeIntBE32(buf.size());
+                sb.write(buf);
             }
         }
 
-        auto zip = zlib->deflateFlush();
+        auto zip = ZLib::deflate(sb.rawbuf());
 
-        StreamBuf sb;
+        sb.reset();
         sb.writeIntBE32(zip.size());
         sb.write(zip);
 

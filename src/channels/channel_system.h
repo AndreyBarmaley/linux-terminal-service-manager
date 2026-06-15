@@ -140,7 +140,6 @@ namespace LTSM {
             std::chrono::milliseconds delay{100};
 
             std::vector<uint8_t> buf;
-            std::unique_ptr<ZLib::DeflateBase> zlib;
 
             size_t transfer1 = 0;
             size_t transfer2 = 0;
@@ -148,6 +147,7 @@ namespace LTSM {
 
             int error = 0;
             uint8_t id = 255;
+            bool zlib = false;
 
             bool sendData(void);
 
@@ -205,13 +205,12 @@ namespace LTSM {
 
             std::chrono::milliseconds delay{100};
 
-            std::unique_ptr<ZLib::InflateBase> zlib;
-
             size_t transfer1 = 0;
             size_t transfer2 = 0;
 
             int error = 0;
             uint8_t id = 255;
+            bool zlib = false;
 
           protected:
             std::vector<uint8_t> popData(void);
@@ -395,7 +394,6 @@ namespace LTSM {
             std::forward_list<AudioFormat> formats;
             const AudioFormat* format = nullptr;
 
-            uint16_t audioVer = 0;
             uint8_t cid = 255;
 
             using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;

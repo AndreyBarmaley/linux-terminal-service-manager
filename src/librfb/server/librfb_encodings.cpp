@@ -133,24 +133,6 @@ namespace LTSM {
         return res + 1;
     }
 
-    int RFB::EncoderStream::sendZlibData(ZLib::DeflateStream* zlib, bool uint16sz) {
-        auto zip = zlib->deflateFlush();
-
-        if(uint16sz) {
-            if(0xFFFF < zip.size()) {
-                Application::error("{}: {}", NS_FuncNameV, "size is large");
-                throw rfb_error(NS_FuncNameS);
-            }
-
-            sendIntBE16(zip.size());
-        } else {
-            sendIntBE32(zip.size());
-        }
-
-        sendRaw(zip.data(), zip.size());
-        return zip.size() + (uint16sz ? 2 : 4);
-    }
-
     // EncoderWrapper
     void RFB::EncoderWrapper::sendRaw(const void* ptr, size_t len) {
         if(ptr && len) {
@@ -530,12 +512,6 @@ namespace LTSM {
     }
 
     // EncodingTRLE
-    RFB::EncodingTRLE::EncodingTRLE(bool zlibVer) : EncodingBase(zlibVer ? ENCODING_ZRLE : ENCODING_TRLE) {
-        if(zlibVer) {
-            zlib = std::make_unique<ZLib::DeflateStream>(Z_BEST_SPEED);
-        }
-    }
-
     void RFB::EncodingTRLE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
@@ -560,9 +536,10 @@ namespace LTSM {
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
 
-            if(zlib) {
-                zlib->sendData(ret.second);
-                st->sendZlibData(zlib.get());
+            if(isZRLE()) {
+                auto zip = zlib_->deflateData(ret.second, Z_SYNC_FLUSH);
+                st->sendIntBE32(zip.size());
+                st->sendRaw(zip.data(), zip.size());
             } else {
                 st->sendData(ret.second);
             }
@@ -734,9 +711,7 @@ namespace LTSM {
         if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION) {
             zlevel = Z_BEST_SPEED;
         }
-
-        zlib = std::make_unique<ZLib::DeflateStream>(zlevel);
-        buf.reserve(64 * 1024);
+        zlib_ = std::make_unique<ZLib::DeflateBase>(zlevel);
     }
 
     void RFB::EncodingZlib::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
@@ -752,17 +727,21 @@ namespace LTSM {
         // single thread: zlib stream spec
         auto job = sendRegion(st, top, reg0 - top, fb, jobId);
         st->sendHeader(getType(), job.first);
-        st->sendZlibData(zlib.get());
+        st->sendIntBE32(job.second.size());
+        st->sendRaw(job.second.data(), job.second.size());
         st->sendFlush();
     }
 
     RFB::EncodingRet RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId) {
-        buf.clear();
+        BinaryBuf buf;
+        buf.reserve(fb.pitchSize() * fb.height());
         EncoderWrapper wrap(& buf, st);
+
         sendRawRegionPixels(& wrap, st, reg, fb);
-        zlib->sendData(buf);
-        return std::make_pair(reg + top, BinaryBuf{});
+        auto zip = zlib_->deflateData(buf, Z_NO_FLUSH);
+
+        return std::make_pair(reg + top, std::move(zip));
     }
 
     bool RFB::EncodingZlib::setEncodingOptions(const std::forward_list<std::string> & encopts) {
@@ -786,7 +765,7 @@ namespace LTSM {
                     }
 
                     Application::info("{}: set zlevel: {}", NS_FuncNameV, zlevel);
-                    zlib = std::make_unique<ZLib::DeflateStream>(zlevel);
+                    zlib_ = std::make_unique<ZLib::DeflateBase>(zlevel);
                 }
             }
         }
@@ -843,33 +822,33 @@ namespace LTSM {
         st->sendFlush();
     }
 
-    RFB::EncodingRet RFB::EncodingLZ4::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        // thread buffer
-        BinaryBuf bb;
-        int ret = 0;
-
-        if(fb.width() == reg.width) {
-            auto inbuf = fb.pitchData(reg.y);
-            auto inlen = fb.pitchSize() * reg.height;
-            bb.resize(LZ4_compressBound(inlen));
-
-            ret = LZ4_compress_fast((const char*) inbuf, (char*) bb.data(), inlen, bb.size(), 1);
-        } else {
-            auto fb2 = fb.copyRegion(reg);
-            auto inbuf = fb2.pitchData(0);
-            auto inlen = fb2.pitchSize() * reg.height;
-            bb.resize(LZ4_compressBound(inlen));
-
-            ret = LZ4_compress_fast((const char*) inbuf, (char*) bb.data(), inlen, bb.size(), 1);
-        }
-
+    BinaryBuf lz4CompressFast(std::span<const uint8_t> buf) {
+        BinaryBuf res;
+        res.resize(LZ4_compressBound(buf.size()));
+        const int acceleration = 1;
+        int ret = LZ4_compress_fast((const char*) buf.data(), (char*) res.data(), buf.size(), res.size(), acceleration);
         if(ret < 0) {
-            Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_compress_fast_continue", ret);
+            Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_compress_fast", ret);
             throw rfb_error(NS_FuncNameS);
         }
+        res.resize(ret);
+        return res;
+    }
 
-        bb.resize(ret);
+    RFB::EncodingRet RFB::EncodingLZ4::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
+            const FrameBuffer & fb, int jobId) {
+
+        if(fb.width() == reg.width) {
+            auto buf = std::span{ fb.pitchData(reg.y),
+                             fb.pitchSize() * reg.height };
+            BinaryBuf bb = lz4CompressFast(buf);
+            return std::make_pair(reg + top, std::move(bb));
+        }
+
+        auto fb2 = fb.copyRegion(reg);
+        auto buf = std::span{ fb2.pitchData(0),
+                             fb2.pitchSize() * reg.height };
+        BinaryBuf bb = lz4CompressFast(buf);
         return std::make_pair(reg + top, std::move(bb));
     }
 
@@ -1072,9 +1051,15 @@ namespace LTSM {
         for(auto & job : jobs.jobList()) {
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
-            // encode buf
-            st->sendIntBE32(ret.second.size());
-            st->sendData(ret.second);
+            if(isZQOI()) {
+                BinaryBuf bb = lz4CompressFast(ret.second);
+                st->sendIntBE32(bb.size());
+                st->sendData(bb);
+            } else {
+                // encode buf
+                st->sendIntBE32(ret.second.size());
+                st->sendData(ret.second);
+            }
         }
 
         st->sendFlush();

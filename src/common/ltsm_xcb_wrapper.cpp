@@ -1805,7 +1805,7 @@ namespace LTSM {
             if(ptr && len) {
                 sourceIncr->buf.insert(sourceIncr->buf.end(), ptr, ptr + len);
             } else {
-                recipient->selectionReceiveData(reply->type, sourceIncr->buf);
+                recipient->selectionReceiveData(reply->type, std::move(sourceIncr->buf));
             }
         }
 
@@ -1889,8 +1889,8 @@ namespace LTSM {
                                 eventNotifyWarning(ptr, ev);
                                 Application::warning("{}: reply not correct, type {}, format: {}", NS_FuncNameV, typeAtom, reply->format);
                             }
-
-                            recipient->selectionReceiveData(reply->type, {(const uint8_t*) buf, (size_t) len});
+                            auto beg = static_cast<const uint8_t*>(buf);
+                            recipient->selectionReceiveData(reply->type, std::vector<uint8_t>{beg, beg + len});
                         }
                     } else {
                         eventNotifyWarning(ptr, ev);
@@ -1997,10 +1997,7 @@ namespace LTSM {
         if(sourceIncr) {
             // data cached
             if(target == sourceIncr->ev.target) {
-                std::thread([this, target = sourceIncr->ev.target, buf = sourceIncr->buf]() {
-                    std::this_thread::sleep_for(10ms);
-                    recipient->selectionReceiveData(target, buf);
-                }).detach();
+                recipient->selectionReceiveData(sourceIncr->ev.target, std::move(sourceIncr->buf));
                 return;
             } else if(target != Atom::targets) {
                 sourceIncr.reset();

@@ -1081,9 +1081,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
 
 // Remote2Local
 LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int flags) : id(cid) {
-    if(static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags) {
-        zlib = std::make_unique<ZLib::InflateBase>();
-    }
+    zlib = static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags;
 }
 
 LTSM::Channel::Remote2Local::~Remote2Local() {
@@ -1134,8 +1132,7 @@ bool LTSM::Channel::Remote2Local::writeData(void) {
     transfer1 += buf.size();
 
     if(zlib) {
-        auto buf2 = zlib->inflateData(buf);
-        buf.swap(buf2);
+        buf = ZLib::inflate(buf);
         // Application::debug(DebugType::Channels, "{}: inflate, size1: {}, size2: {}", NS_FuncNameV, buf.size(), buf2.size());
     }
 
@@ -1206,10 +1203,7 @@ ssize_t LTSM::Channel::Remote2Local_FD::writeDataFrom(const void* buf, size_t le
 
 // Local2Remote
 LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int flags) : id(cid) {
-    if(static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags) {
-        zlib = std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED + 2);
-    }
-
+    zlib = static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags;
     buf.reserve(0xFFFF);
 }
 
@@ -1243,9 +1237,8 @@ bool LTSM::Channel::Local2Remote::readData(void) {
         transfer1 += real;
 
         if(zlib) {
-            auto buf2 = zlib->deflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
-            transfer2 += buf2.size();
-            buf.swap(buf2);
+            buf = ZLib::deflate(buf, Z_BEST_SPEED + 2);
+            transfer2 += buf.size();
             // Application::debug(DebugType::Channels, "{}: deflate, size1: {}, size2: {}", NS_FuncNameV, buf2.size(), buf.size());
         } else {
             transfer2 += real;

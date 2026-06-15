@@ -30,21 +30,18 @@
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
-#include "ltsm_boost_socket.h"
+#include "ltsm_async_socket.h"
 
 namespace LTSM {
     namespace RFB {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
+        class ClientDecoder : public ChannelClient, public DecoderRender, public ExtClip {
 
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::steady_timer incr_update_timer_;
 
-            std::unique_ptr<AsioTls::AsyncStream> socket_; /// socket layer
+            std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
             std::unique_ptr<DecodingBase> decoder_;
-
-            NetworkStream* stream_in_;
-            NetworkStream* stream_out_;
 
             PixelFormat server_pf_;
             int server_ltsm_version_ = 0;
@@ -64,22 +61,14 @@ namespace LTSM {
 
             inline const boost::asio::strand<boost::asio::any_io_executor> & rfb_strand(void) const { return rfb_strand_; }
 
-            // network stream interface
-            void sendFlush(void) override;
-            void sendRaw(const void* ptr, size_t len) override;
-            void recvRaw(void* ptr, size_t len) const override;
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-
             // decoder stream interface
             const PixelFormat & serverFormat(void) const override;
 
-#ifdef LTSM_WITH_GNUTLS
-            bool authVncInit(std::string_view pass);
-            bool authVenCryptInit(const SecurityInfo &);
-#endif
+            boost::asio::awaitable<void> authVncInitAwait(std::string_view pass) const;
+            boost::asio::awaitable<bool> authVenCryptInitAwait(const SecurityInfo &);
+
 #ifdef LTSM_WITH_GSSAPI
-            bool authGssApiInit(const SecurityInfo &);
+            boost::asio::awaitable<bool> authGssApiInitAwait(const SecurityInfo &);
 #endif
 
             boost::asio::awaitable<void> sendPixelFormatAwait(void) const;
@@ -113,18 +102,19 @@ namespace LTSM {
                 return true;
             }
 
-            bool socketConnect(std::string_view host, uint16_t port, bool no_delay = false);
-
-          public:
-            ClientDecoder(const boost::asio::any_io_executor&);
-
-            bool rfbHandshake(const SecurityInfo &);
-
+            boost::asio::awaitable<void> rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay = false);
+            boost::asio::awaitable<bool> rfbHandshakeAwait(const SecurityInfo &);
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
             boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode);
             boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy);
 
-            void sendCutText(std::span<const uint8_t>, bool ext);
+          public:
+            ClientDecoder(const boost::asio::any_io_executor& ctx)
+                : rfb_strand_{ctx}
+                , incr_update_timer_{rfb_strand_} {
+            }
+
+            void sendCutText(std::vector<uint8_t>&&, bool ext);
 
             void rfbMessagesShutdown(void);
             bool isContinueUpdatesSupport(void) const;

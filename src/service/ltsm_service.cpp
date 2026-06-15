@@ -1346,10 +1346,14 @@ namespace LTSM::Manager {
 
         while(true) {
             timer.expires_after(std::chrono::milliseconds(pause));
-            auto wait = timer.async_wait(asio::use_future);
+            auto res = timer.async_wait(asio::use_future);
 
-            // ioc in thread pool
-            wait.get();
+            if(ioc.get_executor().running_in_this_thread()) {
+                // future: skip deadlock
+                while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                    ioc.run_one();
+                }
+            }
 
             if(waitFunc()) {
                 return true;

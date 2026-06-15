@@ -287,12 +287,17 @@ if(LTSM_BUILD_CLIENT)
     if(NOT MINGW)
         set(LTSM_CLIENT_PKCS11_AUTH ON CACHE BOOL "client: pkcs11 auth")
     endif()
-    set(LTSM_CLIENT_GSSAPI_AUTH ON CACHE BOOL "client: kerberos auth")
     set(LTSM_CLIENT_GNUTLS_SUPPORT ON CACHE BOOL "client: tls support")
     set(LTSM_CLIENT_FFMPEG_SUPPORT ON CACHE BOOL "client: ffmpeg decoder")
     set(LTSM_CLIENT_SCARD_REDIRECT ON CACHE BOOL "client: smartcard redirect (pcsc)")
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
     set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect (openal)")
+    if(APPLE)
+        # client crashed
+        set(LTSM_CLIENT_GSSAPI_AUTH OFF CACHE BOOL "client: kerberos auth")
+    else()
+        set(LTSM_CLIENT_GSSAPI_AUTH ON CACHE BOOL "client: kerberos auth")
+    endif()
 
     CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB BOOST)
 

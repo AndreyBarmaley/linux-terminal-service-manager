@@ -34,7 +34,6 @@
 #include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_pcsc_session.h"
-#include "ltsm_byte_streambuf.h"
 
 using namespace std::chrono_literals;
 using namespace boost;
@@ -250,7 +249,7 @@ namespace LTSM {
         }
 
         if(err) {
-            auto str = co_await async_recv_buf<std::string>(err);
+            auto str = co_await async_recv_string(err);
             send_lock_.unlock();
             Application::error("{}: recv error: {}", NS_FuncNameV, str);
             throw pcsc_error(NS_FuncNameS);
@@ -493,7 +492,7 @@ namespace LTSM {
             endian::little_to_native_inplace(bytesReturned);
             endian::little_to_native_inplace(ret);
 
-            data2 = co_await async_recv_buf<binary_buf>(bytesReturned);
+            data2 = co_await async_recv_buffer(bytesReturned);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -534,8 +533,8 @@ namespace LTSM {
             endian::little_to_native_inplace(atrLen);
             endian::little_to_native_inplace(ret);
 
-            readerName = co_await async_recv_buf<std::string>(nameLen);
-            atr = co_await async_recv_buf<binary_buf>(atrLen);
+            readerName = co_await async_recv_string(nameLen);
+            atr = co_await async_recv_buffer(atrLen);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -576,7 +575,7 @@ namespace LTSM {
             endian::little_to_native_inplace(bytesReturned);
             endian::little_to_native_inplace(ret);
         
-            data2 = co_await async_recv_buf<binary_buf>(bytesReturned);
+            data2 = co_await async_recv_buffer(bytesReturned);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -609,7 +608,7 @@ namespace LTSM {
             endian::little_to_native_inplace(ret);
 
             assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-            attr = co_await async_recv_buf<binary_buf>(attrLen);
+            attr = co_await async_recv_buffer(attrLen);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -702,7 +701,7 @@ namespace LTSM {
         while(readersCount--) {
             try {
                 uint32_t readerLen = co_await async_recv_le32();
-                auto readerName = co_await async_recv_buf<std::string>(readerLen);
+                auto readerName = co_await async_recv_string(readerLen);
                 names.emplace_back(std::move(readerName));
             } catch(const system::system_error& err) {
                 ec_ = err.code();
@@ -1411,7 +1410,7 @@ namespace LTSM {
         endian::little_to_native_inplace(recvLength);
         endian::little_to_native_inplace(ret);
 
-        auto data1 = co_await async_recv_buf<binary_buf>(sendLength);
+        auto data1 = co_await async_recv_buffer(sendLength);
 
         if(handle != handle32_) {
             Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
@@ -1556,7 +1555,7 @@ namespace LTSM {
         endian::little_to_native_inplace(bytesReturned);
         endian::little_to_native_inplace(ret);
 
-        auto data1 = co_await async_recv_buf<binary_buf>(sendLength);
+        auto data1 = co_await async_recv_buffer(sendLength);
 
         if(handle != handle32_) {
             Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);

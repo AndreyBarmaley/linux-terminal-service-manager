@@ -13,7 +13,6 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_xcb_wrapper.h"
 #include "librfb_encodings.h"
-#include "librfb_ffmpeg.h"
 #include "ltsm_tools.h"
 
 using namespace LTSM;

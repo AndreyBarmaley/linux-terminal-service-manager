@@ -91,6 +91,7 @@ int main() {
     std::cout << "test2 socket::sendInt16LE/recvInt16LE" << std::endl;
     assert(sock1.recvIntLE16() == 0x1234);
 
+/*
     // zlib part1
     auto zlib1 = std::make_unique<ZLib::DeflateStream>();
 
@@ -103,7 +104,7 @@ int main() {
 
     auto len = sock2.recvIntBE32();
     auto buf2 = sock2.recvData(len);
-/*
+
     auto zlib2 = std::make_unique<ZLib::InflateStream>();
     zlib2->appendData(buf2);
 

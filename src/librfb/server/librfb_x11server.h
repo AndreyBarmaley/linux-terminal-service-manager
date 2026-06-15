@@ -69,7 +69,7 @@ namespace LTSM {
             std::vector<uint8_t> selectionSourceData(xcb_atom_t, size_t offset, uint32_t length) const override;
 
             // selection recipient
-            void selectionReceiveData(xcb_atom_t, std::span<const uint8_t>) const override;
+            void selectionReceiveData(xcb_atom_t, std::vector<uint8_t>&&) const override;
             void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override;
             void selectionChangedEvent(void) const override;
 
@@ -86,7 +86,7 @@ namespace LTSM {
             std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
             void extClipboardRemoteTypesEvent(uint16_t type) override;
             void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
-            void extClipboardSendEvent(const std::vector<uint8_t> &) override;
+            void extClipboardSendEvent(std::vector<uint8_t> &&) override;
 
             XCB::RootDisplay* xcbDisplay(void);
             const XCB::Region & getClientRegion(void) const;

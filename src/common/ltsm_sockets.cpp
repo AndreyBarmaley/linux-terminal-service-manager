@@ -1182,97 +1182,6 @@ namespace LTSM {
 
 #endif
 
-#ifdef LTSM_WITH_ZLIB
-    namespace ZLib {
-        /* Zlib::DeflateBase */
-        DeflateBase::DeflateBase(int level) {
-            zs.data_type = Z_BINARY;
-
-            if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level) {
-                level = Z_BEST_COMPRESSION;
-            }
-
-            int ret = deflateInit(& zs, level);
-            //int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-
-            if(ret < Z_OK) {
-                Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflateInit2", ret);
-                throw zlib_error(NS_FuncNameS);
-            }
-        }
-
-        DeflateBase::~DeflateBase() {
-            deflateEnd(& zs);
-        }
-
-        std::vector<uint8_t> DeflateBase::deflateData(const void* buf, size_t len, int flushPolicy) {
-            // zlib legacy non const
-            zs.next_in = (Bytef*) buf;
-            zs.avail_in = len;
-
-            std::vector<uint8_t> res;
-            res.reserve(std::max(static_cast<size_t>(deflateBound(& zs, len)), tmp.size()));
-
-            do {
-                zs.next_out = tmp.data();
-                zs.avail_out = tmp.size();
-
-                int ret = deflate(& zs, flushPolicy);
-
-                if(ret < Z_OK) {
-                    Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflate", ret);
-                    throw zlib_error(NS_FuncNameS);
-                }
-
-                if(zs.avail_out < tmp.size()) {
-                    res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
-                }
-            } while(zs.avail_out == 0);
-
-            return res;
-        }
-
-        /* Zlib::DeflateStream */
-        DeflateStream::DeflateStream(int level) : DeflateBase(level) {
-            bb.reserve(4096);
-        }
-
-        std::vector<uint8_t> DeflateStream::deflateFlush(void) {
-            auto last = deflateData(nullptr, 0, Z_SYNC_FLUSH);
-
-            if(last.size()) {
-                bb.insert(bb.end(), last.begin(), last.end());
-            }
-
-            return std::move(bb);
-        }
-
-        void DeflateStream::sendRaw(const void* ptr, size_t len) {
-            auto data = deflateData(ptr, len, Z_NO_FLUSH);
-
-            if(data.size()) {
-                bb.insert(bb.end(), data.begin(), data.end());
-            }
-        }
-
-        void DeflateStream::recvRaw(void* ptr, size_t len) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
-        bool DeflateStream::hasInput(void) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
-        size_t DeflateStream::hasData(void) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
-    } // ZLib
-#endif
-
 #ifdef LTSM_WITH_GSSAPI
     namespace GssApi {
         // GssApi::BaseLayer
@@ -1385,6 +1294,7 @@ namespace LTSM {
             Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
 
+/*
         // GssApi::Client
         bool Client::checkUserCredential(std::string_view username) const {
             Gss::ErrorCodes err;
@@ -1417,6 +1327,7 @@ namespace LTSM {
             auto err = Gss::error2str(code1, code2);
             Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
+*/
     } // GssApi
 
 #endif

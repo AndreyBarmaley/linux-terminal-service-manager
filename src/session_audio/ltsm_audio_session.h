@@ -55,7 +55,7 @@ namespace LTSM {
 
     using AudioPacketPtr = std::unique_ptr<AudioPacket>;
 
-    struct AudioClient : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+    struct AudioClient : protected AsyncLocalStream {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         const uint8_t channels_ = 2;
@@ -72,7 +72,7 @@ namespace LTSM {
         uint32_t frag_size_ = 1024;
 
         AudioClient(const boost::asio::any_io_executor & ex)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(ex), strand_{boost::asio::make_strand(ex)} {
+            : AsyncLocalStream(ex), strand_{boost::asio::make_strand(ex)} {
         }
         ~AudioClient() = default;
     

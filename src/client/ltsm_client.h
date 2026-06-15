@@ -54,10 +54,10 @@ namespace LTSM {
 
     class BoostContext {
         const int concurency_ = 4;
-        boost::asio::io_context ioc_{concurency_};
+        mutable boost::asio::io_context ioc_{concurency_};
 
       protected:
-        inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline boost::asio::io_context & ioc(void) const { return ioc_; }
         inline size_t concurency(void) const { return concurency_; }
         boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 
@@ -77,23 +77,23 @@ namespace LTSM {
         boost::asio::signal_set signals_;
         boost::asio::cancellation_signal rfb_cancel_;
         boost::asio::io_context sdl_ctx_;
+        boost::asio::executor_work_guard<boost::asio::any_io_executor> sdl_guard_;
         boost::asio::strand<boost::asio::any_io_executor> sdl_strand_;
         boost::asio::cancellation_signal sdl_cancel_;
 #ifdef __UNIX__
-        boost::asio::strand<boost::asio::any_io_executor> x11_strand_;
         boost::asio::cancellation_signal x11_cancel_;
 #endif
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
         PixelFormat clientPf;
-        RFB::SecurityInfo rfbsec;
+        RFB::SecurityInfo rfbsec_;
 
         std::forward_list<std::string> dropFiles;
         std::forward_list<std::string> shareFolders;
         std::forward_list<std::string> videoEncodingOptions;
         std::forward_list<std::string> audioEncodingOptions;
 
-        std::string host{"localhost"};
+        std::string host_{"localhost"};
         std::string username, seamless, pkcs11Auth;
         std::string printerUrl, saneUrl;
         std::string passfile;
@@ -105,10 +105,10 @@ namespace LTSM {
         XCB::Size windowSize_;
 
         std::chrono::time_point<std::chrono::steady_clock> appStart;
-        std::atomic<uint16_t> decoder_jobs_{0};
+        mutable std::atomic<uint16_t> decoder_jobs_{0};
 
         int xcbDpi = 0;
-        int port = 5900;
+        int port_ = 5900;
         int frameRate = 0;
         int windowFlags = SDL_WINDOW_SHOWN;
 
@@ -131,11 +131,12 @@ namespace LTSM {
         bool focusLost = false;
 
       protected:
-        void setPixel(const XCB::Point &, uint32_t pixel) override;
-        void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, const PixelFormat &) override;
-        void postDecoderJob(RFB::PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
-        void waitDecoderJobs(void) override;
+        // DecoderRender intarface
+        void setPixel(const XCB::Point &, uint32_t pixel) const override;
+        void fillPixel(const XCB::Region &, uint32_t pixel) const override;
+        void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, const PixelFormat &) const override;
+        void postDecoderJob(RFB::PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) const override;
+        void waitDecoderJobs(void) const override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
@@ -169,8 +170,8 @@ namespace LTSM {
         boost::asio::awaitable<void> sdlKeyboardEvent(SDL_Event &&);
         boost::asio::awaitable<void> sdlDropCompleteEvent(SDL_Event &&);
         boost::asio::awaitable<void> sdlUserEvent(SDL_Event &&);
+        boost::asio::awaitable<bool> sdlWindowInit(const XCB::Size &);
 
-        void sdlWindowInit(const XCB::Size &);
         void stop(void);
 
       public:

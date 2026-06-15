@@ -78,10 +78,9 @@ namespace LTSM {
         "[--kerberos <" << krb5def << ">] " <<
 #endif
 #ifdef LTSM_DECODING
-#ifdef LTSM_DECODING_QOI
         "[--qoi] " <<
-#endif
 #ifdef LTSM_DECODING_LZ4
+        "[--zqoi] " <<
         "[--lz4] " <<
 #endif
 #ifdef LTSM_DECODING_TJPG
@@ -103,9 +102,7 @@ namespace LTSM {
 #ifdef LTSM_WITH_AUDIO
         "[--audio [<enc>]] " <<
 #endif
-#ifdef LTSM_WITH_GNUTLS
         "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
-#endif
 #ifdef LTSM_WITH_FUSE
         "[--share-folder <folder>] " <<
 #endif
@@ -136,18 +133,15 @@ namespace LTSM {
                                   "    --extclip (extclip support)" << std::endl <<
                                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
                                   "    --nodelay (socket NO_DELAY option enable)" << std::endl <<
-#ifdef LTSM_WITH_GNUTLS
                                   "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
-#endif
 #ifdef LTSM_WITH_GSSAPI
                                   "    --kerberos <" << krb5def <<
                                   "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING
-#ifdef LTSM_DECODING_QOI
                                   "    --qoi (the same as --video ltsm_qoi)" << std::endl <<
-#endif
 #ifdef LTSM_DECODING_LZ4
+                                  "    --zqoi (the same as --video ltsm_zqoi (qoi+lz4))" << std::endl <<
                                   "    --lz4 (the same as --video ltsm_lz4)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_TJPG
@@ -166,12 +160,10 @@ namespace LTSM {
 #endif
 #endif
                                   "    --video <enc> (set preffered encoding: " << Tools::join(videoEncodings, ",") << ")" << std::endl <<
-#ifdef LTSM_WITH_GNUTLS
                                   "    --tls-priority <string> " << std::endl <<
                                   "    --tls-ca-file <path> " << std::endl <<
                                   "    --tls-cert-file <path> " << std::endl <<
                                   "    --tls-key-file <path> " << std::endl <<
-#endif
 #ifdef LTSM_WITH_FUSE
                                   "    --share-folder <folder> (redirect folder)" << std::endl <<
 #endif
@@ -271,20 +263,13 @@ namespace LTSM {
         , RFB::WinClient(get_executor())
 #endif
         , signals_{get_executor()}
-        , sdl_strand_{sdl_ctx_.get_executor()}
-#ifdef __UNIX__
-        , x11_strand_{get_executor()}
-#endif
-        {
+        , sdl_guard_{sdl_ctx_.get_executor()}
+        , sdl_strand_{sdl_ctx_.get_executor()} {
 
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
-#ifdef LTSM_WITH_GNUTLS
-        rfbsec.authVenCrypt = true;
-        rfbsec.tlsDebug = 2;
-#else
-        rfbsec.authVenCrypt = false;
-#endif
+        rfbsec_.authVenCrypt = true;
+        rfbsec_.tlsDebug = 2;
 
         auto argBeg = argv + 1;
         auto argEnd = argv + argc;
@@ -326,7 +311,9 @@ namespace LTSM {
         }
 
         if(0 == videoEncoding) {
-#ifdef LTSM_WITH_QOI
+#ifdef LTSM_DECODING_LZ4
+            videoEncoding = RFB::ENCODING_LTSM_ZQOI;
+#else
             videoEncoding = RFB::ENCODING_LTSM_QOI;
 #endif
         }
@@ -411,15 +398,9 @@ namespace LTSM {
             ltsmSupport = false;
         } else if(cmd == "--noaccel") {
             windowAccel = false;
-        }
-
-#ifdef LTSM_WITH_GNUTLS
-        else if(cmd == "--notls") {
-            rfbsec.authVenCrypt = false;
-        }
-
-#endif
-        else if(cmd == "--nodelay") {
+        } else if(cmd == "--notls") {
+            rfbsec_.authVenCrypt = false;
+        } else if(cmd == "--nodelay") {
             socketNoDelay = true;
         } else if(cmd == "--noxkb") {
             useXkb = false;
@@ -447,16 +428,23 @@ namespace LTSM {
 #ifdef LTSM_DECODING
         else if(cmd == "--qoi") {
             videoEncoding = RFB::ENCODING_LTSM_QOI;
+        }
+#ifdef LTSM_DECODING_LZ4
+        else if(cmd == "--zqoi") {
+            videoEncoding = RFB::ENCODING_LTSM_ZQOI;
         } else if(cmd == "--lz4") {
             videoEncoding = RFB::ENCODING_LTSM_LZ4;
-        } else if(startsWith(cmd, "--tjpg")) {
+        }
+#endif
+#ifdef LTSM_DECODING_TJPG
+        else if(startsWith(cmd, "--tjpg")) {
             if(auto opts = Tools::split(cmd, ','); 1 < opts.size()) {
                 opts.pop_front();
                 videoEncodingOptions.assign(opts.begin(), opts.end());
             }
             videoEncoding = RFB::ENCODING_LTSM_TJPG;
         }
-
+#endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
@@ -496,11 +484,11 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_GSSAPI
         else if(cmd == "--kerberos") {
-            rfbsec.authKrb5 = true;
-            rfbsec.krb5Service = "TERMSRV";
+            rfbsec_.authKrb5 = true;
+            rfbsec_.krb5Service = "TERMSRV";
 
             if(arg.size()) {
-                rfbsec.krb5Service.assign(arg.begin(), arg.end());
+                rfbsec_.krb5Service.assign(arg.begin(), arg.end());
             }
         }
 
@@ -586,7 +574,7 @@ namespace LTSM {
                 Application::setDebugTarget(DebugTarget::Syslog);
             }
         } else if(cmd == "--host" && arg.size()) {
-            host.assign(arg.begin(), arg.end());
+            host_.assign(arg.begin(), arg.end());
         } else if(cmd == "--seamless" && arg.size()) {
             seamless.assign(arg.begin(), arg.end());
         } else if(cmd == "--share-folder" && arg.size()) {
@@ -597,21 +585,21 @@ namespace LTSM {
                                      NS_FuncNameV, "share-folder", arg);
             }
         } else if(cmd == "--password" && arg.size()) {
-            rfbsec.passwdFile.assign(arg.begin(), arg.end());
+            rfbsec_.passwdFile.assign(arg.begin(), arg.end());
         } else if(cmd == "--password-file" && arg.size()) {
             passfile.assign(arg.begin(), arg.end());
         } else if(cmd == "--username" && arg.size()) {
             username.assign(arg.begin(), arg.end());
         } else if(cmd == "--port" && arg.size()) {
             try {
-                port = std::stoi(view2string(arg));
+                port_ = std::stoi(view2string(arg));
             } catch(const std::invalid_argument &) {
                 std::cerr << "invalid port" << std::endl;
-                port = 5900;
+                port_ = 5900;
             }
-            if(0 > port || 0xFFFF < port) {
-                Application::warning("{}: invalid port: {}", NS_FuncNameV, port);
-                port = 5900;
+            if(0 > port_ || 0xFFFF < port_) {
+                Application::warning("{}: invalid port: {}", NS_FuncNameV, port_);
+                port_ = 5900;
             }
 
         } else if(cmd == "--fps" && arg.size()) {
@@ -652,21 +640,15 @@ namespace LTSM {
                 Application::warning("{}: invalid geometry: {}x{}", NS_FuncNameV, primarySize.width, primarySize.height);
                 primarySize.reset();
             }
-        }
-
-#ifdef LTSM_WITH_GNUTLS
-        else if(cmd == "--tls-priority" && arg.size()) {
-            rfbsec.tlsPriority.assign(arg.begin(), arg.end());
+        } else if(cmd == "--tls-priority" && arg.size()) {
+            rfbsec_.tlsPriority.assign(arg.begin(), arg.end());
         } else if(cmd == "--tls-ca-file" && arg.size()) {
-            rfbsec.caFile.assign(arg.begin(), arg.end());
+            rfbsec_.caFile.assign(arg.begin(), arg.end());
         } else if(cmd == "--tls-cert-file" && arg.size()) {
-            rfbsec.certFile.assign(arg.begin(), arg.end());
+            rfbsec_.certFile.assign(arg.begin(), arg.end());
         } else if(cmd == "--tls-key-file" && arg.size()) {
-            rfbsec.keyFile.assign(arg.begin(), arg.end());
-        }
-
-#endif
-        else if(cmd == "--load") {
+            rfbsec_.keyFile.assign(arg.begin(), arg.end());
+        } else if(cmd == "--load") {
             // skip exception
         } else if(cmd == "--save") {
             // skip exception
@@ -696,54 +678,54 @@ namespace LTSM {
     }
 
     void ClientApp::updateSecurity(void) {
-        if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size()) {
+        if(pkcs11Auth.size() && rfbsec_.passwdFile.size() && username.size()) {
             pkcs11Auth.clear();
         }
 
-        if(rfbsec.passwdFile.empty()) {
+        if(rfbsec_.passwdFile.empty()) {
             if(auto env = std::getenv("LTSM_PASSWORD")) {
-                rfbsec.passwdFile.assign(env);
+                rfbsec_.passwdFile.assign(env);
             }
 
             if(passfile == "-" || Tools::lower(passfile) == "stdin") {
-                std::getline(std::cin, rfbsec.passwdFile);
+                std::getline(std::cin, rfbsec_.passwdFile);
             } else if(std::filesystem::is_regular_file(passfile)) {
                 std::ifstream ifs(passfile);
 
                 if(ifs) {
-                    std::getline(ifs, rfbsec.passwdFile);
+                    std::getline(ifs, rfbsec_.passwdFile);
                 }
             }
         }
 
-        rfbsec.authVnc = ! rfbsec.passwdFile.empty();
-        rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
+        rfbsec_.authVnc = ! rfbsec_.passwdFile.empty();
+        rfbsec_.tlsAnonMode = rfbsec_.keyFile.empty();
 
-        if(rfbsec.authKrb5 && rfbsec.krb5Service.empty()) {
+        if(rfbsec_.authKrb5 && rfbsec_.krb5Service.empty()) {
             Application::warning("{}: kerberos remote service empty", NS_FuncNameV);
-            rfbsec.authKrb5 = false;
+            rfbsec_.authKrb5 = false;
         }
 
-        if(rfbsec.authKrb5 && rfbsec.krb5Name.empty()) {
+        if(rfbsec_.authKrb5 && rfbsec_.krb5Name.empty()) {
             if(username.empty()) {
                 if(auto env = std::getenv("USER")) {
-                    rfbsec.krb5Name.assign(env);
+                    rfbsec_.krb5Name.assign(env);
                 } else if(auto env = std::getenv("USERNAME")) {
-                    rfbsec.krb5Name.assign(env);
+                    rfbsec_.krb5Name.assign(env);
                 }
             } else {
-                rfbsec.krb5Name.assign(username);
+                rfbsec_.krb5Name.assign(username);
             }
         }
 
-        if(rfbsec.authKrb5) {
+        if(rfbsec_.authKrb5) {
             // fixed service format: SERVICE@hostname
-            if(std::string::npos == rfbsec.krb5Service.find("@")) {
-                rfbsec.krb5Service.append("@").append(host);
+            if(std::string::npos == rfbsec_.krb5Service.find("@")) {
+                rfbsec_.krb5Service.append("@").append(host_);
             }
 
             Application::debug(DebugType::Gss, "{}: used kerberos, remote service: {}, local name: {}",
-                                NS_FuncNameV, rfbsec.krb5Service, rfbsec.krb5Name);
+                                NS_FuncNameV, rfbsec_.krb5Service, rfbsec_.krb5Name);
         }
     }
 
@@ -802,6 +784,9 @@ namespace LTSM {
         x11_cancel_.emit(asio::cancellation_type::terminal);
 #endif
         signals_.cancel();
+        sdl_guard_.reset();
+
+        Application::debug(DebugType::App, "{}: client stopped", NS_FuncNameV);
     }
 
 #ifdef __UNIX__
@@ -843,39 +828,56 @@ namespace LTSM {
 #endif
 
     int ClientApp::start(void) {
-        if(! ClientDecoder::socketConnect(host, port, socketNoDelay)) {
-            return -1;
-        }
-
-        // connected
-        if(! rfbHandshake(rfbsec)) {
-            return -1;
-        }
-
-        // SDL failed or clientRecvPixelFormatEvent not received
-        if(! window_) {
-            Application::error("{}: window empty", NS_FuncNameV);
-            return -1;
-        }
-
-        asio::co_spawn(ioc(), signalsHandler(), asio::detached);
 
         asio::co_spawn(rfb_strand(), [this]() -> asio::awaitable<void> {
+            // remote connect
+            try {
+                co_await rfbHostConnectAwait(host_, port_, socketNoDelay);
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbHostConnectAwait", ec.message(), ec.value());
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                }
+                co_return;
+            }
+
+            // rfb handshake
+            try {
+                bool handshake = co_await rfbHandshakeAwait(rfbsec_);
+                if(! handshake) {
+                    co_return;
+                }
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbHandshakeAwait", ec.message(), ec.value());
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                }
+                co_return;
+            }
+
+            if(! window_) {
+                co_return;
+            }
+
+            asio::co_spawn(ioc(), signalsHandler(), asio::detached);
+
+            // rfb messages loop
             try {
                 co_await rfbMessagesLoopAwait();
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                    Application::error("{}: system error: {}, code: {}", "rfbMessagesLoopAwait", ec.message(), ec.value());
+                    Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
                     asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 }
             } catch(const std::exception& err) {
-                Application::error("{}: exception: {}", "rfbMessagesLoopAwait", err.what());
+                Application::error("{}: exception: {}", "start", err.what());
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                co_return;
             }
         }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
 
 #ifdef __UNIX__
-        asio::co_spawn(x11_strand_, x11EventsLoop(),
+        asio::co_spawn(x11_strand(), x11EventsLoop(),
                 asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
         if(isContinueUpdatesSupport()) {
@@ -886,7 +888,7 @@ namespace LTSM {
             asio::post(thread_pool_, [this](){ ioc().run(); });
         }
 
-        Application::info("{}: client running", NS_FuncNameV);
+        Application::info("{}: client starting", NS_FuncNameV);
 
         sdl_ctx_.run();
         thread_pool_.join();
@@ -1176,6 +1178,7 @@ namespace LTSM {
                 break;
 
             case SDL_QUIT:
+                Application::debug(DebugType::App, "{}: {}", NS_FuncNameV, "SDL_QUIT");
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 break;
 
@@ -1264,21 +1267,41 @@ namespace LTSM {
         Application::info("{}: size: {}", NS_FuncNameV, serverWindowSz);
 
         if( ! window_) {
-            sdlWindowInit(serverWindowSz);
+            // sdl init window
+            try {
+                auto res = asio::co_spawn(sdl_strand_, sdlWindowInit(serverWindowSz), asio::use_future);
+
+                if(sdl_strand_.running_in_this_thread()) {
+                    // future: skip deadlock
+                    while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                        sdl_ctx_.run_one();
+                    }
+                }
+
+                if(bool sdl_init = res.get(); !sdl_init) {
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                }
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "start", err.what());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            }
         }
     }
 
-    void ClientApp::sdlWindowInit(const XCB::Size & wsz) {
+    asio::awaitable<bool> ClientApp::sdlWindowInit(const XCB::Size & wsz) {
+        co_await asio::dispatch(sdl_ctx_, asio::use_awaitable);
+
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
 
         window_ = std::make_unique<SDL::Window>(windowTitle, wsz, wsz, windowFlags, windowAccel);
+        Application::debug(DebugType::Sdl, "{}: {} success", NS_FuncNameV, "SDL_Window");
 
         if(SDL_TRUE != SDL_PixelFormatEnumToMasks(window_->pixelFormat(), &bpp, &rmask,
                 &gmask, &bmask, &amask)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV,
                                "SDL_PixelFormatEnumToMasks", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
+            co_return false;
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
@@ -1288,14 +1311,15 @@ namespace LTSM {
         asio::co_spawn(sdl_strand_, sdlEventsLoop(),
                     asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
 
-        asio::post(rfb_strand(), std::bind(&ClientApp::displayResizeEvent, this, windowSize_));
+        asio::dispatch(rfb_strand(), std::bind(&ClientApp::displayResizeEvent, this, windowSize_));
+        co_return true;
     }
 
-    void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) {
+    void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) const {
         fillPixel({dst, XCB::Size{1, 1}}, pixel);
     }
 
-    void ClientApp::fillPixel(const XCB::Region & wrt, uint32_t pixel) {
+    void ClientApp::fillPixel(const XCB::Region & wrt, uint32_t pixel) const {
         if(wrt.isEmpty()) {
             return;
         }
@@ -1310,7 +1334,7 @@ namespace LTSM {
     }
 
     void ClientApp::updateRawPixels(const XCB::Region & wrt, std::vector<uint8_t>&& buf,
-                                  uint32_t pitch, const PixelFormat & pf) {
+                                  uint32_t pitch, const PixelFormat & pf) const {
         if(wrt.isEmpty()) {
             return;
         }
@@ -1349,7 +1373,7 @@ namespace LTSM {
         }
     }
 
-    void ClientApp::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) {
+    void ClientApp::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
         // decoder job
         boost::asio::post(ioc(), [this, job=std::move(func), buf1=std::move(buf), pitch, reg, pf]() {
             decoder_jobs_.fetch_add(1, std::memory_order_relaxed);
@@ -1358,7 +1382,7 @@ namespace LTSM {
         });
     }
 
-    void ClientApp::waitDecoderJobs(void) {
+    void ClientApp::waitDecoderJobs(void) const {
         while(decoder_jobs_.load(std::memory_order_acquire)) {
             std::this_thread::yield();
         }
@@ -1502,7 +1526,7 @@ namespace LTSM {
 
     void ClientApp::clientRecvLtsmHandshakeEvent(int flags) {
 #ifdef __UNIX__
-        asio::post(x11_strand_, [this]() {
+        asio::post(x11_strand(), [this]() {
             if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
                 // switch to rfb_strand
                 asio::post(rfb_strand(), [this, names=extXkb->getNames(), group=extXkb->getLayoutGroup()]() {
@@ -1594,12 +1618,12 @@ namespace LTSM {
             jo.push("username", username);
         }
 
-        if(! rfbsec.passwdFile.empty()) {
-            jo.push("password", rfbsec.passwdFile);
+        if(! rfbsec_.passwdFile.empty()) {
+            jo.push("password", rfbsec_.passwdFile);
         }
 
-        if(! rfbsec.certFile.empty()) {
-            jo.push("certificate", Tools::fileToString(rfbsec.certFile));
+        if(! rfbsec_.certFile.empty()) {
+            jo.push("certificate", Tools::fileToString(rfbsec_.certFile));
         }
 
         if(! printerUrl.empty()) {

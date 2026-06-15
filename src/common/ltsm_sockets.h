@@ -401,6 +401,7 @@ namespace LTSM {
             bool handshakeLayer(std::string_view service);
         };
 
+/*
         /// @brief: gss api client layer
         class Client : public BaseLayer, public Gss::ClientContext {
           protected:
@@ -420,47 +421,10 @@ namespace LTSM {
             bool checkUserCredential(std::string_view) const;
             bool handshakeLayer(std::string_view service, bool mutual = false, std::string_view username = "");
         };
+*/
     }
 
 #endif // LTSM_WITH_GSSAPI
-
-#ifdef LTSM_WITH_ZLIB
-    namespace ZLib {
-        class DeflateBase {
-          protected:
-            z_stream zs{};
-            std::array<uint8_t, 1024> tmp;
-
-          public:
-            explicit DeflateBase(int level = Z_BEST_COMPRESSION);
-            virtual ~DeflateBase();
-
-            DeflateBase(const DeflateBase &) = delete;
-            DeflateBase & operator=(const DeflateBase &) = delete;
-
-            std::vector<uint8_t> deflateData(const void* buf, size_t len, int flushPolicy = Z_SYNC_FLUSH);
-        };
-
-        /// @brief: zlib compress output stream only
-        class DeflateStream : public DeflateBase, public NetworkStream {
-          protected:
-            std::vector<uint8_t> bb;
-
-          public:
-            explicit DeflateStream(int level = Z_BEST_COMPRESSION);
-
-            std::vector<uint8_t> deflateFlush(void);
-
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            void sendRaw(const void*, size_t) override;
-
-          private:
-            void recvRaw(void*, size_t) const override;
-        };
-
-    } // Zlib
-#endif // LTSM_WITH_ZLIB
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

@@ -32,6 +32,8 @@
 namespace LTSM {
     namespace RFB {
         class WinClient : public ClientDecoder {
+
+            boost::asio::strand<boost::asio::any_io_executor> win_strand_;
             std::vector<uint8_t> clientClipboard;
 
             mutable std::mutex clientLock;
@@ -40,13 +42,14 @@ namespace LTSM {
             uint16_t clipRemoteTypes = 0;
 
           protected:
+            inline const boost::asio::strand<boost::asio::any_io_executor> & win_strand(void) const { return win_strand_; }
 
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
             std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
             void extClipboardRemoteTypesEvent(uint16_t type) override;
             void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
-            void extClipboardSendEvent(const std::vector<uint8_t> &) override;
+            void extClipboardSendEvent(std::vector<uint8_t> &&) override;
 
             void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
 

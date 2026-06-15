@@ -23,13 +23,12 @@
 
 #include <algorithm>
 
-#ifdef LTSM_WITH_BOOST
 #include <boost/asio/post.hpp>
-#endif
+#include <boost/endian.hpp>
 
-#include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "librfb_decodings.h"
+#include "ltsm_tools.h"
 
 #ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
@@ -43,9 +42,52 @@
 #include "SDL.h"
 
 namespace LTSM {
+    // AsioDecoderStream
+    void RFB::AsioDecoderStream::recvRaw(void* ptr, size_t len) const {
+        sock_.sync_recv_buf(ptr, len);
+    }
+
     // DecoderStream
-    int RFB::DecoderStream::recvPixel(void) {
-        switch(clientFormat().bytePerPixel()) {
+    std::vector<uint8_t> RFB::DecoderStream::recvData(size_t len) const {
+        std::vector<uint8_t> res(len);
+        if(len) {
+            recvRaw(res.data(), res.size());
+        }
+        return res;
+    }
+
+    uint8_t RFB::DecoderStream::recvInt8(void) const {
+        uint8_t byte;
+        recvRaw(& byte, 1);
+        return byte;
+    }
+
+    uint16_t RFB::DecoderStream::recvIntLE16(void) const {
+        uint16_t v;
+        recvRaw(& v, 2);
+        return boost::endian::little_to_native(v);
+    }
+
+    uint32_t RFB::DecoderStream::recvIntLE32(void) const {
+        uint32_t v;
+        recvRaw(& v, 4);
+        return boost::endian::little_to_native(v);
+    }
+
+    uint16_t RFB::DecoderStream::recvIntBE16(void) const {
+        uint16_t v;
+        recvRaw(& v, 2);
+        return boost::endian::big_to_native(v);
+    }
+
+    uint32_t RFB::DecoderStream::recvIntBE32(void) const {
+        uint32_t v;
+        recvRaw(& v, 4);
+        return boost::endian::big_to_native(v);
+    }
+
+    uint32_t RFB::DecoderStream::recvPixel(const PixelFormat & clientPf) const {
+        switch(clientPf.bytePerPixel()) {
             case 4:
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
                 return recvIntBE32();
@@ -69,15 +111,9 @@ namespace LTSM {
         throw rfb_error(NS_FuncNameS);
     }
 
-    void RFB::DecoderStream::recvRegionUpdatePixels(const XCB::Region & reg) {
-        uint32_t pitch = reg.width * clientFormat().bytePerPixel();
-        auto pixels = recvData(static_cast<size_t>(pitch) * reg.height);
-        updateRawPixels(reg, std::move(pixels), pitch, serverFormat());
-    }
-
-    int RFB::DecoderStream::recvCPixel(void) {
-        if(clientFormat().bitsPerPixel() != 32) {
-            return recvPixel();
+    uint32_t RFB::DecoderStream::recvCPixel(const PixelFormat & clientPf) const {
+        if(clientPf.bitsPerPixel() != 32) {
+            return recvPixel(clientPf);
         }
 
         uint32_t pixel = 0;
@@ -85,13 +121,13 @@ namespace LTSM {
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 
-        if(! clientFormat().leastSignificant()) {
+        if(! clientPf.leastSignificant()) {
             ptr++;
         }
 
 #else
 
-        if(clientFormat().leastSignificant()) {
+        if(clientPf.leastSignificant()) {
             ptr++;
         }
 
@@ -101,8 +137,8 @@ namespace LTSM {
         return pixel;
     }
 
-    size_t RFB::DecoderStream::recvRunLength(void) {
-        size_t length = 0;
+    uint32_t RFB::DecoderStream::recvRunLength(void) const {
+        uint32_t length = 0;
 
         while(true) {
             auto val = recvInt8();
@@ -126,38 +162,38 @@ namespace LTSM {
         return type_;
     }
 
-    void RFB::DecodingRaw::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingRaw::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        const uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
+        const uint32_t pitch = reg.width * rend.clientFormat().bytePerPixel();
         // server transform pixels to client format
-        cli.updateRawPixels(reg, std::move(buf), pitch, cli.clientFormat());
+        rend.updateRawPixels(reg, std::move(buf), pitch, rend.clientFormat());
     }
 
-    void RFB::DecodingRRE::updateRegionStream(DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingRRE::updateRegionStream(const DecoderStream & st, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
 
-        auto subRects = cli.recvIntBE32();
-        auto bgColor = cli.recvPixel();
+        auto subRects = st.recvIntBE32();
+        auto bgColor = st.recvPixel(rend.clientFormat());
 
         Application::trace(DebugType::Enc, "{}: back pixel: {:#010x}, sub rects: {}", NS_FuncNameV, bgColor, subRects);
 
-        cli.fillPixel(reg, bgColor);
+        rend.fillPixel(reg, bgColor);
 
         while(0 < subRects--) {
             XCB::Region dst;
-            auto pixel = cli.recvPixel();
+            auto pixel = st.recvPixel(rend.clientFormat());
 
             if(isCoRRE()) {
-                dst.x = cli.recvInt8();
-                dst.y = cli.recvInt8();
-                dst.width = cli.recvInt8();
-                dst.height = cli.recvInt8();
+                dst.x = st.recvInt8();
+                dst.y = st.recvInt8();
+                dst.width = st.recvInt8();
+                dst.height = st.recvInt8();
             } else {
-                dst.x = cli.recvIntBE16();
-                dst.y = cli.recvIntBE16();
-                dst.width = cli.recvIntBE16();
-                dst.height = cli.recvIntBE16();
+                dst.x = st.recvIntBE16();
+                dst.y = st.recvIntBE16();
+                dst.width = st.recvIntBE16();
+                dst.height = st.recvIntBE16();
             }
 
             Application::trace(DebugType::Enc, "{}: sub region: {}", NS_FuncNameV, dst);
@@ -170,11 +206,11 @@ namespace LTSM {
                 throw rfb_error(NS_FuncNameS);
             }
 
-            cli.fillPixel(dst, pixel);
+            rend.fillPixel(dst, pixel);
         }
     }
 
-    void RFB::DecodingHexTile::updateRegionStream(DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingHexTile::updateRegionStream(const DecoderStream & st, const DecoderRender & rend, const XCB::Region & reg) {
         if(16 < reg.width || 16 < reg.height) {
             Application::error("{}: invalid hextile region: {}", NS_FuncNameV, reg);
             throw rfb_error(NS_FuncNameS);
@@ -182,37 +218,39 @@ namespace LTSM {
 
         Application::debug(DebugType::Enc, "{}: decoding region: {}", NS_FuncNameV, reg);
 
-        updateRegionStreamColors(cli, reg);
+        updateRegionStreamColors(st, rend, reg);
     }
 
-    void RFB::DecodingHexTile::updateRegionStreamColors(DecoderStream & cli, const XCB::Region & reg) {
-        auto flag = cli.recvInt8();
+    void RFB::DecodingHexTile::updateRegionStreamColors(const DecoderStream & st, const DecoderRender & rend, const XCB::Region & reg) {
+        auto flag = st.recvInt8();
 
         Application::trace(DebugType::Enc, "{}: sub encoding mask: {:#04x}, sub region: {}",
                            NS_FuncNameV, flag, reg);
 
         if(flag & RFB::HEXTILE_RAW) {
             Application::trace(DebugType::Enc, "{}: type: {}", NS_FuncNameV, "raw");
-            cli.recvRegionUpdatePixels(reg);
+            const uint32_t pitch = reg.width * rend.clientFormat().bytePerPixel();
+            auto pixels = st.recvData(static_cast<size_t>(pitch) * reg.height);
+            rend.updateRawPixels(reg, std::move(pixels), pitch, rend.serverFormat());
             return;
         }
 
         if(flag & RFB::HEXTILE_BACKGROUND) {
-            bgColor = cli.recvPixel();
+            bgColor = st.recvPixel(rend.clientFormat());
             Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "background", bgColor);
         }
 
-        cli.fillPixel(reg, bgColor);
+        rend.fillPixel(reg, bgColor);
 
         if(flag & HEXTILE_FOREGROUND) {
-            fgColor = cli.recvPixel();
+            fgColor = st.recvPixel(rend.clientFormat());
             flag &= ~HEXTILE_COLOURED;
 
             Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "foreground", fgColor);
         }
 
         if(flag & HEXTILE_SUBRECTS) {
-            int subRects = cli.recvInt8();
+            int subRects = st.recvInt8();
             XCB::Region dst;
 
             Application::trace(DebugType::Enc, "{}: type: {}, count: {}", NS_FuncNameV, "subrects", subRects);
@@ -221,13 +259,13 @@ namespace LTSM {
                 auto pixel = fgColor;
 
                 if(flag & HEXTILE_COLOURED) {
-                    pixel = cli.recvPixel();
+                    pixel = st.recvPixel(rend.clientFormat());
 
                     Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "colored", pixel);
                 }
 
-                auto val1 = cli.recvInt8();
-                auto val2 = cli.recvInt8();
+                auto val1 = st.recvInt8();
+                auto val2 = st.recvInt8();
                 dst.x = (0x0F & (val1 >> 4));
                 dst.y = (0x0F & val1);
                 dst.width = 1 + (0x0F & (val2 >> 4));
@@ -244,43 +282,50 @@ namespace LTSM {
                     throw rfb_error(NS_FuncNameS);
                 }
 
-                cli.fillPixel(dst, pixel);
+                rend.fillPixel(dst, pixel);
             }
         }
     }
 
-    RFB::DecodingTRLE::DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE) {
-        if(zip) {
-            zlib = std::make_unique<ZLib::InflateBase>();
-        }
-    }
+    /// BufferWrapper
+    class BufferWrapper : public RFB::DecoderStream {
+        StreamBufRef sb_;
 
-    void RFB::DecodingTRLE::updateRegionStream(DecoderStream & cli, const XCB::Region & reg) {
+      public:
+        BufferWrapper(std::span<const uint8_t> buf) {
+            sb_.reset(buf.data(), buf.size());
+        }
+
+        void recvRaw(void* ptr, size_t len) const override {
+            sb_.readTo(ptr, len);
+        }
+    };
+ 
+    void RFB::DecodingTRLE::updateRegionStream(const DecoderStream & st, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}", NS_FuncNameV, reg);
 
         const XCB::Size bsz(64, 64);
 
         if(isZRLE()) {
-            auto zipsz = cli.recvIntBE32();
-            auto zipin = cli.recvData(zipsz);
-
-            auto buf = zlib->inflateData(zipin);
-            Application::trace(DebugType::Enc, "{}: inflate data, in length: {}, out length: {}", NS_FuncNameV, zipin.size(), buf.size());
-
-            DecoderWrapper wrap(std::move(buf), & cli);
+            auto len = st.recvIntBE32();
+            auto zip = st.recvData(len);
+            auto buf = zlib_->inflateData(zip, Z_SYNC_FLUSH);
+    
+            Application::trace(DebugType::Enc, "{}: inflate data, in length: {}, out length: {}", NS_FuncNameV, zip.size(), buf.size());
+            BufferWrapper wrap(buf);
 
             for(const auto & reg0 : reg.XCB::Region::divideBlocks(bsz)) {
-                updateSubRegion(wrap, reg0);
+                updateSubRegion(wrap, rend, reg0);
             }
         } else {
             for(const auto & reg0 : reg.XCB::Region::divideBlocks(bsz)) {
-                updateSubRegion(cli, reg0);
+                updateSubRegion(st, rend, reg0);
             }
         }
     }
 
-    void RFB::DecodingTRLE::updateSubRegion(DecoderStream & cli, const XCB::Region & reg) {
-        auto type = cli.recvInt8();
+    void RFB::DecodingTRLE::updateSubRegion(const DecoderStream & st, const DecoderRender & rend, const XCB::Region & reg) {
+        auto type = st.recvInt8();
 
         Application::trace(DebugType::Enc, "{}: sub encoding type: {:#04x}, sub region: {}, zrle: {}",
                            NS_FuncNameV, type, reg, (int) isZRLE());
@@ -290,15 +335,15 @@ namespace LTSM {
             Application::trace(DebugType::Enc, "{}: type: {}", NS_FuncNameV, "raw");
 
             for(auto coord = XCB::PointIterator(0, 0, reg.toSize()); coord.isValid(); ++coord) {
-                auto pixel = cli.recvCPixel();
-                cli.setPixel(reg.topLeft() + coord, pixel);
+                auto pixel = st.recvCPixel(rend.clientFormat());
+                rend.setPixel(reg.topLeft() + coord, pixel);
             }
 
             Application::trace(DebugType::Enc, "{}: complete: {}", NS_FuncNameV, "raw");
         } else if(1 == type) {
             // trle solid
-            auto solid = cli.recvCPixel();
-            cli.fillPixel(reg, solid);
+            auto solid = st.recvCPixel(rend.clientFormat());
+            rend.fillPixel(reg, solid);
 
             Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}", NS_FuncNameV, "solid", solid);
         } else if(2 <= type && type <= 16) {
@@ -321,14 +366,14 @@ namespace LTSM {
             std::vector<int> palette(type);
 
             for(auto & val : palette) {
-                val = cli.recvCPixel();
+                val = st.recvCPixel(rend.clientFormat());
             }
 
             Application::trace(DebugType::Enc, "{}: type: {}, size: {}", NS_FuncNameV, "packed palette", palette.size());
 
             // recv packed rows
             for(int oy = 0; oy < reg.height; ++oy) {
-                Tools::StreamBitsUnpack sb(cli.recvData(rowsz), reg.width, field);
+                Tools::StreamBitsUnpack sb(st.recvData(rowsz), reg.width, field);
 
                 for(int ox = reg.width - 1; 0 <= ox; --ox) {
                     auto pos = reg.topLeft() + XCB::Point(ox, oy);
@@ -341,7 +386,7 @@ namespace LTSM {
                         throw rfb_error(NS_FuncNameS);
                     }
 
-                    cli.setPixel(pos, palette[index]);
+                    rend.setPixel(pos, palette[index]);
                 }
             }
 
@@ -355,13 +400,13 @@ namespace LTSM {
             auto coord = XCB::PointIterator(0, 0, reg.toSize());
 
             while(coord.isValid()) {
-                auto pixel = cli.recvCPixel();
-                auto runLength = cli.recvRunLength();
+                auto pixel = st.recvCPixel(rend.clientFormat());
+                auto runLength = st.recvRunLength();
 
                 Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#010x}, length: {}", NS_FuncNameV, "plain rle", pixel, runLength);
 
                 while(runLength--) {
-                    cli.setPixel(reg.topLeft() + coord, pixel);
+                    rend.setPixel(reg.topLeft() + coord, pixel);
                     ++coord;
 
                     if(! coord.isValid() && runLength) {
@@ -377,7 +422,7 @@ namespace LTSM {
             std::vector<int> palette(palsz);
 
             for(auto & val : palette) {
-                val = cli.recvCPixel();
+                val = st.recvCPixel(rend.clientFormat());
             }
 
             Application::trace(DebugType::Enc, "{}: type: {}, size: {}", NS_FuncNameV, "rle palette", palsz);
@@ -385,7 +430,7 @@ namespace LTSM {
             auto coord = XCB::PointIterator(0, 0, reg.toSize());
 
             while(coord.isValid()) {
-                auto index = cli.recvInt8();
+                auto index = st.recvInt8();
 
                 if(index < 128) {
                     if(index >= palette.size()) {
@@ -394,7 +439,7 @@ namespace LTSM {
                     }
 
                     auto pixel = palette[index];
-                    cli.setPixel(reg.topLeft() + coord, pixel);
+                    rend.setPixel(reg.topLeft() + coord, pixel);
                     ++coord;
                 } else {
                     index -= 128;
@@ -405,12 +450,12 @@ namespace LTSM {
                     }
 
                     auto pixel = palette[index];
-                    auto runLength = cli.recvRunLength();
+                    auto runLength = st.recvRunLength();
 
                     Application::trace(DebugType::Enc, "{}: type: {}, index: {}, length: {}", NS_FuncNameV, "rle palette", index, runLength);
 
                     while(runLength--) {
-                        cli.setPixel(reg.topLeft() + coord, pixel);
+                        rend.setPixel(reg.topLeft() + coord, pixel);
                         ++coord;
 
                         if(! coord.isValid() && runLength) {
@@ -425,50 +470,48 @@ namespace LTSM {
         }
     }
 
-    RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB) {
-        zlib = std::make_unique<ZLib::InflateBase>();
-    }
-
-    void RFB::DecodingZlib::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingZlib::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        const uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
-        auto pixels = zlib->inflateData(buf);
+        const uint32_t pitch = reg.width * rend.clientFormat().bytePerPixel();
+        auto pixels = zlib_->inflateData(buf, Z_SYNC_FLUSH);
 
         assert(pixels.size() >= static_cast<size_t>(pitch) * reg.height);
-        cli.updateRawPixels(reg, std::move(pixels), pitch, cli.serverFormat());
+        rend.updateRawPixels(reg, std::move(pixels), pitch, rend.serverFormat());
     }
 
 #ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
-    void RFB::DecodingLZ4::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingLZ4::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        const uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
+        const uint32_t pitch = rend.serverFormat().bytePerPixel() * reg.width;
         auto runJob = std::bind(&DecodingLZ4::decodeLZ4, this,
                                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
         // move job to thread pool
-        cli.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, cli.serverFormat());
+        rend.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, rend.serverFormat());
+    }
+
+    std::vector<uint8_t> lz4DecompressSafe(std::span<const uint8_t> buf, size_t outlen) {
+        std::vector<uint8_t> res(outlen);
+        int ret = LZ4_decompress_safe((const char*) buf.data(), (char*) res.data(), buf.size(), res.size());
+        if(ret < 0) {
+            Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_decompress_safe", ret);
+            throw rfb_error(NS_FuncNameS);
+        }
+        res.resize(ret);
+        return res;
     }
 
     std::vector<uint8_t> RFB::DecodingLZ4::decodeLZ4(const std::vector<uint8_t> & buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
-        std::vector<uint8_t> res(pitch * reg.height);
-        int ret = LZ4_decompress_safe((const char*) buf.data(), (char*) res.data(), buf.size(), res.size());
-
-        if(0 >= ret) {
-        Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_decompress_safe_continue", ret);
-            throw rfb_error(NS_FuncNameS);
-        }
-
-        res.resize(ret);
-        return res;
+        return lz4DecompressSafe(buf, pitch * reg.height);
     }
 #endif // LTSM_DECODING_LZ4
 
 #ifdef LTSM_DECODING_TJPG
     /// DecodingTJPG
-    void RFB::DecodingTJPG::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingTJPG::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         const uint32_t pitch = reg.width * tjPixelSize[pixfmt];
@@ -477,14 +520,14 @@ namespace LTSM {
         // format transformed: jpg pixel data only in this format
         const PixelFormat jpgFormat = platformBigEndian() ? XRGB32 : BGRX32;
         // move job to thread pool
-        cli.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, jpgFormat);
+        rend.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, jpgFormat);
     }
 
     std::vector<uint8_t> RFB::DecodingTJPG::decodeJPG(const std::vector<uint8_t> & buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
         std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitDecompress(), tjDestroy };
 
         if(! jpeg) {
-        Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
+            Application::error("{}: {} failed", NS_FuncNameV, "tjInitDecompress");
             throw rfb_error(NS_FuncNameS);
         }
 
@@ -507,16 +550,29 @@ namespace LTSM {
     }
 #endif // LTSM_DECODING_TJPG
 
-#ifdef LTSM_DECODING_QOI
     /// DecodingQOI
-    void RFB::DecodingQOI::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingQOI::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        const uint32_t pitch = cli.serverFormat().bytePerPixel() * reg.width;
+        const uint32_t pitch = rend.serverFormat().bytePerPixel() * reg.width;
+
+        if(isZQOI()) {
+#ifdef LTSM_DECODING_LZ4
+            auto runJob = std::bind(&DecodingQOI::decodeZQOI, this,
+                                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+            // move job to thread pool
+            rend.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, rend.serverFormat());
+            return;
+#else
+            Application::error("{}: {} failed", NS_FuncNameV, "encoding type");
+            throw rfb_error(NS_FuncNameS);
+#endif
+        }
+
         auto runJob = std::bind(&DecodingQOI::decodeBGRx, this,
                                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
         // move job to thread pool
-        cli.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, cli.serverFormat());
+        rend.postDecoderJob(std::move(runJob), std::move(buf), reg, pitch, rend.serverFormat());
     }
 
     namespace QOI {
@@ -547,6 +603,12 @@ namespace LTSM {
             return (col.r * 3 + col.g * 5 + col.b * 7) % 64;
         }
     }
+
+#ifdef LTSM_DECODING_LZ4
+    std::vector<uint8_t> RFB::DecodingQOI::decodeZQOI(const std::vector<uint8_t> & buf, const XCB::Region & rsz, uint32_t pitch, const PixelFormat & pf) const {
+        return decodeBGRx(lz4DecompressSafe(buf, pitch * rsz.height), rsz, pitch, pf);
+     }
+#endif
 
     std::vector<uint8_t> RFB::DecodingQOI::decodeBGRx(const std::vector<uint8_t> & buf, const XCB::Region & rsz, uint32_t pitch, const PixelFormat & pf) const {
         std::array<int64_t, 64> hashes;
@@ -644,6 +706,5 @@ namespace LTSM {
 
         return res;
     }
-#endif // LTSM_DECODING_QOI
 #endif // LTSM_DECODING
 }

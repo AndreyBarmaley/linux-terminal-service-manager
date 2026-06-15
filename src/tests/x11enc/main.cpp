@@ -15,8 +15,11 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_xcb_wrapper.h"
 #include "librfb_encodings.h"
-#include "librfb_ffmpeg.h"
 #include "ltsm_tools.h"
+
+#ifdef LTSM_WITH_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
 
 using namespace LTSM;
 
@@ -140,10 +143,11 @@ namespace LTSM::RFB {
             ENCODING_LTSM_QOI,
             ENCODING_LTSM_TJPG,
 
+#ifdef LTSM_WITH_FFMPEG
             ENCODING_LTSM_H264,
             ENCODING_LTSM_AV1,
             ENCODING_LTSM_VP8,
-
+#endif
             ENCODING_RAW };
     }
 }
@@ -203,8 +207,10 @@ class EncodingTest : public Application {
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_ZRLE
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+#ifdef LTSM_WITH_FFMPEG
             // RFB::ENCODING_LTSM_H264
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
+#endif
             // RFB::ENCODING_LTSM_LZ4
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_TJPG
@@ -235,10 +241,11 @@ class EncodingTest : public Application {
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
+#ifdef LTSM_WITH_FFMPEG
                     case RFB::ENCODING_LTSM_H264:
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
-
+#endif
                     case RFB::ENCODING_LTSM_LZ4:
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;

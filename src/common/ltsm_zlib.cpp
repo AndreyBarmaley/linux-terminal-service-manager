@@ -26,8 +26,8 @@
 
 namespace LTSM::Tools {
     std::vector<uint8_t> zlibCompress(std::span<const uint8_t> cont) {
-        const auto & data = reinterpret_cast<const Bytef*>(cont.data());
-        const auto & size = cont.size();
+        auto data = reinterpret_cast<const Bytef*>(std::data(cont));
+        auto size = std::size(cont);
 
         if(data && size) {
             uLong dstsz = ::compressBound(size);
@@ -76,6 +76,7 @@ namespace LTSM::Tools {
 }
 
 namespace LTSM::ZLib {
+    // InflateBase
     InflateBase::InflateBase() {
         zs.data_type = Z_BINARY;
 
@@ -89,8 +90,8 @@ namespace LTSM::ZLib {
         inflateEnd(& zs);
     }
 
-    std::vector<uint8_t> InflateBase::inflateData(const std::vector<uint8_t> & buf) {
-        return inflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
+    std::vector<uint8_t> InflateBase::inflateData(std::span<const uint8_t> cont, int flushPolicy) {
+        return inflateData(cont.data(), cont.size(), flushPolicy);
     }
 
     void InflateBase::reset(void) {
@@ -108,7 +109,8 @@ namespace LTSM::ZLib {
             return {};
         }
 
-        zs.next_in = (Bytef*) buf;
+        // zlib legacy non const
+        zs.next_in = reinterpret_cast<Bytef*>(const_cast<void*>(buf));
         zs.avail_in = static_cast<uInt>(len);
 
         std::vector<uint8_t> res;
@@ -123,7 +125,7 @@ namespace LTSM::ZLib {
             zs.next_out = res.data() + write_pos;
             zs.avail_out = static_cast<uInt>(res.size() - write_pos);
 
-            int ret = inflate(& zs, flushPolicy);
+            int ret = ::inflate(& zs, flushPolicy);
 
             const size_t bytes_written = (res.size() - write_pos) - zs.avail_out;
             write_pos += bytes_written;
@@ -143,6 +145,65 @@ namespace LTSM::ZLib {
         }
 
         res.resize(write_pos);
+        return res;
+    }
+
+    // DeflateBase
+    DeflateBase::DeflateBase(int level) {
+        zs.data_type = Z_BINARY;
+            
+        if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level) {
+            level = Z_BEST_COMPRESSION;
+        }
+
+        //int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+
+        if(int ret = deflateInit(& zs, level); ret < Z_OK) {
+            Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflateInit2", ret);
+            throw zlib_error(NS_FuncNameS);
+        }
+    }
+            
+    DeflateBase::~DeflateBase() {
+        deflateEnd(& zs);
+    }
+
+    std::vector<uint8_t> DeflateBase::deflateData(std::span<const uint8_t> cont, int flushPolicy) {
+        return deflateData(cont.data(), cont.size(), flushPolicy);
+    }
+
+    void DeflateBase::reset(void) {
+        if(int ret = deflateReset(&zs); ret != Z_OK) {
+            Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflateReset", ret);
+            throw zlib_error(NS_FuncNameS);
+        }
+    }
+
+    std::vector<uint8_t> DeflateBase::deflateData(const void* buf, size_t len, int flushPolicy) {
+
+        if(len == 0) {
+            Application::warning("{}: empty data", NS_FuncNameV);
+            return {};
+        }
+
+        // zlib legacy non const
+        zs.next_in = reinterpret_cast<Bytef*>(const_cast<void*>(buf));
+        zs.avail_in = static_cast<uInt>(len);
+
+        std::vector<uint8_t> res;
+        res.resize(deflateBound(& zs, len));
+
+        zs.next_out = res.data();
+        zs.avail_out = static_cast<uInt>(res.size());
+
+        if(int ret = ::deflate(& zs, flushPolicy); ret < Z_OK) {
+            Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflate", ret);
+            throw zlib_error(NS_FuncNameS);
+        }
+
+        const size_t write_pos = res.size() - zs.avail_out;
+        res.resize(write_pos);
+
         return res;
     }
 }

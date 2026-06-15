@@ -60,10 +60,6 @@
 // Use (void) to silence unused warnings.
 #define assertm(exp, msg) assert(((void)msg, exp))
 
-#ifdef LTSM_WITH_GNUTLS
-#include "gnutls/gnutls.h"
-#endif
-
 #ifdef __WIN32__
 int getuid(void);
 int getgid(void);

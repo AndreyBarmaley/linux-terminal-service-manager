@@ -31,118 +31,68 @@
 #include <stdexcept>
 #include <openssl/ssl.h>
 
-#include <boost/utility/base_from_member.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
-#include "ltsm_sockets.h"
 #include "ltsm_async_socket.h"
 
 namespace LTSM {
-    //
-    using AsioSocket = boost::asio::ip::tcp::socket;
-    using AsioSslStream = boost::asio::ssl::stream<AsioSocket>;
-    using AsioSslContext = boost::asio::ssl::context;
+//
+using AsioSslContext = boost::asio::ssl::context;
+using AsioSslStream = boost::asio::ssl::stream<AsioTcpSocket>;
 
-    namespace AsioTls {
-        enum class HandshakeType { Client, Srrver };
+namespace AsioTls {
+enum class HandshakeType { Client, Srrver };
 
-        class AsyncStream : protected boost::base_from_member<AsioSslContext>, public AsyncSocket<AsioSslStream>, public NetworkStream {
-            bool ssl_connected = false;
+class AsyncStream : public AsyncSocket<AsioSslStream> {
+    AsioSslContext ssl_ctx_;
+    mutable AsioSslStream ssl_sock_;
+    bool ssl_connected_ = false;
 
-          public:
-            explicit AsyncStream(const boost::asio::any_io_executor & ex, const AsioSslContext::method & method)
-                : boost::base_from_member<AsioSslContext>(method)
-                , AsyncSocket<AsioSslStream>(AsioSslStream{AsioSocket{ex}, boost::base_from_member<AsioSslContext>::member}) {}
+  protected:
+    AsioSslStream& socket(void) const override { return ssl_sock_; }
 
-            explicit AsyncStream(AsioSocket && sock, const AsioSslContext::method & method)
-                : boost::base_from_member<AsioSslContext>(method)
-                , AsyncSocket<AsioSslStream>(AsioSslStream{std::move(sock), boost::base_from_member<AsioSslContext>::member}) {}
+  public:
+    explicit AsyncStream(const boost::asio::any_io_executor& ex, const AsioSslContext::method& method)
+        : ssl_ctx_{method}, ssl_sock_{AsioTcpSocket{ex}, ssl_ctx_} {}
 
-            inline AsioSslContext & ssl_context(void) {
-                return boost::base_from_member<boost::asio::ssl::context>::member;
+    explicit AsyncStream(AsioTcpSocket&& sock, const AsioSslContext::method& method)
+        : ssl_ctx_{method}, ssl_sock_{std::move(sock), ssl_ctx_} {}
+
+    inline AsioSslContext& ssl_context(void) { return ssl_ctx_; }
+
+    inline const AsioSslContext& ssl_context(void) const { return ssl_ctx_; }
+
+    inline AsioSslStream& ssl_stream(void) { return ssl_sock_; }
+
+    inline const AsioSslStream& ssl_stream(void) const { return ssl_sock_; }
+
+    void sslHandshake(const HandshakeType& type) {
+        ssl_stream().handshake(type == HandshakeType::Client ? boost::asio::ssl::stream_base::client
+                                                             : boost::asio::ssl::stream_base::server);
+        ssl_connected_ = true;
+    }
+
+    void closeSocket(void) override {
+        if (auto& sock = ssl_stream().lowest_layer(); sock.is_open()) {
+            boost::system::error_code ec;
+            sock.cancel(ec);
+
+            if (ssl_connected_) {
+                ssl_stream().shutdown(ec);
             }
 
-            inline const AsioSslContext & ssl_context(void) const {
-                return boost::base_from_member<boost::asio::ssl::context>::member;
-            }
+            sock.close(ec);
+        }
+    }
 
-            inline AsioSslStream & ssl_stream(void) {
-                return AsyncSocket<AsioSslStream>::socket();
-            }
-
-            inline const AsioSslStream & ssl_stream(void) const {
-                return AsyncSocket<AsioSslStream>::socket();
-            }
-
-            void sslHandshake(const HandshakeType & type) {
-                ssl_stream().handshake(type == HandshakeType::Client ?
-                                       boost::asio::ssl::stream_base::client : boost::asio::ssl::stream_base::server);
-                ssl_connected = true;
-            }
-
-            void closeSocket(void) {
-                if(auto& sock = ssl_stream().lowest_layer(); sock.is_open()) {
-                    boost::system::error_code ec;
-                    sock.cancel(ec);
-
-                    if(ssl_connected) {
-                        ssl_stream().shutdown(ec);
-                    }
-
-                    sock.close(ec);
-                }
-            }
-
-            void setCipherSuite(const char* list) {
-                if(list) {
-                    auto ssl = ssl_stream().native_handle();
-                    SSL_set_cipher_list(ssl, list);
-                }
-            }
-
-            bool hasInput(void) const override {
-                if(ssl_connected) {
-                    if(auto ssl = const_cast<AsioSslStream &>(ssl_stream()).native_handle()) {
-                        return 0 < SSL_pending(ssl) ||
-                               0 < ssl_stream().lowest_layer().available();
-                    }
-
-                    return false;
-                }
-
-                return 0 < ssl_stream().lowest_layer().available();
-            }
-
-            size_t hasData(void) const override {
-                if(ssl_connected) {
-                    auto ssl = const_cast<AsioSslStream &>(ssl_stream()).native_handle();
-                    return ssl ? SSL_pending(ssl) : 0;
-                }
-
-                return ssl_stream().lowest_layer().available();
-            }
-
-            void sendRaw(const void* ptr, size_t len) override {
-                if(ssl_connected) {
-                    boost::asio::write(ssl_stream(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
-                } else {
-                    boost::asio::write(ssl_stream().next_layer(), boost::asio::const_buffer(ptr, len), boost::asio::transfer_all());
-                }
-
-                NetworkStream::bytesOut += len;
-            }
-
-            void recvRaw(void* ptr, size_t len) const override {
-                if(ssl_connected) {
-                    boost::asio::read(const_cast<AsioSslStream &>(ssl_stream()), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
-                } else {
-                    boost::asio::read(const_cast<AsioSslStream &>(ssl_stream()).next_layer(), boost::asio::buffer(ptr, len), boost::asio::transfer_all());
-                }
-
-                NetworkStream::bytesIn += len;
-            }
-        };
-    } // AsioTls
-} // LTSM
+    void setCipherSuite(const char* list) {
+        if (list) {
+            auto ssl = ssl_stream().native_handle();
+            SSL_set_cipher_list(ssl, list);
+        }
+    }
+};
+} // namespace AsioTls
+} // namespace LTSM
 
 #endif // _LTSM_BOOST_SOCKETS_

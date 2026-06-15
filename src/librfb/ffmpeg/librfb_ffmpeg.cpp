@@ -541,11 +541,11 @@ namespace LTSM {
         Application::debug(DebugType::Enc, "{}: success", NS_FuncNameV);
     }
 
-    void RFB::DecodingFFmpeg::updateRegionBuf(BinaryBuf && buf, DecoderStream & cli, const XCB::Region & reg) {
+    void RFB::DecodingFFmpeg::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::trace(DebugType::Enc, "{}: decoding region {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
-        if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != cli.clientSize()) {
-            initLocalContext(cli.clientSize(), cli.clientFormat());
+        if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != rend.clientSize()) {
+            initLocalContext(rend.clientSize(), rend.clientFormat());
         }
 
         if(! remoteFrame) {
@@ -590,7 +590,7 @@ namespace LTSM {
             const size_t bufsz = localFrame->linesize[0] * localFrame->height;
             std::vector<uint8_t> buf{localFrame->data[0], localFrame->data[0]+bufsz};
 
-            cli.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), std::move(buf), localFrame->linesize[0], ffmpegPixelFormat);
+            rend.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), std::move(buf), localFrame->linesize[0], ffmpegPixelFormat);
             av_frame_unref(remoteFrame.get());
         }
     }

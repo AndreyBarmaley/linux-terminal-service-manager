@@ -57,13 +57,44 @@ namespace LTSM::ZLib {
         InflateBase(InflateBase &&) noexcept = default;
         InflateBase & operator=(InflateBase &&) noexcept = default;
 
-        std::vector<uint8_t> inflateData(const std::vector<uint8_t> & buf);
+        std::vector<uint8_t> inflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
         void reset(void);
 
       protected:
         /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
-        std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH);
+        std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy);
     };
+
+    inline std::vector<uint8_t> inflate(std::span<const uint8_t> data) {
+        return InflateBase().inflateData(data);
+    }
+
+    /// @brief: zlib compress output stream only
+    class DeflateBase {
+      protected:
+        z_stream zs{};
+
+      public:
+        explicit DeflateBase(int level = Z_BEST_COMPRESSION);
+        virtual ~DeflateBase();
+
+        DeflateBase(const DeflateBase &) = delete;
+        DeflateBase & operator=(const DeflateBase &) = delete;
+            
+        DeflateBase(DeflateBase &&) noexcept = default;
+        DeflateBase & operator=(DeflateBase &&) noexcept = default;
+
+        std::vector<uint8_t> deflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
+        void reset(void);
+
+      protected:
+        /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
+        std::vector<uint8_t> deflateData(const void* buf, size_t len, int flushPolicy);
+    };
+
+    inline std::vector<uint8_t> deflate(std::span<const uint8_t> data, int level = Z_BEST_COMPRESSION) {
+        return DeflateBase(level).deflateData(data);
+    }
 }
 
 #endif // _LTSM_ZLIB_

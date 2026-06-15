@@ -28,7 +28,7 @@
 #include <functional>
 
 #include "ltsm_librfb.h"
-#include "ltsm_sockets.h"
+#include "ltsm_boost_socket.h"
 
 #ifdef LTSM_WITH_BOOST
 #include <boost/asio/post.hpp>
@@ -38,114 +38,65 @@
 #include "turbojpeg.h"
 #endif
 
+#include "ltsm_zlib.h"
+
 namespace LTSM {
     namespace RFB {
         using PostDecoderJobCb = std::function<BinaryBuf(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &)>;
 
         /// DecoderStream
-        class DecoderStream : public NetworkStream {
+        class DecoderStream {
           public:
-            int recvPixel(void);
-            int recvCPixel(void);
-            size_t recvRunLength(void);
-            void recvRegionUpdatePixels(const XCB::Region &);
+            DecoderStream() = default;
+            virtual ~DecoderStream() = default;
+
+            virtual void recvRaw(void*, size_t) const = 0;
+
+            std::vector<uint8_t> recvData(size_t) const;
+            uint8_t recvInt8(void) const;
+            uint16_t recvIntLE16(void) const;
+            uint32_t recvIntLE32(void) const;
+            uint16_t recvIntBE16(void) const;
+            uint32_t recvIntBE32(void) const;
+
+            uint32_t recvPixel(const PixelFormat &) const;
+            uint32_t recvCPixel(const PixelFormat &) const;
+            uint32_t recvRunLength(void) const;
+        };
+
+        class AsioDecoderStream : public DecoderStream {
+            AsyncSocketBase& sock_;
+
+          public:
+            AsioDecoderStream(AsyncSocketBase& st) : sock_(st) {}
+            ~AsioDecoderStream() = default;
+
+            void recvRaw(void*, size_t) const override;
+        };
+
+        /// DecoderRender
+        class DecoderRender {
+          public:
+            DecoderRender() = default;
+            virtual ~DecoderRender() = default;
 
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
 
-            virtual void setPixel(const XCB::Point &, uint32_t pixel) = 0;
-            virtual void fillPixel(const XCB::Region &, uint32_t pixel) = 0;
+            virtual void setPixel(const XCB::Point &, uint32_t pixel) const = 0;
+            virtual void fillPixel(const XCB::Region &, uint32_t pixel) const = 0;
 
-            virtual void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, const PixelFormat &) = 0;
+            virtual void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&& buf, uint32_t pitch, const PixelFormat &) const = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
+            virtual void postDecoderJob(PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) const = 0;
+            virtual void waitDecoderJobs(void) const = 0;
+
             virtual int clientPrefferedVideoEncoding(void) const {
                 return 0;
             }
             virtual int clientPrefferedAudioEncoding(void) const {
                 return 0;
-            }
-
-            virtual void postDecoderJob(PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) = 0;
-            virtual void waitDecoderJobs(void) = 0;
-        };
-
-        /// DecoderWrapper
-        class DecoderWrapper : public DecoderStream {
-            std::vector<uint8_t> buf_;
-            StreamBufRef sb_;
-
-            DecoderStream* owner_ = nullptr;
-
-          public:
-            DecoderWrapper(std::vector<uint8_t> && buf, DecoderStream* st) : buf_(std::move(buf)), owner_(st) {
-                sb_.reset(buf_.data(), buf_.size());
-            }
-
-            DecoderWrapper(const DecoderWrapper &) = delete;
-            DecoderWrapper & operator=(const DecoderWrapper &) = delete;
-
-#ifdef LTSM_WITH_GNUTLS
-            void setupTLS(gnutls::session* ses) const override {
-                throw rfb_error(NS_FuncNameS + " usupported");
-            }
-
-#endif
-            bool hasInput(void) const override {
-                return sb_.last();
-            }
-
-            size_t hasData(void) const override {
-                return sb_.last();
-            }
-
-            void sendRaw(const void* ptr, size_t len) override {
-                throw rfb_error(NS_FuncNameS + " usupported");
-            }
-
-            void recvRaw(void* ptr, size_t len) const override {
-                sb_.readTo(ptr, len);
-            }
-
-            const PixelFormat & serverFormat(void) const override {
-                return owner_->serverFormat();
-            }
-
-            const PixelFormat & clientFormat(void) const override {
-                return owner_->clientFormat();
-            }
-
-            void setPixel(const XCB::Point & pt, uint32_t pixel) override {
-                owner_->setPixel(pt, pixel);
-            }
-
-            void fillPixel(const XCB::Region & rt, uint32_t pixel) override {
-                owner_->fillPixel(rt, pixel);
-            }
-
-            void updateRawPixels(const XCB::Region & wrt, std::vector<uint8_t>&& buf, uint32_t pitch,
-                                 const PixelFormat & pf) override {
-                owner_->updateRawPixels(wrt, std::move(buf), pitch, pf);
-            }
-
-            void postDecoderJob(RFB::PostDecoderJobCb && cb, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) override {
-                owner_->postDecoderJob(std::move(cb), std::move(buf), reg, pitch, pf);
-            }
-
-            void waitDecoderJobs(void) override {
-                owner_->waitDecoderJobs();
-            }
-
-            XCB::Size clientSize(void) const override {
-                return owner_->clientSize();
-            }
-
-            int clientPrefferedVideoEncoding(void) const override {
-                return owner_->clientPrefferedVideoEncoding();
-            }
-
-            int clientPrefferedAudioEncoding(void) const override {
-                return owner_->clientPrefferedAudioEncoding();
             }
         };
 
@@ -157,8 +108,8 @@ namespace LTSM {
             DecodingBase(int v);
             virtual ~DecodingBase() = default;
 
-            virtual void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) { /* empty */ }
-            virtual void updateRegionStream(DecoderStream &, const XCB::Region &) { /* empty */ }
+            virtual void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) { /* empty */ }
+            virtual void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) { /* empty */ }
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
 
             int type(void) const;
@@ -167,7 +118,7 @@ namespace LTSM {
         /// DecodingRaw
         class DecodingRaw : public DecodingBase {
           public:
-            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
             DecodingRaw() : DecodingBase(ENCODING_RAW) {}
         };
@@ -175,7 +126,7 @@ namespace LTSM {
         /// DecodingRRE
         class DecodingRRE : public DecodingBase {
           public:
-            void updateRegionStream(DecoderStream &, const XCB::Region &) override;
+            void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
             DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
@@ -190,10 +141,10 @@ namespace LTSM {
             int fgColor = -1;
 
           protected:
-            void updateRegionStreamColors(DecoderStream &, const XCB::Region &);
+            void updateRegionStreamColors(const DecoderStream &, const DecoderRender &, const XCB::Region &);
 
           public:
-            void updateRegionStream(DecoderStream &, const XCB::Region &) override;
+            void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
             DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
@@ -204,15 +155,16 @@ namespace LTSM {
 
         /// DecodingTRLE
         class DecodingTRLE : public DecodingBase {
-            std::unique_ptr<ZLib::InflateBase> zlib;
+            std::unique_ptr<ZLib::InflateBase> zlib_;
 
           protected:
-            void updateSubRegion(DecoderStream &, const XCB::Region &);
+            void updateSubRegion(const DecoderStream &, const DecoderRender &, const XCB::Region &);
 
           public:
-            void updateRegionStream(DecoderStream &, const XCB::Region &) override;
+            void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingTRLE(bool zlib);
+            DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE),
+                zlib_{std::make_unique<ZLib::InflateBase>()} {}
 
             bool isZRLE(void) const {
                 return type() == ENCODING_ZRLE;
@@ -221,12 +173,13 @@ namespace LTSM {
 
         /// DecodingZlib
         class DecodingZlib : public DecodingBase {
-            std::unique_ptr<ZLib::InflateBase> zlib;
+            std::unique_ptr<ZLib::InflateBase> zlib_;
 
           public:
-            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingZlib();
+            DecodingZlib() : DecodingBase(ENCODING_ZLIB),
+                zlib_{std::make_unique<ZLib::InflateBase>()} {}
         };
 
 #ifdef LTSM_DECODING
@@ -238,7 +191,7 @@ namespace LTSM {
             std::vector<uint8_t> decodeLZ4(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
-            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
             DecodingLZ4() : DecodingBase(ENCODING_LTSM_LZ4) {}
         };
@@ -255,24 +208,29 @@ namespace LTSM {
             std::vector<uint8_t> decodeJPG(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
-            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
             DecodingTJPG() : DecodingBase(ENCODING_LTSM_TJPG) {}
         };
 #endif
-#ifdef LTSM_DECODING_QOI
         /// DecodingQOI
         class DecodingQOI : public DecodingBase {
 
           protected:
+#ifdef LTSM_DECODING_LZ4
+            std::vector<uint8_t> decodeZQOI(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
+#endif
             std::vector<uint8_t> decodeBGRx(const std::vector<uint8_t> &, const XCB::Region &, uint32_t pitch, const PixelFormat &) const;
 
           public:
-            void updateRegionBuf(BinaryBuf &&, DecoderStream &, const XCB::Region &) override;
+            void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI) {}
+            DecodingQOI(bool lz4) : DecodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
+
+            bool isZQOI(void) const {
+                return type() == ENCODING_LTSM_ZQOI;
+            }
         };
-#endif
 #endif
     }
 }
