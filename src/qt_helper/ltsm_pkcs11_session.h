@@ -81,6 +81,7 @@ class Pkcs11Client : public QThread, protected boost::base_from_member<boost::as
     Q_OBJECT
 
     boost::asio::io_context & ioc_;
+    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
     boost::asio::cancellation_signal client_cancel_;
 
     mutable LTSM::async_mutex send_lock_;

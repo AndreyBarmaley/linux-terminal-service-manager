@@ -42,6 +42,7 @@ using namespace boost;
 Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
     AsyncLocalStream(member.get_executor()),
     ioc_{member},
+    work_guard_{asio::make_work_guard(ioc_)},
     send_lock_{ioc_.get_executor()},
     templatePath{"/var/run/ltsm/pkcs11/%{display}/sock"} {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
@@ -60,6 +61,7 @@ void Pkcs11Client::stop(void) noexcept {
     try {
         socket().cancel();
         client_cancel_.emit(asio::cancellation_type::terminal);
+        work_guard_.reset();
     } catch(...) {
     }
 }
