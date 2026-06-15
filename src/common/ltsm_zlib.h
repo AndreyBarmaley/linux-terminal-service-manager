@@ -27,58 +27,73 @@
 #include <vector>
 #include <iterator>
 
+#include "ltsm_compat.h"
 #include <zlib.h>
-#include "ltsm_tools.h"
-#include "ltsm_application.h"
+
+namespace LTSM {
+    struct zlib_error : public std::runtime_error {
+        explicit zlib_error(std::string_view what) : std::runtime_error(view2string(what)) {}
+    };
+}
 
 namespace LTSM::Tools {
-    std::vector<uint8_t> zlibCompress(std::span<const uint8_t> cont) {
-        const auto & data = reinterpret_cast<const Bytef*>(cont.data());
-        const auto & size = cont.size();
+    std::vector<uint8_t> zlibCompress(std::span<const uint8_t> cont);
+    std::vector<uint8_t> zlibUncompress(std::span<const uint8_t> cont, size_t real = 0);
+}
 
-        if(data && size) {
-            uLong dstsz = ::compressBound(size);
-            std::vector<uint8_t> res(dstsz);
-            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz, data, size);
-            if(ret == Z_OK) {
-                res.resize(dstsz);
-                return res;
-            } else {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "compress", ret);
-                throw std::runtime_error(NS_FuncNameS);
-            }
-        }
+namespace LTSM::ZLib {
+    /// @brief: zlib compress input stream only
+    class InflateBase {
+      protected:
+        z_stream zs{};
 
-        return {};
+      public:
+        InflateBase();
+        virtual ~InflateBase();
+
+        InflateBase(const InflateBase &) = delete;
+        InflateBase & operator=(const InflateBase &) = delete;
+
+        InflateBase(InflateBase &&) noexcept = default;
+        InflateBase & operator=(InflateBase &&) noexcept = default;
+
+        std::vector<uint8_t> inflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
+        void reset(void);
+
+      protected:
+        /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
+        std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy);
+    };
+
+    inline std::vector<uint8_t> inflate(std::span<const uint8_t> data) {
+        return InflateBase().inflateData(data);
     }
 
-    template<typename Cont>
-    std::vector<uint8_t> zlibUncompress(const Cont & cont, size_t real = 0) {
-        auto data = std::data(cont);
-        auto size = std::size(cont);
+    /// @brief: zlib compress output stream only
+    class DeflateBase {
+      protected:
+        z_stream zs{};
 
-        if(data && size) {
-            uLong dstsz = real ? real : size * 7;
-            std::vector<uint8_t> res(dstsz);
-            int ret = Z_BUF_ERROR;
+      public:
+        explicit DeflateBase(int level = Z_BEST_COMPRESSION);
+        virtual ~DeflateBase();
 
-            while(Z_BUF_ERROR ==
-                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                      reinterpret_cast<const Bytef*>(data), size))) {
-                dstsz = res.size() * 2;
-                res.resize(dstsz);
-            }
+        DeflateBase(const DeflateBase &) = delete;
+        DeflateBase & operator=(const DeflateBase &) = delete;
+            
+        DeflateBase(DeflateBase &&) noexcept = default;
+        DeflateBase & operator=(DeflateBase &&) noexcept = default;
 
-            if(ret == Z_OK) {
-                res.resize(dstsz);
-                return res;
-            } else {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV, "uncompress", ret);
-                throw std::runtime_error(NS_FuncNameS);
-            }
-        }
+        std::vector<uint8_t> deflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
+        void reset(void);
 
-        return {};
+      protected:
+        /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
+        std::vector<uint8_t> deflateData(const void* buf, size_t len, int flushPolicy);
+    };
+
+    inline std::vector<uint8_t> deflate(std::span<const uint8_t> data, int level = Z_BEST_COMPRESSION) {
+        return DeflateBase(level).deflateData(data);
     }
 }
 

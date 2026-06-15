@@ -316,7 +316,7 @@ void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&
     }
 
     if(channel == static_cast<uint8_t>(ChannelType::System)) {
-        recvChannelSystem(buf);
+        recvChannelSystemEvent(buf);
     } else {
         recvChannelData(channel, std::move(buf));
     }
@@ -574,16 +574,6 @@ void LTSM::ChannelClient::sendSystemCursorFailed(int cursorId) {
     sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
 }
 
-void LTSM::ChannelClient::sendSystemKeyboardEvent(bool pressed, int scancode, int keycode) {
-    JsonObjectStream jo;
-    jo.push("cmd", SystemCommand::KeyboardEvent);
-    jo.push("pressed", pressed);
-    jo.push("scancode", scancode);
-    jo.push("keycode", keycode);
-
-    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
-}
-
 void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string> & names, int group) {
     if(0 <= group && group < names.size()) {
         JsonObjectStream jo;
@@ -596,7 +586,7 @@ void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string
     }
 }
 
-bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string> files) {
+bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string> && files) {
     Application::info("{}", NS_FuncNameV);
 
     std::erase_if(files, [](auto & file) {
@@ -963,59 +953,17 @@ void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, int flags,
                         push("id", channel).flush());
 }
 
-void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
-    int version = ns.recvInt8();
-
-    if(version != LtsmProtocolVersion) {
-        Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
-        throw channel_error(NS_FuncNameS);
-    }
-
-    auto channel = ns.recvInt8();
-    auto length = ns.recvIntBE16();
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, length);
-
-    auto buf = ns.recvData(length);
+void LTSM::ChannelClient::recvLtsmProto(uint8_t channel, std::vector<uint8_t> && buf)
+{
+    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
     if(channelDebug == channel) {
         auto str = Tools::hexString(buf, 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           NS_FuncNameV, channel, length, str);
-    }
-
-    recvLtsmEvent(channel, std::move(buf));
-}
-
-void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLock,
-                                        uint8_t channel, std::span<const uint8_t> buf) {
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
-
-    if(buf.empty()) {
-        Application::warning("{}: empty data", NS_FuncNameV);
-        return;
-    }
-
-    assert(0xFFFF >= buf.size());
-
-    const std::scoped_lock guard{sendLock};
-    ns.sendInt8(RFB::PROTOCOL_LTSM);
-
-    // version
-    ns.sendInt8(LtsmProtocolVersion);
-    //channel
-    ns.sendInt8(channel);
-
-    // data
-    ns.sendIntBE16(buf.size());
-
-    if(channelDebug == channel) {
-        auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
-        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            NS_FuncNameV, channel, buf.size(), str);
     }
 
-    ns.sendRaw(buf.data(), buf.size());
-    ns.sendFlush();
+    recvLtsmEvent(channel, std::move(buf));
 }
 
 void LTSM::ChannelClient::setChannelDebug(const uint8_t & channel, const bool & debug) {
@@ -1133,9 +1081,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
 
 // Remote2Local
 LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int flags) : id(cid) {
-    if(static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags) {
-        zlib = std::make_unique<ZLib::InflateBase>();
-    }
+    zlib = static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags;
 }
 
 LTSM::Channel::Remote2Local::~Remote2Local() {
@@ -1186,8 +1132,7 @@ bool LTSM::Channel::Remote2Local::writeData(void) {
     transfer1 += buf.size();
 
     if(zlib) {
-        auto buf2 = zlib->inflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
-        buf.swap(buf2);
+        buf = ZLib::inflate(buf);
         // Application::debug(DebugType::Channels, "{}: inflate, size1: {}, size2: {}", NS_FuncNameV, buf.size(), buf2.size());
     }
 
@@ -1258,10 +1203,7 @@ ssize_t LTSM::Channel::Remote2Local_FD::writeDataFrom(const void* buf, size_t le
 
 // Local2Remote
 LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int flags) : id(cid) {
-    if(static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags) {
-        zlib = std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED + 2);
-    }
-
+    zlib = static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags;
     buf.reserve(0xFFFF);
 }
 
@@ -1295,9 +1237,8 @@ bool LTSM::Channel::Local2Remote::readData(void) {
         transfer1 += real;
 
         if(zlib) {
-            auto buf2 = zlib->deflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
-            transfer2 += buf2.size();
-            buf.swap(buf2);
+            buf = ZLib::deflate(buf, Z_BEST_SPEED + 2);
+            transfer2 += buf.size();
             // Application::debug(DebugType::Channels, "{}: deflate, size1: {}, size2: {}", NS_FuncNameV, buf2.size(), buf.size());
         } else {
             transfer2 += real;
@@ -1468,7 +1409,7 @@ void LTSM::Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
             continue;
         } else {
             auto & buf = st->getBuf();
-            owner->sendLtsmChannelData(st->cid(), buf);
+            owner->sendLtsmChannelData(st->cid(), std::move(buf));
         }
     }
 

@@ -383,6 +383,20 @@ namespace LTSM {
         return std::vector<uint8_t>(it0, it1);
     }
 
+    void StreamBufRef::readTo(void* ptr, size_t len) const {
+        if(last() < len) {
+            Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
+            throw std::invalid_argument(NS_FuncNameS);
+        }
+
+        if(len == 0) {
+            return;
+        }
+
+        std::copy_n(it1, len, static_cast<uint8_t*>(ptr));
+        it1 = std::next(it1, len);
+    }
+
     void StreamBufRef::skip(size_t len) const {
         if(last() < len) {
             Application::error("{}: incorrect len, last: {}, len: {}", NS_FuncNameV, last(), len);
@@ -453,7 +467,7 @@ namespace LTSM {
 
     /* StreamBuf */
     StreamBuf::StreamBuf(size_t reserve) {
-        vec.reserve(reserve);
+        vec.reserve(Tools::alignUp(reserve, 8));
         it = vec.begin();
     }
 

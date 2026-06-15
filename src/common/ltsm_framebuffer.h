@@ -101,6 +101,15 @@ namespace LTSM {
                    redShift == pf.redShift && greenShift == pf.greenShift && blueShift == pf.blueShift && (skipAlpha ? true : alphaShift == pf.alphaShift);
         }
 
+#ifdef LTSM_WITH_SDL
+        uint32_t sdlPixelFormat(void) const;
+#endif
+
+#ifdef LTSM_WITH_FFMPEG
+        int ffmpegPixelFormat(void) const;
+#endif
+
+        uint32_t depth(void) const;
         uint32_t rmask(void) const;
         uint32_t gmask(void) const;
         uint32_t bmask(void) const;
@@ -142,10 +151,10 @@ namespace LTSM {
             return redShift == 0 || blueShift == 0 || greenShift == 0;
         }
 
-        uint8_t red(uint32_t pixel) const;
-        uint8_t green(uint32_t pixel) const;
-        uint8_t blue(uint32_t pixel) const;
-        uint8_t alpha(uint32_t pixel) const;
+        uint16_t red(uint32_t pixel) const;
+        uint16_t green(uint32_t pixel) const;
+        uint16_t blue(uint32_t pixel) const;
+        uint16_t alpha(uint32_t pixel) const;
 
         Color color(uint32_t pixel) const;
         uint32_t pixel(const Color & col) const;
@@ -261,15 +270,15 @@ namespace LTSM {
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 // RGBA LITTLE ENDIAN <- ABGR
-#define RGB555  LTSM::PixelFormat(15, 0x0000001F, 0x000003E0, 0x00007C00, 0)
-#define BGR555  LTSM::PixelFormat(15, 0x00007C00, 0x000003E0, 0x0000001F, 0)
+#define RGB555  LTSM::PixelFormat(16, 0x0000001F, 0x000003E0, 0x00007C00, 0)
+#define BGR555  LTSM::PixelFormat(16, 0x00007C00, 0x000003E0, 0x0000001F, 0)
 #define RGB565  LTSM::PixelFormat(16, 0x0000001F, 0x000007E0, 0x0000F800, 0)
 #define BGR565  LTSM::PixelFormat(16, 0x0000F800, 0x000007E0, 0x0000001F, 0)
 
 #define RGB24   LTSM::PixelFormat(24, 0x000000FF, 0x0000FF00, 0x00FF0000, 0)
 #define BGR24   LTSM::PixelFormat(24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0)
-#define RGB30   LTSM::PixelFormat(30, 0x000003FF, 0x000FFC00, 0x3FF00000, 0)
-#define BGR30   LTSM::PixelFormat(30, 0x3FF00000, 0x000FFC00, 0x000003FF, 0)
+#define RGB30   LTSM::PixelFormat(32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0)
+#define BGR30   LTSM::PixelFormat(32, 0x3FF00000, 0x000FFC00, 0x000003FF, 0)
 
 #define RGBA1010102 LTSM::PixelFormat(32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000)
 #define BGRA1010102 LTSM::PixelFormat(32, 0x3FF00000, 0x000FFC00,0x000003FF, 0xC0000000)
@@ -285,15 +294,15 @@ namespace LTSM {
 #define XBGR32  LTSM::PixelFormat(32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0)
 #else
 // RGBA BIG ENDIAN -> RGBA
-#define RGB555  LTSM::PixelFormat(15, 0x00007C00, 0x000003E0, 0x0000001F, 0)
-#define BGR555  LTSM::PixelFormat(15, 0x0000001F, 0x000003E0, 0x00007C00, 0)
+#define RGB555  LTSM::PixelFormat(16, 0x00007C00, 0x000003E0, 0x0000001F, 0)
+#define BGR555  LTSM::PixelFormat(16, 0x0000001F, 0x000003E0, 0x00007C00, 0)
 #define RGB565  LTSM::PixelFormat(16, 0x0000F800, 0x000007E0, 0x0000001F, 0)
 #define BGR565  LTSM::PixelFormat(16, 0x0000001F, 0x000007E0, 0x0000F800, 0)
 
 #define RGB24   LTSM::PixelFormat(24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0)
 #define BGR24   LTSM::PixelFormat(24, 0x000000FF, 0x0000FF00, 0x00FF0000, 0)
-#define RGB30   LTSM::PixelFormat(30, 0x3FF00000, 0x000FFC00, 0x000003FF, 0)
-#define BGR30   LTSM::PixelFormat(30, 0x000003FF, 0x000FFC00, 0x3FF00000, 0)
+#define RGB30   LTSM::PixelFormat(32, 0x3FF00000, 0x000FFC00, 0x000003FF, 0)
+#define BGR30   LTSM::PixelFormat(32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0)
 
 #define RGBA1010102 LTSM::PixelFormat(32, 0xFFC00000, 0x003FF000, 0x00000FFC, 0x00000003)
 #define BGRA1010102 LTSM::PixelFormat(32, 0x00000FFC, 0x003FF000,0xFFC00000, 0x00000003)

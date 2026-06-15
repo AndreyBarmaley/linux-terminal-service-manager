@@ -112,7 +112,7 @@ namespace LTSM {
         }
     };
 
-    class FuseSession : protected AsyncSocket<asio::local::stream_protocol::socket> {
+    class FuseSession : protected AsyncLocalStream {
         asio::strand<asio::any_io_executor> fuse_strand_;
         asio::cancellation_signal fuse_stop_;
         mutable async_mutex send_lock_;
@@ -162,7 +162,7 @@ namespace LTSM {
 
       public:
         FuseSession(const asio::any_io_executor & ex, const std::string & local, const std::string & remote)
-            : AsyncSocket<asio::local::stream_protocol::socket>(ex)
+            : AsyncLocalStream(ex)
             , fuse_strand_{asio::make_strand(ex)}
             , send_lock_{socket().get_executor()}
             , localPoint{local}, remotePoint{remote} {
@@ -369,7 +369,7 @@ namespace LTSM {
         while(count--) {
             // <LEN16><PATH> - remote path
             auto len = co_await async_recv_le16();
-            auto path = co_await async_recv_buf<std::string>(len);
+            auto path = co_await async_recv_string(len);
 
             auto st = co_await recvStatStruct();
             auto ino = st.st_ino;
@@ -598,12 +598,11 @@ namespace LTSM {
     asio::awaitable<void> FuseSession::replyRead(fuse_req_t req) const {
 
         // <LEN16><DATA> - raw data
-        using binary_buf = std::vector<char>;
         auto len = co_await async_recv_le16();
 
         if(len) {
-            auto buf = co_await async_recv_buf<binary_buf>(len);
-            fuse_reply_buf(req, buf.data(), buf.size());
+            auto buf = co_await async_recv_buffer(len);
+            fuse_reply_buf(req, (const char*) buf.data(), buf.size());
         } else {
             fuse_reply_buf(req, nullptr, 0);
         }

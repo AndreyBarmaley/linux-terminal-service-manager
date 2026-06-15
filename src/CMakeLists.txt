@@ -287,12 +287,17 @@ if(LTSM_BUILD_CLIENT)
     if(NOT MINGW)
         set(LTSM_CLIENT_PKCS11_AUTH ON CACHE BOOL "client: pkcs11 auth")
     endif()
-    set(LTSM_CLIENT_GSSAPI_AUTH ON CACHE BOOL "client: kerberos auth")
     set(LTSM_CLIENT_GNUTLS_SUPPORT ON CACHE BOOL "client: tls support")
     set(LTSM_CLIENT_FFMPEG_SUPPORT ON CACHE BOOL "client: ffmpeg decoder")
     set(LTSM_CLIENT_SCARD_REDIRECT ON CACHE BOOL "client: smartcard redirect (pcsc)")
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
     set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect (openal)")
+    if(APPLE)
+        # client crashed
+        set(LTSM_CLIENT_GSSAPI_AUTH OFF CACHE BOOL "client: kerberos auth")
+    else()
+        set(LTSM_CLIENT_GSSAPI_AUTH ON CACHE BOOL "client: kerberos auth")
+    endif()
 
     CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB BOOST)
 
@@ -337,7 +342,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_vnc2image)
     set(CUR_TARGET ltsm_vnc2image)
 
-    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST OPENSSL)
+    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB BOOST OPENSSL SDL)
 
     add_executable(${CUR_TARGET})
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
@@ -354,7 +359,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_x11vnc)
     set(CUR_TARGET ltsm_x11vnc)
 
-    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB)
+    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB SDL)
 
     add_executable(${CUR_TARGET} tools/x11vnc/ltsm_x11vnc.cpp tools/x11vnc/ltsm_connector_x11vnc.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
@@ -369,9 +374,10 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_libsdl2x11)
     set(CUR_TARGET ltsm_sdl2x11)
 
-    CommonDefaults(SDL)
+    CommonDefaults(SDL BOOST)
 
     add_executable(${CUR_TARGET} tools/sdl2x11/ltsm_sdl2x11.cpp)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_BOOST)
 
     target_include_directories(${CUR_TARGET} PRIVATE common)
     add_subdirectory(common ${CUR_TARGET}_common)

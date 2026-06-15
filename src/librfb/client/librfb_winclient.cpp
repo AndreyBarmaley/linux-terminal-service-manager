@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2025 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -33,12 +33,12 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
-    RFB::WinClient::WinClient() {
+    RFB::WinClient::WinClient(const boost::asio::any_io_executor& ctx) : ClientDecoder(ctx), win_strand_{ctx} {
     }
 
-    void RFB::WinClient::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
+    void RFB::WinClient::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
         Application::debug(DebugType::WinCli, "{}, length: {}", NS_FuncNameV, buf.size());
-        sendCutTextEvent(buf, true);
+        sendCutText(std::move(buf), true);
     }
 
     uint16_t RFB::WinClient::extClipboardLocalTypes(void) const {
@@ -97,12 +97,12 @@ namespace LTSM {
         }
     }
 
-    void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
+    void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
         Application::debug(DebugType::WinCli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
-            clientClipboard = buf;
+            clientClipboard.swap(buf);
         } else {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);

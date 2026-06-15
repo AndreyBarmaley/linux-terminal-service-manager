@@ -1,28 +1,28 @@
-/***************************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
- *                                                                         *
- *   Part of the LTSM: Linux Terminal Service Manager:                     *
- *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
- **************************************************************************/
+/***********************************************************************
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *                                                                     *
+ *   Part of the LTSM: Linux Terminal Service Manager:                 *
+ *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
+ *                                                                     *
+ *   This program is free software;                                    *
+ *   you can redistribute it and/or modify it under the terms of the   *
+ *   GNU Affero General Public License as published by the             *
+ *   Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                               *
+ *                                                                     *
+ *   This program is distributed in the hope that it will be useful,   *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of    *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
+ *   See the GNU Affero General Public License for more details.       *
+ *                                                                     *
+ *   You should have received a copy of the                            *
+ *   GNU Affero General Public License along with this program;        *
+ *   if not, write to the Free Software Foundation, Inc.,              *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
+ **********************************************************************/
 
 #include <cmath>
 #include <chrono>
-#include <thread>
 #include <cstring>
 #include <algorithm>
 
@@ -35,81 +35,34 @@
 #include "librfb_ffmpeg.h"
 #endif
 
+#include <boost/system/system_error.hpp>
 #include <boost/asio/ssl/stream.hpp>
+#include <boost/container/small_vector.hpp>
+
+#include "ltsm_boost_socket.h"
 
 using namespace std::chrono_literals;
 using namespace boost;
 
 namespace LTSM {
     /* RFB::ClientDecoder */
-    void RFB::ClientDecoder::setSocketStreamMode(asio::ip::tcp::socket && sock) {
-        socket = std::make_unique<AsioTls::AsyncStream>(std::move(sock), asio::ssl::context::tlsv12_client);
-        streamIn = streamOut = socket.get();
-    }
-
-    void RFB::ClientDecoder::sendFlush(void) {
-        try {
-            if(rfbMessages) {
-                streamOut->sendFlush();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            rfbMessagesShutdown();
+    asio::awaitable<void> RFB::ClientDecoder::rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay) {
+        asio::ip::tcp::resolver resolver{rfb_strand_};
+        auto endpoints = resolver.resolve(host, std::to_string(port));
+        auto tcp_stream = std::make_unique<AsyncTcpStream>(rfb_strand_);
+        co_await asio::async_connect(tcp_stream->socket(), endpoints, asio::use_awaitable);
+        // set no delay
+        if(no_delay) {
+            boost::asio::ip::tcp::no_delay option(true);
+            tcp_stream->socket().set_option(option);
         }
+        stream_ = std::move(tcp_stream);
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendRaw(const void* ptr, size_t len) {
-        try {
-            if(rfbMessages) {
-                streamOut->sendRaw(ptr, len);
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            rfbMessagesShutdown();
-        }
-    }
-
-    void RFB::ClientDecoder::recvRaw(void* ptr, size_t len) const {
-        try {
-            if(rfbMessages) {
-                streamIn->recvRaw(ptr, len);
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
-        }
-    }
-
-    bool RFB::ClientDecoder::hasInput(void) const {
-        try {
-            if(rfbMessages) {
-                return streamIn->hasInput();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
-        }
-
-        return false;
-    }
-
-    size_t RFB::ClientDecoder::hasData(void) const {
-        try {
-            if(rfbMessages) {
-                return streamIn->hasData();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
-        }
-
-        return 0;
-    }
-
-#ifdef LTSM_WITH_GNUTLS
-    bool RFB::ClientDecoder::authVncInit(std::string_view password) {
+    asio::awaitable<void> RFB::ClientDecoder::authVncInitAwait(std::string_view password) const {
         // recv challenge 16 bytes
-        auto challenge = recvData(16);
+        auto challenge = co_await stream_->async_recv_buffer(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::hexString(challenge, 2);
@@ -123,36 +76,40 @@ namespace LTSM {
             Application::debug(DebugType::Rfb, "{}: encrypt: {}", NS_FuncNameV, tmp);
         }
 
-        sendRaw(crypt.data(), crypt.size());
-        sendFlush();
-        return true;
+        co_await stream_->async_send_buf(asio::buffer(crypt));
+        co_return;
     }
 
-    bool RFB::ClientDecoder::authVenCryptInit(const SecurityInfo & sec) {
+    asio::awaitable<bool> RFB::ClientDecoder::authVenCryptInitAwait(const SecurityInfo & sec) {
         // server VenCrypt version
-        int majorVer = recvInt8();
-        int minorVer = recvInt8();
+        const uint8_t majorVer = co_await stream_->async_recv_byte();
+        const uint8_t minorVer = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}: server vencrypt version {}.{}", NS_FuncNameV, majorVer, minorVer);
+
         // client VenCrypt version 0.2
-        sendInt8(0).sendInt8(2).sendFlush();
+        co_await stream_->async_send_byte(0);
+        co_await stream_->async_send_byte(2);
 
         // recv support flag
-        if(int unsupportedVersion = recvInt8()) {
-            Application::error("{}: server unsupported vencrypt version: {}", NS_FuncNameV, unsupportedVersion);
-            return false;
+        const uint8_t zeroVer = co_await stream_->async_recv_byte();
+        if(zeroVer != 0) {
+            Application::error("{}: server unsupported vencrypt version: {}", NS_FuncNameV, zeroVer);
+            co_return false;
         }
 
         // rect vencrypt types
-        std::vector<int> venCryptTypes;
-        int typesCount = recvInt8();
+        uint8_t typesCount = co_await stream_->async_recv_byte();
 
-        if(0 >= typesCount) {
+        if(0 == typesCount) {
             Application::error("{}: server vencrypt sub-types failure: {}", NS_FuncNameV, typesCount);
-            return false;
+            co_return false;
         }
 
+        container::small_vector<uint32_t, 4> venCryptTypes;
+
         while(typesCount--) {
-            venCryptTypes.push_back(recvIntBE32());
+            auto val = co_await stream_->async_recv_be32();
+            venCryptTypes.push_back(val);
         }
 
         int mode = RFB::SECURITY_VENCRYPT02_TLSNONE;
@@ -160,58 +117,127 @@ namespace LTSM {
         if(sec.tlsAnonMode) {
             if(std::ranges::none_of(venCryptTypes, [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_TLSNONE; })) {
                 Application::error("{}: server unsupported tls: {} mode", NS_FuncNameV, "anon");
-                return false;
+                co_return false;
             }
         } else {
             if(std::ranges::none_of(venCryptTypes, [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_X509NONE; })) {
                 Application::error("{}: server unsupported tls: {} mode", NS_FuncNameV, "x509");
-                return false;
+                co_return false;
             }
 
             mode = RFB::SECURITY_VENCRYPT02_X509NONE;
         }
 
         Application::debug(DebugType::Rfb, "{}: send vencrypt mode: {}", NS_FuncNameV, mode);
-        sendIntBE32(mode).sendFlush();
-        int status = recvInt8();
+        co_await stream_->async_send_be32(mode);
+        int status = co_await stream_->async_recv_byte();
 
         if(0 == status) {
             Application::error("{}: server invalid status", NS_FuncNameV);
-            return false;
+            co_return false;
         }
 
         // TLS handshake
         try {
+            auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).socket());
+            auto sock = std::make_unique<AsioTls::AsyncStream>(std::move(tcp_stream), asio::ssl::context::tlsv12_client);
+
+            auto& ssl_ctx = sock->ssl_context();
+            auto& ssl_stream = sock->ssl_stream();
+            int verify_mode = asio::ssl::verify_none;
+
             if(mode == RFB::SECURITY_VENCRYPT02_X509NONE) {
-                if(sec.caFile.empty()) {
-                    socket->ssl_context().set_default_verify_paths();
-                } else {
-                    socket->ssl_context().load_verify_file(sec.caFile);
+                ssl_ctx.set_default_verify_paths();
+
+                if(! sec.caFile.empty()) {
+                    ssl_ctx.load_verify_file(sec.caFile);
                 }
-                socket->ssl_context().use_certificate_chain_file(sec.certFile);
-                socket->ssl_context().use_private_key_file(sec.keyFile, asio::ssl::context::pem);
-                socket->ssl_context().set_verify_mode(asio::ssl::verify_peer);
-            } else {
-                socket->ssl_context().set_verify_mode(asio::ssl::verify_none);
+
+                ssl_ctx.use_certificate_chain_file(sec.certFile);
+                ssl_ctx.use_private_key_file(sec.keyFile, asio::ssl::context::pem);
+                verify_mode = asio::ssl::verify_peer;
             }
 
-            socket->setCipherSuite("AECDH-AES256-SHA:@SECLEVEL=0");
-            socket->sslHandshake(AsioTls::HandshakeType::Client);
+            ssl_stream.set_verify_mode(verify_mode);
+            sock->setCipherSuite("AECDH-AES256-SHA:@SECLEVEL=0");
+            sock->sslHandshake(AsioTls::HandshakeType::Client);
+            Application::info("{}: {}", NS_FuncNameV, "TLS handshake success");
+            stream_ = std::move(sock);
         } catch(system::system_error & err) {
             auto ec = err.code();
             Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-            return false;
+            co_return false;
         }
 
-        streamIn = streamOut = socket.get();
-        return true;
+        co_return true;
     }
-#endif
 
 #ifdef LTSM_WITH_GSSAPI
-    bool RFB::ClientDecoder::authGssApiInit(const SecurityInfo & sec) {
+    namespace GssWrapper {
+        /// @brief: gss api client layer
+        class Client : public Gss::ClientContext {
+            AsyncSocketBase & sock_;
+
+          protected:
+            // Gss::ServiceContext interface
+            void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const override {
+                auto err = Gss::error2str(code1, code2);
+                Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
+            }
+        
+            uint32_t recvLength(void) const {
+                uint32_t val;
+                sock_.sync_recv_buf(&val, sizeof(val));
+                return boost::endian::big_to_native(val);
+            }
+
+            void sendLength(uint32_t val) {
+                val = boost::endian::native_to_big(val);
+                sock_.sync_recv_buf(&val, sizeof(val));
+            }
+
+        public:
+            Client(AsyncSocketBase & sock) : sock_{sock} {
+            }
+
+            bool checkUserCredential(std::string_view username) const {
+                Gss::ErrorCodes err;
+                if(auto cred = acquireUserCredential(username, & err)) {
+                    return true;
+                }
+                error(NS_FuncNameV, err.func, err.code1, err.code2);
+                return false;
+            }
+
+            bool handshakeLayer(std::string_view service, bool mutual = false, std::string_view username = "") {
+                if(username.empty()) {
+                    return connectService(service, mutual);
+                }
+                Gss::ErrorCodes err;
+                if(auto cred = acquireUserCredential(username, & err)) {
+                    return connectService(service, mutual, std::move(cred));
+                }
+                error(NS_FuncNameV, err.func, err.code1, err.code2);
+                return false;
+            }
+
+            std::vector<uint8_t> recvToken(void) const override {
+                uint32_t len = recvLength();
+                std::vector<uint8_t> buf(len, 0);
+                sock_.sync_recv_buf(buf.data(), buf.size());
+                return buf;
+            }
+        
+            void sendToken(const void* buf, size_t len) override {
+                sendLength(len);
+                sock_.sync_send_buf(buf, len);
+            }
+        };
+    }
+
+    asio::awaitable<bool> RFB::ClientDecoder::authGssApiInitAwait(const SecurityInfo & sec) {
         try {
-            auto krb = std::make_unique<GssApi::Client>(socket.get());
+            auto krb = std::make_unique<GssWrapper::Client>(*stream_);
             // a remote peer asked for mutual authentication
             const bool mutual = true;
 
@@ -221,23 +247,17 @@ namespace LTSM {
                 jo.push("continue:tls", sec.authVenCrypt);
                 auto json = jo.flush();
                 // send security info json
-                krb->sendIntBE32(json.size());
-                krb->sendString(json);
-                krb->sendFlush();
+                krb->sendToken(json.data(), json.size());
                 // stop kerberos session
                 krb.reset();
 
                 // continue tls
                 if(sec.authVenCrypt) {
-#ifdef LTSM_WITH_GNUTLS
-                    return authVenCryptInit(sec);
-#else
-                    Application::error("{}: vencrypt security: not supported", NS_FuncNameV);
-                    return false;
-#endif
+                    co_await authVenCryptInitAwait(sec);
+                    co_return true; 
                 }
 
-                return true;
+                co_return true;
             }
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -245,47 +265,44 @@ namespace LTSM {
 
         const std::string err("security kerberos failed");
         Application::error("{}: error: {}", NS_FuncNameV, err);
-        return false;
+        co_return false;
     }
 
 #endif
 
-    bool RFB::ClientDecoder::rfbHandshake(const SecurityInfo & sec) {
+    asio::awaitable<bool> RFB::ClientDecoder::rfbHandshakeAwait(const SecurityInfo & sec) {
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
-        auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
-        std::string magick = recvString(12);
+        const auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
+        const auto magick = co_await stream_->async_recv_string(12);
 
         if(magick.empty()) {
             Application::error("{}: handshake failure", NS_FuncNameV);
-            return false;
+            co_return false;
         }
 
         Application::debug(DebugType::Rfb, "{}: handshake version: {}", NS_FuncNameV, magick.substr(0, magick.size() - 1));
 
         if(magick != version) {
             Application::error("{}: handshake failure", NS_FuncNameV);
-            return false;
+            co_return false;
         }
 
         // 12 bytes
-        sendString(version).sendFlush();
+        co_await stream_->async_send_buf(asio::buffer(version));
+
         // RFB 1.7.1.2 security
-        int counts = recvInt8();
+        const uint8_t counts = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}: security counts: {}", NS_FuncNameV, counts);
 
         if(0 == counts) {
-            int len = recvIntBE32();
-            auto err = recvString(len);
+            auto len = co_await stream_->async_recv_be32();
+            auto err = co_await stream_->async_recv_string(len);
             Application::error("{}: receive error: {}", NS_FuncNameV, err);
-            return false;
+            co_return false;
         }
 
-        std::vector<int> security;
-
-        while(0 < counts--) {
-            security.push_back(recvInt8());
-        }
+        auto security = co_await stream_->async_recv_buffer(counts);
 
 #ifdef LTSM_WITH_GSSAPI
         Gss::CredentialPtr krb5Cred;
@@ -301,21 +318,22 @@ namespace LTSM {
 
         if(krb5Cred) {
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "gssapi");
-            sendInt8(RFB::SECURITY_TYPE_GSSAPI).sendFlush();
+            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_GSSAPI);
+            const bool authInit = co_await authGssApiInitAwait(sec);
 
-            if(! authGssApiInit(sec)) {
-                return false;
+            if(! authInit) {
+                co_return false;
             }
         } else
 #endif
-#ifdef LTSM_WITH_GNUTLS
-            if(sec.authVenCrypt &&
+        if(sec.authVenCrypt &&
                 std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; })) {
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "vencrypt");
-            sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
+            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_VENCRYPT);
+            const bool authInit = co_await authVenCryptInitAwait(sec);
 
-            if(! authVenCryptInit(sec)) {
-                return false;
+            if(! authInit) {
+                co_return false;
             }
         } else if(sec.authVnc &&
             std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_VNC; })) {
@@ -323,79 +341,88 @@ namespace LTSM {
 
             if(password.empty()) {
                 Application::error("{}: security vnc: password empty", NS_FuncNameV);
-                return false;
+                co_return false;
             }
 
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "vncauth");
-            sendInt8(RFB::SECURITY_TYPE_VNC).sendFlush();
-            authVncInit(password);
-        } else
-#endif
-            if(sec.authNone &&
+
+            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_VNC);
+            co_await authVncInitAwait(password);
+        } else if(sec.authNone &&
                 std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_NONE; })) {
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "noauth");
-            sendInt8(RFB::SECURITY_TYPE_NONE).sendFlush();
+            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_NONE);
         } else {
             Application::error("{}: security vnc: not supported", NS_FuncNameV);
-            return false;
+            co_return false;
         }
 
+        const auto secReply = co_await stream_->async_recv_be32();
+
         // RFB 1.7.1.3 security result
-        if(RFB::SECURITY_RESULT_OK != recvIntBE32()) {
-            int len = recvIntBE32();
-            auto err = recvString(len);
+        if(RFB::SECURITY_RESULT_OK != secReply) {
+            auto len = co_await stream_->async_recv_be32();
+            auto err = co_await stream_->async_recv_string(len);
             Application::error("{}: receive error: {}", NS_FuncNameV, err);
-            return false;
+            co_return false;
         }
 
         bool shared = false;
         Application::debug(DebugType::Rfb, "{}: send share flags: {}", NS_FuncNameV, (int) shared);
         // RFB 6.3.1 client init (shared flag)
-        sendInt8(shared ? 1 : 0).sendFlush();
+        co_await stream_->async_send_byte(shared ? 1 : 0);
+
         // RFB 6.3.2 server init
-        auto fbWidth = recvIntBE16();
-        auto fbHeight = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: remote framebuffer size: {}", NS_FuncNameV, XCB::Size(fbWidth, fbHeight));
+        auto buf = co_await stream_->async_recv_buffer(20);
+        StreamBufRef sb(buf.data(), buf.size());
+
+        auto fbWidth = sb.readIntBE16();
+        auto fbHeight = sb.readIntBE16();
         // recv server pixel format
-        int bpp = recvInt8();
-        int depth = recvInt8();
-        serverBigEndian = recvInt8();
-        serverTrueColor = recvInt8();
-        int rmax = recvIntBE16();
-        int gmax = recvIntBE16();
-        int bmax = recvIntBE16();
-        int rshift = recvInt8();
-        int gshift = recvInt8();
-        int bshift = recvInt8();
-        recvSkip(3);
-        serverPf = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
-        Application::debug(DebugType::Rfb, "{}: remote pixel format: bpp: {}, depth: {}, bigendian: {}, true color: {}, red({},{}), green({},{}), blue({},{})",
-                           NS_FuncNameV, serverPf.bitsPerPixel(), depth, (int) serverBigEndian, (int) serverTrueColor,
-                           serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
+        auto bpp = sb.readInt8();
+        auto depth = sb.readInt8();
+        server_big_endian_ = sb.readInt8();
+        server_true_color_ = sb.readInt8();
+        auto rmax = sb.readIntBE16();
+        auto gmax = sb.readIntBE16();
+        auto bmax = sb.readIntBE16();
+        auto rshift = sb.readInt8();
+        auto gshift = sb.readInt8();
+        auto bshift = sb.readInt8();
+        // also align (3 byte)
+
+        server_pf_ = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
+        Application::debug(DebugType::Rfb, "{}: remote framebuffer size: {}", NS_FuncNameV, XCB::Size(fbWidth, fbHeight));
+
+        Application::info("{}: remote pixel format: bpp: {}, depth: {}, bigendian: {}, true color: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
+                           NS_FuncNameV, server_pf_.bitsPerPixel(), depth, (int) server_big_endian_, (int) server_true_color_,
+                           server_pf_.rmask(), server_pf_.gmask(), server_pf_.bmask());
 
         // check server format
         switch(bpp) {
             case 32:
+            case 24:
             case 16:
             case 8:
                 break;
 
             default:
                 Application::error("{}: unknown pixel format, bpp: {}, depth: {}", NS_FuncNameV, bpp, depth);
-                return false;
+                co_return false;
         }
 
-        if(! serverTrueColor || serverPf.rmax() == 0 || serverPf.gmax() == 0 || serverPf.bmax() == 0) {
+        if(! server_true_color_ || server_pf_.rmax() == 0 || server_pf_.gmax() == 0 || server_pf_.bmax() == 0) {
             Application::error("{}: unsupported pixel format", NS_FuncNameV);
-            return false;
+            co_return false;
         }
 
-        clientRecvPixelFormatEvent(serverPf, XCB::Size(fbWidth, fbHeight));
+        clientRecvPixelFormatEvent(server_pf_, XCB::Size(fbWidth, fbHeight));
         // recv name desktop
-        auto nameLen = recvIntBE32();
-        auto nameDesktop = recvString(nameLen);
+        auto nameLen = co_await stream_->async_recv_be32();
+        auto nameDesktop = co_await stream_->async_recv_string(nameLen);
+
         Application::debug(DebugType::Rfb, "{}: server desktop name: {}", NS_FuncNameV, nameDesktop);
-        return true;
+        co_return true;
     }
 
     bool RFB::ClientDecoder::isContinueUpdatesSupport(void) const {
@@ -406,28 +433,23 @@ namespace LTSM {
         return continueUpdatesProcessed;
     }
 
-    bool RFB::ClientDecoder::rfbMessagesRunning(void) const {
-        return rfbMessages;
-    }
-
     const PixelFormat & RFB::ClientDecoder::serverFormat(void) const {
-        return serverPf;
+        return server_pf_;
     }
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void) {
         channelsShutdown();
-        socket->closeSocket();
-        rfbMessages = false;
+        incr_update_timer_.cancel();
+        static_cast<AsioTls::AsyncStream&>(*stream_).closeSocket();
     }
 
     std::list<int> RFB::ClientDecoder::supportedEncodings(bool extclip) {
         std::list<int> encodings = {
             // first preffered
 #ifdef LTSM_DECODING
-#ifdef LTSM_DECODING_QOI
             ENCODING_LTSM_QOI,
-#endif
 #ifdef LTSM_DECODING_LZ4
+            ENCODING_LTSM_ZQOI,
             ENCODING_LTSM_LZ4,
 #endif
 #ifdef LTSM_DECODING_TJPG
@@ -445,6 +467,7 @@ namespace LTSM {
             ENCODING_LTSM_VP8,
 #endif
 #endif
+            ENCODING_LTSM_KEYB,
             ENCODING_LTSM_CURSOR,
             // compatible RFB encodings
             ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
@@ -466,7 +489,19 @@ namespace LTSM {
         return encodings;
     }
 
-    void RFB::ClientDecoder::rfbMessagesLoop(void) {
+    asio::awaitable<void> RFB::ClientDecoder::rfbRequestIncrUpdate(void) {
+        for(;;) {
+            incr_update_timer_.expires_after(300ms);
+            co_await incr_update_timer_.async_wait(asio::use_awaitable);
+
+            if(! (continueUpdatesSupport && continueUpdatesProcessed)) {
+                // request incr update
+                co_await sendFrameBufferUpdateAwait(true);
+            }
+        }
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::rfbMessagesLoopAwait(void) {
         auto encodings = supportedEncodings();
         // added pseudo encodings
         encodings.push_front(ENCODING_LAST_RECT);
@@ -512,162 +547,238 @@ namespace LTSM {
             }
         }
 
-        sendEncodings(encodings);
-        sendPixelFormat();
+        co_await sendEncodingsAwait(encodings);
+        co_await sendPixelFormatAwait();
+
         // request full update
-        sendFrameBufferUpdate(false);
+        co_await sendFrameBufferUpdateAwait(false);
         Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
-        auto cur = std::chrono::steady_clock::now();
 
-        while(rfbMessages) {
-            auto now = std::chrono::steady_clock::now();
+        // request incr update job
+        asio::co_spawn(rfb_strand_, rfbRequestIncrUpdate(), asio::detached);
 
-            if((! continueUpdatesSupport || ! continueUpdatesProcessed) &&
-               std::chrono::milliseconds(300) <= now - cur) {
-                // request incr update
-                sendFrameBufferUpdate(true);
-                cur = now;
-            }
-
-            if(! hasInput()) {
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
-
-            int msgType = recvInt8();
-
-            if(msgType == PROTOCOL_LTSM) {
-                if(0 == serverLtsmVersion) {
-                    Application::error("{}: server not supported: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
-                    rfbMessagesShutdown();
-                    return;
-                }
-
-                try {
-                    recvLtsmProto(*this);
-                    continue;
-                } catch(const std::exception& err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                    rfbMessagesShutdown();
-                    return;
-                }
-            }
+        while(true) {
+            co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+            int msgType = co_await stream_->async_recv_byte();
 
             switch(msgType) {
-                case SERVER_FB_UPDATE:
-                    try {
-                        recvFBUpdateEvent();
-                    } catch(const std::exception & err) {
-                        rfbMessagesShutdown();
-                    }
+                case PROTOCOL_LTSM:
+                    co_await recvLtsmProtoAwait();
+                    break;
 
+                case SERVER_FB_UPDATE:
+                    co_await recvFBUpdateEventAwait();
                     break;
 
                 case SERVER_SET_COLOURMAP:
-                    recvColorMapEvent();
+                    co_await recvColorMapEventAwait();
                     break;
 
                 case SERVER_BELL:
-                    recvBellEvent();
+                    co_await recvBellEventAwait();
                     break;
 
                 case SERVER_CUT_TEXT:
-                    recvCutTextEvent();
+                    co_await recvCutTextEventAwait();
                     break;
 
                 case SERVER_CONTINUOUS_UPDATES:
-                    recvContinuousUpdatesEvent();
+                    co_await recvContinuousUpdatesEventAwait();
                     break;
 
                 default: {
                     Application::error("{}: unknown message: {:#04x}", NS_FuncNameV, msgType);
-                    rfbMessagesShutdown();
+                    throw system::system_error(asio::error::operation_aborted);
                 }
             }
         }
+
+        co_return;
+    }
+
+    bool RFB::ClientDecoder::isDecoderFFmpeg(void) const {
+        if(decoder_) {
+            switch(decoder_->type()) {
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
+                    return true;
+
+                default: break;
+            }
+        }
+        return false;
     }
 
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz) {
         Application::info("{}: display resized, new size: {}", NS_FuncNameV, dsz);
 #ifdef LTSM_DECODING_FFMPEG
         // event background
-        std::thread([this, sz = dsz]() {
-            if(this->decoder &&
-               (this->decoder->getType() == RFB::ENCODING_LTSM_H264 ||
-                this->decoder->getType() == RFB::ENCODING_LTSM_AV1 || this->decoder->getType() == RFB::ENCODING_LTSM_VP8)) {
-                this->decoder->resizedEvent(sz);
-            }
-        }).detach();
-
+        if(isDecoderFFmpeg()) {
+            asio::dispatch(rfb_strand_, [this, sz = dsz]() {
+                this->decoder_->resizedEvent(sz);
+            });
+        }
 #endif
     }
 
-    void RFB::ClientDecoder::sendPixelFormat(void) {
-        auto & pf = clientFormat();
-        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
+    asio::awaitable<void> RFB::ClientDecoder::sendPixelFormatAwait(void) const {
+        const auto & pf = clientFormat();
+        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                            NS_FuncNameV, pf.bitsPerPixel(), (int) platformBigEndian(),
-                           pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
-        std::scoped_lock guard{ sendLock };
-        // send pixel format
-        sendInt8(RFB::CLIENT_SET_PIXEL_FORMAT);
-        sendZero(3); // padding
-        sendInt8(pf.bitsPerPixel());
-        sendInt8(24); // depth
-        sendInt8(platformBigEndian());
-        sendInt8(1); // trueColor
-        sendIntBE16(pf.rmax());
-        sendIntBE16(pf.gmax());
-        sendIntBE16(pf.bmax());
-        sendInt8(pf.rshift());
-        sendInt8(pf.gshift());
-        sendInt8(pf.bshift());
-        sendZero(3); // padding
-        sendFlush();
+                           pf.rmask(), pf.gmask(), pf.bmask());
+
+        StreamBuf sb(20);
+
+        const uint8_t trueColor = 1;
+        const uint8_t defaultDepth = 24;
+
+        sb.writeInt8(RFB::CLIENT_SET_PIXEL_FORMAT).
+            writeZero(3). // padding
+            writeInt8(pf.bitsPerPixel()).
+            writeInt8(defaultDepth).
+            writeInt8(platformBigEndian()).
+            writeInt8(trueColor).
+            writeIntBE16(pf.rmax()).
+            writeIntBE16(pf.gmax()).
+            writeIntBE16(pf.bmax()).
+            writeInt8(pf.rshift()).
+            writeInt8(pf.gshift()).
+            writeInt8(pf.bshift()).
+            writeZero(3); // padding
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendEncodings(const std::list<int> & encodings) {
+    asio::awaitable<void> RFB::ClientDecoder::sendEncodingsAwait(const std::list<int> & encodings) const {
         for(const auto & type : encodings) {
             Application::debug(DebugType::Rfb, "{}: {}", NS_FuncNameV, encodingName(type));
         }
 
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::CLIENT_SET_ENCODINGS);
-        sendZero(1); // padding
-        sendIntBE16(encodings.size());
+        StreamBuf sb(4 + encodings.size() * sizeof(uint32_t));
+
+        sb.writeInt8(RFB::CLIENT_SET_ENCODINGS).
+            writeZero(1). // padding
+            writeIntBE16(encodings.size());
 
         for(const auto & val : encodings) {
-            sendIntBE32(val);
+            sb.writeIntBE32(val);
         }
 
-        sendFlush();
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym) {
+    asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(bool incr) const {
+        auto csz = clientSize();
+        co_await sendFrameBufferUpdateAwait(XCB::Region{0, 0, csz.width, csz.height}, incr);
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(const XCB::Region & reg, bool incr) const {
+        Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
+
+        StreamBuf sb(10);
+
+        sb.writeInt8(RFB::CLIENT_REQUEST_FB_UPDATE).
+            writeInt8(incr ? 1 : 0).
+            writeIntBE16(reg.x).
+            writeIntBE16(reg.y).
+            writeIntBE16(reg.width).
+            writeIntBE16(reg.height);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
+                           (enable ? "enable" : "disable"), reg);
+
+        StreamBuf sb(10);
+
+        sb.writeInt8(CLIENT_CONTINUOUS_UPDATES).
+            writeInt8(enable ? 1 : 0).
+            writeIntBE16(reg.x).
+            writeIntBE16(reg.y).
+            writeIntBE16(reg.width).
+            writeIntBE16(reg.height);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        continueUpdatesProcessed = enable;
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendSetDesktopSizeAwait(const XCB::Size & wsz) {
+        Application::info("{}: size: {}", NS_FuncNameV, wsz);
+
+        StreamBuf sb(24);
+
+        sb.writeInt8(RFB::CLIENT_SET_DESKTOP_SIZE).
+            writeZero(1).
+            writeIntBE16(wsz.width).
+            writeIntBE16(wsz.height).
+            // num of screens
+            writeInt8(1).
+            writeZero(1).
+            // screen id
+            writeIntBE32(0).
+            // posx, posy
+            writeIntBE32(0).
+            writeIntBE16(wsz.width).
+            writeIntBE16(wsz.height).
+            // flag
+            writeIntBE32(0);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) {
         Application::debug(DebugType::Rfb, "{}: keysym: {:#010x}, pressed: {}", NS_FuncNameV, keysym, (int) pressed);
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::CLIENT_EVENT_KEY);
-        sendInt8(pressed ? 1 : 0);
-        // padding
-        sendZero(2);
-        sendIntBE32(keysym);
-        sendFlush();
+
+        // support: ENCODING_LTSM_KEYB
+        const bool ltsmKeybSupport = true; 
+        StreamBuf sb(8);
+
+        if(ltsmKeybSupport) {
+            sb.writeInt8(RFB::CLIENT_EVENT_KEY).
+                writeInt8(pressed ? 1 : 0).
+                writeIntBE16(scancode).
+                writeIntBE32(keysym);
+        } else {
+            sb.writeInt8(RFB::CLIENT_EVENT_KEY).
+                writeInt8(pressed ? 1 : 0).
+                // padding
+                writeZero(2).
+                writeIntBE32(keysym);
+        }
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {
+    asio::awaitable<void> RFB::ClientDecoder::sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) {
         Application::debug(DebugType::Rfb, "{}: pointer: {}, buttons: {:#04x}", NS_FuncNameV, XCB::Point(posx, posy), buttons);
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::CLIENT_EVENT_POINTER);
-        sendInt8(buttons);
-        sendIntBE16(posx);
-        sendIntBE16(posy);
-        sendFlush();
+
+        StreamBuf sb(6);
+
+        sb.writeInt8(RFB::CLIENT_EVENT_POINTER).
+            writeInt8(buttons).
+            writeIntBE16(posx).
+            writeIntBE16(posy);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendCutTextEvent(std::span<const uint8_t> buf, bool ext) {
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::CLIENT_CUT_TEXT);
-        // padding
-        sendZero(3);
+    asio::awaitable<void> RFB::ClientDecoder::sendCutTextEventAwait(std::span<const uint8_t> buf, bool ext) {
+        StreamBuf sb(8);
+
+        sb.writeInt8(RFB::CLIENT_CUT_TEXT).
+            // padding
+            writeZero(3);
 
         if(ext) {
             // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
@@ -678,98 +789,385 @@ namespace LTSM {
 
             // A negative value of length indicates that the extended message format
             // is used and abs(length) is the total number of following bytes.
-            sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - buf.size() + 1);
+            sb.writeIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - buf.size() + 1);
         } else {
             Application::debug(DebugType::Rfb, "{}: length text: {}", NS_FuncNameV, buf.size());
-            sendIntBE32(buf.size());
+            sb.writeIntBE32(buf.size());
         }
 
-        sendRaw(buf.data(), buf.size());
-        sendFlush();
+        // send
+        co_await stream_->async_send_values(asio::buffer(sb.rawbuf()), asio::buffer(buf.data(), buf.size()));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
-                           (enable ? "enable" : "disable"), reg);
-        std::scoped_lock guard{ sendLock };
-        sendInt8(CLIENT_CONTINUOUS_UPDATES);
-        sendInt8(enable ? 1 : 0);
-        sendIntBE16(reg.x);
-        sendIntBE16(reg.y);
-        sendIntBE16(reg.width);
-        sendIntBE16(reg.height);
-        sendFlush();
-        continueUpdatesProcessed = enable;
+    asio::awaitable<void> RFB::ClientDecoder::sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t> buf) {
+        Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
+
+        StreamBuf sb(5);
+
+        sb.writeInt8(RFB::PROTOCOL_LTSM).
+            // version
+            writeInt8(LtsmProtocolVersion).
+            //channel
+            writeInt8(channel).
+            // data
+            writeIntBE16(buf.size());
+
+        if(channelDebug == channel) {
+            auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
+            Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, buf.size(), str);
+        }
+
+        // send
+        co_await stream_->async_send_values(asio::buffer(sb.rawbuf()), asio::buffer(buf.data(), buf.size()));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendFrameBufferUpdate(bool incr) {
-        auto csz = clientSize();
-        sendFrameBufferUpdate(XCB::Region(0, 0, csz.width, csz.height), incr);
+    asio::awaitable<void> RFB::ClientDecoder::recvLtsmProtoAwait(void) {
+        if(0 == server_ltsm_version_) {
+            Application::error("{}: server not supported: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
+            throw system::system_error(asio::error::operation_aborted);
+        }
+
+        Application::debug(DebugType::Rfb, "{}", NS_FuncNameV);
+
+        const uint8_t version = co_await stream_->async_recv_byte();
+
+        if(version != LtsmProtocolVersion) {
+            Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
+            throw channel_error(NS_FuncNameS);
+        }
+
+        const uint8_t channel = co_await stream_->async_recv_byte();
+        const uint16_t length = co_await stream_->async_recv_be16();
+        auto buf = co_await stream_->async_recv_buffer(length);
+
+        ChannelClient::recvLtsmProto(channel, std::move(buf));
+        co_return;
     }
 
-    void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr) {
-        Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
-        std::scoped_lock guard{ sendLock };
-        // send framebuffer update request
-        sendInt8(CLIENT_REQUEST_FB_UPDATE);
-        sendInt8(incr ? 1 : 0);
-        sendIntBE16(reg.x);
-        sendIntBE16(reg.y);
-        sendIntBE16(reg.width);
-        sendIntBE16(reg.height);
-        sendFlush();
+    asio::awaitable<void> RFB::ClientDecoder::recvFBUpdateEventAwait(void) {
+        auto start = std::chrono::steady_clock::now();
+        // format -
+        // u8: padding
+        // u16: num rects
+
+        [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
+        const uint16_t numRects = co_await stream_->async_recv_be16();
+    
+        Application::debug(DebugType::Rfb, "{}: num rects: {}", NS_FuncNameV, numRects);
+
+        for(int it = 0; it < numRects; ++it) {
+            co_await recvFBUpdateRegionAwait();
+        }
+
+        waitDecoderJobs();
+
+        if(Application::isDebugLevel(DebugLevel::Trace)) {
+            auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
+            Application::debug(DebugType::Rfb, "{}: update time: {}us", NS_FuncNameV, dt.count());
+        }
+
+        clientRecvFBUpdateEvent();
+        co_return;
     }
 
+    asio::awaitable<void> RFB::ClientDecoder::recvFBUpdateRegionAwait(void) {
+        // region format -
+        // u16: rx
+        // u16: ry
+        // u16: rw
+        // u16: rh
+        // u32: encoding type
 
-    void RFB::ClientDecoder::updateRegion(int type, const XCB::Region & reg) {
-        if(! decoder || type != decoder->getType()) {
+        XCB::Region reg;
+        reg.x = co_await stream_->async_recv_be16();
+        reg.y = co_await stream_->async_recv_be16();
+        reg.width = co_await stream_->async_recv_be16();
+        reg.height = co_await stream_->async_recv_be16();
+
+        int32_t encodingType = co_await stream_->async_recv_be32();
+
+        Application::debug(DebugType::Rfb, "{}: region: {}, encodingType: {}",
+                           NS_FuncNameV, reg, RFB::encodingName(encodingType));
+
+        switch(encodingType) {
+            case ENCODING_LTSM:
+                co_await recvDecodingLtsmAwait(reg);
+                break;
+
+            case ENCODING_LAST_RECT:
+                co_await recvDecodingLastRectAwait(reg);
+                throw std::runtime_error("unsupported LastRect");
+                break;
+
+            case ENCODING_LTSM_CURSOR:
+                co_await recvDecodingLtsmCursorAwait(reg);
+                break;
+
+            case ENCODING_RICH_CURSOR:
+                co_await recvDecodingRichCursorAwait(reg);
+                break;
+
+            case ENCODING_EXT_DESKTOP_SIZE:
+                co_await recvDecodingExtDesktopSizeAwait(reg.x, reg.y, reg.toSize());
+                break;
+
+            case RFB::ENCODING_DESKTOP_SIZE:
+                Application::warning("{}: {}", NS_FuncNameV, "old desktop_size");
+                break;
+
+            default:
+                co_await recvDecodingUpdateRegionAwait(encodingType, reg);
+                break;
+        }
+        
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmAwait(const XCB::Region & reg) {
+
+        uint32_t type = co_await stream_->async_recv_be32();
+        Application::info("{}: success, type: {}", NS_FuncNameV, type);
+
+        // type 0: handshake part
+        if(type == 0) {
+            // ltsm 1.1 ver: flags
+            // ltsm 2.1 ver: version
+            server_ltsm_version_ = co_await stream_->async_recv_be32();
+
+            clientRecvLtsmHandshakeEvent(0 /* flags */);
+        }
+        // type 1: data part
+        else if(type == 1) {
+            // type: LTSM version
+            auto len = co_await stream_->async_recv_be32();
+            auto buf = co_await stream_->async_recv_buffer(len);
+
+            clientRecvLtsmDataEvent(std::move(buf));
+        } else {
+            Application::error("{}: unknown type: {}", NS_FuncNameV, type);
+            throw rfb_error(NS_FuncNameS);
+        }
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingLastRectAwait(const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmCursorAwait(const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+
+        BinaryBuf buf;
+
+        const uint32_t cursorId = co_await stream_->async_recv_be32();
+        const uint32_t rawsz = co_await stream_->async_recv_be32();
+
+        if(rawsz) {
+            auto zipsz = co_await stream_->async_recv_be32();
+
+            if(zipsz) {
+                auto zip = co_await stream_->async_recv_buffer(zipsz);
+                buf = Tools::zlibUncompress(zip, rawsz);
+            } else {
+                buf = co_await stream_->async_recv_buffer(rawsz);
+            }
+        }
+
+        clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingRichCursorAwait(const XCB::Region & reg) {
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+        const auto bufsz = static_cast<uint32_t>(reg.width) * reg.height * clientFormat().bytePerPixel();
+        const auto masksz = std::floor((static_cast<uint32_t>(reg.width) + 7) / 8) * reg.height;
+
+        auto buf = co_await stream_->async_recv_buffer(bufsz);
+        auto mask = co_await stream_->async_recv_buffer(masksz);
+
+        Application::trace(DebugType::Rfb, "{}: bufsz: {}, masksz: {}", NS_FuncNameV, buf.size(), mask.size());
+
+        clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size & sz) {
+        Application::info("{}: status: {}, error: {}, size: {}", NS_FuncNameV, status, err, sz);
+
+        const uint8_t numOfScreens = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const uint8_t pad1 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const uint8_t pad2 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const uint8_t pad3 = co_await stream_->async_recv_byte();
+
+        const auto bufsz = static_cast<uint32_t>(numOfScreens) *
+            (sizeof(uint32_t) /* screen id */ + 4 * sizeof(uint16_t) /* region */ + sizeof(uint32_t) /* flags */);
+        auto buf = co_await stream_->async_recv_buffer(bufsz);
+
+        StreamBufRef sb(buf.data(), buf.size());
+        std::vector<RFB::ScreenInfo> screens(numOfScreens);
+
+        for(auto & screen : screens) {
+            screen.id = sb.readIntBE32();
+            auto posx = sb.readIntBE16();
+            auto posy = sb.readIntBE16();
+            screen.width = sb.readIntBE16();
+            screen.height = sb.readIntBE16();
+            auto flags = sb.readIntBE32();
+
+            Application::debug(DebugType::Rfb, "{}: screen: {}, area: {}, flags: {:#010x}",
+                               NS_FuncNameV, screen.id, XCB::Region(posx, posy, screen.width, screen.height), flags);
+        }
+
+        clientRecvDecodingDesktopSizeEvent(status, err, sz, screens);
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvColorMapEventAwait(void) {
+        [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
+        const uint16_t firstColor = co_await stream_->async_recv_be16();
+        const uint16_t numColors = co_await stream_->async_recv_be16();
+
+        const auto bufsz = static_cast<uint32_t>(numColors) * 3 /* rgb - 3 bytes */;
+        auto buf = co_await stream_->async_recv_buffer(bufsz);
+
+        Application::debug(DebugType::Rfb, "{}: num colors: {}, first color: {}", NS_FuncNameV, numColors, firstColor);
+
+        StreamBufRef sb(buf.data(), buf.size());
+        std::vector<Color> colors(numColors);
+
+        for(auto & col : colors) {
+            col.r = sb.readInt8();
+            col.g = sb.readInt8();
+            col.b = sb.readInt8();
+
+            Application::trace(DebugType::Rfb, "{}: color [{:#04x},{:#04x},{:#04x}]", NS_FuncNameV, col.r, col.g, col.b);
+        }
+
+        clientRecvSetColorMapEvent(colors);
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvBellEventAwait(void) {
+        Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
+        clientRecvBellEvent();
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvCutTextEventAwait(void) {
+        [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const auto pad2 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const auto pad3 = co_await stream_->async_recv_byte();
+        const int32_t length = co_await stream_->async_recv_be32();
+
+        if(length < 0 && 0 == extClipboardLocalCaps()) {
+            Application::error("{}: invalid format, failed `{}'", NS_FuncNameV, "ext clipboard");
+            throw rfb_error(NS_FuncNameS);
+        }
+
+        auto buf = co_await stream_->async_recv_buffer(std::abs(length));
+
+        if(0 == length) {
+            co_return;
+        }
+
+        // A negative value of length indicates that the extended message format is used and abs(length) is the total number of following bytes.
+        // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
+        if(0 < length) {
+            Application::debug(DebugType::Rfb, "{}: length: {}", NS_FuncNameV, length);
+            clientRecvCutTextEvent(std::move(buf));
+        } else {
+            Application::debug(DebugType::Rfb, "{}: length: {}, extclip", NS_FuncNameV, length);
+            recvExtClipboardCapsEvent(std::move(buf));
+        }
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvContinuousUpdatesEventAwait(void) {
+        Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
+        continueUpdatesSupport = true;
+
+        asio::co_spawn(rfb_strand_, sendContinuousUpdatesAwait(false, { XCB::Point(0, 0), clientSize() }), asio::detached);
+        co_return;
+    }
+
+    void RFB::ClientDecoder::sendCutText(std::vector<uint8_t>&& buf, bool ext) {
+        if(! buf.empty()) {
+            asio::co_spawn(rfb_strand_, [this, ext, buf = std::move(buf)]() -> asio::awaitable<void> {
+                co_await sendCutTextEventAwait(buf, ext);
+                co_return;
+            }, asio::detached);
+        }
+    }
+
+    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {
+        if(! buf.empty()) {
+            assert(0xFFFF >= buf.size());
+            asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
+                co_await sendLtsmChannelAwait(channel, buf);
+                co_return;
+            }, asio::detached);
+        }
+    }
+
+    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::string&& buf) {
+        if(! buf.empty()) {
+            assert(0xFFFF >= buf.size());
+            asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
+                co_await sendLtsmChannelAwait(channel, {(const uint8_t*) buf.data(), buf.size()});
+                co_return;
+            }, asio::detached);
+        }
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::recvDecodingUpdateRegionAwait(int type, const XCB::Region & reg) {
+        if(! decoder_ || type != decoder_->type()) {
             switch(type) {
                 case ENCODING_RAW:
-                    decoder = std::make_unique<DecodingRaw>();
+                    decoder_ = std::make_unique<DecodingRaw>();
                     break;
 
                 case ENCODING_RRE:
-                    decoder = std::make_unique<DecodingRRE>(false);
+                    decoder_ = std::make_unique<DecodingRRE>(false);
                     break;
 
                 case ENCODING_CORRE:
-                    decoder = std::make_unique<DecodingRRE>(true);
+                    decoder_ = std::make_unique<DecodingRRE>(true);
                     break;
 
                 case ENCODING_HEXTILE:
-                    decoder = std::make_unique<DecodingHexTile>(false);
+                    decoder_ = std::make_unique<DecodingHexTile>(false);
                     break;
 
                 case ENCODING_TRLE:
-                    decoder = std::make_unique<DecodingTRLE>(false);
+                    decoder_ = std::make_unique<DecodingTRLE>(false);
                     break;
 
                 case ENCODING_ZRLE:
-                    decoder = std::make_unique<DecodingTRLE>(true);
+                    decoder_ = std::make_unique<DecodingTRLE>(true);
                     break;
 
                 case ENCODING_ZLIB:
-                    decoder = std::make_unique<DecodingZlib>();
+                    decoder_ = std::make_unique<DecodingZlib>();
                     break;
 #ifdef LTSM_DECODING
-#ifdef LTSM_DECODING_QOI
-
                 case ENCODING_LTSM_QOI:
-                    decoder = std::make_unique<DecodingQOI>();
+                    decoder_ = std::make_unique<DecodingQOI>(false);
                     break;
-#endif
-
 #ifdef LTSM_DECODING_LZ4
-
+                case ENCODING_LTSM_ZQOI:
+                    decoder_ = std::make_unique<DecodingQOI>(true);
+                    break;
                 case ENCODING_LTSM_LZ4:
-                    decoder = std::make_unique<DecodingLZ4>();
+                    decoder_ = std::make_unique<DecodingLZ4>();
                     break;
 #endif
-
 #ifdef LTSM_DECODING_TJPG
-
                 case ENCODING_LTSM_TJPG:
-                    decoder = std::make_unique<DecodingTJPG>();
+                    decoder_ = std::make_unique<DecodingTJPG>();
                     break;
 #endif
 #endif
@@ -778,9 +1176,9 @@ namespace LTSM {
                 case ENCODING_LTSM_H264:
                 case ENCODING_LTSM_AV1:
                 case ENCODING_LTSM_VP8:
-                    decoder = std::make_unique<DecodingFFmpeg>(type, frameRateOption());
+                    decoder_ = std::make_unique<DecodingFFmpeg>(type, frameRateOption());
                     // FIXME
-                    // decoder->setDebug(4 /* AV_LOG_VERBOSE */);
+                    // decoder_->setDebug(4 /* AV_LOG_VERBOSE */);
                     break;
 #endif
 
@@ -790,230 +1188,44 @@ namespace LTSM {
                 }
             }
 
-            decoderInitEvent(decoder.get());
+            decoderInitEvent(decoder_.get());
         }
 
-        decoder->updateRegion(*this, reg);
-    }
+        const AsioDecoderStream wrap(*stream_);
 
-    void RFB::ClientDecoder::recvFBUpdateEvent(void) {
-        auto start = std::chrono::steady_clock::now();
-        // padding
-        recvSkip(1);
-        auto numRects = recvIntBE16();
-        XCB::Region reg;
-        Application::debug(DebugType::Rfb, "{}: num rects: {}", NS_FuncNameV, numRects);
+        switch(decoder_->type()) {
+            case ENCODING_RAW:
+                {
+                    auto len = static_cast<uint32_t>(reg.width) * reg.height * clientFormat().bytePerPixel();
+                    auto buf = co_await stream_->async_recv_buffer(len);
+                    decoder_->updateRegionBuf(std::move(buf), *this, reg);
+                }
+                break;
 
-        while(0 < numRects--) {
-            reg.x = recvIntBE16();
-            reg.y = recvIntBE16();
-            reg.width = recvIntBE16();
-            reg.height = recvIntBE16();
-            int encodingType = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: region: {}, encodingType: {}",
-                               NS_FuncNameV, reg, RFB::encodingName(encodingType));
+            case ENCODING_LTSM_QOI:
+            case ENCODING_LTSM_ZQOI:
+            case ENCODING_LTSM_LZ4:
+            case ENCODING_LTSM_TJPG:
+            case ENCODING_LTSM_H264:
+            case ENCODING_LTSM_AV1:
+            case ENCODING_LTSM_VP8:
+            case ENCODING_ZLIB:
+                {
+                    auto len = co_await stream_->async_recv_be32();
+                    auto buf = co_await stream_->async_recv_buffer(len);
+                    decoder_->updateRegionBuf(std::move(buf), *this, reg);
+                }
+                break;
 
-            switch(encodingType) {
-                case ENCODING_LTSM:
-                    recvDecodingLtsm(reg);
-                    break;
-
-                case ENCODING_LAST_RECT:
-                    recvDecodingLastRect(reg);
-                    numRects = 0;
-                    break;
-
-                case ENCODING_LTSM_CURSOR:
-                    recvDecodingLtsmCursor(reg);
-                    break;
-
-                case ENCODING_RICH_CURSOR:
-                    recvDecodingRichCursor(reg);
-                    break;
-
-                case ENCODING_EXT_DESKTOP_SIZE:
-                    recvDecodingExtDesktopSize(reg.x, reg.y, reg.toSize());
-                    break;
-
-                case RFB::ENCODING_DESKTOP_SIZE:
-                    Application::warning("{}: {}", NS_FuncNameV, "old desktop_size");
-                    break;
-
-                default:
-                    updateRegion(encodingType, reg);
-                    break;
-            }
+            default:
+                decoder_->updateRegionStream(wrap, *this, reg);
+                break;
         }
 
-        if(decoder) {
-            decoder->waitUpdateComplete();
-        }
-
-        if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
-            Application::debug(DebugType::Rfb, "{}: update time: {}us", NS_FuncNameV, dt.count());
-        }
-
-        clientRecvFBUpdateEvent();
+        co_return;
     }
 
-    void RFB::ClientDecoder::recvColorMapEvent(void) {
-        // padding
-        recvSkip(1);
-        auto firstColor = recvIntBE16();
-        auto numColors = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: num colors: {}, first color: {}", NS_FuncNameV, numColors, firstColor);
-        std::vector<Color> colors(numColors);
-
-        for(auto & col : colors) {
-            col.r = recvInt8();
-            col.g = recvInt8();
-            col.b = recvInt8();
-
-            Application::trace(DebugType::Rfb, "{}: color [{:#04x},{:#04x},{:#04x}]", NS_FuncNameV, col.r, col.g, col.b);
-        }
-
-        clientRecvSetColorMapEvent(colors);
-    }
-
-    void RFB::ClientDecoder::recvBellEvent(void) {
-        Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
-        clientRecvBellEvent();
-    }
-
-    void RFB::ClientDecoder::recvCutTextEvent(void) {
-        // padding
-        recvSkip(3);
-        // A negative value of length indicates that the extended message format is used and abs(length) is the total number of following bytes.
-        // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        int32_t length = recvIntBE32();
-
-        if(0 < length) {
-            Application::debug(DebugType::Rfb, "{}: length: {}", NS_FuncNameV, length);
-            auto text = recvData(length);
-            clientRecvCutTextEvent(std::move(text));
-        } else if(length < 0) {
-            if(0 == extClipboardLocalCaps()) {
-                Application::error("{}: invalid format, failed `{}'", NS_FuncNameV, "ext clipboard");
-                throw rfb_error(NS_FuncNameS);
-            }
-
-            length = std::abs(length);
-            Application::debug(DebugType::Rfb, "{}: length: {}, extclip", NS_FuncNameV, length);
-
-            auto buffer = recvData(length);
-            recvExtClipboardCaps(StreamBuf(std::move(buffer)));
-        }
-    }
-
-    void RFB::ClientDecoder::recvContinuousUpdatesEvent(void) {
-        continueUpdatesSupport = true;
-        sendContinuousUpdates(false, { XCB::Point(0, 0), clientSize() });
-    }
-
-    void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
-    }
-
-    void RFB::ClientDecoder::recvDecodingLtsmCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
-
-        auto cursorId = recvIntBE32();
-
-        if(auto rawsz = recvIntBE32()) {
-            auto zipsz = recvIntBE32();
-
-            if(zipsz) {
-                const auto zip = recvData(zipsz);
-                auto buf = Tools::zlibUncompress(zip, rawsz);
-                clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
-            } else {
-                auto buf = recvData(rawsz);
-                clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
-            }
-        } else {
-            clientRecvLtsmCursorEvent(reg, cursorId, {});
-        }
-    }
-
-    void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
-        auto buf = recvData(static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel());
-        auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
-
-        Application::trace(DebugType::Rfb, "{}: bufsz: {}, masksz: {}", NS_FuncNameV, buf.size(), mask.size());
-        clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
-    }
-
-    void RFB::ClientDecoder::recvDecodingExtDesktopSize(int status, int err, const XCB::Size & sz) {
-        Application::info("{}: status: {}, error: {}, size: {}", NS_FuncNameV, status, err, sz);
-        auto numOfScreens = recvInt8();
-        recvSkip(3);
-        std::vector<RFB::ScreenInfo> screens(numOfScreens);
-
-        for(auto & screen : screens) {
-            screen.id = recvIntBE32();
-            auto posx = recvIntBE16();
-            auto posy = recvIntBE16();
-            screen.width = recvIntBE16();
-            screen.height = recvIntBE16();
-            auto flags = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: screen: {}, area: {}, flags: {:#010x}",
-                               NS_FuncNameV, screen.id, XCB::Region(posx, posy, screen.width, screen.height), flags);
-        }
-
-        clientRecvDecodingDesktopSizeEvent(status, err, sz, screens);
-    }
-
-    void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz) {
-        Application::info("{}: size: {}", NS_FuncNameV, wsz);
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
-        sendZero(1);
-        sendIntBE16(wsz.width);
-        sendIntBE16(wsz.height);
-        // num of screens
-        sendInt8(1);
-        sendZero(1);
-        // screen id
-        sendIntBE32(0);
-        // posx, posy
-        sendIntBE32(0);
-        sendIntBE16(wsz.width);
-        sendIntBE16(wsz.height);
-        // flag
-        sendIntBE32(0);
-        sendFlush();
-    }
-
-    void RFB::ClientDecoder::recvDecodingLtsm(const XCB::Region & reg) {
-        Application::info("{}: success", NS_FuncNameV);
-        uint32_t type = recvIntBE32();
-
-        // type 0: handshake part
-        if(type == 0) {
-            // ltsm 1.1 ver: flags
-            // ltsm 2.1 ver: version
-            serverLtsmVersion = recvIntBE32();
-            clientRecvLtsmHandshakeEvent(0 /* flags */);
-        }
-        // type 1: data part
-        else if(type == 1) {
-            // type: LTSM version
-            auto len = recvIntBE32();
-            auto buf = recvData(len);
-            clientRecvLtsmDataEvent(buf);
-        } else {
-            Application::error("{}: unknown type: {}", NS_FuncNameV, type);
-            throw rfb_error(NS_FuncNameS);
-        }
-    }
-
-    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::span<const uint8_t> buf) {
-        sendLtsmProto(*this, sendLock, channel, buf);
-    }
-
-    void RFB::ClientDecoder::recvChannelSystem(const std::vector<uint8_t> & buf) {
+    void RFB::ClientDecoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {
         JsonContent jc;
         jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
 

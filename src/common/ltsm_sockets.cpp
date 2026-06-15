@@ -1182,171 +1182,6 @@ namespace LTSM {
 
 #endif
 
-#ifdef LTSM_WITH_ZLIB
-    namespace ZLib {
-        /* Zlib::DeflateBase */
-        DeflateBase::DeflateBase(int level) {
-            zs.data_type = Z_BINARY;
-
-            if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level) {
-                level = Z_BEST_COMPRESSION;
-            }
-
-            int ret = deflateInit(& zs, level);
-            //int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-
-            if(ret < Z_OK) {
-                Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflateInit2", ret);
-                throw zlib_error(NS_FuncNameS);
-            }
-        }
-
-        DeflateBase::~DeflateBase() {
-            deflateEnd(& zs);
-        }
-
-        std::vector<uint8_t> DeflateBase::deflateData(const void* buf, size_t len, int flushPolicy) {
-            // zlib legacy non const
-            zs.next_in = (Bytef*) buf;
-            zs.avail_in = len;
-
-            std::vector<uint8_t> res;
-            res.reserve(std::max(static_cast<size_t>(deflateBound(& zs, len)), tmp.size()));
-
-            do {
-                zs.next_out = tmp.data();
-                zs.avail_out = tmp.size();
-
-                int ret = deflate(& zs, flushPolicy);
-
-                if(ret < Z_OK) {
-                    Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "deflate", ret);
-                    throw zlib_error(NS_FuncNameS);
-                }
-
-                if(zs.avail_out < tmp.size()) {
-                    res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
-                }
-            } while(zs.avail_out == 0);
-
-            return res;
-        }
-
-        /* Zlib::DeflateStream */
-        DeflateStream::DeflateStream(int level) : DeflateBase(level) {
-            bb.reserve(4096);
-        }
-
-        std::vector<uint8_t> DeflateStream::deflateFlush(void) {
-            auto last = deflateData(nullptr, 0, Z_SYNC_FLUSH);
-
-            if(last.size()) {
-                bb.insert(bb.end(), last.begin(), last.end());
-            }
-
-            return std::move(bb);
-        }
-
-        void DeflateStream::sendRaw(const void* ptr, size_t len) {
-            auto data = deflateData(ptr, len, Z_NO_FLUSH);
-
-            if(data.size()) {
-                bb.insert(bb.end(), data.begin(), data.end());
-            }
-        }
-
-        void DeflateStream::recvRaw(void* ptr, size_t len) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
-        bool DeflateStream::hasInput(void) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
-        size_t DeflateStream::hasData(void) const {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-
-        /* Zlib::InflateBase */
-        InflateBase::InflateBase() {
-            zs.data_type = Z_BINARY;
-
-            int ret = inflateInit2(& zs, MAX_WBITS);
-
-            if(ret < Z_OK) {
-                Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "inflateInit2", ret);
-                throw zlib_error(NS_FuncNameS);
-            }
-        }
-
-        InflateBase::~InflateBase() {
-            inflateEnd(& zs);
-        }
-
-        std::vector<uint8_t> InflateBase::inflateData(const void* buf, size_t len, int flushPolicy) {
-            std::vector<uint8_t> res;
-
-            if(len) {
-                res.reserve(len * 7);
-            }
-
-            zs.next_in = (Bytef*) buf;
-            zs.avail_in = len;
-
-            do {
-                zs.next_out = tmp.data();
-                zs.avail_out = tmp.size();
-                int ret = inflate(& zs, flushPolicy);
-
-                if(ret < Z_OK) {
-                    Application::error("{}: {} failed, error code: {}", NS_FuncNameV, "inflate", ret);
-                    throw zlib_error(NS_FuncNameS);
-                }
-
-                if(zs.avail_out < tmp.size()) {
-                    res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
-                }
-            } while(zs.avail_in > 0);
-
-            return res;
-        }
-
-        /* Zlib::InflateStream */
-        InflateStream::InflateStream() : sb(4096 /* reserve */) {
-        }
-
-        void InflateStream::appendData(const std::vector<uint8_t> & zip) {
-            sb.shrink();
-            sb.write(inflateData(zip.data(), zip.size(), Z_SYNC_FLUSH));
-        }
-
-        void InflateStream::recvRaw(void* ptr, size_t len) const {
-            if(sb.last() < len) {
-                Application::error("{}: stream last: {}, expected: {}", NS_FuncNameV, sb.last(), len);
-                throw std::invalid_argument(NS_FuncNameS);
-            }
-
-            sb.readTo(static_cast<uint8_t*>(ptr), len);
-        }
-
-        size_t InflateStream::hasData(void) const {
-            return sb.last();
-        }
-
-        bool InflateStream::hasInput(void) const {
-            return sb.last();
-        }
-
-        void InflateStream::sendRaw(const void* ptr, size_t len) {
-            Application::error("{}: {}", NS_FuncNameV, "disabled");
-            throw zlib_error(NS_FuncNameS);
-        }
-    } // ZLib
-#endif
-
 #ifdef LTSM_WITH_GSSAPI
     namespace GssApi {
         // GssApi::BaseLayer
@@ -1459,6 +1294,7 @@ namespace LTSM {
             Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
 
+/*
         // GssApi::Client
         bool Client::checkUserCredential(std::string_view username) const {
             Gss::ErrorCodes err;
@@ -1491,6 +1327,7 @@ namespace LTSM {
             auto err = Gss::error2str(code1, code2);
             Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
         }
+*/
     } // GssApi
 
 #endif

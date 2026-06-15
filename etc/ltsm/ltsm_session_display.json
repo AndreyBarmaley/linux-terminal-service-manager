@@ -8,9 +8,5 @@
     "default:height": 768,
     "default:depth": 24,
 
-    "#xvfb:path": "/usr/bin/Xvfb",
-    "#xvfb:args": [ ":%{display}", "-nolisten", "tcp", "-screen", "0", "%{width}x%{height}x%{depth}", "-auth", "%{authfile}", "+extension", "DAMAGE", "+extension", "MIT-SHM", "+extension", "RANDR", "+extension", "XFIXES", "+extension", "XTEST" ],
-    "#xvfb:timeout": 3500,
-
-    "zenity:path": "/usr/bin/zenity"
+    "#zenity:path": "/usr/bin/zenity"
 }

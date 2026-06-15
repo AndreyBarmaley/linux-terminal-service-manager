@@ -28,6 +28,7 @@
 #include <thread>
 
 #include "ltsm_application.h"
+#include "ltsm_sdl_wrapper.h"
 #include "librfb_x11server.h"
 
 #ifdef LTSM_ENCODING_FFMPEG
@@ -209,7 +210,7 @@ namespace LTSM {
             if(auto frameRate = frameRateOption()) {
                 int delayTimeout = 1000 / frameRate;
 
-                if(isClientFFmpegEncoding()) {
+                if(isEncoderFFmpeg()) {
                     // ffmpeg encoding: fixed fps
                     fullscreenUpdateReq = true;
                 } else if(xcbNoDamageOption()) {
@@ -305,10 +306,31 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keysym) {
-        auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST));
+    void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
+        if(! xcbAllowMessages()) {
+            return;
+        }
 
-        if(xcbAllowMessages() && test) {
+        auto keysym = keycode;
+
+        if(isClientLtsmKeyboard()) {
+            auto x11sym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
+
+            if(x11sym) {
+                keysym = static_cast<uint32_t>(x11sym);
+            }
+
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtension(XCB::Module::XKB))) {
+                int group = xkb->getLayoutGroup();
+                auto keycodeGroup = keysymToKeycodeGroup(x11sym);
+
+                if(group != keycodeGroup.second) {
+                    keysym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                }
+            }
+        }
+
+        if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST))) {
             auto keycode = rfbUserKeycode(keysym);
 
             if(! keycode) {
@@ -356,7 +378,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
+    void RFB::X11Server::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
         sendCutTextEvent(buf, true);
     }
 
@@ -412,21 +434,21 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
+    void RFB::X11Server::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ serverLock };
-            clientClipboard = buf;
+            clientClipboard.swap(buf);
         } else {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
-    void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const {
+    void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
         if(auto ptr = const_cast<RFB::X11Server*>(this)) {
             if(extClipboardRemoteCaps()) {
                 const std::scoped_lock guard{ serverLock };
-                ptr->clientClipboard.assign(buf.begin(), buf.end());
+                ptr->clientClipboard.swap(buf);
             } else {
                 ptr->sendCutTextEvent(buf, false);
             }

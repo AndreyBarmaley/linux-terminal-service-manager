@@ -1,6 +1,6 @@
 # LTSM librfb client
 
-target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_DECODING -DLTSM_DECODING_QOI)
+target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_DECODING)
 target_sources(${CUR_TARGET} PRIVATE librfb_decodings.cpp librfb_client.cpp)
 
 if(APPLE)

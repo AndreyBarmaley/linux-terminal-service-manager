@@ -96,7 +96,7 @@ namespace LTSM {
         Transaction(const boost::asio::any_io_executor & ex) : trans_lock{ex} {}
     };
 
-    class PcscRemote : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+    class PcscRemote : protected AsyncLocalStream {
 
         std::unordered_map<uint32_t, uint64_t> map_context_;
 
@@ -114,7 +114,7 @@ namespace LTSM {
 
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock))
+            : AsyncLocalStream(std::move(sock))
             , send_lock_{socket().get_executor()}
             , trans_lock_{socket().get_executor()} {}
         ~PcscRemote() = default;
@@ -164,7 +164,7 @@ namespace LTSM {
 
     class PcscSessionBus;
 
-    class PcscLocal : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+    class PcscLocal : protected AsyncLocalStream {
         uint64_t context64_ = 0; ///< remote context
         uint64_t handle64_ = 0;  ///< remote handle
 
@@ -207,7 +207,7 @@ namespace LTSM {
 
       public:
         PcscLocal(boost::asio::local::stream_protocol::socket && sock, int cid, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* bus)
-            : AsyncSocket(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {
+            : AsyncLocalStream(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {
         }
         ~PcscLocal() = default;
 

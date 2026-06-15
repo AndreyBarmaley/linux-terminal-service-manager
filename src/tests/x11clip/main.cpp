@@ -30,7 +30,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
     std::filesystem::path file;
 
   protected:
-    void selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const override {
+    void selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const override {
         auto name = getAtomName(atom);
         Application::info("{}: atom: `{}', size: {}", NS_FuncNameV, name.data(), buf.size());
 

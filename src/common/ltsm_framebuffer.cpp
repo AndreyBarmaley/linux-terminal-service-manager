@@ -28,12 +28,18 @@
 #include <algorithm>
 #include <exception>
 
-#if __GNUC__ < 9
-#define LTSM_CENTOS7
+#ifdef LTSM_WITH_EXECUTION_PAR
+#include <execution>
 #endif
 
-#if not defined(__APPLE__) && not defined(LTSM_CENTOS7)
-#include <execution>
+#ifdef LTSM_WITH_SDL
+#include "SDL.h"
+#endif
+
+#ifdef LTSM_WITH_FFMPEG
+extern "C" {
+#include "libavformat/avformat.h"
+}
 #endif
 
 #include "ltsm_tools.h"
@@ -60,6 +66,11 @@ namespace LTSM {
           bitsPixel(bpp), bytePixel(bpp >> 3) {
     }
 
+    uint32_t PixelFormat::depth(void) const {
+        return std::popcount(redMax) + std::popcount(greenMax) +
+            std::popcount(blueMax) + std::popcount(alphaMax);
+    }
+
     uint32_t PixelFormat::rmask(void) const {
         return static_cast<uint32_t>(redMax) << redShift;
     }
@@ -76,19 +87,19 @@ namespace LTSM {
         return static_cast<uint32_t>(alphaMax) << alphaShift;
     }
 
-    uint8_t PixelFormat::red(uint32_t pixel) const {
+    uint16_t PixelFormat::red(uint32_t pixel) const {
         return (pixel >> redShift) & redMax;
     }
 
-    uint8_t PixelFormat::green(uint32_t pixel) const {
+    uint16_t PixelFormat::green(uint32_t pixel) const {
         return (pixel >> greenShift) & greenMax;
     }
 
-    uint8_t PixelFormat::blue(uint32_t pixel) const {
+    uint16_t PixelFormat::blue(uint32_t pixel) const {
         return (pixel >> blueShift) & blueMax;
     }
 
-    uint8_t PixelFormat::alpha(uint32_t pixel) const {
+    uint16_t PixelFormat::alpha(uint32_t pixel) const {
         return (pixel >> alphaShift) & alphaMax;
     }
 
@@ -114,7 +125,7 @@ namespace LTSM {
         return (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
-    uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2) {
+    uint32_t convertMax(uint16_t col1, uint16_t max1, uint16_t max2) {
         // count2: max2 + 1 (zero)
         // count1: max1 + 1 (zero)
         return max1 ? (col1 * (max2 + 1)) / (max1 + 1) : 0;
@@ -152,6 +163,53 @@ namespace LTSM {
         return convertPixelFromTo(pixel, *this, pf);
     }
 
+#ifdef LTSM_WITH_SDL
+    uint32_t PixelFormat::sdlPixelFormat(void) const {
+        if(auto fmt = SDL_MasksToPixelFormatEnum(bitsPerPixel(),
+            rmask(), gmask(), bmask(), amask()); fmt != SDL_PIXELFORMAT_UNKNOWN) {
+            return fmt;
+        }
+
+        if(32 == bitsPerPixel() && 30 == depth()) {
+            return SDL_PIXELFORMAT_ARGB2101010;
+        }
+
+        return SDL_PIXELFORMAT_UNKNOWN;
+    }
+#endif
+
+#ifdef LTSM_WITH_FFMPEG
+    int PixelFormat::ffmpegPixelFormat(void) const {
+        if(15 == bitsPerPixel()) {
+            return platformBigEndian() ? AV_PIX_FMT_BGR555 : AV_PIX_FMT_RGB555;
+        }
+
+        if(16 == bitsPerPixel()) {
+            return platformBigEndian() ? AV_PIX_FMT_BGR565 : AV_PIX_FMT_RGB565;
+        }
+
+        if(24 == bitsPerPixel()) {
+            return platformBigEndian() ? AV_PIX_FMT_BGR24 : AV_PIX_FMT_RGB24;
+        }
+        
+        if(32 == bitsPerPixel()) {
+            if(32 == depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            }
+
+            if(30 == depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_X2RGB10 : AV_PIX_FMT_X2BGR10;
+            }
+
+            if(24 == depth()) {
+                return platformBigEndian() ? AV_PIX_FMT_0RGB : AV_PIX_FMT_BGR0;
+            }
+        }
+
+        return AV_PIX_FMT_NONE;
+    }
+#endif
+
     fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), allocated(1) {
         uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
         pitch = std::max(pitch1, pitch2);
@@ -172,12 +230,12 @@ namespace LTSM {
     }
 
     uint32_t PixelMapPalette::findColorIndex(const uint32_t & col) const {
-#if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
+#ifdef LTSM_WITH_EXECUTION_PAR
+        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair) {
             return pair.first == col;
         });
 #else
-        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair) {
+        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
             return pair.first == col;
         });
 #endif
@@ -185,12 +243,12 @@ namespace LTSM {
     }
 
     uint32_t PixelMapWeight::maxWeightPixel(void) const {
-#if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
+#ifdef LTSM_WITH_EXECUTION_PAR
+        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;
         });
 #else
-        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2) {
+        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;
         });
 #endif

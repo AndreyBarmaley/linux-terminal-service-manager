@@ -30,6 +30,7 @@
 #include "ltsm_vnc2image.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
     //
@@ -41,7 +42,7 @@ namespace LTSM {
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
-        : Application("ltsm_vnc2image") {
+        : Application("ltsm_vnc2image"), ClientDecoder(ioc_.get_executor()) {
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 
@@ -73,35 +74,56 @@ namespace LTSM {
     }
 
     int Vnc2Image::start(void) {
-        boost::asio::ip::tcp::socket sock{ioc_};
-        boost::asio::ip::tcp::resolver resolver{ioc_};
 
-        auto endpoints = resolver.resolve(host, std::to_string(port));
-        boost::asio::connect(sock, endpoints);
-
-        RFB::ClientDecoder::setSocketStreamMode(std::move(sock));
-
-        RFB::SecurityInfo rfbsec;
-        rfbsec.authVenCrypt = ! notls;
-        rfbsec.authNone = password.empty();
-        rfbsec.authVnc = ! password.empty();
-        rfbsec.passwdFile = password;
-        rfbsec.tlsAnonMode = true;
-
-        // process rfb message background
-        try {
-            if(rfbHandshake(rfbsec)) {
-                rfbMessagesLoop();
+        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> {
+            try {
+                co_await rfbHostConnectAwait(host, port, false);
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbHostConnectAwait", ec.message(), ec.value());
+                }
+                co_return;
             }
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        }
+ 
+            RFB::SecurityInfo rfbsec;
+            rfbsec.authVenCrypt = ! notls;
+            rfbsec.authNone = password.empty();
+            rfbsec.authVnc = ! password.empty();
+            rfbsec.passwdFile = password;
+            rfbsec.tlsAnonMode = true;
 
+            bool handshake = false;
+
+            try {
+                handshake = co_await rfbHandshakeAwait(rfbsec);
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbHandshakeAwait", ec.message(), ec.value());
+                }
+                co_return;
+            }
+
+            if(! handshake) {
+                co_return;
+            }
+
+            try {
+                co_await asio::co_spawn(ioc_, rfbMessagesLoopAwait(), asio::use_awaitable);
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
+                }
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "start", err.what());
+                co_return;
+            }
+        }, asio::detached);
+
+        ioc_.run();
         return 0;
     }
 
     void Vnc2Image::decoderInitEvent(RFB::DecodingBase* decoder) {
-        decoder->setThreads(1);
         tp = std::chrono::steady_clock::now();
     }
 
@@ -132,16 +154,16 @@ namespace LTSM {
         fbPtr = std::make_unique<FrameBuffer>(XCB::Region(0, 0, wsz.width, wsz.height), format);
     }
 
-    void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel) {
+    void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel) const {
         fbPtr->setPixel(dst, pixel);
     }
 
-    void Vnc2Image::fillPixel(const XCB::Region & dst, uint32_t pixel) {
+    void Vnc2Image::fillPixel(const XCB::Region & dst, uint32_t pixel) const {
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const XCB::Region & reg, const void* ptr, uint32_t pitch, const PixelFormat & pf) {
-        FrameBuffer fb((uint8_t*) ptr, XCB::Region{0, 0, reg.width, reg.height}, pf, pitch);
+    void Vnc2Image::updateRawPixels(const XCB::Region & reg, std::vector<uint8_t>&& buf, uint32_t pitch, const PixelFormat & pf) const {
+        FrameBuffer fb(buf.data(), XCB::Region{0, 0, reg.width, reg.height}, pf, pitch);
         fbPtr->blitRegion(fb, fb.region(), reg.topLeft());
 
         /*
@@ -152,9 +174,13 @@ namespace LTSM {
         */
     }
 
-    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, const void* ptr, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
-        // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
-        Application::warning("{}: not implemented", NS_FuncNameV);
+    void Vnc2Image::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf1, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
+        auto buf2 = func(buf1, reg, pitch, pf);
+        assertm(buf2.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
+        updateRawPixels(reg, std::move(buf2), pitch, pf);
+    }
+
+    void Vnc2Image::waitDecoderJobs(void) const {
     }
 
     const PixelFormat & Vnc2Image::clientFormat(void) const {
@@ -172,10 +198,10 @@ namespace LTSM {
     void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type) {
     }
 
-    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
+    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
     }
 
-    void Vnc2Image::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
+    void Vnc2Image::extClipboardSendEvent(std::vector<uint8_t> &&) {
     }
 }
 

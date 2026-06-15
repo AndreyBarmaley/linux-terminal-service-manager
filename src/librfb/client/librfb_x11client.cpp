@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2025 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -31,18 +31,19 @@
 #include "librfb_x11client.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
-    RFB::X11Client::X11Client() {
+    RFB::X11Client::X11Client(const asio::any_io_executor& ctx) : ClientDecoder(ctx), x11_strand_{ctx} {
         if(! displayConnect(-1,
                             XCB::InitModules::Xkb | XCB::InitModules::SelCopy | XCB::InitModules::SelPaste, nullptr)) {
             throw xcb_error(NS_FuncNameS);
         }
     }
 
-    void RFB::X11Client::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
+    void RFB::X11Client::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        sendCutTextEvent(buf, true);
+        sendCutText(std::move(buf), true);
     }
 
     uint16_t RFB::X11Client::extClipboardLocalTypes(void) const {
@@ -101,27 +102,27 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
+    void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
         Application::debug(DebugType::X11Cli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
-            clientClipboard = buf;
+            clientClipboard.swap(buf);
         } else {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
-    void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, std::span<const uint8_t> buf) const {
+    void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
         Application::debug(DebugType::X11Cli, "{}, atom: {:#010x}, length: {}", NS_FuncNameV, atom, buf.size());
 
         if(auto ptr = const_cast<RFB::X11Client*>(this)) {
             if(extClipboardRemoteCaps()) {
                 const std::scoped_lock guard{ clientLock };
-                ptr->clientClipboard.assign(buf.begin(), buf.end());
+                ptr->clientClipboard.swap(buf);
             } else {
-                ptr->sendCutTextEvent(buf, false);
+                ptr->sendCutText(std::move(buf), false);
             }
         }
     }

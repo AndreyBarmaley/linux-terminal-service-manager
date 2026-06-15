@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2025 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -33,6 +33,8 @@
 namespace LTSM {
     namespace RFB {
         class X11Client : public XCB::RootDisplay, public ClientDecoder, public XCB::SelectionSource, public XCB::SelectionRecipient {
+
+            boost::asio::strand<boost::asio::any_io_executor> x11_strand_;
             std::vector<uint8_t> clientClipboard;
 
             mutable std::mutex clientLock;
@@ -41,6 +43,7 @@ namespace LTSM {
             uint16_t clipRemoteTypes = 0;
 
           protected:
+            inline const boost::asio::strand<boost::asio::any_io_executor> & x11_strand(void) const { return x11_strand_; }
 
             // selection source
             std::vector<xcb_atom_t> selectionSourceTargets(void) const override;
@@ -49,7 +52,7 @@ namespace LTSM {
             std::vector<uint8_t> selectionSourceData(xcb_atom_t, size_t offset, uint32_t length) const override;
 
             // selection recipient
-            void selectionReceiveData(xcb_atom_t, std::span<const uint8_t>) const override;
+            void selectionReceiveData(xcb_atom_t, std::vector<uint8_t>&&) const override;
             void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override;
             void selectionChangedEvent(void) const override;
 
@@ -57,8 +60,8 @@ namespace LTSM {
             uint16_t extClipboardLocalTypes(void) const override;
             std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
             void extClipboardRemoteTypesEvent(uint16_t type) override;
-            void extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> &) override;
-            void extClipboardSendEvent(const std::vector<uint8_t> &) override;
+            void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
+            void extClipboardSendEvent(std::vector<uint8_t> &&) override;
 
             void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
 
@@ -66,7 +69,7 @@ namespace LTSM {
             void xcbDisplayConnectedEvent(void) override;
 
           public:
-            X11Client();
+            X11Client(const boost::asio::any_io_executor&);
         };
     }
 }

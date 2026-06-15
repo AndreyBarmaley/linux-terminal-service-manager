@@ -150,7 +150,9 @@ namespace LTSM {
     }
 #endif
 
-    void RFB::ExtClip::recvExtClipboardCaps(StreamBuf && sb) {
+    void RFB::ExtClip::recvExtClipboardCapsEvent(std::vector<uint8_t> && buf) {
+        StreamBuf sb(std::move(buf));
+
         if(4 > sb.last()) {
             Application::error("{}: invalid format, failed `{}'", NS_FuncNameV, "length");
             throw rfb_error(NS_FuncNameS);
@@ -298,16 +300,16 @@ namespace LTSM {
             auto len = sb.readIntBE32();
 
             if(len) {
-                auto zlib = std::make_unique<ZLib::InflateStream>();
-                zlib->appendData(sb.read(len));
+                auto buf = ZLib::inflate(sb.read(len));
+                StreamBufRef sbr(buf.data(), buf.size());
 
                 // The header is followed by a Zlib stream which contains a pair of size and data for each format
                 for(uint64_t it = 1; it <= 0x80000000; it <<= 1) {
                     if(auto type = static_cast<uint32_t>(it); localProvideTypes & type) {
-                        auto len = zlib->recvIntBE32();
-                        auto raw = zlib->recvData(len);
+                        auto len = sbr.readIntBE32();
+                        auto raw = sbr.read(len);
 
-                        extClipboardRemoteDataEvent(type, raw);
+                        extClipboardRemoteDataEvent(type, std::move(raw));
                         localProvideTypes &= ~type;
                     }
                 }
@@ -320,7 +322,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::ExtClip::sendExtClipboardCaps(void) {
+    void RFB::ExtClip::sendExtClipboardCapsEvent(void) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: server flags: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
 
@@ -354,7 +356,7 @@ namespace LTSM {
             sb.writeIntBE32(localExtClipTypeFilesSz);
         }
 
-        extClipboardSendEvent(sb.rawbuf());
+        extClipboardSendEvent(std::move(sb.rawbuf()));
     }
 
     void RFB::ExtClip::sendExtClipboardRequest(uint16_t types) {
@@ -379,7 +381,7 @@ namespace LTSM {
         StreamBuf sb;
         sb.writeIntBE32(ExtClipCaps::OpRequest | allowTypes);
 
-        extClipboardSendEvent(sb.rawbuf());
+        extClipboardSendEvent(std::move(sb.rawbuf()));
 
         // The recipient should respond with a provide messages
         localProvideTypes |= allowTypes;
@@ -391,7 +393,7 @@ namespace LTSM {
         StreamBuf sb;
         sb.writeIntBE32(ExtClipCaps::OpPeek);
 
-        extClipboardSendEvent(sb.rawbuf());
+        extClipboardSendEvent(std::move(sb.rawbuf()));
     }
 
     void RFB::ExtClip::sendExtClipboardNotify(uint16_t types) {
@@ -403,14 +405,14 @@ namespace LTSM {
         StreamBuf sb;
         sb.writeIntBE32(ExtClipCaps::OpNotify | allowTypes);
 
-        extClipboardSendEvent(sb.rawbuf());
+        extClipboardSendEvent(std::move(sb.rawbuf()));
     }
 
     void RFB::ExtClip::sendExtClipboardProvide(uint16_t types) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: types: {:#06x}", NS_FuncNameV, types);
 
-        auto zlib = std::make_unique<ZLib::DeflateStream>();
+        StreamBuf sb;
 
         for(const auto & type : {
                 ExtClipCaps::TypeText, ExtClipCaps::TypeRtf, ExtClipCaps::TypeHtml, ExtClipCaps::TypeDib, ExtClipCaps::TypeFiles
@@ -418,18 +420,18 @@ namespace LTSM {
             if(types & type) {
                 auto buf = extClipboardLocalData(type);
 
-                zlib->sendIntBE32(buf.size());
-                zlib->sendData(buf);
+                sb.writeIntBE32(buf.size());
+                sb.write(buf);
             }
         }
 
-        auto zip = zlib->deflateFlush();
+        auto zip = ZLib::deflate(sb.rawbuf());
 
-        StreamBuf sb;
+        sb.reset();
         sb.writeIntBE32(zip.size());
         sb.write(zip);
 
-        extClipboardSendEvent(sb.rawbuf());
+        extClipboardSendEvent(std::move(sb.rawbuf()));
     }
 
     int RFB::ExtClip::extClipboardLocalCaps(void) const {

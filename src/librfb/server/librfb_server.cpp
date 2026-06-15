@@ -498,9 +498,9 @@ namespace LTSM {
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::notice("{}: server pf - bpp: {}, depth: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
+        Application::notice("{}: server pf - bpp: {}, depth: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                             NS_FuncNameV, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
-                            pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
+                            pf.rmask(), pf.gmask(), pf.bmask());
         clientPf = serverFormat();
         // send pixel format
         sendInt8(pf.bitsPerPixel());
@@ -574,7 +574,7 @@ namespace LTSM {
                 }
 
                 try {
-                    recvLtsmProto(*this);
+                    recvLtsmProto();
                     continue;
                 } catch(const std::exception & err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -624,6 +624,27 @@ namespace LTSM {
         }
     }
 
+    void RFB::ServerEncoder::recvLtsmProto(void) {
+        int version = recvInt8();
+
+        if(version != LtsmProtocolVersion) {
+            Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
+            throw channel_error(NS_FuncNameS);
+        }
+        
+        auto channel = recvInt8();
+        auto length = recvIntBE16();
+        auto buf = recvData(length);
+
+        if(channelDebug == channel) {
+            auto str = Tools::hexString(buf, 2);
+            Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, length, str);
+        }
+
+        ChannelListener::recvLtsmEvent(channel, std::move(buf));
+    }
+
     void RFB::ServerEncoder::recvPixelFormat(void) {
         waitUpdateProcess();
         // RFB: 6.4.1
@@ -641,8 +662,8 @@ namespace LTSM {
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
-                            NS_FuncNameV, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
+        Application::debug(DebugType::Rfb, "{}: red({},{}), green({},{}), blue({},{})",
+                            NS_FuncNameV, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel) {
             case 32:
@@ -664,6 +685,11 @@ namespace LTSM {
         clientTrueColor = trueColor;
         clientBigEndian = bigEndian;
         clientPf = PixelFormat(bitsPerPixel, redMax, greenMax, blueMax, 0, redShift, greenShift, blueShift, 0);
+
+        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
+                            NS_FuncNameV, bitsPerPixel, depth, (int) bigEndian,
+                            clientPf.rmask(), clientPf.gmask(), clientPf.bmask());
+
         colourMap.clear();
         serverRecvPixelFormatEvent(clientPf, clientBigEndian);
     }
@@ -705,13 +731,20 @@ namespace LTSM {
 
             switch(encoding) {
                 case RFB::ENCODING_LTSM:
+                case RFB::ENCODING_LTSM_ZQOI:
                 case RFB::ENCODING_LTSM_QOI:
                 case RFB::ENCODING_LTSM_LZ4:
                 case RFB::ENCODING_LTSM_TJPG:
                 case RFB::ENCODING_LTSM_H264:
                 case RFB::ENCODING_LTSM_AV1:
                 case RFB::ENCODING_LTSM_VP8:
+                case RFB::ENCODING_LTSM_CURSOR:
                     clientLtsmSupported = true;
+                    break;
+
+                case RFB::ENCODING_LTSM_KEYB:
+                    clientLtsmSupported = true;
+                    clientLtsmKeyboard = true;
                     break;
 
                 case RFB::ENCODING_CONTINUOUS_UPDATES:
@@ -756,7 +789,7 @@ namespace LTSM {
                                      ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
 
             ExtClip::remoteExtClipTypeTextSz = 20 * 1024 * 1024;
-            sendExtClipboardCaps();
+            sendExtClipboardCapsEvent();
         }
 
         serverRecvSetEncodingsEvent(recvEncodings);
@@ -776,12 +809,20 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::recvKeyCode(void) {
-        // RFB: 6.4.4
-        bool pressed = recvInt8();
-        recvSkip(2);
-        uint32_t keysym = recvIntBE32();
-        Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keysym);
-        serverRecvKeyEvent(pressed, keysym);
+        if(clientLtsmKeyboard) {
+            bool pressed = recvInt8();
+            uint16_t scancode = recvIntBE16();
+            uint32_t keycode = recvIntBE32();
+            Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}, scancode: {:#06x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keycode, scancode);
+            serverRecvKeyEvent(pressed, keycode, scancode);
+        } else {
+            // RFB: 6.4.4
+            bool pressed = recvInt8();
+            recvSkip(2);
+            uint32_t keycode = recvIntBE32();
+            Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keycode);
+            serverRecvKeyEvent(pressed, keycode, 0);
+        }
     }
 
     void RFB::ServerEncoder::recvPointer(void) {
@@ -817,7 +858,7 @@ namespace LTSM {
             }
 
             auto buffer = recvData(std::abs(length));
-            recvExtClipboardCaps(StreamBuf(std::move(buffer)));
+            recvExtClipboardCapsEvent(std::move(buffer));
         }
     }
 
@@ -862,7 +903,7 @@ namespace LTSM {
         Application::info("{}: display resized, new size: {}", NS_FuncNameV, dsz);
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
-        if(isClientFFmpegEncoding()) {
+        if(isEncoderFFmpeg()) {
     	    std::thread([this, sz = dsz]() {
                 this->encoder->resizedEvent(sz);
     	    }).detach();
@@ -1003,6 +1044,7 @@ namespace LTSM {
             RFB::ENCODING_LTSM_VP8,
 #endif
 #ifdef LTSM_ENCODING
+            RFB::ENCODING_LTSM_ZQOI,
             RFB::ENCODING_LTSM_QOI,
             RFB::ENCODING_LTSM_LZ4,
             RFB::ENCODING_LTSM_TJPG,
@@ -1019,6 +1061,14 @@ namespace LTSM {
 
         if(encoder && encoder->getType() == compatible) {
             return;
+        }
+
+        if((compatible == RFB::ENCODING_LTSM_QOI ||
+            compatible == RFB::ENCODING_LTSM_ZQOI) && 24 != serverFormat().depth()) {
+            const int change = RFB::ENCODING_LTSM_LZ4;
+            Application::notice("{}: server bpp({}), {} not supported, change to: {}",
+                NS_FuncNameV, serverFormat().bytePerPixel(), RFB::encodingName(compatible), RFB::encodingName(change));
+            compatible = change;
         }
 
         switch(compatible) {
@@ -1069,8 +1119,12 @@ namespace LTSM {
 #endif
 #ifdef LTSM_ENCODING
 
+            case RFB::ENCODING_LTSM_ZQOI:
+                encoder = std::make_unique<EncodingQOI>(true);
+                break;
+
             case RFB::ENCODING_LTSM_QOI:
-                encoder = std::make_unique<EncodingQOI>();
+                encoder = std::make_unique<EncodingQOI>(false);
                 break;
 
             case RFB::ENCODING_LTSM_LZ4:
@@ -1283,19 +1337,68 @@ namespace LTSM {
         return clientLtsmSupported;
     }
 
-    bool RFB::ServerEncoder::isClientFFmpegEncoding(void) const {
-	return encoder &&
-            (encoder->getType() == RFB::ENCODING_LTSM_H264 ||
-                encoder->getType() == RFB::ENCODING_LTSM_AV1 || encoder->getType() == RFB::ENCODING_LTSM_VP8);
+    bool RFB::ServerEncoder::isClientLtsmKeyboard(void) const {
+        return clientLtsmKeyboard;
     }
 
-    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::span<const uint8_t> buf) {
-        if(clientLtsmSupported) {
-            sendLtsmProto(*this, sendLock, channel, buf);
+    bool RFB::ServerEncoder::isEncoderFFmpeg(void) const {
+        if(encoder) {
+            switch(encoder->getType()) {
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
+                    return true;
+
+                default: break;
+            }
         }
+        return false;
     }
 
-    void RFB::ServerEncoder::recvChannelSystem(const std::vector<uint8_t> & buf) {
+    void RFB::ServerEncoder::sendLtsmChannel(uint8_t channel, std::span<const uint8_t> buf) {
+        if(! clientLtsmSupported) {
+            return;
+        }
+
+        Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
+
+        if(buf.empty()) {
+            Application::warning("{}: empty data", NS_FuncNameV);
+            return;
+        }
+
+        assert(0xFFFF >= buf.size());
+
+        const std::scoped_lock guard{sendLock};
+        sendInt8(RFB::PROTOCOL_LTSM);
+
+        // version
+        sendInt8(LtsmProtocolVersion);
+        //channel
+        sendInt8(channel);
+
+        // data
+        sendIntBE16(buf.size());
+
+        if(channelDebug == channel) {
+            auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
+            Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, buf.size(), str);
+        }
+
+        sendRaw(buf.data(), buf.size());
+        sendFlush();
+    }
+
+    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {
+        sendLtsmChannel(channel, buf);
+    }
+
+    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::string&& buf) {
+        sendLtsmChannel(channel, { (const uint8_t*) buf.data(), buf.size() });
+    }
+
+    void RFB::ServerEncoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {
         JsonContent jc;
         jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
 
@@ -1318,8 +1421,6 @@ namespace LTSM {
             systemClientVariables(jo);
         } else if(cmd == SystemCommand::KeyboardChange) {
             systemKeyboardChange(jo);
-        } else if(cmd == SystemCommand::KeyboardEvent) {
-            systemKeyboardEvent(jo);
         } else if(cmd == SystemCommand::CursorFailed) {
             systemCursorFailed(jo);
         } else if(cmd == SystemCommand::TransferFiles) {
@@ -1344,7 +1445,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts, uint32_t frameRate) {
         if(encoder) {
-    	    if(isClientFFmpegEncoding()) {
+    	    if(isEncoderFFmpeg()) {
         	encoder->setFps(frameRate);
         	serverScreenUpdateRequest();
             }

@@ -470,7 +470,7 @@ namespace LTSM {
         /// SelectionRecipient interface
         class SelectionRecipient {
           public:
-            virtual void selectionReceiveData(xcb_atom_t, std::span<const uint8_t>) const = 0;
+            virtual void selectionReceiveData(xcb_atom_t, std::vector<uint8_t>&&) const = 0;
             virtual void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const = 0;
             virtual void selectionChangedEvent(void) const = 0;
 
@@ -625,6 +625,7 @@ namespace LTSM {
             /// exception: xcb_error
             Connector(int displayNum, const AuthCookie* = nullptr);
 
+            int getFd(void);
             bool connectorDisplayConnect(int displayNum, const AuthCookie* = nullptr);
 
             size_t depthFromBpp(size_t bitsPerPixel) const;

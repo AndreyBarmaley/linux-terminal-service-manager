@@ -75,7 +75,7 @@ namespace LTSM::Connector {
         RFB::SecurityInfo rfbSecurityInfo(void) const override;
         int rfbUserKeycode(uint32_t) const override;
 
-        void serverRecvKeyEvent(bool pressed, uint32_t keysym) override;
+        void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) override;
         void serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
 
         // dbus virtual signals
@@ -114,7 +114,6 @@ namespace LTSM::Connector {
         void systemTransferFiles(const JsonObject &) override;
         void systemClientVariables(const JsonObject &) override;
         void systemKeyboardChange(const JsonObject &) override;
-        void systemKeyboardEvent(const JsonObject &) override;
         void systemCursorFailed(const JsonObject & jo) override;
 
         bool noVncMode(void) const override;

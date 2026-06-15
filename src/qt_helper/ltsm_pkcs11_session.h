@@ -77,7 +77,7 @@ using ListCertificates = std::list<Pkcs11Cert>;
 using ListMechanisms = std::list<Pkcs11Mech>;
 using binary_buf = std::vector<uint8_t>;
 
-class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncSocket<boost::asio::local::stream_protocol::socket> {
+class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncLocalStream {
     Q_OBJECT
 
     boost::asio::io_context & ioc_;

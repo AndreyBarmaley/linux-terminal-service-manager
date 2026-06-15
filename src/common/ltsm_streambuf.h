@@ -32,7 +32,7 @@
 
 #include "ltsm_compat.h"
 
-#define LTSM_STREAMBUF_VERSION 20240810
+#define LTSM_STREAMBUF_VERSION 20260520
 
 namespace LTSM {
     /// @brief: byte array interface
@@ -53,36 +53,32 @@ namespace LTSM {
 
     /// @brief: extend binary vector
     struct BinaryBuf : ByteArray, std::vector<uint8_t> {
-        BinaryBuf() = default;
+        using std::vector<uint8_t>::vector;
 
-        BinaryBuf(size_t len, uint8_t val = 0) : std::vector<uint8_t>(len, val) {}
-
-        BinaryBuf(const_iterator it1, const_iterator it2) : std::vector<uint8_t>(it1, it2) {}
-
-        BinaryBuf(const uint8_t* ptr, size_t len) : std::vector<uint8_t>(ptr, ptr + len) {}
-
-        explicit BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {}
-
-        explicit BinaryBuf(std::vector<uint8_t> && v) noexcept {
-            swap(v);
+        BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {
         }
 
-        template<size_t N>
-        explicit BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
+        BinaryBuf(std::vector<uint8_t> && v) noexcept : std::vector<uint8_t>(std::move(v)) {
+        }
 
-
-        BinaryBuf & operator= (const std::vector<uint8_t> & v) {
-            assign(v.begin(), v.end());
+        BinaryBuf & operator=(const std::vector<uint8_t> & v) {
+            if(this != &v) {
+                assign(v.begin(), v.end());
+            }
             return *this;
         }
 
+        BinaryBuf & operator=(std::vector<uint8_t> && v) noexcept {
+            if(this != &v) {
+                swap(v);
+            }
+            return *this;
+        }
+    
         BinaryBuf & operator= (const ByteArray & v) {
-            assign(v.data(), v.data() + v.size());
-            return *this;
-        }
-
-        BinaryBuf & operator= (std::vector<uint8_t> && v) noexcept {
-            swap(v);
+            if(this != &v) {
+                assign(v.data(), v.data() + v.size());
+            }
             return *this;
         }
 
@@ -151,8 +147,9 @@ namespace LTSM {
             return getInt8();
         }
 
-        inline void writeInt8(uint8_t v) {
+        inline MemoryStream & writeInt8(uint8_t v) {
             putInt8(v);
+            return *this;
         }
 
         /// @brief: read uint16 (depends on current endian mode)
@@ -243,6 +240,11 @@ namespace LTSM {
             return *this;
         }
 
+        inline MemoryStream & writeZero(size_t len) {
+            fill(len, 0);
+            return *this;
+        }
+
         MemoryStream & write(const void*, size_t);
         MemoryStream & write(std::string_view);
         MemoryStream & write(const std::vector<uint8_t> &);
@@ -299,6 +301,7 @@ namespace LTSM {
         uint8_t peek(void) const override;
         void skip(size_t) const override;
 
+        void readTo(void* ptr, size_t len) const;
         const uint8_t* data(void) const;
 
         uint16_t peekIntLE16(void) const;
