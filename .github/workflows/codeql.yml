@@ -78,18 +78,18 @@ jobs:
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
     - name: Install Dependencies
-        run: |
-            sudo apt update
-            sudo apt -y upgrade
-            sudo apt install -y cmake wget g++ git libexpat1 libpam0g-dev \
-            libsdbus-c++-dev gnutls-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
-            libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev libsdl2-image-dev qtbase5-dev \
-            libxcb-xkb-dev libxkbcommon-x11-dev \
-            libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
-            libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
-            liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
-            libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
-            libspdlog-dev libboost-dev libpipewire-0.3-dev
+      run: |
+        sudo apt update
+        sudo apt -y upgrade
+        sudo apt install -y cmake wget g++ git libexpat1 libpam0g-dev \
+        libsdbus-c++-dev gnutls-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
+        libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev libsdl2-image-dev qtbase5-dev \
+        libxcb-xkb-dev libxkbcommon-x11-dev \
+        libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
+        libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
+        liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
+        libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
+        libspdlog-dev libboost-dev libpipewire-0.3-dev
 
     # If the analyze step fails for one of the languages you are analyzing with
     # "We were unable to automatically build your code", modify the matrix above
