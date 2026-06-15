@@ -876,14 +876,6 @@ namespace LTSM {
             }
         }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
 
-#ifdef __UNIX__
-        asio::co_spawn(x11_strand(), x11EventsLoop(),
-                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
-#endif
-        if(isContinueUpdatesSupport()) {
-            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() }), asio::detached);
-        }
-
         for(auto it = 0; it < concurency(); ++it) {
             asio::post(thread_pool_, [this](){ ioc().run(); });
         }
@@ -1284,6 +1276,14 @@ namespace LTSM {
             } catch(const std::exception& err) {
                 Application::error("{}: exception: {}", "start", err.what());
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            }
+
+#ifdef __UNIX__
+            asio::co_spawn(x11_strand(), x11EventsLoop(),
+                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
+#endif
+            if(isContinueUpdatesSupport()) {
+                asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() }), asio::detached);
             }
         }
     }
