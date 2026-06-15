@@ -141,6 +141,7 @@ namespace LTSM::RFB {
 
             ENCODING_LTSM_LZ4,
             ENCODING_LTSM_QOI,
+            ENCODING_LTSM_ZQOI,
             ENCODING_LTSM_TJPG,
 
 #ifdef LTSM_WITH_FFMPEG
@@ -216,7 +217,9 @@ class EncodingTest : public Application {
             // RFB::ENCODING_LTSM_TJPG
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTJPG>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_QOI
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            // RFB::ENCODING_LTSM_ZQOI
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
         } else {
             for(const auto & name : encodings) {
                 // test preffered encodings
@@ -250,8 +253,12 @@ class EncodingTest : public Application {
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
+                    case RFB::ENCODING_LTSM_ZQOI:
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        break;
+
                     case RFB::ENCODING_LTSM_QOI:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
                     case RFB::ENCODING_LTSM_TJPG:

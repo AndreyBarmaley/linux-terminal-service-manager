@@ -192,8 +192,12 @@ namespace LTSM {
 #endif
 #ifdef LTSM_ENCODING
 
+            case RFB::ENCODING_LTSM_ZQOI:
+                encoder = std::make_unique<EncodingQOI>(true);
+                return true;
+
             case RFB::ENCODING_LTSM_QOI:
-                encoder = std::make_unique<EncodingQOI>();
+                encoder = std::make_unique<EncodingQOI>(false);
                 return true;
 
             case RFB::ENCODING_LTSM_LZ4:
