@@ -1355,6 +1355,9 @@ namespace LTSM::Manager {
                 }
             }
 
+            // wait timer
+            res.get();
+
             if(waitFunc()) {
                 return true;
             }
