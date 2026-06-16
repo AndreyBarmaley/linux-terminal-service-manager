@@ -1,5 +1,5 @@
 target_sources(${CUR_TARGET} PRIVATE ltsm_client.cpp)
-target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_BOOST)
+target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_BOOST LTSM_WITH_OPENSSL)
 
 # boost + openssl warnings
 target_compile_options(${CUR_TARGET} PRIVATE -Wno-deprecated-declarations)

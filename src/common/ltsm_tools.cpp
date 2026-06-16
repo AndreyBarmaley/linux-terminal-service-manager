@@ -52,7 +52,9 @@
 #include <stdexcept>
 #include <filesystem>
 
+#ifdef LTSM_WITH_OPENSSL
 #include <openssl/evp.h>
+#endif
 
 #include "ltsm_tools.h"
 #include "ltsm_sockets.h"
@@ -894,6 +896,7 @@ namespace LTSM {
         return buf;
     }
 
+#ifdef LTSM_WITH_OPENSSL
     std::vector<uint8_t> OpenSSL::encryptDES(std::span<const uint8_t> data, std::string_view str) {
         std::array<uint8_t, 8> _key = {0};
         std::array<uint8_t, 8> _iv = {0};
@@ -943,4 +946,5 @@ namespace LTSM {
         res.resize(out_len + final_len);
         return res;
     }
+#endif
 } // LTSM
