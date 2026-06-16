@@ -1031,7 +1031,7 @@ namespace LTSM::Manager {
         stop();
     }
 
-    void DBusAdaptor::stop(void) {
+    void DBusAdaptor::stop(void) noexcept {
 
         // terminate connectors
         for(const auto & ptr : sessions) {
@@ -1054,7 +1054,9 @@ namespace LTSM::Manager {
 
         dbus_conn_->leaveEventLoop();
 
-        signals_.cancel();
+        system::error_code ec;
+        signals_.cancel(ec);
+
         timer_limit_.cancel();
         timer_ended_.cancel();
         timer_alive_.cancel();

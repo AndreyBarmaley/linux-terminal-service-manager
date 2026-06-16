@@ -257,7 +257,7 @@ namespace LTSM {
         std::shared_ptr<PcscRemote> remote_;
 
       protected:
-        void stop(void);
+        void stop(void) noexcept;
 
         [[nodiscard]] boost::asio::awaitable<void> signalsHandler(void);
         [[nodiscard]] boost::asio::awaitable<void> sdbusHandler(void);

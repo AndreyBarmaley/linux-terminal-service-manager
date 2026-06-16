@@ -1010,7 +1010,8 @@ namespace LTSM {
             sdbusLoopCancel();
             connect_cancel_.emit(asio::cancellation_type::terminal);
             childs_.clear();
-            signals_.cancel();
+            system::error_code ec;
+            signals_.cancel(ec);
         } catch(...) {
         }
     }

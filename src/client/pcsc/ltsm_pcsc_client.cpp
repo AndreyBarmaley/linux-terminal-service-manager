@@ -624,7 +624,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteStatus(const StreamBufRef & sb)
     }
 
     // reply
-    readerNameLen = strlen(readerName);
+    readerNameLen = strnlen(readerName, sizeof(readerName));
     StreamBuf reply(20 + sizeof(readerName) + sizeof(atrBuf));
 
     reply.writeIntLE32(state).writeIntLE32(protocol).

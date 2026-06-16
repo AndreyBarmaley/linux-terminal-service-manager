@@ -517,10 +517,12 @@ namespace LTSM::DisplaySession {
         timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
     }
 
-    void DBusAdaptor::stop(void) {
+    void DBusAdaptor::stop(void) noexcept {
         dbus_conn_->leaveEventLoop();
 
-        signals_.cancel();
+        boost::system::error_code ec;
+        signals_.cancel(ec);
+
         timer_childs_.cancel();
 
         if(ps_xorg_.isRunning()) {

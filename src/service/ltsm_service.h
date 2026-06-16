@@ -385,7 +385,7 @@ namespace LTSM::Manager {
 #endif
 
       private:
-        void stop(void);
+        void stop(void) noexcept;
         void timerSessionsTimeLimitAction(const boost::system::error_code&);
         void timerSessionsEndedAction(const boost::system::error_code&);
         void timerSessionsCheckConnectedAction(const boost::system::error_code&);

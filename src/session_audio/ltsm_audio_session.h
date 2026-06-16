@@ -107,7 +107,7 @@ namespace LTSM {
       protected:
         boost::asio::awaitable<void> signalsHandler(void);
         boost::asio::awaitable<void> sdbusHandler(void);
-        void stop(void);
+        void stop(void) noexcept;
 
       public:
         AudioSessionBus(DBusConnectionPtr, bool debug = false);
