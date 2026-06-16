@@ -7,6 +7,10 @@ elseif(MINGW)
     target_include_directories(${CUR_TARGET} PUBLIC mingw)
 endif()
 
+if(LTSM_BUILD_COVERAGE_TESTS)
+    set(LTSM_WITH_EXECUTION_PAR OFF)
+endif()
+
 target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)
 
 find_package(spdlog CONFIG REQUIRED)
