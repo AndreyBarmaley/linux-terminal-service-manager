@@ -1,61 +1,55 @@
-/***************************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
- *                                                                         *
- *   Part of the LTSM: Linux Terminal Service Manager:                     *
- *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
- **************************************************************************/
+/***********************************************************************
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *                                                                     *
+ *   Part of the LTSM: Linux Terminal Service Manager:                 *
+ *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
+ *                                                                     *
+ *   This program is free software;                                    *
+ *   you can redistribute it and/or modify it under the terms of the   *
+ *   GNU Affero General Public License as published by the             *
+ *   Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                               *
+ *                                                                     *
+ *   This program is distributed in the hope that it will be useful,   *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of    *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
+ *   See the GNU Affero General Public License for more details.       *
+ *                                                                     *
+ *   You should have received a copy of the                            *
+ *   GNU Affero General Public License along with this program;        *
+ *   if not, write to the Free Software Foundation, Inc.,              *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
+ **********************************************************************/
 
 #ifndef _LIBRFB_CLIENT_
 #define _LIBRFB_CLIENT_
 
 #include <mutex>
 #include <memory>
-#include <atomic>
 
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
+#include "ltsm_async_socket.h"
 
 namespace LTSM {
     namespace RFB {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
-            PixelFormat serverPf;
+        class ClientDecoder : public ChannelClient, public DecoderRender, public ExtClip {
 
-            std::unique_ptr<NetworkStream> socket; /// socket layer
-#ifdef LTSM_WITH_GNUTLS
-            std::unique_ptr<TLS::Stream> tls; /// tls layer
-#endif
-            std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
-            std::unique_ptr<DecodingBase> decoder;
+            boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+            boost::asio::steady_timer incr_update_timer_;
 
-            NetworkStream* streamIn;
-            NetworkStream* streamOut;
+            std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
+            std::unique_ptr<DecodingBase> decoder_;
 
-            std::atomic<bool> rfbMessages{true};
-            std::mutex sendLock;
+            PixelFormat server_pf_;
+            int server_ltsm_version_ = 0;
+            bool server_true_color_ = true;
+            bool server_big_endian_ = false;
 
-            bool serverTrueColor = true;
-            bool serverBigEndian = false;
             bool continueUpdatesSupport = false;
             bool continueUpdatesProcessed = false;
-
-            int serverLtsmVersion = 0;
 
           protected:
             friend class DecodingRaw;
@@ -65,73 +59,76 @@ namespace LTSM {
             friend class DecodingZlib;
             friend class DecodingFFmpeg;
 
-            // network stream interface
-            void sendFlush(void) override;
-            void sendRaw(const void* ptr, size_t len) override;
-            void recvRaw(void* ptr, size_t len) const override;
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            uint8_t peekInt8(void) const override;
+            inline const boost::asio::strand<boost::asio::any_io_executor> & rfb_strand(void) const { return rfb_strand_; }
 
             // decoder stream interface
             const PixelFormat & serverFormat(void) const override;
 
-#ifdef LTSM_WITH_GNUTLS
-            bool authVncInit(std::string_view pass);
-            bool authVenCryptInit(const SecurityInfo &);
-#endif
+            boost::asio::awaitable<void> authVncInitAwait(std::string_view pass) const;
+            boost::asio::awaitable<bool> authVenCryptInitAwait(const SecurityInfo &);
+
 #ifdef LTSM_WITH_GSSAPI
-            bool authGssApiInit(const SecurityInfo &);
+            boost::asio::awaitable<bool> authGssApiInitAwait(const SecurityInfo &);
 #endif
 
-            void sendPixelFormat(void);
-            void sendEncodings(const std::list<int> &);
-            void sendFrameBufferUpdate(bool incr);
-            void sendFrameBufferUpdate(const XCB::Region &, bool incr);
-            void sendSetDesktopSize(const XCB::Size &);
-            void sendContinuousUpdates(bool enable, const XCB::Region &);
+            boost::asio::awaitable<void> sendPixelFormatAwait(void) const;
+            boost::asio::awaitable<void> sendEncodingsAwait(const std::list<int> &) const;
+            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
+            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
+            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, const XCB::Region &);
+            boost::asio::awaitable<void> sendSetDesktopSizeAwait(const XCB::Size &);
+            boost::asio::awaitable<void> sendCutTextEventAwait(std::span<const uint8_t>, bool ext);
+            boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>);
 
-            void recvFBUpdateEvent(void);
-            void recvColorMapEvent(void);
-            void recvBellEvent(void);
-            void recvCutTextEvent(void);
-            void recvContinuousUpdatesEvent(void);
+            boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
+            boost::asio::awaitable<void> recvFBUpdateRegionAwait(void);
 
-            void recvDecodingLtsm(const XCB::Region &);
-            void recvChannelSystem(const std::vector<uint8_t> &) override;
+            boost::asio::awaitable<void> recvLtsmProtoAwait(void);
+            boost::asio::awaitable<void> recvFBUpdateEventAwait(void);
+            boost::asio::awaitable<void> recvColorMapEventAwait(void);
+            boost::asio::awaitable<void> recvBellEventAwait(void);
+            boost::asio::awaitable<void> recvCutTextEventAwait(void);
+            boost::asio::awaitable<void> recvContinuousUpdatesEventAwait(void);
+
+            boost::asio::awaitable<void> recvDecodingLtsmAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingLastRectAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingLtsmCursorAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingRichCursorAwait(const XCB::Region &);
+            boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
+            boost::asio::awaitable<void> recvDecodingUpdateRegionAwait(int type, const XCB::Region &);
+
+            void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
             bool isUserSession(void) const override {
                 return true;
             }
 
-            void recvDecodingLastRect(const XCB::Region &);
-            void recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
-            void recvDecodingRichCursor(const XCB::Region &);
-            void recvDecodingLtsmCursor(const XCB::Region &);
-
-            void setSocketStreamMode(int sockd);
-            void setInetStreamMode(void);
-            void updateRegion(int type, const XCB::Region &);
+            boost::asio::awaitable<void> rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay = false);
+            boost::asio::awaitable<bool> rfbHandshakeAwait(const SecurityInfo &);
+            boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
+            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode);
+            boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy);
 
           public:
-            ClientDecoder() = default;
+            ClientDecoder(const boost::asio::any_io_executor& ctx)
+                : rfb_strand_{ctx}
+                , incr_update_timer_{rfb_strand_} {
+            }
 
-            bool rfbHandshake(const SecurityInfo &);
-            bool rfbMessagesRunning(void) const;
-            void rfbMessagesLoop(void);
+            void sendCutText(std::vector<uint8_t>&&, bool ext);
+
             void rfbMessagesShutdown(void);
             bool isContinueUpdatesSupport(void) const;
             bool isContinueUpdatesProcessed(void) const;
+            bool isDecoderFFmpeg(void) const;
 
-            void sendKeyEvent(bool pressed, uint32_t keysym);
-            void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
-            void sendCutTextEvent(const uint8_t*, uint32_t, bool ext);
-            void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override;
+            void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override;
+            void sendLtsmChannelData(uint8_t channel, std::string&&) override;
 
             static std::list<int> supportedEncodings(bool extclip = false);
 
             // client decoder events
             virtual void clientRecvLtsmHandshakeEvent(int flags) { /* empty */ }
-            virtual void clientRecvLtsmDataEvent(const std::vector<uint8_t> &) { /* empty */ }
+            virtual void clientRecvLtsmDataEvent(std::vector<uint8_t>) { /* empty */ }
 
             virtual void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                     const std::vector<RFB::ScreenInfo> &) { /* empty */ }
@@ -150,26 +147,12 @@ namespace LTSM {
             }
 
             inline int remoteLtsmVersion(void) const {
-                return serverLtsmVersion;
+                return server_ltsm_version_;
             }
 
             virtual uint32_t frameRateOption(void) const { return 16; }
 
             virtual void decoderInitEvent(DecodingBase*) { /* empty */ }
-        };
-
-        class ClientDecoderSocket : public ClientDecoder {
-          public:
-            ClientDecoderSocket(int sd) {
-                setSocketStreamMode(sd);
-            }
-        };
-
-        class ClientDecoderInet : public ClientDecoder {
-          public:
-            ClientDecoderInet() {
-                setInetStreamMode();
-            }
         };
     };
 }

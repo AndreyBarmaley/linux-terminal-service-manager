@@ -26,9 +26,6 @@
 
     "#starter:path": "/usr/libexec/ltsm/ltsm_session_display",
 
-    "default:width": 1024,
-    "default:height": 768,
-
     "limit:sessions": 20,
     "limit:users": 10,
 

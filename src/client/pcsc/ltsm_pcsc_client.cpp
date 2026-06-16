@@ -193,7 +193,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
     const uint8_t* endPacket = nullptr;
 
     try {
-        while(4 < sb.last()) {
+        while(4 <= sb.last()) {
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
 
@@ -201,15 +201,19 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
             // <CMD16> - pcsc init
             // <CMD16> - pcsc cmd
             // <DATA> - pcsc data
-            auto pcscInit = sb.readIntLE16();
+            auto pcscCmd = sb.readIntLE16();
 
-            if(pcscInit == PcscOp::Init) {
-                auto cmd = sb.readIntLE16();
-                pcscCommand(cmd, sb);
+            if(pcscCmd == PcscOp::Init) {
+                if(! pcscOpInit(sb)) {
+                    throw channel_error(NS_FuncNameS);
+                }
+            } else if(pcscCmd == PcscOp::Lite) {
+                auto liteCmd = sb.readIntLE16();
+                pcscLiteCommand(liteCmd, sb);
                 //
             } else {
                 Application::error("{}: {} failed, cmd: {:#06x}, recv size: {}",
-                                   NS_FuncNameV, "pcsc init", pcscInit, recv.size());
+                                   NS_FuncNameV, "pcsc init", pcscCmd, recv.size());
                 throw channel_error(NS_FuncNameS);
             }
         }
@@ -228,54 +232,83 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
     }
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamBufRef & sb) {
+bool LTSM::Channel::ConnectorClientPcsc::pcscOpInit(const StreamBufRef & sb) {
+    // <VER16> - proto ver
+    if(2 > sb.last()) {
+        throw std::underflow_error(NS_FuncNameS);
+    }
+
+    auto protoVer = sb.readIntLE16();
+
+    if(protoVer != PcscOp::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
+        throw pcsc_error(NS_FuncNameS);
+    }
+
+    Application::info("{}: server proto version: {}", NS_FuncNameV, protoVer);
+
+    // reply
+    StreamBuf reply(8);
+    reply.writeIntLE16(PcscOp::Init);
+
+    // no errors
+    reply.writeIntLE16(0);
+    // proto ver
+    reply.writeIntLE16(PcscOp::ProtoVer);
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+
+    return true;
+
+}
+
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteCommand(uint16_t cmd, const StreamBufRef & sb) {
     Application::debug(DebugType::Pcsc, "{}: cmd: {} ({:#06x})", NS_FuncNameV, PcscLite::commandName(cmd), cmd);
 
     switch(cmd) {
         case PcscLite::EstablishContext:
-            return pcscEstablishContext(sb);
+            return pcscLiteEstablishContext(sb);
 
         case PcscLite::ReleaseContext:
-            return pcscReleaseContext(sb);
+            return pcscLiteReleaseContext(sb);
 
         case PcscLite::ListReaders:
-            return pcscListReaders(sb);
+            return pcscLiteListReaders(sb);
 
         case PcscLite::Connect:
-            return pcscConnect(sb);
+            return pcscLiteConnect(sb);
 
         case PcscLite::Reconnect:
-            return pcscReconnect(sb);
+            return pcscLiteReconnect(sb);
 
         case PcscLite::Disconnect:
-            return pcscDisconnect(sb);
+            return pcscLiteDisconnect(sb);
 
         case PcscLite::BeginTransaction:
-            return pcscBeginTransaction(sb);
+            return pcscLiteBeginTransaction(sb);
 
         case PcscLite::EndTransaction:
-            return pcscEndTransaction(sb);
+            return pcscLiteEndTransaction(sb);
 
         case PcscLite::Transmit:
-            return pcscTransmit(sb);
+            return pcscLiteTransmit(sb);
 
         case PcscLite::Status:
-            return pcscStatus(sb);
+            return pcscLiteStatus(sb);
 
         case PcscLite::GetStatusChange:
-            return pcscGetStatusChange(sb);
+            return pcscLiteGetStatusChange(sb);
 
         case PcscLite::Control:
-            return pcscControl(sb);
+            return pcscLiteControl(sb);
 
         case PcscLite::Cancel:
-            return pcscCancel(sb);
+            return pcscLiteCancel(sb);
 
         case PcscLite::GetAttrib:
-            return pcscGetAttrib(sb);
+            return pcscLiteGetAttrib(sb);
 
         case PcscLite::SetAttrib:
-            return pcscSetAttrib(sb);
+            return pcscLiteSetAttrib(sb);
 
         default:
             break;
@@ -286,7 +319,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamB
     throw channel_error(NS_FuncNameS);
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteEstablishContext(const StreamBufRef & sb) {
     if(4 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -305,10 +338,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
     // reply
     StreamBuf reply(16);
     reply.writeIntLE64(hContext).writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteReleaseContext(const StreamBufRef & sb) {
     if(8 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -326,7 +359,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef &
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
 std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
@@ -369,7 +402,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
     return {};
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteListReaders(const StreamBufRef & sb) {
     if(8 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -387,10 +420,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
         reply.writeIntLE32(reader.size()).write(reader);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteConnect(const StreamBufRef & sb) {
     if(20 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -424,10 +457,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
     // reply
     StreamBuf reply(16);
     reply.writeIntLE64(hCard).writeIntLE32(activeProtocol).writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteReconnect(const StreamBufRef & sb) {
     if(20 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -450,10 +483,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) 
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(activeProtocol).writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteDisconnect(const StreamBufRef & sb) {
     if(12 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -473,10 +506,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteBeginTransaction(const StreamBufRef & sb) {
     if(8 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -495,10 +528,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteEndTransaction(const StreamBufRef & sb) {
     if(12 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -518,10 +551,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteTransmit(const StreamBufRef & sb) {
     if(24 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -561,10 +594,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
         reply.write(recvBuffer.data(), recvLength);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteStatus(const StreamBufRef & sb) {
     if(8 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -593,14 +626,15 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
     // reply
     readerNameLen = strlen(readerName);
     StreamBuf reply(20 + sizeof(readerName) + sizeof(atrBuf));
-    reply.writeIntLE32(readerNameLen).write(readerName, readerNameLen);
-    reply.writeIntLE32(state).writeIntLE32(protocol);
-    reply.writeIntLE32(atrLen).write(atrBuf, atrLen);
-    reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+
+    reply.writeIntLE32(state).writeIntLE32(protocol).
+        writeIntLE32(readerNameLen).writeIntLE32(atrLen).writeIntLE32(ret);
+    reply.write(readerName, readerNameLen).write(atrBuf, atrLen);
+
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetStatusChange(const StreamBufRef & sb) {
     if(16 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -682,10 +716,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         }
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteControl(const StreamBufRef & sb) {
     if(20 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -721,10 +755,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
         reply.write(recvBuffer.data(), bytesReturned);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteCancel(const StreamBufRef & sb) {
     if(8 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -742,10 +776,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb) {
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetAttrib(const StreamBufRef & sb) {
     if(12 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -771,10 +805,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) 
         reply.write(attrBuf.data(), attrLen);
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
 
-void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb) {
+void LTSM::Channel::ConnectorClientPcsc::pcscLiteSetAttrib(const StreamBufRef & sb) {
     if(16 > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
@@ -801,5 +835,5 @@ void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb) 
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }

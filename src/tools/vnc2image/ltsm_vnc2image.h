@@ -30,10 +30,11 @@
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
 
-#define LTSM_VNC2IMAGE_VERSION 20220829
+#define LTSM_VNC2IMAGE_VERSION 20260414
 
 namespace LTSM {
     class Vnc2Image : public Application, protected RFB::ClientDecoder {
+        boost::asio::io_context ioc_;
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 
@@ -45,18 +46,19 @@ namespace LTSM {
         bool notls = false;
 
       protected:
-        void setPixel(const XCB::Point &, uint32_t pixel) override;
-        void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const XCB::Region &, const void*, uint32_t pitch, const PixelFormat & pf) override;
-        void updateRawPixels2(const XCB::Region &, const void*, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
+        void setPixel(const XCB::Point &, uint32_t pixel) const override;
+        void fillPixel(const XCB::Region &, uint32_t pixel) const override;
+        void updateRawPixels(const XCB::Region &, std::vector<uint8_t>&&, uint32_t pitch, const PixelFormat &) const override;
+        void postDecoderJob(RFB::PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) const override;
+        void waitDecoderJobs(void) const override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
         uint16_t extClipboardLocalTypes(void) const override;
         std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
         void extClipboardRemoteTypesEvent(uint16_t type) override;
-        void extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> &) override;
-        void extClipboardSendEvent(const std::vector<uint8_t> &) override;
+        void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
+        void extClipboardSendEvent(std::vector<uint8_t> &&) override;
         void decoderInitEvent(RFB::DecodingBase*) override;
 
         int startSocket(std::string_view host, int port) const;

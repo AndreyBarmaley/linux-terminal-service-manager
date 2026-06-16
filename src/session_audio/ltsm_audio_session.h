@@ -24,12 +24,14 @@
 #ifndef _LTSM_AUDIO_SESSION_
 #define _LTSM_AUDIO_SESSION_
 
+#include <span>
 #include <chrono>
 #include <memory>
 #include <string>
 #include <forward_list>
 
 #include "ltsm_application.h"
+#include "ltsm_async_sdbus.h"
 #include "ltsm_async_socket.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
@@ -53,7 +55,7 @@ namespace LTSM {
 
     using AudioPacketPtr = std::unique_ptr<AudioPacket>;
 
-    struct AudioClient : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+    struct AudioClient : protected AsyncLocalStream {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         const uint8_t channels_ = 2;
@@ -70,7 +72,7 @@ namespace LTSM {
         uint32_t frag_size_ = 1024;
 
         AudioClient(const boost::asio::any_io_executor & ex)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(ex), strand_{boost::asio::make_strand(ex)} {
+            : AsyncLocalStream(ex), strand_{boost::asio::make_strand(ex)} {
         }
         ~AudioClient() = default;
     
@@ -79,8 +81,8 @@ namespace LTSM {
         boost::asio::awaitable<void> timerWaitEngine(void);
 
         bool engineInit(void);
-        void dataReadyNotify(const uint8_t* ptr, size_t len);
-        std::list<AudioPacketPtr> dataEncode(const uint8_t* ptr, size_t len);
+        void dataReadyNotify(std::span<const uint8_t>);
+        std::list<AudioPacketPtr> dataEncode(std::span<const uint8_t>);
 
         bool socketPath(std::string_view path) const {
             return socket().local_endpoint().path() == path;
@@ -94,14 +96,17 @@ namespace LTSM {
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
     using AudioClientPtr = std::unique_ptr<AudioClient>;
 
-    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
+    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
+        boost::asio::cancellation_signal connect_cancel_;
+        boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
 
-        DBusConnectionPtr dbus_conn_;
         std::forward_list<AudioClientPtr> clients_;
 
       protected:
+        boost::asio::awaitable<void> signalsHandler(void);
+        boost::asio::awaitable<void> sdbusHandler(void);
         void stop(void);
 
       public:

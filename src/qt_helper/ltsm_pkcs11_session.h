@@ -77,12 +77,12 @@ using ListCertificates = std::list<Pkcs11Cert>;
 using ListMechanisms = std::list<Pkcs11Mech>;
 using binary_buf = std::vector<uint8_t>;
 
-class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncSocket<boost::asio::local::stream_protocol::socket> {
+class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncLocalStream {
     Q_OBJECT
 
     boost::asio::io_context & ioc_;
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
-    boost::asio::cancellation_signal update_tokens_;
+    boost::asio::cancellation_signal client_cancel_;
 
     mutable LTSM::async_mutex send_lock_;
 
@@ -104,9 +104,11 @@ class Pkcs11Client : public QThread, protected boost::base_from_member<boost::as
 
   protected:
     void run(void) override;
-    void stop(void);
+    void stop(void) noexcept;
 
-    boost::asio::awaitable<void> remoteConnect(void);
+    boost::asio::awaitable<void> clientHandler(void);
+    boost::asio::awaitable<void> retryConnect(const std::string& path, int attempts);
+    boost::asio::awaitable<void> remoteHandshake(void);
     boost::asio::awaitable<bool> updateTokens(void);
     boost::asio::awaitable<void> updateTokensTimer(void);
     boost::asio::awaitable<ListCertificates> loadCertificates(uint64_t slotId) const;

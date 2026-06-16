@@ -15,8 +15,11 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_xcb_wrapper.h"
 #include "librfb_encodings.h"
-#include "librfb_ffmpeg.h"
 #include "ltsm_tools.h"
+
+#ifdef LTSM_WITH_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
 
 using namespace LTSM;
 
@@ -84,9 +87,6 @@ class FakeStream : public RFB::EncoderStream {
     size_t hasData(void) const override {
         throw std::runtime_error("unsupported");
     }
-    uint8_t peekInt8(void) const override {
-        throw std::runtime_error("unsupported");
-    }
     void recvRaw(void* ptr, size_t len) const override {
         throw std::runtime_error("unsupported");
     }
@@ -141,12 +141,14 @@ namespace LTSM::RFB {
 
             ENCODING_LTSM_LZ4,
             ENCODING_LTSM_QOI,
+            ENCODING_LTSM_ZQOI,
             ENCODING_LTSM_TJPG,
 
+#ifdef LTSM_WITH_FFMPEG
             ENCODING_LTSM_H264,
             ENCODING_LTSM_AV1,
             ENCODING_LTSM_VP8,
-
+#endif
             ENCODING_RAW };
     }
 }
@@ -206,14 +208,18 @@ class EncodingTest : public Application {
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_ZRLE
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+#ifdef LTSM_WITH_FFMPEG
             // RFB::ENCODING_LTSM_H264
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
+#endif
             // RFB::ENCODING_LTSM_LZ4
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_TJPG
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTJPG>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_QOI
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            // RFB::ENCODING_LTSM_ZQOI
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
         } else {
             for(const auto & name : encodings) {
                 // test preffered encodings
@@ -238,16 +244,21 @@ class EncodingTest : public Application {
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
+#ifdef LTSM_WITH_FFMPEG
                     case RFB::ENCODING_LTSM_H264:
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
-
+#endif
                     case RFB::ENCODING_LTSM_LZ4:
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
+                    case RFB::ENCODING_LTSM_ZQOI:
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        break;
+
                     case RFB::ENCODING_LTSM_QOI:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
                     case RFB::ENCODING_LTSM_TJPG:

@@ -151,9 +151,15 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
-    audioVer = sb.readIntLE16();
+    auto protoVer = sb.readIntLE16();
     auto numEnc = sb.readIntLE16();
-    Application::info("{}: server proto version: {}, encodings count: {}", NS_FuncNameV, audioVer, numEnc);
+
+    if(protoVer != AudioOp::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
+        throw audio_error(NS_FuncNameS);
+    }
+
+    Application::info("{}: server proto version: {}, encodings count: {}", NS_FuncNameV, protoVer, numEnc);
     formats.clear();
 
     if(numEnc * 10 > sb.last()) {
@@ -220,7 +226,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! format) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
         return false;
     }
 
@@ -243,17 +249,17 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! player) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
         return false;
     }
 
     // no errors
     reply.writeIntLE16(0);
     // proto ver
-    reply.writeIntLE16(1);
+    reply.writeIntLE16(AudioOp::ProtoVer);
     // encoding type
     reply.writeIntLE16(format->type);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -268,7 +274,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     if(silent) {
         if(std::chrono::steady_clock::now() - *silent < 3s) {
             std::vector<uint8_t> buf(len, 0);
-            player->streamWrite(buf.data(), buf.size());
+            player->streamWrite(buf);
         } else if(player->isPlaying()) {
             Application::info("{}: play stop", NS_FuncNameV);
             player->playStop();
@@ -276,7 +282,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     } else {
         silent = std::make_unique<TimePoint>(std::chrono::steady_clock::now());
         std::vector<uint8_t> buf(len, 0);
-        player->streamWrite(buf.data(), buf.size());
+        player->streamWrite(buf);
     }
 }
 
@@ -296,16 +302,18 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
         silent.reset();
     }
 
+    std::span<const uint8_t> span{sb.data(), len};
+
     if(! decoder) {
-        player->streamWrite(sb.data(), len);
-    } else if(auto buf = decoder->decode(sb.data(), len); !buf.empty()) {
+        player->streamWrite(span);
+    } else if(auto buf = decoder->decode(span); !buf.empty()) {
         Application::debug(DebugType::Audio, "{}: decode size: {}", NS_FuncNameV, buf.size());
 
         if(auto env = getenv("LTSM_AUDIO_SAVE_FILE")) {
             Tools::binaryToFile(buf.data(), buf.size(), env, true);
         }
 
-        player->streamWrite(buf.data(), buf.size());
+        player->streamWrite(buf);
     }
 
     sb.skip(len);

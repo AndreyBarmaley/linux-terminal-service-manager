@@ -68,7 +68,6 @@ namespace LTSM {
             void                recvRaw(void* ptr, size_t len) const override;
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
-            uint8_t             peekInt8(void) const override;
 
             XCB::Size           displaySize(void) const override;
 

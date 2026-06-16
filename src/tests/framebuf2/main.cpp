@@ -13,7 +13,6 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_xcb_wrapper.h"
 #include "librfb_encodings.h"
-#include "librfb_ffmpeg.h"
 #include "ltsm_tools.h"
 
 using namespace LTSM;
@@ -68,9 +67,6 @@ class FakeStream : public RFB::EncoderStream {
         throw std::runtime_error("unsupported");
     }
     size_t hasData(void) const override {
-        throw std::runtime_error("unsupported");
-    }
-    uint8_t peekInt8(void) const override {
         throw std::runtime_error("unsupported");
     }
     void recvRaw(void* ptr, size_t len) const override {

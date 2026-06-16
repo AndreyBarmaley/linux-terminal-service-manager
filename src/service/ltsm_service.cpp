@@ -23,7 +23,6 @@
 
 #include <errno.h>
 #include <unistd.h>
-#include <signal.h>
 
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -34,6 +33,7 @@
 #include <chrono>
 #include <atomic>
 #include <thread>
+#include <csignal>
 #include <cstring>
 #include <numeric>
 #include <cstdlib>
@@ -142,7 +142,7 @@ namespace LTSM::Manager {
 
         void pamOpenDisplaySession(XvfbSessionPtr sess, const ApplicationJsonConfig & json) {
             // child1 thread
-            signal(SIGTERM, ChildProcess::signalHandler);
+            std::signal(SIGTERM, ChildProcess::signalHandler);
 
             const auto & userInfo = sess->userInfo;
             auto pam = std::make_unique<PamSession>(json.configGetString("pam:service"),
@@ -183,7 +183,7 @@ namespace LTSM::Manager {
 
             if(pid_t pid = ForkMode::forkStart(); 0 != pid) {
                 pidNext = pid;
-                const bool notSysUser = std::string_view(ltsm_user_conn) != sess->userInfo->user();
+                const bool notSysUser = std::string_view(ltsm_user_conn) != userInfo->user();
                 std::future<void> detach;
 
                 // logon
@@ -211,7 +211,7 @@ namespace LTSM::Manager {
             auto sessionBin = json.configGetString("starter:path", "/usr/libexec/ltsm/ltsm_session_display");
 
             if(std::filesystem::exists(sessionBin)) {
-                if(switchToUser(*sess->userInfo)) {
+                if(switchToUser(*userInfo)) {
                     // set environments
                     for(const auto & [key, val] : sess->getEnvironments(pam->getEnvList())) {
                         Application::debug(DebugType::App, "{}: setenv[ {} ] = `{}'", NS_FuncNameV, key, val);
@@ -336,15 +336,15 @@ namespace LTSM::Manager {
     char* PamAuthenticate::onPamPrompt(int style, const char* msg) const {
         switch(style) {
             case PAM_ERROR_MSG:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_ERROR_MSG", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_ERROR_MSG", msg);
                 break;
 
             case PAM_TEXT_INFO:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_TEXT_INFO", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_TEXT_INFO", msg);
                 break;
 
             case PAM_PROMPT_ECHO_ON:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_ON", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_ON", msg);
 
                 //if(0 == strncasecmp(msg, "login:", 6));
                 return strdup(login.c_str());
@@ -352,7 +352,7 @@ namespace LTSM::Manager {
                 break;
 
             case PAM_PROMPT_ECHO_OFF:
-                Application::info("{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_OFF", msg);
+                Application::debug(DebugType::Pam, "{}: style: `{}', msg: `{}'", NS_FuncNameV, "PAM_PROMPT_ECHO_OFF", msg);
 
                 //if(0 == strncasecmp(msg, "password:", 9));
                 return strdup(password.c_str());
@@ -1346,10 +1346,17 @@ namespace LTSM::Manager {
 
         while(true) {
             timer.expires_after(std::chrono::milliseconds(pause));
-            auto wait = timer.async_wait(asio::use_future);
+            auto res = timer.async_wait(asio::use_future);
 
-            // ioc in thread pool
-            wait.get();
+            if(ioc.get_executor().running_in_this_thread()) {
+                // future: skip deadlock
+                while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                    ioc.run_one();
+                }
+            }
+
+            // wait timer
+            res.get();
 
             if(waitFunc()) {
                 return true;
@@ -1486,7 +1493,7 @@ namespace LTSM::Manager {
             }
             try {
                 auto json = jos.flush();
-                auto base64 = Tools::base64Encode(Tools::zlibCompress(json));
+                auto base64 = Tools::base64Encode(Tools::zlibCompress({(const uint8_t*) json.data(), json.size()}));
                 sess->environments.emplace("LTSM_CLIENT_OPTS", std::move(base64));
             } catch(const std::exception & err) {
                 Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
@@ -1529,7 +1536,7 @@ namespace LTSM::Manager {
         // main thread
         // ioc_.notify_fork(asio::execution_context::fork_parent);
 
-        Application::debug(DebugType::App, "{}: started, pid: {}, display: {}",
+        Application::debug(DebugType::App, "{}: started, child pid: {}, display: {}",
                            NS_FuncNameV, sess->pid1, sess->displayNum);
 
         auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
@@ -1551,6 +1558,7 @@ namespace LTSM::Manager {
             Application::error("{}: display session not started", NS_FuncNameV);
         }
 
+        // failed
         ForkMode::waitPid(sess->pid1);
         return nullptr;
     }
@@ -1650,7 +1658,7 @@ namespace LTSM::Manager {
 
         if(newSess) {
             // registered xvfb job
-            asio::post(ioc_, [this, pid = newSess->pid1](){
+            asio::post(childs_guard_, [this, pid = newSess->pid1](){
                 childs_.emplace_back(pid);
             });
         } else {        
@@ -2486,26 +2494,37 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stopSessionChannels(XvfbSessionPtr xvfb) {
-        if(0 < xvfb->connectorId) {
-            auto fuse = xvfb->options.find("redirect:fuse");
+        auto fuse = xvfb->options.find("redirect:fuse");
 
-            if(xvfb->options.end() != fuse && ! fuse->second.empty()) {
-                for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>()) {
-                    stopFuseListener(xvfb, share);
+        if(xvfb->options.end() != fuse && ! fuse->second.empty()) {
+            for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>()) {
+                stopFuseListener(xvfb, share);
+            }
+        }
+
+        auto audio = xvfb->options.find("redirect:audio");
+
+        if(xvfb->options.end() != audio) {
+            stopAudioListener(xvfb, audio->second);
+        }
+
+        auto pcsc = xvfb->options.find("redirect:pcsc");
+
+        if(xvfb->options.end() != pcsc) {
+            stopPcscListener(xvfb, pcsc->second);
+        }
+
+        if(! xvfb->fusePoints.empty()) {
+            for(const auto & point: xvfb->fusePoints) {
+                if(int ret = umount(point.c_str()); 0 < ret && ret != EINVAL) {
+                    Application::error("{}: {} failed, code: {}, error: {}, path: `{}'", NS_FuncNameV, "umount", errno, strerror(errno), point);
+                }
+                std::error_code err;
+                if(std::filesystem::is_directory(point, err)) {
+                    std::filesystem::remove(point, err);
                 }
             }
-
-            auto audio = xvfb->options.find("redirect:audio");
-
-            if(xvfb->options.end() != audio) {
-                stopAudioListener(xvfb, audio->second);
-            }
-
-            auto pcsc = xvfb->options.find("redirect:pcsc");
-
-            if(xvfb->options.end() != pcsc) {
-                stopPcscListener(xvfb, pcsc->second);
-            }
+            xvfb->fusePoints.clear();
         }
     }
 
@@ -2851,6 +2870,7 @@ namespace LTSM::Manager {
                           NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), localPoint, remotePoint, fuseSocket);
 
             if(xvfb->dbusFuseMountPoint(localPoint, remotePoint, fuseSocket)) {
+                xvfb->fusePoints.emplace_front(std::move(localPoint));
                 return true;
             }
     
@@ -3115,8 +3135,8 @@ namespace LTSM::Manager {
         asio::io_context ctx{concurency};
         asio::thread_pool pool{concurency};
 
-        signal(SIGPIPE, SIG_IGN);
-        signal(SIGHUP, SIG_IGN);
+        std::signal(SIGPIPE, SIG_IGN);
+        std::signal(SIGHUP, SIG_IGN);
 
         auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, std::move(conn), confile);
         Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",

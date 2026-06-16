@@ -29,6 +29,8 @@
 namespace LTSM {
     namespace Pkcs11Op {
         enum {
+            ProtoVer = 1,
+            //
             Init = 0xFC01,
             GetSlots = 0xFC02,
             GetSlotMechanisms = 0xFC03,

@@ -46,7 +46,6 @@ namespace LTSM {
             int sendPixel(uint32_t pixel);
             int sendCPixel(uint32_t pixel);
             int sendRunLength(uint32_t length);
-            int sendZlibData(ZLib::DeflateStream*, bool uint16sz = false);
 
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
@@ -68,7 +67,6 @@ namespace LTSM {
 
             bool hasInput(void) const override;
             size_t hasData(void) const override;
-            uint8_t peekInt8(void) const override;
 
             void sendRaw(const void* ptr, size_t len) override;
             void recvRaw(void* ptr, size_t len) const override;
@@ -176,7 +174,7 @@ namespace LTSM {
 
         /// EncodingTRLE
         class EncodingTRLE : public EncodingBase {
-            std::unique_ptr<ZLib::DeflateStream> zlib;
+            std::unique_ptr<ZLib::DeflateBase> zlib_;
 
           protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
@@ -190,10 +188,11 @@ namespace LTSM {
           public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
             const char* getTypeName(void) const override {
-                return getType() == ENCODING_ZRLE ? "ZRLE" : "TRLE";
+                return isZRLE() ? "ZRLE" : "TRLE";
             }
 
-            EncodingTRLE(bool zlib);
+            EncodingTRLE(bool zlib) : EncodingBase(zlib ? ENCODING_ZRLE : ENCODING_TRLE),
+                zlib_{std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED)} {}
 
             bool isZRLE(void) const {
                 return getType() == ENCODING_ZRLE;
@@ -202,8 +201,7 @@ namespace LTSM {
 
         /// EncodingZlib
         class EncodingZlib : public EncodingBase {
-            std::unique_ptr<ZLib::DeflateStream> zlib;
-            BinaryBuf buf;
+            std::unique_ptr<ZLib::DeflateBase> zlib_;
             int zlevel;
 
           protected:
@@ -264,10 +262,14 @@ namespace LTSM {
           public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
             const char* getTypeName(void) const override {
-                return "QOI";
+                return isZQOI() ? "ZQOI" : "QOI";
             }
 
-            EncodingQOI() : EncodingBase(ENCODING_LTSM_QOI) {}
+            EncodingQOI(bool lz4) : EncodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
+
+            bool isZQOI(void) const {
+                return getType() == ENCODING_LTSM_ZQOI;
+            }
         };
 #endif
     }

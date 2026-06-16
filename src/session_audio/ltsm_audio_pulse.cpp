@@ -712,10 +712,10 @@ namespace LTSM {
         return pa_stream_writable_size(stream.get());
     }
 
-    void PulseAudio::InputStream::streamWriteData(const uint8_t* ptr, size_t len) {
-        Application::info("{}: data size: {}", NS_FuncNameV, len);
+    void PulseAudio::InputStream::streamWriteData(std::span<const uint8_t> span) {
+        Application::info("{}: data size: {}", NS_FuncNameV, span.size());
         std::scoped_lock guard{ lock };
-        pcm.insert(pcm.end(), ptr, ptr + len);
+        pcm.insert(pcm.end(), span.begin(), span.end());
         auto writableSize = pa_stream_writable_size(stream.get());
 
         if((writableSize << 2) < pcm.size()) {
@@ -828,7 +828,7 @@ namespace LTSM {
 
         if(0 == pa_stream_peek(stream.get(), (const void**) & streamData, & streamBytes)) {
             if(streamBytes) {
-                dataReadyCb(streamData, streamBytes);
+                dataReadyCb({streamData, streamBytes});
                 pa_stream_drop(stream.get());
             }
         } else {

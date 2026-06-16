@@ -45,11 +45,11 @@ namespace LTSM {
         }
     }
 
-    std::vector<uint8_t> AudioDecoder::Opus::decode(const uint8_t* ptr, size_t len) {
-        int frames = opus_decoder_get_nb_samples(ctx.get(), ptr, len);
+    std::vector<uint8_t> AudioDecoder::Opus::decode(std::span<const uint8_t> buf) {
+        int frames = opus_decoder_get_nb_samples(ctx.get(), buf.data(), buf.size());
 
         if(0 > frames) {
-            Application::error("{}: {} failed, error: {}, data size: {}", NS_FuncNameV, "opus_decoder_get_nb_samples", frames, len);
+            Application::error("{}: {} failed, error: {}, data size: {}", NS_FuncNameV, "opus_decoder_get_nb_samples", frames, buf.size());
             throw audio_error(NS_FuncNameS);
         }
 
@@ -61,7 +61,7 @@ namespace LTSM {
         Application::debug(DebugType::Audio, "{}: frames {}", NS_FuncNameV, frames);
 
         std::vector<uint8_t> tmp(frames * sampleLength);
-        int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
+        int nSamples = opus_decode(ctx.get(), buf.data(), buf.size(), (opus_int16*) tmp.data(), frames, 0);
 
         if(nSamples < 0) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV, "opus_decode", nSamples);

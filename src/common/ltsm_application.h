@@ -35,8 +35,10 @@
 #include <libaudit.h>
 #endif
 
+#ifdef __UNIX__
 #ifdef LTSM_WITH_BOOST
 #include <boost/asio.hpp>
+#endif
 #endif
 
 #ifdef LTSM_WITH_JSON
@@ -81,7 +83,8 @@ namespace LTSM {
         Gss = 1 << 13,
         Fork = 1 << 12,
         Common = 1 << 11,
-        Default = 1 << 10
+        Pam = 1 << 10,
+        Default = 1 << 9
     };
 
     using Logger = std::shared_ptr<spdlog::logger>;
@@ -172,6 +175,7 @@ namespace LTSM {
         ApplicationLog(std::string_view ident);
     };
 
+#ifdef __UNIX__
     using WatchModificationCb = std::function<void(const std::string &)>;
 
     class WatchModification {
@@ -261,7 +265,8 @@ namespace LTSM {
         virtual void configReloadedEvent(void) {}
     };
 
-#endif
+#endif // __UNIX__
+#endif // LTSM_WITH_JSON
 
 #ifdef LTSM_WITH_AUDIT
     class AuditLog {

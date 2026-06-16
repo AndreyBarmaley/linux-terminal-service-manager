@@ -25,19 +25,35 @@
 #define _LTSM_FUSE_SESSION_
 
 #include <string>
+#include <memory>
 #include <forward_list>
 
 #include "ltsm_fuse.h"
+#include "ltsm_async_sdbus.h"
 #include "ltsm_fuse_adaptor.h"
+#include "ltsm_async_socket.h"
 
 namespace LTSM {
     struct FuseSession;
 
-    class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Fuse_adaptor> {
-        std::forward_list<std::unique_ptr<FuseSession>> childs;
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
+    using FuseSessionPtr = std::unique_ptr<FuseSession>;
+
+    class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Fuse_adaptor>, protected SDBus::AsioCoroConnector {
+        boost::asio::io_context ioc_;
+        boost::asio::signal_set signals_;
+        boost::asio::cancellation_signal connect_cancel_;
+        boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
+
+        std::forward_list<FuseSessionPtr> childs_;
+
+      protected:
+        boost::asio::awaitable<void> signalsHandler(void);
+        boost::asio::awaitable<void> sdbusHandler(void);
+        void stop(void) noexcept;
 
       public:
-        FuseSessionBus(sdbus::IConnection &, bool debug = false);
+        FuseSessionBus(DBusConnectionPtr, bool debug = false);
         virtual ~FuseSessionBus();
 
         int start(void);

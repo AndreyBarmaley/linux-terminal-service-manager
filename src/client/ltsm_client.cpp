@@ -42,6 +42,7 @@
 #include "ltsm_client.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
     const auto sanedef = "sock://127.0.0.1:6566";
@@ -67,7 +68,7 @@ namespace LTSM {
             }
         }
         std::cout << std::endl <<
-                  prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
+                  prog << " version: " << LTSM_CLIENT_VERSION << std::endl;
         std::cout << std::endl <<
         "usage: " << prog <<
         ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] " <<
@@ -77,10 +78,9 @@ namespace LTSM {
         "[--kerberos <" << krb5def << ">] " <<
 #endif
 #ifdef LTSM_DECODING
-#ifdef LTSM_DECODING_QOI
         "[--qoi] " <<
-#endif
 #ifdef LTSM_DECODING_LZ4
+        "[--zqoi] " <<
         "[--lz4] " <<
 #endif
 #ifdef LTSM_DECODING_TJPG
@@ -102,9 +102,7 @@ namespace LTSM {
 #ifdef LTSM_WITH_AUDIO
         "[--audio [<enc>]] " <<
 #endif
-#ifdef LTSM_WITH_GNUTLS
         "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
-#endif
 #ifdef LTSM_WITH_FUSE
         "[--share-folder <folder>] " <<
 #endif
@@ -115,7 +113,7 @@ namespace LTSM {
 #ifdef LTSM_WITH_PCSC
         "[--smartcard] " <<
 #endif
-        "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
+        "[--noxkb] [--nocaps] [--nodelay] [--loop] [--seamless <path>] " << std::endl;
         std::cout << std::endl << "arguments:" << std::endl <<
                                   "    --debug <types> (allow types: [all],xcb,rfb,clip,sock,tls,chnl,conn,enc,x11srv,x11cli,audio,fuse,pcsc,pkcs11,sdl,app,ldap,gss,mgr)" << std::endl <<
                                   "    --trace (big more debug)" << std::endl <<
@@ -134,18 +132,16 @@ namespace LTSM {
                                   "    --resize (allow resizable window)" << std::endl <<
                                   "    --extclip (extclip support)" << std::endl <<
                                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
-#ifdef LTSM_WITH_GNUTLS
+                                  "    --nodelay (socket NO_DELAY option enable)" << std::endl <<
                                   "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
-#endif
 #ifdef LTSM_WITH_GSSAPI
                                   "    --kerberos <" << krb5def <<
                                   "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING
-#ifdef LTSM_DECODING_QOI
                                   "    --qoi (the same as --video ltsm_qoi)" << std::endl <<
-#endif
 #ifdef LTSM_DECODING_LZ4
+                                  "    --zqoi (the same as --video ltsm_zqoi (qoi+lz4))" << std::endl <<
                                   "    --lz4 (the same as --video ltsm_lz4)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_TJPG
@@ -164,12 +160,10 @@ namespace LTSM {
 #endif
 #endif
                                   "    --video <enc> (set preffered encoding: " << Tools::join(videoEncodings, ",") << ")" << std::endl <<
-#ifdef LTSM_WITH_GNUTLS
                                   "    --tls-priority <string> " << std::endl <<
                                   "    --tls-ca-file <path> " << std::endl <<
                                   "    --tls-cert-file <path> " << std::endl <<
                                   "    --tls-key-file <path> " << std::endl <<
-#endif
 #ifdef LTSM_WITH_FUSE
                                   "    --share-folder <folder> (redirect folder)" << std::endl <<
 #endif
@@ -261,16 +255,21 @@ namespace LTSM {
         }
     }
 
-    Vnc2SDL::Vnc2SDL(int argc, const char** argv)
-        : Application("ltsm_client") {
+    ClientApp::ClientApp(int argc, const char** argv)
+        : Application("ltsm_client")
+#ifdef LTSM_WITH_X11
+        , RFB::X11Client(get_executor())
+#else
+        , RFB::WinClient(get_executor())
+#endif
+        , signals_{get_executor()}
+        , sdl_guard_{sdl_ctx_.get_executor()}
+        , sdl_strand_{sdl_ctx_.get_executor()} {
+
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
-#ifdef LTSM_WITH_GNUTLS
-        rfbsec.authVenCrypt = true;
-        rfbsec.tlsDebug = 2;
-#else
-        rfbsec.authVenCrypt = false;
-#endif
+        rfbsec_.authVenCrypt = true;
+        rfbsec_.tlsDebug = 2;
 
         auto argBeg = argv + 1;
         auto argEnd = argv + argc;
@@ -312,7 +311,9 @@ namespace LTSM {
         }
 
         if(0 == videoEncoding) {
-#ifdef LTSM_WITH_QOI
+#ifdef LTSM_DECODING_LZ4
+            videoEncoding = RFB::ENCODING_LTSM_ZQOI;
+#else
             videoEncoding = RFB::ENCODING_LTSM_QOI;
 #endif
         }
@@ -324,9 +325,7 @@ namespace LTSM {
 #endif
         }
 
-        if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size()) {
-            pkcs11Auth.clear();
-        }
+        updateSecurity();    
 
         // fullscreen
         if(windowFullScreen()) {
@@ -354,11 +353,11 @@ namespace LTSM {
                     break;
             }
         }
-    
+
         appStart = std::chrono::steady_clock::now();
     }
 
-    void Vnc2SDL::loadConfig(const std::filesystem::path & config) {
+    void ClientApp::loadConfig(const std::filesystem::path & config) {
         if(! std::filesystem::is_regular_file(config)) {
             return;
         }
@@ -392,22 +391,18 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::parseCommand(std::string_view cmd, std::string_view arg) {
+    void ClientApp::parseCommand(std::string_view cmd, std::string_view arg) {
         if(cmd == "--nocaps") {
             capslockEnable = false;
         } else if(cmd == "--noltsm") {
             ltsmSupport = false;
         } else if(cmd == "--noaccel") {
             windowAccel = false;
-        }
-
-#ifdef LTSM_WITH_GNUTLS
-        else if(cmd == "--notls") {
-            rfbsec.authVenCrypt = false;
-        }
-
-#endif
-        else if(cmd == "--noxkb") {
+        } else if(cmd == "--notls") {
+            rfbsec_.authVenCrypt = false;
+        } else if(cmd == "--nodelay") {
+            socketNoDelay = true;
+        } else if(cmd == "--noxkb") {
             useXkb = false;
         } else if(cmd == "--loop") {
             alwaysRunning = true;
@@ -433,16 +428,23 @@ namespace LTSM {
 #ifdef LTSM_DECODING
         else if(cmd == "--qoi") {
             videoEncoding = RFB::ENCODING_LTSM_QOI;
+        }
+#ifdef LTSM_DECODING_LZ4
+        else if(cmd == "--zqoi") {
+            videoEncoding = RFB::ENCODING_LTSM_ZQOI;
         } else if(cmd == "--lz4") {
             videoEncoding = RFB::ENCODING_LTSM_LZ4;
-        } else if(startsWith(cmd, "--tjpg")) {
+        }
+#endif
+#ifdef LTSM_DECODING_TJPG
+        else if(startsWith(cmd, "--tjpg")) {
             if(auto opts = Tools::split(cmd, ','); 1 < opts.size()) {
                 opts.pop_front();
                 videoEncodingOptions.assign(opts.begin(), opts.end());
             }
             videoEncoding = RFB::ENCODING_LTSM_TJPG;
         }
-
+#endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
@@ -482,11 +484,11 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_GSSAPI
         else if(cmd == "--kerberos") {
-            rfbsec.authKrb5 = true;
-            rfbsec.krb5Service = "TERMSRV";
+            rfbsec_.authKrb5 = true;
+            rfbsec_.krb5Service = "TERMSRV";
 
             if(arg.size()) {
-                rfbsec.krb5Service.assign(arg.begin(), arg.end());
+                rfbsec_.krb5Service.assign(arg.begin(), arg.end());
             }
         }
 
@@ -572,7 +574,7 @@ namespace LTSM {
                 Application::setDebugTarget(DebugTarget::Syslog);
             }
         } else if(cmd == "--host" && arg.size()) {
-            host.assign(arg.begin(), arg.end());
+            host_.assign(arg.begin(), arg.end());
         } else if(cmd == "--seamless" && arg.size()) {
             seamless.assign(arg.begin(), arg.end());
         } else if(cmd == "--share-folder" && arg.size()) {
@@ -583,21 +585,21 @@ namespace LTSM {
                                      NS_FuncNameV, "share-folder", arg);
             }
         } else if(cmd == "--password" && arg.size()) {
-            rfbsec.passwdFile.assign(arg.begin(), arg.end());
+            rfbsec_.passwdFile.assign(arg.begin(), arg.end());
         } else if(cmd == "--password-file" && arg.size()) {
             passfile.assign(arg.begin(), arg.end());
         } else if(cmd == "--username" && arg.size()) {
             username.assign(arg.begin(), arg.end());
         } else if(cmd == "--port" && arg.size()) {
             try {
-                port = std::stoi(view2string(arg));
+                port_ = std::stoi(view2string(arg));
             } catch(const std::invalid_argument &) {
                 std::cerr << "invalid port" << std::endl;
-                port = 5900;
+                port_ = 5900;
             }
-            if(0 > port || 0xFFFF < port) {
-                Application::warning("{}: invalid port: {}", NS_FuncNameV, port);
-                port = 5900;
+            if(0 > port_ || 0xFFFF < port_) {
+                Application::warning("{}: invalid port: {}", NS_FuncNameV, port_);
+                port_ = 5900;
             }
 
         } else if(cmd == "--fps" && arg.size()) {
@@ -638,21 +640,15 @@ namespace LTSM {
                 Application::warning("{}: invalid geometry: {}x{}", NS_FuncNameV, primarySize.width, primarySize.height);
                 primarySize.reset();
             }
-        }
-
-#ifdef LTSM_WITH_GNUTLS
-        else if(cmd == "--tls-priority" && arg.size()) {
-            rfbsec.tlsPriority.assign(arg.begin(), arg.end());
+        } else if(cmd == "--tls-priority" && arg.size()) {
+            rfbsec_.tlsPriority.assign(arg.begin(), arg.end());
         } else if(cmd == "--tls-ca-file" && arg.size()) {
-            rfbsec.caFile.assign(arg.begin(), arg.end());
+            rfbsec_.caFile.assign(arg.begin(), arg.end());
         } else if(cmd == "--tls-cert-file" && arg.size()) {
-            rfbsec.certFile.assign(arg.begin(), arg.end());
+            rfbsec_.certFile.assign(arg.begin(), arg.end());
         } else if(cmd == "--tls-key-file" && arg.size()) {
-            rfbsec.keyFile.assign(arg.begin(), arg.end());
-        }
-
-#endif
-        else if(cmd == "--load") {
+            rfbsec_.keyFile.assign(arg.begin(), arg.end());
+        } else if(cmd == "--load") {
             // skip exception
         } else if(cmd == "--save") {
             // skip exception
@@ -661,19 +657,19 @@ namespace LTSM {
         }
     }
 
-    bool Vnc2SDL::windowFullScreen(void) const {
+    bool ClientApp::windowFullScreen(void) const {
         return windowFlags & SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
 
-    bool Vnc2SDL::windowResizable(void) const {
+    bool ClientApp::windowResizable(void) const {
         return windowFlags & SDL_WINDOW_RESIZABLE;
     }
 
-    bool Vnc2SDL::isAlwaysRunning(void) const {
+    bool ClientApp::isAlwaysRunning(void) const {
         return alwaysRunning;
     }
 
-    const char* Vnc2SDL::pkcs11Library(void) const {
+    const char* ClientApp::pkcs11Library(void) const {
 #ifdef LTSM_PKCS11_AUTH
         return pkcs11Auth.c_str();
 #else
@@ -681,246 +677,244 @@ namespace LTSM {
 #endif
     }
 
-    int Vnc2SDL::start(void) {
-        auto ipaddr = TCPSocket::resolvHostname(host);
-        int sockfd = TCPSocket::connect(ipaddr, port);
-
-        if(0 > sockfd) {
-            return -1;
+    void ClientApp::updateSecurity(void) {
+        if(pkcs11Auth.size() && rfbsec_.passwdFile.size() && username.size()) {
+            pkcs11Auth.clear();
         }
 
-        if(rfbsec.passwdFile.empty()) {
+        if(rfbsec_.passwdFile.empty()) {
             if(auto env = std::getenv("LTSM_PASSWORD")) {
-                rfbsec.passwdFile.assign(env);
+                rfbsec_.passwdFile.assign(env);
             }
 
             if(passfile == "-" || Tools::lower(passfile) == "stdin") {
-                std::getline(std::cin, rfbsec.passwdFile);
+                std::getline(std::cin, rfbsec_.passwdFile);
             } else if(std::filesystem::is_regular_file(passfile)) {
                 std::ifstream ifs(passfile);
 
                 if(ifs) {
-                    std::getline(ifs, rfbsec.passwdFile);
+                    std::getline(ifs, rfbsec_.passwdFile);
                 }
             }
         }
 
-        RFB::ClientDecoder::setSocketStreamMode(sockfd);
-        rfbsec.authVnc = ! rfbsec.passwdFile.empty();
-        rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
+        rfbsec_.authVnc = ! rfbsec_.passwdFile.empty();
+        rfbsec_.tlsAnonMode = rfbsec_.keyFile.empty();
 
-        if(rfbsec.authKrb5 && rfbsec.krb5Service.empty()) {
+        if(rfbsec_.authKrb5 && rfbsec_.krb5Service.empty()) {
             Application::warning("{}: kerberos remote service empty", NS_FuncNameV);
-            rfbsec.authKrb5 = false;
+            rfbsec_.authKrb5 = false;
         }
 
-        if(rfbsec.authKrb5 && rfbsec.krb5Name.empty()) {
+        if(rfbsec_.authKrb5 && rfbsec_.krb5Name.empty()) {
             if(username.empty()) {
                 if(auto env = std::getenv("USER")) {
-                    rfbsec.krb5Name.assign(env);
+                    rfbsec_.krb5Name.assign(env);
                 } else if(auto env = std::getenv("USERNAME")) {
-                    rfbsec.krb5Name.assign(env);
+                    rfbsec_.krb5Name.assign(env);
                 }
             } else {
-                rfbsec.krb5Name.assign(username);
+                rfbsec_.krb5Name.assign(username);
             }
         }
 
-        if(rfbsec.authKrb5) {
+        if(rfbsec_.authKrb5) {
             // fixed service format: SERVICE@hostname
-            if(std::string::npos == rfbsec.krb5Service.find("@")) {
-                rfbsec.krb5Service.append("@").append(host);
+            if(std::string::npos == rfbsec_.krb5Service.find("@")) {
+                rfbsec_.krb5Service.append("@").append(host_);
             }
 
-            Application::info("{}: kerberos remote service: {}", NS_FuncNameV,
-                              rfbsec.krb5Service);
-            Application::info("{}: kerberos local name: {}", NS_FuncNameV,
-                              rfbsec.krb5Name);
+            Application::debug(DebugType::Gss, "{}: used kerberos, remote service: {}, local name: {}",
+                                NS_FuncNameV, rfbsec_.krb5Service, rfbsec_.krb5Name);
         }
+    }
 
-        // connected
-        if(! rfbHandshake(rfbsec)) {
-            return -1;
+    asio::awaitable<void> ClientApp::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
         }
+    }
 
-        // rfb thread: process rfb messages
-        auto thrfb = std::thread([this]() {
-            this->rfbMessagesLoop();
-        });
+    asio::awaitable<void> ClientApp::sdlEventsLoop(void) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
 
-        // xcb thread: wait xkb event
-        auto thxcb = std::thread([this]() {
-            while(this->rfbMessagesRunning()) {
-#ifdef __UNIX__
+        try {
+            for(;;) {
+                bool events = co_await sdlEventProcessing();
 
-                if(auto err = XCB::RootDisplay::hasError()) {
-                    Application::warning("{}: x11 error: {}", NS_FuncNameV, err);
-                    this->rfbMessagesShutdown();
-                    break;
+                if(events) {
+                    std::this_thread::yield();
+                    continue;
                 }
 
-                if(auto ev = XCB::RootDisplay::pollEvent()) {
+                timer.expires_after(10ms);
+                co_await timer.async_wait(asio::use_awaitable);
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        }
+    }
+
+    void ClientApp::stop(void) {
+        this->rfbMessagesShutdown();
+
+        rfb_cancel_.emit(asio::cancellation_type::terminal);
+        sdl_cancel_.emit(asio::cancellation_type::terminal);
+#ifdef __UNIX__
+        x11_cancel_.emit(asio::cancellation_type::terminal);
+#endif
+        signals_.cancel();
+        sdl_guard_.reset();
+
+        Application::debug(DebugType::App, "{}: client stopped", NS_FuncNameV);
+    }
+
+#ifdef __UNIX__
+    asio::awaitable<void> ClientApp::x11EventsLoop(void) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
+
+        try {
+            for(;;) {
+                if(auto err = XCB::RootDisplay::hasError()) {
+                    Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                    throw system::system_error(asio::error::operation_aborted);
+                }
+
+                co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+
+                while(auto ev = XCB::RootDisplay::pollEvent()) {
                     if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
                         uint16_t opcode = 0;
-
                         if(extXkb->isEventError(ev, & opcode)) {
                             Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "xkb", opcode);
                         }
                     }
                 }
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        }
 
+        sd.release();
+    }
 #endif
 
-                std::this_thread::sleep_for(50ms);
-            }
-        });
+    int ClientApp::start(void) {
 
-        if(isContinueUpdatesSupport()) {
-            sendContinuousUpdates(true, { XCB::Point(0, 0), windowSize });
-        }
-
-        // main thread: sdl processing
-        //        auto clipboardDelay = std::chrono::steady_clock::now();
-        //        std::thread thclip;
-
-        while(true) {
-            if(! rfbMessagesRunning()) {
-                break;
-            }
-
-            if(! dropFiles.empty() &&
-               std::chrono::steady_clock::now() - dropStart > 700ms) {
-                ChannelClient::sendSystemTransferFiles(dropFiles);
-                dropFiles.clear();
-            }
-
-            /*
-                        // send clipboard
-                        if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
-                                ! focusLost && SDL_HasClipboardText())
-                        {
-                            if(thclip.joinable())
-                            {
-                                thclip.join();
-                            }
-                            else
-                            {
-                                thclip = std::thread([this]() mutable
-                                {
-                                    if(auto ptr = SDL_GetClipboardText())
-                                    {
-                                        const std::scoped_lock guard{ this->clipboardLock };
-                                        auto clipboardBufSdl = RawPtr<uint8_t>(reinterpret_cast<uint8_t*>(ptr),
-                                                                               SDL_strlen(ptr));
-
-                                        if(clipboardBufRemote != clipboardBufSdl &&
-                                                clipboardBufLocal != clipboardBufSdl)
-                                        {
-                                            clipboardBufLocal = clipboardBufSdl;
-                                            this->sendCutTextEvent(clipboardBufSdl.data(), clipboardBufSdl.size(), false);
-                                        }
-
-                                        SDL_free(ptr);
-                                    }
-                                });
-                            }
-
-                            clipboardDelay = std::chrono::steady_clock::now();
-                        }
-            */
-            if(needUpdate && sfback) {
-                const std::scoped_lock guard{ renderLock };
-                SDL_Texture* tx = SDL_CreateTextureFromSurface(window->render(), sfback.get());
-
-                if(! tx) {
-                    Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                       "SDL_CreateTextureFromSurface", SDL_GetError());
-                    throw sdl_error(NS_FuncNameS);
+        asio::co_spawn(rfb_strand(), [this]() -> asio::awaitable<void> {
+            // remote connect
+            try {
+                co_await rfbHostConnectAwait(host_, port_, socketNoDelay);
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbHostConnectAwait", ec.message(), ec.value());
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 }
-
-                window->renderReset();
-
-                if(0 != SDL_RenderCopy(window->render(), tx, nullptr, nullptr)) {
-                    Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_RenderCopy",
-                                       SDL_GetError());
-                    throw sdl_error(NS_FuncNameS);
-                }
-
-                SDL_RenderPresent(window->render());
-                SDL_DestroyTexture(tx);
-                needUpdate = false;
+                co_return;
             }
 
-            if(! sdlEventProcessing()) {
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
-        }
-
-        rfbMessagesShutdown();
-
-        /*
-                if(thclip.joinable())
-                {
-                    thclip.join();
+            // rfb handshake
+            try {
+                bool handshake = co_await rfbHandshakeAwait(rfbsec_);
+                if(! handshake) {
+                    co_return;
                 }
-        */
-        if(thrfb.joinable()) {
-            thrfb.join();
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "rfbHandshakeAwait", ec.message(), ec.value());
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                }
+                co_return;
+            }
+
+            if(! window_) {
+                co_return;
+            }
+
+            asio::co_spawn(ioc(), signalsHandler(), asio::detached);
+
+            // rfb messages loop
+            try {
+                co_await rfbMessagesLoopAwait();
+            } catch(const system::system_error& err) {
+                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                }
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "start", err.what());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                co_return;
+            }
+        }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
+
+        for(auto it = 0; it < concurency(); ++it) {
+            asio::post(thread_pool_, [this](){ ioc().run(); });
         }
 
-        if(thxcb.joinable()) {
-            thxcb.join();
-        }
+        Application::info("{}: client starting", NS_FuncNameV);
 
-        return 0;
+        sdl_ctx_.run();
+        thread_pool_.join();
+
+        return EXIT_SUCCESS;
     }
 
-    bool Vnc2SDL::sdlMouseEvent(const SDL::GenericEvent & ev) {
-        // left 0x01, middle 0x02, right 0x04, scrollUp: 0x08,
-        // scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
-        switch(ev.type()) {
-            case SDL_MOUSEMOTION:
-                if(auto me = ev.motion()) {
-                    sendPointerEvent(0xFF & me->state, me->x, me->y);
-                    return true;
-                }
+    asio::awaitable<void> ClientApp::sdlMouseMotion(SDL_Event && ev) {
+        const auto & me = ev.motion;
+        co_spawn(rfb_strand(), sendPointerEventAwait(0xFF & me.state, me.x, me.y), asio::detached);
+        co_return;
+    }
 
-                break;
+    asio::awaitable<void> ClientApp::sdlMouseButton(SDL_Event && ev) {
+        const auto & be = ev.button;
+        const uint8_t buttons = ev.type == SDL_MOUSEBUTTONDOWN ? SDL_BUTTON(be.button) : 0;
+        co_spawn(rfb_strand(), sendPointerEventAwait(buttons, be.x, be.y), asio::detached);
+        co_return;
+    }
 
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-                if(auto be = ev.button()) {
-                    sendPointerEvent(ev.type() == SDL_MOUSEBUTTONDOWN ? SDL_BUTTON(be->button) : 0, be->x, be->y);
-                    return true;
-                }
+    asio::awaitable<void> ClientApp::sdlMouseWheel(SDL_Event && ev) {
+        const auto & we = ev.wheel;
 
-                break;
-
-            case SDL_MOUSEWHEEL:
-
-                // scroll up
-                if(auto we = ev.wheel()) {
-                    if(0 == we->y) {
-                        return false;
-                    }
-
-                    int mouseX, mouseY;
-                    [[maybe_unused]] auto state = SDL_GetMouseState(& mouseX, & mouseY);
-
-                    // press/release up/down
-                    sendPointerEvent(SDL_BUTTON(0 < we->y ? SDL_BUTTON_X1 : SDL_BUTTON_X2), mouseX, mouseY);
-
-                    SDL_GetMouseState(& mouseX, & mouseY);
-                    sendPointerEvent(0, mouseX, mouseY);
-                    return true;
-                }
-
-            default:
-                break;
+        if(0 == we.y) {
+            co_return;
         }
 
-        return false;
+        int mouseX, mouseY;
+        [[maybe_unused]] auto state = SDL_GetMouseState(& mouseX, & mouseY);
+
+        // press/release up/down
+        const uint8_t buttons = SDL_BUTTON(0 < we.y ? SDL_BUTTON_X1 : SDL_BUTTON_X2);
+        co_spawn(rfb_strand(), sendPointerEventAwait(buttons, mouseX, mouseY), asio::detached);
+        co_spawn(rfb_strand(), sendPointerEventAwait(0, mouseX, mouseY), asio::detached);
     }
 
     const char* sdlWindowEventName(uint8_t id) {
@@ -992,209 +986,204 @@ namespace LTSM {
         return "unknown";
     }
 
-    bool Vnc2SDL::sdlWindowEvent(const SDL::GenericEvent & ev) {
-        if(auto we = ev.window()) {
-            Application::debug(DebugType::App, "{}: window event: {}", NS_FuncNameV, sdlWindowEventName(we->event));
-
-            switch(we->event) {
-                case SDL_WINDOWEVENT_EXPOSED:
-                    window->renderPresent(false);
-                    return true;
-
-                case SDL_WINDOWEVENT_FOCUS_GAINED:
-                    focusLost = false;
-                    return true;
-
-                case SDL_WINDOWEVENT_FOCUS_LOST:
-                    focusLost = true;
-                    return true;
-
-                case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    Application::debug(DebugType::App, "{}: size changed: [{}, {}]",
-                                       NS_FuncNameV, we->data1, we->data2);
-                    return true;
-
-                case SDL_WINDOWEVENT_RESIZED:
-                    Application::debug(DebugType::App, "{}: event resized: [{}, {}]",
-                                       NS_FuncNameV, we->data1, we->data2);
-                    windowResizedEvent(we->data1, we->data2);
-                    return true;
-
-                default:
-                    break;
-            }
+    asio::awaitable<void> ClientApp::windowResizedEvent(const XCB::Size & wsz) {
+        auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
+        // skip: starting window resized
+        if(time.count() > 3) {
+            windowSize_ = wsz;
+            co_spawn(rfb_strand(), sendSetDesktopSizeAwait(wsz), asio::detached);
+            co_spawn(rfb_strand(), sendFrameBufferUpdateAwait(false), asio::detached);
         }
-
-        return false;
+        co_return;
     }
 
-    bool Vnc2SDL::sdlKeyboardEvent(const SDL::GenericEvent & ev) {
-        if(auto ke = ev.key()) {
-            // pressed
-            if(ke->state == SDL_PRESSED) {
-                Application::debug(DebugType::App, "{}: SDL Keysym - scancode: {:#010x}, keycode: {:#010x}",
-                                   NS_FuncNameV, static_cast<int>(ke->keysym.scancode), ke->keysym.sym);
+    asio::awaitable<void> ClientApp::sdlWindowEvent(SDL_Event && ev) {
+        const auto & we = ev.window;
+        Application::debug(DebugType::App, "{}: window event: {}", NS_FuncNameV, sdlWindowEventName(we.event));
 
-                // ctrl + F10 -> fast close
-                if(ke->keysym.sym == SDLK_F10 &&
-                   (KMOD_CTRL & SDL_GetModState())) {
-                    Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F10", "close application");
-                    return sdlQuitEvent();
+        switch(we.event) {
+            case SDL_WINDOWEVENT_EXPOSED:
+                window_->renderPresent();
+                break;
+
+            case SDL_WINDOWEVENT_FOCUS_GAINED:
+                focusLost = false;
+                break;
+
+            case SDL_WINDOWEVENT_FOCUS_LOST:
+                focusLost = true;
+                break;
+
+            case SDL_WINDOWEVENT_SIZE_CHANGED:
+                Application::debug(DebugType::App, "{}: size changed: [{}, {}]",
+                                   NS_FuncNameV, we.data1, we.data2);
+                break;
+
+            case SDL_WINDOWEVENT_RESIZED:
+                Application::debug(DebugType::App, "{}: event resized: [{}, {}]",
+                                   NS_FuncNameV, we.data1, we.data2);
+                co_await windowResizedEvent(XCB::Size(we.data1, we.data2));
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    asio::awaitable<void> ClientApp::sdlKeyboardEvent(SDL_Event && ev) {
+        const auto & ke = ev.key;
+
+        // pressed
+        if(ke.state == SDL_PRESSED) {
+            Application::debug(DebugType::App, "{}: SDL Keysym - scancode: {:#010x}, keycode: {:#010x}",
+                               NS_FuncNameV, static_cast<int>(ke.keysym.scancode), ke.keysym.sym);
+
+            // ctrl + F10 -> fast close
+            if(ke.keysym.sym == SDLK_F10 &&
+               (KMOD_CTRL & SDL_GetModState())) {
+                Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F10", "close application");
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                co_return;
+            }
+
+            // ctrl + F11 -> fullscreen toggle
+            if(ke.keysym.sym == SDLK_F11 &&
+               (KMOD_CTRL & SDL_GetModState())) {
+                Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F11", "fullscreen toggle");
+
+                if(windowFullScreen()) {
+                    windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
+                    window_->setFullScreen(false);
+                } else {
+                    window_->setFullScreen(true);
+                    windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
                 }
 
-                // ctrl + F11 -> fullscreen toggle
-                if(ke->keysym.sym == SDLK_F11 &&
-                   (KMOD_CTRL & SDL_GetModState())) {
-                    Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F11", "fullscreen toggle");
-
-                    if(windowFullScreen()) {
-                        SDL_SetWindowFullscreen(window->get(), 0);
-                        windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
-                    } else {
-                        SDL_SetWindowFullscreen(window->get(), SDL_WINDOW_FULLSCREEN);
-                        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-                    }
-
-                    return true;
-                }
-
-                // key press delay 200 ms
-                if(std::chrono::steady_clock::now() - keyPress < 200ms) {
-                    keyPress = std::chrono::steady_clock::now();
-                    return true;
-                }
+                co_return;
             }
-
-            // continue, released
-            if(ke->keysym.sym == 0x40000000 && ! capslockEnable) {
-                auto mod = SDL_GetModState();
-                SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
-                Application::debug(DebugType::App, "{}: CAPS reset", NS_FuncNameV);
-                return true;
-            }
-
-            if(20250808 <= remoteLtsmVersion()) {
-                sendSystemKeyboardEvent(ev.type() == SDL_KEYDOWN, ke->keysym.scancode, ke->keysym.sym);
-                return true;
-            }
-
-#ifdef __UNIX__
-            int xksym = SDL::Window::convertScanCodeToKeySym(ke->keysym.scancode);
-
-            if(xksym == 0) {
-                xksym = ke->keysym.sym;
-            }
-
-            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb) {
-                int group = extXkb->getLayoutGroup();
-                auto keycodeGroup = keysymToKeycodeGroup(xksym);
-
-                if(group != keycodeGroup.second) {
-                    xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
-                }
-            }
-
-#else
-            int xksym = ke->keysym.sym;
-#endif
-            sendKeyEvent(ke->state == SDL_PRESSED, xksym);
-            return true;
         }
 
-        return false;
+        if(ke.keysym.sym == 0x40000000 && ! capslockEnable) {
+            auto mod = SDL_GetModState();
+            SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
+            Application::debug(DebugType::App, "{}: CAPS reset", NS_FuncNameV);
+            co_return;
+        }
+
+        // sizeof(ke.keysym.scancode) = 4, sizeof(ke.keysym.sym) = 4
+        const bool pressed = ke.state == SDL_PRESSED;
+
+        co_spawn(rfb_strand(), sendKeyEventAwait(pressed, ke.keysym.sym, ke.keysym.scancode), asio::detached);
+        co_return;
     }
 
     enum LocalEvent { Resize = 776, ResizeCont = 777 };
 
-    bool Vnc2SDL::sdlUserEvent(const SDL::GenericEvent & ev) {
-        if(auto ue = ev.user()) {
-            // resize event
-            if(ue->code == LocalEvent::Resize ||
-               ue->code == LocalEvent::ResizeCont) {
-                uint16_t width = (ptrdiff_t) ue->data1;
-                uint16_t height = (ptrdiff_t) ue->data2;
-                bool contUpdateResume = ue->code == LocalEvent::ResizeCont;
+    asio::awaitable<void> ClientApp::sdlUserEvent(SDL_Event && ev) {
 
-                cursors.clear();
+        const auto & ue = ev.user;
+        // resize event
+        if(ue.code == LocalEvent::Resize ||
+           ue.code == LocalEvent::ResizeCont) {
+            const XCB::Size windowSz((ptrdiff_t) ue.data1, (ptrdiff_t) ue.data2);
+            bool contUpdateResume = ue.code == LocalEvent::ResizeCont;
+            cursors.clear();
 
-                if(windowFullScreen()) {
-                    window = std::make_unique<SDL::Window>(windowTitle, width, height, 0, 0, windowFlags, windowAccel);
-                } else {
-                    window->resize(width, height);
-                }
-
-                auto pair = window->geometry();
-                windowSize = XCB::Size(pair.first, pair.second);
-                displayResizeEvent(windowSize);
-                // full update
-                sendFrameBufferUpdate(false);
-
-                if(contUpdateResume) {
-                    sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
-                }
-
-                return true;
+            try {
+                window_->resize(windowSz);
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                co_return;
             }
-        }
 
-        return false;
+            // get real size
+            windowSize_ = window_->geometry();
+            co_spawn(rfb_strand(), [this, contUpdateResume, wsz=windowSize_]() -> asio::awaitable<void> {
+                displayResizeEvent(wsz);
+                // full update
+                co_await sendFrameBufferUpdateAwait(false);
+                if(contUpdateResume) {
+                    co_await sendContinuousUpdatesAwait(true, {0, 0, wsz.width, wsz.height});
+                }
+            }, asio::detached);
+        }
+        co_return;
     }
 
-    bool Vnc2SDL::sdlDropFileEvent(const SDL::GenericEvent & ev) {
-        if(auto de = ev.drop()) {
-            std::unique_ptr<char, void(*)(void*)> drop{ de->file, SDL_free };
-            dropFiles.emplace_front(drop.get());
-            dropStart = std::chrono::steady_clock::now();
-            return true;
-        }
+    asio::awaitable<void> ClientApp::sdlDropCompleteEvent(SDL_Event && ev) {
+        if(! dropFiles.empty()) {
+            co_spawn(rfb_strand(), [this, files=std::move(dropFiles)]() mutable -> asio::awaitable<void> {
+                sendSystemTransferFiles(std::move(files));
+                co_return;
+            }, asio::detached);
 
-        return false;
+            dropFiles.clear();
+        }
+        co_return;
     }
 
-    bool Vnc2SDL::sdlQuitEvent(void) {
-        RFB::ClientDecoder::rfbMessagesShutdown();
-        return true;
-    }
+    asio::awaitable<bool> ClientApp::sdlEventProcessing(void) {
+        SDL_Event ev;
 
-    bool Vnc2SDL::sdlEventProcessing(void) {
-        const std::scoped_lock guard{ renderLock };
-
-        if(! SDL_PollEvent(& sdlEvent)) {
-            return false;
+        if(! SDL_PollEvent(& ev)) {
+            co_return false;
         }
 
-        const SDL::GenericEvent ev(& sdlEvent);
+        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
 
-        switch(ev.type()) {
+        switch(ev.type) {
             case SDL_MOUSEMOTION:
+                co_await sdlMouseMotion(std::move(ev));
+                break;
+
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
+                co_await sdlMouseButton(std::move(ev));
+                break;
+
             case SDL_MOUSEWHEEL:
-                return sdlMouseEvent(ev);
+                co_await sdlMouseWheel(std::move(ev));
+                break;
 
             case SDL_WINDOWEVENT:
-                return sdlWindowEvent(ev);
+                co_await sdlWindowEvent(std::move(ev));
+                break;
 
             case SDL_KEYDOWN:
             case SDL_KEYUP:
-                return sdlKeyboardEvent(ev);
+                co_await sdlKeyboardEvent(std::move(ev));
+                break;
 
             case SDL_DROPFILE:
-                return sdlDropFileEvent(ev);
+                if(ev.drop.file) {
+                    dropFiles.emplace_front(ev.drop.file);
+                    SDL_free(ev.drop.file);
+                }
+                break;
+
+            case SDL_DROPCOMPLETE:
+                co_await sdlDropCompleteEvent(std::move(ev));
+                break;
 
             case SDL_USEREVENT:
-                return sdlUserEvent(ev);
+                co_await sdlUserEvent(std::move(ev));
+                break;
 
             case SDL_QUIT:
-                return sdlQuitEvent();
+                Application::debug(DebugType::App, "{}: {}", NS_FuncNameV, "SDL_QUIT");
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                break;
+
+            default:
+                co_return false;
         }
 
-        return false;
+        co_return true;
     }
 
-    bool Vnc2SDL::pushEventWindowResize(const XCB::Size & nsz) {
+    bool ClientApp::pushEventWindowResize(const XCB::Size & nsz) {
 
-        if(windowSize == nsz) {
+        if(windowSize_ == nsz) {
             Application::warning("{}: the window has the same size: {}", NS_FuncNameV, nsz);
             return true;
         }
@@ -1204,7 +1193,7 @@ namespace LTSM {
         bool contUpdateResume = false;
 
         if(isContinueUpdatesProcessed()) {
-            sendContinuousUpdates(false, XCB::Region{0, 0, windowSize.width, windowSize.height});
+            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(false, XCB::Region{0, 0, windowSize_.width, windowSize_.height}), asio::detached);
             contUpdateResume = true;
         }
 
@@ -1225,9 +1214,8 @@ namespace LTSM {
         return true;
     }
 
-    void Vnc2SDL::clientRecvDecodingDesktopSizeEvent(int status, int err,
+    void ClientApp::clientRecvDecodingDesktopSizeEvent(int status, int err,
             const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens) {
-        needUpdate = false;
 
         Application::debug(DebugType::App, "{}: status: {}, error: {}, size:: {}",
                             NS_FuncNameV, status, err, nsz);
@@ -1239,10 +1227,10 @@ namespace LTSM {
                 serverExtDesktopSizeNego = true;
 
                 Application::debug(DebugType::App, "{}: nego part, primary: {}, window: {}",
-                            NS_FuncNameV, primarySize, windowSize);
+                            NS_FuncNameV, primarySize, windowSize_);
 
-                if(! primarySize.isEmpty() && primarySize != windowSize) {
-                    sendSetDesktopSize(primarySize);
+                if(! primarySize.isEmpty() && primarySize != windowSize_) {
+                    asio::co_spawn(rfb_strand(), sendSetDesktopSizeAwait(primarySize), asio::detached);
                 }
             } else {
                 // server runtime
@@ -1267,180 +1255,162 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::clientRecvFBUpdateEvent(void) {
-        if(! needUpdate) {
-            needUpdate = true;
+    void ClientApp::clientRecvPixelFormatEvent(const PixelFormat & serverPf, const XCB::Size & serverWindowSz) {
+        Application::info("{}: size: {}", NS_FuncNameV, serverWindowSz);
+
+        if( ! window_) {
+            // sdl init window
+            try {
+                auto res = asio::co_spawn(sdl_strand_, sdlWindowInit(serverWindowSz), asio::use_future);
+
+                if(sdl_strand_.running_in_this_thread()) {
+                    // future: skip deadlock
+                    while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                        sdl_ctx_.run_one();
+                    }
+                }
+
+                if(bool sdl_init = res.get(); !sdl_init) {
+                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
+                }
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "start", err.what());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            }
+
+#ifdef __UNIX__
+            asio::co_spawn(x11_strand(), x11EventsLoop(),
+                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
+#endif
+            if(isContinueUpdatesSupport()) {
+                asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() }), asio::detached);
+            }
         }
     }
 
-    void Vnc2SDL::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
-        Application::info("{}: size: {}", NS_FuncNameV, wsz);
-        const std::scoped_lock guard{ renderLock };
-        bool eventResize = false;
-
-        if(! window) {
-            window = std::make_unique<SDL::Window>(windowTitle, wsz.width, wsz.height, 0, 0, windowFlags, windowAccel);
-            eventResize = true;
-        }
+    asio::awaitable<bool> ClientApp::sdlWindowInit(const XCB::Size & wsz) {
+        co_await asio::dispatch(sdl_ctx_, asio::use_awaitable);
 
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
 
-        if(SDL_TRUE != SDL_PixelFormatEnumToMasks(window->pixelFormat(), &bpp, &rmask,
+        window_ = std::make_unique<SDL::Window>(windowTitle, wsz, wsz, windowFlags, windowAccel);
+        Application::debug(DebugType::Sdl, "{}: {} success", NS_FuncNameV, "SDL_Window");
+
+        if(SDL_TRUE != SDL_PixelFormatEnumToMasks(window_->pixelFormat(), &bpp, &rmask,
                 &gmask, &bmask, &amask)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV,
                                "SDL_PixelFormatEnumToMasks", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
+            co_return false;
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
+        windowSize_ = window_->geometry();
 
-        if(eventResize) {
-            auto pair = window->geometry();
-            windowSize = XCB::Size(pair.first, pair.second);
-            displayResizeEvent(windowSize);
-        }
+        // start sdl loop
+        asio::co_spawn(sdl_strand_, sdlEventsLoop(),
+                    asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
+
+        asio::dispatch(rfb_strand(), std::bind(&ClientApp::displayResizeEvent, this, windowSize_));
+        co_return true;
     }
 
-    void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel) {
+    void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) const {
         fillPixel({dst, XCB::Size{1, 1}}, pixel);
     }
 
-    void Vnc2SDL::fillPixel(const XCB::Region & dst, uint32_t pixel) {
-        const std::scoped_lock guard{ renderLock };
+    void ClientApp::fillPixel(const XCB::Region & wrt, uint32_t pixel) const {
+        if(wrt.isEmpty()) {
+            return;
+        }
 
-        if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height) {
-            sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
-                                              clientPf.bitsPerPixel(),
-                                              clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
+        // move to strand
+        asio::dispatch(sdl_strand_, [this, wrt, pixel](){
+            auto col = clientPf.color(pixel);
+            auto dstrt = SDL_Rect{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
+            auto dstcol = SDL_Color{ .r = col.r, .g = col.g, .b = col.b, .a = 255 };
+            window_->renderColor(&dstcol, &dstrt);
+        });
+    }
 
-            if(! sfback) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                   "SDL_CreateSurface", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
+    void ClientApp::updateRawPixels(const XCB::Region & wrt, std::vector<uint8_t>&& buf,
+                                  uint32_t pitch, const PixelFormat & pf) const {
+        if(wrt.isEmpty()) {
+            return;
+        }
+
+        if(buf.size() < pitch * wrt.height) {
+            Application::error("{}: invalid buffer, size: {}, pitch: {}, reg: {}", NS_FuncNameV, buf.size(), pitch, wrt);
+            return;
+        }
+
+        if(auto sdlFormat = pf.sdlPixelFormat(); sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
+            const bool optimal = SDL_PIXELLAYOUT(sdlFormat) == SDL_PIXELLAYOUT(window_->pixelFormat());
+
+            if(! optimal && clientPf.bitsPerPixel() == pf.bitsPerPixel()) {
+                Application::warning("{}: pixels not optimal, decoder: {}, local: {}",
+                    NS_FuncNameV, SDL_GetPixelFormatName(sdlFormat), SDL_GetPixelFormatName(window_->pixelFormat()));
             }
-        }
 
-        SDL_Rect dstrt{ .x = dst.x, .y = dst.y, .w = dst.width, .h = dst.height };
-        auto col = clientPf.color(pixel);
-        Uint32 color = SDL_MapRGB(sfback->format, col.r, col.g, col.b);
-
-        if(0 > SDL_FillRect(sfback.get(), &dstrt, color)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_FillRect",
-                               SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-    }
-
-    void Vnc2SDL::updateRawPixels(const XCB::Region & wrt, const void* data,
-                                  uint32_t pitch, const PixelFormat & pf) {
-        uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
-
-        if(sdlFormat != SDL_PIXELFORMAT_UNKNOWN) {
-            return updateRawPixels2(wrt, data, pf.bitsPerPixel(), pitch, sdlFormat);
-        }
-
-        // lock part
-        const std::scoped_lock guard{ renderLock };
-
-        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
-            SDL_CreateRGBSurfaceFrom((void*) data, wrt.width, wrt.height,
-                                     pf.bitsPerPixel(), pitch, pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()),
-            SDL_FreeSurface};
-
-        if(! sfframe) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                               "SDL_CreateRGBSurfaceFrom", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        updateRawPixels3(wrt, sfframe.get());
-    }
-
-    void Vnc2SDL::updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
-        // lock part
-        const std::scoped_lock guard{ renderLock };
-
-        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
-            SDL_CreateRGBSurfaceWithFormatFrom((void*) data, wrt.width, wrt.height,
-                                               depth, pitch, sdlFormat),
-            SDL_FreeSurface};
-
-        if(! sfframe) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                               "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
-        }
-
-        updateRawPixels3(wrt, sfframe.get());
-    }
-
-    void Vnc2SDL::updateRawPixels3(const XCB::Region & wrt, SDL_Surface* sfframe) {
-        if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height) {
-            sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
-                                              clientPf.bitsPerPixel(),
-                                              clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
-
-            if(! sfback) {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                   "SDL_CreateSurface", SDL_GetError());
-                throw sdl_error(NS_FuncNameS);
-            }
-        }
-
-        SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
-
-        if(0 > SDL_BlitSurface(sfframe, nullptr, sfback.get(), & dstrt)) {
-            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_BlitSurface",
-                               SDL_GetError());
-            throw sdl_error(NS_FuncNameS);
+            // move to strand
+            asio::dispatch(sdl_strand_, [this, wrt, buf = std::move(buf), pitch, sdlFormat, optimal](){
+                const SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
+                try {
+                    if(optimal) {
+                        window_->renderDisplayUpdateRaw(&dstrt, buf.data(), pitch);
+                    } else {
+                        auto tx = window_->createTexture(wrt.toSize(), SDL_TEXTUREACCESS_STATIC, sdlFormat);
+                        tx.updateRect(nullptr, buf.data(), pitch);
+                        window_->renderTexture(tx.get(), nullptr, nullptr, &dstrt);
+                    }
+                } catch(const std::exception& err) {
+                    Application::error("{}: {} failed, exception: {}", NS_FuncNameV, err.what());
+                }
+            });
+        } else {
+            Application::error("{}: {} failed, pixel format - bpp: {}, depth: {}, red({:#010x}), green({:#010x}), blue({:#010x}), alpha({:#010x})",
+                NS_FuncNameV, "SDL_MasksToPixelFormatEnum", pf.bitsPerPixel(), pf.depth(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
         }
     }
 
-    const PixelFormat & Vnc2SDL::clientFormat(void) const {
+    void ClientApp::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
+        // decoder job
+        boost::asio::post(ioc(), [this, job=std::move(func), buf1=std::move(buf), pitch, reg, pf]() {
+            decoder_jobs_.fetch_add(1, std::memory_order_relaxed);
+            updateRawPixels(reg, job(buf1, reg, pitch, pf), pitch, pf);
+            decoder_jobs_.fetch_sub(1, std::memory_order_release);
+        });
+    }
+
+    void ClientApp::waitDecoderJobs(void) const {
+        while(decoder_jobs_.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+    }
+
+    void ClientApp::clientRecvFBUpdateEvent(void) {
+        asio::dispatch(sdl_strand_, [this](){
+            window_->renderPresent();
+        });
+    }
+
+    const PixelFormat & ClientApp::clientFormat(void) const {
         return clientPf;
     }
 
-    XCB::Size Vnc2SDL::clientSize(void) const {
-        return windowSize;
+    XCB::Size ClientApp::clientSize(void) const {
+        return windowSize_;
     }
 
-    int Vnc2SDL::clientPrefferedVideoEncoding(void) const {
+    int ClientApp::clientPrefferedVideoEncoding(void) const {
         return videoEncoding;
     }
 
-    int Vnc2SDL::clientPrefferedAudioEncoding(void) const {
+    int ClientApp::clientPrefferedAudioEncoding(void) const {
         return audioEncoding;
     }
 
-    /*
-        void Vnc2SDL::clientRecvCutTextEvent(std::vector<uint8_t> && buf)
-        {
-            bool zeroInserted = false;
-
-            if(buf.back() != 0)
-            {
-                buf.push_back(0);
-                zeroInserted = true;
-            }
-
-            const std::scoped_lock guard{ clipboardLock };
-            clipboardBufRemote.swap(buf);
-
-            if(0 != SDL_SetClipboardText(reinterpret_cast<const char*>
-                                         (clipboardBufRemote.data())))
-            {
-                Application::error("{}: {} failed, error: {}", NS_FuncNameV,
-                                   "SDL_SetClipboardText", SDL_GetError());
-            }
-
-            if(zeroInserted)
-            {
-                clipboardBufRemote.pop_back();
-            }
-        }
-    */
-    void Vnc2SDL::clientRecvRichCursorEvent(const XCB::Region & reg,
+    void ClientApp::clientRecvRichCursorEvent(const XCB::Region & reg,
                                             std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {
         uint32_t key = Tools::crc32b(pixels);
         auto it = cursors.find(key);
@@ -1491,12 +1461,12 @@ namespace LTSM {
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void Vnc2SDL::clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) {
+    void ClientApp::clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) {
         auto it = cursors.find(cursorId);
 
         if(cursors.end() == it) {
             if(pixels.empty()) {
-                Application::error("{}: cursor not found, id: {:#010x}", NS_FuncNameV, cursorId);
+                Application::warning("{}: cursor not found, id: {:#010x}", NS_FuncNameV, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }
@@ -1554,31 +1524,35 @@ namespace LTSM {
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void Vnc2SDL::clientRecvLtsmHandshakeEvent(int flags) {
-        std::vector<std::string> names;
-        int group = 0;
-
+    void ClientApp::clientRecvLtsmHandshakeEvent(int flags) {
 #ifdef __UNIX__
-
-        if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
-            names = extXkb->getNames();
-            group = extXkb->getLayoutGroup();
-        }
-
-#endif
-        sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
+        asio::post(x11_strand(), [this]() {
+            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
+                // switch to rfb_strand
+                asio::post(rfb_strand(), [this, names=extXkb->getNames(), group=extXkb->getLayoutGroup()]() {
+                    sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), names,
                                   (0 <= group && group < names.size() ? names[group] : ""));
+                });
+            }
+        });
+#else
+        asio::post(rfb_strand(), [this]() {
+            sendSystemClientVariables(this->clientOptions(), this->clientEnvironments(), {}, "");
+        });
+#endif
     }
 
 #ifdef __UNIX__
-    void Vnc2SDL::xcbXkbGroupChangedEvent(int group) {
+    void ClientApp::xcbXkbGroupChangedEvent(int group) {
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb) {
-            sendSystemKeyboardChange(extXkb->getNames(), group);
+            asio::post(rfb_strand(), [this, names = extXkb->getNames(), group]() {
+                sendSystemKeyboardChange(names, group);
+            });
         }
     }
 #endif
 
-    json_plain Vnc2SDL::clientEnvironments(void) const {
+    json_plain ClientApp::clientEnvironments(void) const {
         JsonObjectStream jo;
 #ifdef __UNIX__
         // locale
@@ -1606,7 +1580,7 @@ namespace LTSM {
         return jo.flush();
     }
 
-    json_plain Vnc2SDL::clientOptions(void) const {
+    json_plain ClientApp::clientOptions(void) const {
         JsonArrayStream opts;
         opts.push(videoEncodingOptions);
         opts.push(audioEncodingOptions);
@@ -1625,7 +1599,7 @@ namespace LTSM {
         jo.push("hostname", "localhost");
         jo.push("ipaddr", "127.0.0.1");
         jo.push("platform", SDL_GetPlatform());
-        jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
+        jo.push("ltsm:client", LTSM_CLIENT_VERSION);
         jo.push("x11:nodamage", xcbNoDamage);
         jo.push("x11:dpi", xcbDpi);
         jo.push("enc:opts", opts.flush());
@@ -1644,12 +1618,12 @@ namespace LTSM {
             jo.push("username", username);
         }
 
-        if(! rfbsec.passwdFile.empty()) {
-            jo.push("password", rfbsec.passwdFile);
+        if(! rfbsec_.passwdFile.empty()) {
+            jo.push("password", rfbsec_.passwdFile);
         }
 
-        if(! rfbsec.certFile.empty()) {
-            jo.push("certificate", Tools::fileToString(rfbsec.certFile));
+        if(! rfbsec_.certFile.empty()) {
+            jo.push("certificate", Tools::fileToString(rfbsec_.certFile));
         }
 
         if(! printerUrl.empty()) {
@@ -1686,10 +1660,10 @@ namespace LTSM {
         return jo.flush();
     }
 
-    void Vnc2SDL::systemLoginSuccess(const JsonObject & jo) {
+    void ClientApp::systemLoginSuccess(const JsonObject & jo) {
         if(jo.getBoolean("action", false)) {
-            if(! primarySize.isEmpty() && primarySize != windowSize) {
-                sendSetDesktopSize(primarySize);
+            if(! primarySize.isEmpty() && primarySize != windowSize_) {
+                asio::co_spawn(rfb_strand(), sendSetDesktopSizeAwait(primarySize), asio::detached);
             }
         } else {
             auto error = jo.getString("error");
@@ -1698,13 +1672,13 @@ namespace LTSM {
         }
     }
 
-    void Vnc2SDL::clientRecvBellEvent(void) {
+    void ClientApp::clientRecvBellEvent(void) {
 #ifdef __UNIX__
         bell(75);
 #endif
     }
 
-    bool Vnc2SDL::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
+    bool ClientApp::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
                                      const Channel::ConnectorMode & mode) const {
         if(type == Channel::ConnectorType::Fuse) {
             if(std::ranges::none_of(shareFolders, [&](auto & val) { return val == content; })) {
@@ -1716,15 +1690,6 @@ namespace LTSM {
         return true;
     }
 
-    void Vnc2SDL::windowResizedEvent(int width, int height) {
-        auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
-        // skip: starting window resized
-        if(time.count() > 3) {
-            windowSize = XCB::Size(width, height);
-            sendSetDesktopSize(windowSize);
-            sendFrameBufferUpdate(false);
-        }
-    }
 }
 
 using namespace LTSM;
@@ -1787,15 +1752,18 @@ int main(int argc, const char** argv)
         return -1;
     }
 
+    // enable drop file
+    SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+
     bool programRestarting = true;
     int res = 0;
 
     while(programRestarting) {
         try {
 #ifdef __WIN32__
-            Vnc2SDL app(argc, (const char**) argv);
+            ClientApp app(argc, (const char**) argv);
 #else
-            Vnc2SDL app(argc, argv);
+            ClientApp app(argc, argv);
 #endif
 
             if(! app.isAlwaysRunning()) {

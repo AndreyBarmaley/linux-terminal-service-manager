@@ -147,7 +147,13 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
         throw std::underflow_error(NS_FuncNameS);
     }
 
-    protoVer = sb.readIntLE16();
+    auto protoVer = sb.readIntLE16();
+
+    if(protoVer != Pkcs11Op::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
+        throw channel_error(NS_FuncNameS);
+    }
+
     reply.reset();
     // reply format:
     // <CMD16> - cmd id
@@ -163,7 +169,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
         std::string error = err.what();
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
         return false;
     }
 
@@ -171,7 +177,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     // no errors
     reply.writeIntLE16(0);
     // proto ver
-    reply.writeIntLE16(1);
+    reply.writeIntLE16(Pkcs11Op::ProtoVer);
     // library info
     reply.writeInt8(info->cryptokiVersion.major);
     reply.writeInt8(info->cryptokiVersion.minor);
@@ -180,7 +186,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     reply.write(info->libraryDescription, 32);
     reply.writeInt8(info->libraryVersion.major);
     reply.writeInt8(info->libraryVersion.minor);
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -248,7 +254,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
         }
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -286,7 +292,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
         }
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -331,7 +337,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
         reply.write(rawValue.data(), rawValue.size());
     }
 
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -387,7 +393,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     auto sign = sess->signData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
     reply.write(sign.data(), sign.size());
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
 
@@ -443,6 +449,6 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     auto sign = sess->decryptData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
     reply.write(sign.data(), sign.size());
-    owner->sendLtsmChannelData(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }

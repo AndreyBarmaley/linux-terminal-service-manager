@@ -24,7 +24,7 @@
 #ifndef _LTSM_FUSE_
 #define _LTSM_FUSE_
 
-#define LTSM_SESSION_FUSE_VERSION 20250905
+#define LTSM_SESSION_FUSE_VERSION 20260401
 
 #include <stdexcept>
 
@@ -33,6 +33,8 @@
 namespace LTSM {
     namespace FuseOp {
         enum {
+            ProtoVer = 2,
+            //
             Init = 0xFF01,
             Quit = 0xFF02,
             GetAttr = 0xFF03,

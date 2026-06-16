@@ -24,6 +24,7 @@
 #ifndef _CHANNEL_SYSTEM_
 #define _CHANNEL_SYSTEM_
 
+#include <span>
 #include <list>
 #include <mutex>
 #include <atomic>
@@ -63,7 +64,6 @@ namespace LTSM {
         static const std::string_view ClientVariables{"ClientVariables"};
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
-        static const std::string_view KeyboardEvent{"KeyboardEvent"};
         static const std::string_view CursorFailed{"CursorFailed"};
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
@@ -140,7 +140,6 @@ namespace LTSM {
             std::chrono::milliseconds delay{100};
 
             std::vector<uint8_t> buf;
-            std::unique_ptr<ZLib::DeflateBase> zlib;
 
             size_t transfer1 = 0;
             size_t transfer2 = 0;
@@ -148,6 +147,7 @@ namespace LTSM {
 
             int error = 0;
             uint8_t id = 255;
+            bool zlib = false;
 
             bool sendData(void);
 
@@ -172,6 +172,10 @@ namespace LTSM {
 
             std::chrono::milliseconds getDelay(void) const {
                 return delay;
+            }
+
+            std::vector<uint8_t> & getBuf(void) {
+                return buf;
             }
 
             const std::vector<uint8_t> & getBuf(void) const {
@@ -201,13 +205,12 @@ namespace LTSM {
 
             std::chrono::milliseconds delay{100};
 
-            std::unique_ptr<ZLib::InflateBase> zlib;
-
             size_t transfer1 = 0;
             size_t transfer2 = 0;
 
             int error = 0;
             uint8_t id = 255;
+            bool zlib = false;
 
           protected:
             std::vector<uint8_t> popData(void);
@@ -391,7 +394,6 @@ namespace LTSM {
             std::forward_list<AudioFormat> formats;
             const AudioFormat* format = nullptr;
 
-            uint16_t audioVer = 0;
             uint8_t cid = 255;
 
             using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
@@ -424,23 +426,24 @@ namespace LTSM {
             std::vector<uint8_t> last;
 
           protected:
-            void pcscCommand(uint16_t cmd, const StreamBufRef & sb);
+            bool pcscOpInit(const StreamBufRef &);
+            void pcscLiteCommand(uint16_t cmd, const StreamBufRef & sb);
 
-            void pcscEstablishContext(const StreamBufRef &);
-            void pcscReleaseContext(const StreamBufRef &);
-            void pcscListReaders(const StreamBufRef &);
-            void pcscConnect(const StreamBufRef &);
-            void pcscReconnect(const StreamBufRef &);
-            void pcscDisconnect(const StreamBufRef &);
-            void pcscBeginTransaction(const StreamBufRef &);
-            void pcscEndTransaction(const StreamBufRef &);
-            void pcscTransmit(const StreamBufRef &);
-            void pcscStatus(const StreamBufRef &);
-            void pcscGetStatusChange(const StreamBufRef &);
-            void pcscControl(const StreamBufRef &);
-            void pcscCancel(const StreamBufRef &);
-            void pcscGetAttrib(const StreamBufRef &);
-            void pcscSetAttrib(const StreamBufRef &);
+            void pcscLiteEstablishContext(const StreamBufRef &);
+            void pcscLiteReleaseContext(const StreamBufRef &);
+            void pcscLiteListReaders(const StreamBufRef &);
+            void pcscLiteConnect(const StreamBufRef &);
+            void pcscLiteReconnect(const StreamBufRef &);
+            void pcscLiteDisconnect(const StreamBufRef &);
+            void pcscLiteBeginTransaction(const StreamBufRef &);
+            void pcscLiteEndTransaction(const StreamBufRef &);
+            void pcscLiteTransmit(const StreamBufRef &);
+            void pcscLiteStatus(const StreamBufRef &);
+            void pcscLiteGetStatusChange(const StreamBufRef &);
+            void pcscLiteControl(const StreamBufRef &);
+            void pcscLiteCancel(const StreamBufRef &);
+            void pcscLiteGetAttrib(const StreamBufRef &);
+            void pcscLiteSetAttrib(const StreamBufRef &);
 
           public:
             ConnectorClientPcsc(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
@@ -460,7 +463,6 @@ namespace LTSM {
             PKCS11::LibraryPtr pkcs11;
             std::vector<uint8_t> last;
 
-            uint16_t protoVer = 0;
             uint8_t cid = 255;
 
           protected:
@@ -568,10 +570,8 @@ namespace LTSM {
         Channel::Planned* findPlanned(uint8_t);
         bool channelPlannedCreate(uint8_t, const Channel::Planned &);
 
-        void recvLtsmProto(const NetworkStream &);
-        void sendLtsmProto(NetworkStream &, std::mutex &, uint8_t channel, const uint8_t*, size_t);
-
-        virtual void recvChannelSystem(const std::vector<uint8_t> &) = 0;
+        void recvLtsmProto(uint8_t channel, std::vector<uint8_t> &&);
+        virtual void recvChannelSystemEvent(const std::vector<uint8_t> &) = 0;
         void recvChannelData(uint8_t channel, std::vector<uint8_t> &&);
 
         virtual bool isUserSession(void) const {
@@ -583,7 +583,6 @@ namespace LTSM {
         virtual void systemClientVariables(const JsonObject &) { /* empty */ }
         virtual void systemCursorFailed(const JsonObject &) { /* empty */ }
         virtual void systemKeyboardChange(const JsonObject &) { /* empty */ }
-        virtual void systemKeyboardEvent(const JsonObject &) { /* empty */ }
         virtual void systemChannelError(const JsonObject &) { /* empty */ }
         virtual void systemTransferFiles(const JsonObject &) { /* empty */ }
         virtual void systemLoginSuccess(const JsonObject &) { /* empty */ }
@@ -621,14 +620,10 @@ namespace LTSM {
         ChannelClient() = default;
         virtual ~ChannelClient() = default;
 
-        void sendLtsmChannelData(uint8_t channel, std::string_view);
-        void sendLtsmChannelData(uint8_t channel, const std::vector<uint8_t> &);
-
         void sendSystemCursorFailed(int cursorId);
-        void sendSystemKeyboardEvent(bool pressed, int scancode, int keycode);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
-        bool sendSystemTransferFiles(std::forward_list<std::string>);
+        bool sendSystemTransferFiles(std::forward_list<std::string> &&);
         void sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode &, const Channel::Opts &);
         void sendSystemChannelClose(uint8_t channel);
         void sendSystemChannelConnected(uint8_t channel, int flags, bool noerror);
@@ -636,7 +631,9 @@ namespace LTSM {
 
         void recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
 
-        virtual void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) = 0;
+        virtual void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) = 0;
+        virtual void sendLtsmChannelData(uint8_t channel, std::string&&) = 0;
+
         virtual bool serverSide(void) const {
             return false;
         }

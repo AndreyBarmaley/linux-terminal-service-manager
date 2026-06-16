@@ -34,7 +34,6 @@
 #include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_pcsc_session.h"
-#include "ltsm_byte_streambuf.h"
 
 using namespace std::chrono_literals;
 using namespace boost;
@@ -177,7 +176,7 @@ namespace PcscLite {
 namespace LTSM {
     /// PcscRemote
     uint32_t PcscRemote::makeContext64(uint64_t remote) {
-        uint32_t context = Tools::crc32b((const uint8_t*) & remote, sizeof(remote));
+        uint32_t context = Tools::crc32b({(const uint8_t*) & remote, sizeof(remote)});
         context &= 0x7FFFFFFF;
         map_context_.emplace(context, remote);
         return context;
@@ -202,15 +201,70 @@ namespace LTSM {
         trans_lock_.unlock(id);
     }
 
-    asio::awaitable<bool> PcscRemote::handlerWaitConnect(const std::string & path) {
+    asio::awaitable<void> PcscRemote::retryConnect(const std::string & path, int attempts) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
+
+        for(int it = 1; it <= attempts; it++) {
+            try {
+                co_await socket().async_connect(path, asio::use_awaitable);
+                Application::debug(DebugType::Pcsc, "{}: connected, path: {}", NS_FuncNameV, path);
+                co_return;
+            } catch(const system::system_error& err) {
+                if(it == attempts) {
+                    Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
+                    throw system::system_error(asio::error::operation_aborted);
+                } else {
+            	    auto ec = err.code();
+                    Application::warning("{}: system error: {}", NS_FuncNameV, ec.message());
+                }
+            }
+
+            timer.expires_after(300ms);
+            co_await timer.async_wait(asio::use_awaitable);
+        }
+    }
+
+    asio::awaitable<void> PcscRemote::remoteHandshake(void) {
+        co_await send_lock_.async_lock();
+
         try {
-            co_await socket().async_connect(path, asio::use_awaitable);
-            connected_ = true;
-        } catch(const std::exception & ex) {
-            Application::error("{}: exception: {}", NS_FuncNameV, ex.what());
+            co_await async_send_values(
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::ProtoVer)));
+        } catch(const system::system_error& err) {
+            ec_ = err.code();
         }
 
-        co_return connected_;
+        uint16_t cmd, err;
+
+        co_await async_recv_values(cmd, err);
+        endian::little_to_native_inplace(cmd);
+        endian::little_to_native_inplace(err);
+
+        if(cmd != PcscOp::Init) {
+            send_lock_.unlock();
+            Application::error("{}: {} failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        if(err) {
+            auto str = co_await async_recv_string(err);
+            send_lock_.unlock();
+            Application::error("{}: recv error: {}", NS_FuncNameV, str);
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ver = co_await async_recv_le16();
+        send_lock_.unlock();
+
+        if(ver == PcscOp::ProtoVer) {
+            Application::info("{}: client proto version: {}", NS_FuncNameV, ver);
+            co_return;
+        }
+
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, ver);
+        throw pcsc_error(NS_FuncNameS);
     }
 
     asio::awaitable<RetEstablishedContext>
@@ -224,7 +278,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::EstablishContext)),
                 endian::native_to_little(scope));
 
@@ -251,7 +305,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::ReleaseContext)),
                 endian::native_to_little(context));
 
@@ -276,7 +330,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Connect)),
                 endian::native_to_little(context),
                 endian::native_to_little(shareMode),
@@ -308,7 +362,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Reconnect)),
                 endian::native_to_little(handle),
                 endian::native_to_little(shareMode),
@@ -337,7 +391,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Disconnect)),
                 endian::native_to_little(handle),
                 endian::native_to_little(disposition));
@@ -362,7 +416,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::BeginTransaction)),
                 endian::native_to_little(handle));
 
@@ -389,7 +443,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::EndTransaction)),
                 endian::native_to_little(handle),
                 endian::native_to_little(disposition));
@@ -422,7 +476,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Transmit)),
                 endian::native_to_little(handle),
                 endian::native_to_little(ioSendPciProtocol),
@@ -438,7 +492,7 @@ namespace LTSM {
             endian::little_to_native_inplace(bytesReturned);
             endian::little_to_native_inplace(ret);
 
-            data2 = co_await async_recv_buf<binary_buf>(bytesReturned);
+            data2 = co_await async_recv_buffer(bytesReturned);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -466,22 +520,21 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Status)),
                 endian::native_to_little(handle));
 
-            uint32_t nameLen = co_await async_recv_le32();
-            readerName = co_await async_recv_buf<std::string>(nameLen);
-
-            uint32_t atrLen;
-            co_await async_recv_values(state, protocol, atrLen);
+            uint32_t nameLen, atrLen;
+            co_await async_recv_values(state, protocol, nameLen, atrLen, ret);
 
             endian::little_to_native_inplace(state);
             endian::little_to_native_inplace(protocol);
+            endian::little_to_native_inplace(nameLen);
             endian::little_to_native_inplace(atrLen);
-        
-            atr = co_await async_recv_buf<binary_buf>(atrLen);
-            ret = co_await async_recv_le32();
+            endian::little_to_native_inplace(ret);
+
+            readerName = co_await async_recv_string(nameLen);
+            atr = co_await async_recv_buffer(atrLen);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -509,7 +562,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Control)),
                 endian::native_to_little(handle),
                 endian::native_to_little(controlCode),
@@ -522,7 +575,7 @@ namespace LTSM {
             endian::little_to_native_inplace(bytesReturned);
             endian::little_to_native_inplace(ret);
         
-            data2 = co_await async_recv_buf<binary_buf>(bytesReturned);
+            data2 = co_await async_recv_buffer(bytesReturned);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -543,7 +596,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::GetAttrib)),
                 endian::native_to_little(handle),
                 endian::native_to_little(attrId));
@@ -555,7 +608,7 @@ namespace LTSM {
             endian::little_to_native_inplace(ret);
 
             assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-            attr = co_await async_recv_buf<binary_buf>(attrLen);
+            attr = co_await async_recv_buffer(attrLen);
         } catch(const system::system_error& err) {
             ec_ = err.code();
         }
@@ -580,7 +633,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::SetAttrib)),
                 endian::native_to_little(handle),
                 endian::native_to_little(attrId),
@@ -606,7 +659,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::Cancel)),
                 endian::native_to_little(context));
 
@@ -631,7 +684,7 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::ListReaders)),
                 endian::native_to_little(context));
 
@@ -648,7 +701,7 @@ namespace LTSM {
         while(readersCount--) {
             try {
                 uint32_t readerLen = co_await async_recv_le32();
-                auto readerName = co_await async_recv_buf<std::string>(readerLen);
+                auto readerName = co_await async_recv_string(readerLen);
                 names.emplace_back(std::move(readerName));
             } catch(const system::system_error& err) {
                 ec_ = err.code();
@@ -672,12 +725,12 @@ namespace LTSM {
 
         try {
             co_await async_send_values(
-                endian::native_to_little(static_cast<uint16_t>(PcscOp::Init)),
+                endian::native_to_little(static_cast<uint16_t>(PcscOp::Lite)),
                 endian::native_to_little(static_cast<uint16_t>(PcscLite::GetStatusChange)),
                 endian::native_to_little(context),
                 endian::native_to_little(timeout),
                 endian::native_to_little(statesCount));
-                
+
             for(uint32_t it = 0; it < statesCount; ++it) {
                 const SCARD_READERSTATE & state = states[it];
                 auto len = strnlen(state.szReader, MAX_READERNAME);
@@ -1022,7 +1075,11 @@ namespace LTSM {
             co_return false;
         }
 
-        co_await async_send_values(scope, context, ret);
+        co_await async_send_values(
+            endian::native_to_little(scope),
+            endian::native_to_little(context),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1056,7 +1113,10 @@ namespace LTSM {
             }
         }
 
-        co_await async_send_values(context, ret);
+        co_await async_send_values(
+            endian::native_to_little(context),
+            endian::native_to_little(ret));
+
         ptr->removeContext32(context32_);
 
         context32_ = 0;
@@ -1129,8 +1189,14 @@ namespace LTSM {
                                NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(context, readerData,
-            shareMode, prefferedProtocols, handle, activeProtocol, ret);
+        co_await async_send_values(
+            endian::native_to_little(context),
+            readerData,
+            endian::native_to_little(shareMode),
+            endian::native_to_little(prefferedProtocols),
+            endian::native_to_little(handle),
+            endian::native_to_little(activeProtocol),
+            endian::native_to_little(ret));
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1177,8 +1243,13 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, shareMode,
-            prefferedProtocols, initialization, activeProtocol, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(shareMode),
+            endian::native_to_little(prefferedProtocols),
+            endian::native_to_little(initialization),
+            endian::native_to_little(activeProtocol),
+            endian::native_to_little(ret));
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1228,7 +1299,11 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, disposition, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(disposition),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1268,7 +1343,10 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1308,7 +1386,11 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, disposition, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(disposition),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1328,7 +1410,7 @@ namespace LTSM {
         endian::little_to_native_inplace(recvLength);
         endian::little_to_native_inplace(ret);
 
-        auto data1 = co_await async_recv_buf<binary_buf>(sendLength);
+        auto data1 = co_await async_recv_buffer(sendLength);
 
         if(handle != handle32_) {
             Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
@@ -1368,10 +1450,16 @@ namespace LTSM {
 
         recvLength = data2.size();
 
-        co_await async_send_values(handle,
-            ioSendPciProtocol, ioSendPciLength, sendLength,
-            ioRecvPciProtocol, ioRecvPciLength, recvLength,
-            ret, data2);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(ioSendPciProtocol),
+            endian::native_to_little(ioSendPciLength),
+            endian::native_to_little(sendLength),
+            endian::native_to_little(ioRecvPciProtocol),
+            endian::native_to_little(ioRecvPciLength),
+            endian::native_to_little(recvLength),
+            endian::native_to_little(ret),
+            data2);
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1449,7 +1537,10 @@ namespace LTSM {
                                NS_FuncNameV, id(), handle32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(handle, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1464,7 +1555,7 @@ namespace LTSM {
         endian::little_to_native_inplace(bytesReturned);
         endian::little_to_native_inplace(ret);
 
-        auto data1 = co_await async_recv_buf<binary_buf>(sendLength);
+        auto data1 = co_await async_recv_buffer(sendLength);
 
         if(handle != handle32_) {
             Application::error("{}: clientId: {}, invalid handle32: {:#010x}", NS_FuncNameV, id(), handle);
@@ -1504,8 +1595,14 @@ namespace LTSM {
 
         bytesReturned = data2.size();
 
-        co_await async_send_values(handle, controlCode, sendLength,
-            recvLength, bytesReturned, ret, data2);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(controlCode),
+            endian::native_to_little(sendLength),
+            endian::native_to_little(recvLength),
+            endian::native_to_little(bytesReturned),
+            endian::native_to_little(ret),
+            data2);
 
         co_return ret == SCARD_S_SUCCESS;
     }
@@ -1561,7 +1658,13 @@ namespace LTSM {
         attrLen = std::min(attr.size(), static_cast<size_t>(MAX_BUFFER_SIZE));
         attr.resize(MAX_BUFFER_SIZE, 0);
 
-        co_await async_send_values(handle, attrId, attr, attrLen, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(attrId),
+            attr,
+            endian::native_to_little(attrLen),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1613,7 +1716,13 @@ namespace LTSM {
         // revert attr size
         attr.resize(MAX_BUFFER_SIZE, 0);
 
-        co_await async_send_values(handle, attrId, attr, attrLen, ret);
+        co_await async_send_values(
+            endian::native_to_little(handle),
+            endian::native_to_little(attrId),
+            attr,
+            endian::native_to_little(attrLen),
+            endian::native_to_little(ret));
+
         co_return ret == SCARD_S_SUCCESS;
     }
 
@@ -1646,10 +1755,12 @@ namespace LTSM {
                                NS_FuncNameV, id(), context32_, ret, PcscLite::err2str(ret));
         }
 
-        co_await async_send_values(context, ret);
+        co_await async_send_values(
+            endian::native_to_little(context),
+            endian::native_to_little(ret));
 
-        asio::co_spawn(socket().get_executor(),
-                       std::bind(&PcscSessionBus::handlerStopClient, session_, cancelContext), asio::detached);
+        asio::post(socket().get_executor(),
+                       std::bind(&PcscSessionBus::stopClientContext, session_, cancelContext));
 
         co_return true;
     }
@@ -1672,7 +1783,11 @@ namespace LTSM {
             ret = SCARD_E_NO_SERVICE;
         }
 
-        co_await async_send_values(versionMajor, versionMinor, ret);
+        co_await async_send_values(
+            endian::native_to_little(versionMajor),
+            endian::native_to_little(versionMinor),
+            endian::native_to_little(ret));
+
         co_return true;
     }
 
@@ -1717,7 +1832,10 @@ namespace LTSM {
         const uint32_t timeout = 0;
         const uint32_t ret = SCARD_S_SUCCESS;
 
-        co_await async_send_values(timeout, ret);
+        co_await async_send_values(
+            endian::native_to_little(timeout),
+            endian::native_to_little(ret));
+
         co_return true;
     }
 
@@ -1728,7 +1846,8 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_pcsc_path),
 #endif
-        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        SDBus::AsioCoroConnector(std::move(conn)),
+        signals_ {ioc_} {
         registerAdaptor();
 
         if(debug) {
@@ -1738,17 +1857,53 @@ namespace LTSM {
 
     PcscSessionBus::~PcscSessionBus() {
         unregisterAdaptor();
-        stop();
     }
 
     void PcscSessionBus::stop(void) {
+        sdbusLoopCancel();
+        remote_cancel_.emit(asio::cancellation_type::terminal);
         listen_stop_.emit(asio::cancellation_type::terminal);
+        clients_.clear();
+        remote_.reset();
         signals_.cancel();
-        dbus_conn_->leaveEventLoop();
+    }
+
+    asio::awaitable<void> PcscSessionBus::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+    asio::awaitable<void> PcscSessionBus::sdbusHandler(void) {
+        try {
+            co_await sdbusEventLoop();
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            Application::error("{}: system error: `{}', code: {}",
+                    NS_FuncNameV, ec.message(), ec.value());
+        } catch(const sdbus::Error& err) {
+            Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
+            asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
+        }
     }
 
     int PcscSessionBus::start(void) {
-        Application::info("{}: uid: {}, pid: {}, version: {}", NS_FuncNameV, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
+        Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
 
         auto pcsc_path = getenv("PCSCLITE_CSOCK_NAME");
 
@@ -1762,33 +1917,12 @@ namespace LTSM {
         pcsc_ep_.path(pcsc_path);
         remote_ = std::make_shared<PcscRemote>(asio::local::stream_protocol::socket{ioc_});
 
-        signals_.add(SIGTERM);
-        signals_.add(SIGINT);
-
-        signals_.async_wait([this](const system::error_code & ec, int signal) {
-            // skip canceled
-            if(ec != asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
-                this->stop();
-            }
-        });
-
-        auto sdbus_job = std::thread([this]() {
-            try {
-                dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
-                asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
-            }
-        });
-
         // main loop
+        asio::co_spawn(ioc_, sdbusHandler(), asio::detached);
+        asio::co_spawn(ioc_, signalsHandler(), asio::detached);
         ioc_.run();
 
-        dbus_conn_->leaveEventLoop();
-        sdbus_job.join();
-
-        Application::notice("{}: PCSC session shutdown", NS_FuncNameV);
-
+        Application::notice("{}: service shutdown", NS_FuncNameV);
         std::filesystem::remove(pcsc_path);
 
         return EXIT_SUCCESS;
@@ -1809,24 +1943,23 @@ namespace LTSM {
         setDebugLevel(level);
     }
 
-    asio::awaitable<void> PcscSessionBus::handlerStopClient(uint64_t ctx) {
+    void PcscSessionBus::stopClientContext(uint64_t ctx) {
 
-        asio::co_spawn(clients_guard_, [this, ctx]() -> asio::awaitable<void> {
-            auto it = std::find_if(clients_.begin(), clients_.end(), [ = ](auto & cli) {
-                return cli.proxyContext() == ctx;
-            });
+        auto it = std::find_if(clients_.begin(), clients_.end(), [ = ](auto & cli) {
+            return cli.proxyContext() == ctx;
+        });
 
-            if(it != clients_.end()) {
-                Application::debug(DebugType::Dbus, "{}: stop remote: {:#018x}", "handlerStopClient", ctx);
+        if(it != clients_.end()) {
+            Application::debug(DebugType::Dbus, "{}: stop remote: {:#018x}", "stopClientHandler", ctx);
+
+            asio::co_spawn(clients_guard_, [it]() -> asio::awaitable<void> {
                 it->stopSignal();
-            }
-            co_return;
-        }, asio::detached);
-
-        co_return;
+                co_return;
+            }, asio::detached);
+        }
     }
 
-    asio::awaitable<void> PcscSessionBus::handlerLocalAccept(PcscLocal & client) {
+    asio::awaitable<void> PcscSessionBus::acceptHandler(PcscLocal & client) {
 
         Application::debug(DebugType::App, "{}: clientId: {}", NS_FuncNameV, client.id());
         bool success = true;
@@ -1838,14 +1971,14 @@ namespace LTSM {
                 auto ec = err.code();
 
                 if(ec != asio::error::eof && ec != asio::error::operation_aborted) {
-                    Application::error("{}: {} failed, code: {}, error: {}",
-                                       NS_FuncNameV, "handlerClientWaitCommand", ec.value(), ec.message());
+                    Application::error("{}: system error: {}, code: {}",
+                                       NS_FuncNameV, ec.message(), ec.value());
                 }
 
-                success = false;
+                co_return;
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                success = false;
+                co_return;
             }
 
             if(remote_->isError()) {
@@ -1857,7 +1990,7 @@ namespace LTSM {
         co_return;
     }
 
-    void PcscSessionBus::handlerLocalStopped(const PcscLocal* client, std::exception_ptr eptr) {
+    void PcscSessionBus::clientStoppedHandler(const PcscLocal* client, std::exception_ptr eptr) {
         auto it = std::find_if(clients_.begin(), clients_.end(), [&](auto & cli) {
             return client == std::addressof(cli);
         });
@@ -1870,7 +2003,13 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> PcscSessionBus::handlerLocalListener(void) {
+    asio::awaitable<void> PcscSessionBus::listenerHandler(void) {
+        // remote connected
+        if(std::filesystem::is_socket(pcsc_ep_.path())) {
+            std::filesystem::remove(pcsc_ep_.path());
+            Application::warning("{}: old socket removed", NS_FuncNameV);
+        }
+
         try {
             auto executor = co_await asio::this_coro::executor;
             asio::local::stream_protocol::acceptor acceptor(executor, pcsc_ep_);
@@ -1883,15 +2022,15 @@ namespace LTSM {
                 auto & client = clients_.back();
 
                 auto token = asio::bind_cancellation_slot(client.stopSlot(),
-                             std::bind(&PcscSessionBus::handlerLocalStopped, this, &client, std::placeholders::_1));
+                             std::bind(&PcscSessionBus::clientStoppedHandler, this, &client, std::placeholders::_1));
 
-                asio::co_spawn(executor, handlerLocalAccept(client), std::move(token));
+                asio::co_spawn(executor, acceptHandler(client), std::move(token));
             }
         } catch(const system::system_error& err) {
             auto ec = err.code();
 
             if(ec != asio::error::operation_aborted) {
-                Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "handlerLocalAccept", ec.value(), ec.message());
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
         }
 
@@ -1900,36 +2039,39 @@ namespace LTSM {
         }
     }
 
-    bool PcscSessionBus::connectChannel(const std::string & path) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, path);
+    bool PcscSessionBus::connectChannel(const std::string & socketPath) {
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", NS_FuncNameV, socketPath);
 
         if(remote_->isConnected()) {
+            Application::warning("{}: also connected, socket path: `{}'", NS_FuncNameV, remote_->socketPath());
             return false;
         }
 
-        auto wait = asio::co_spawn(ioc_.get_executor(), remote_->handlerWaitConnect(path), asio::use_future);
-        bool connected = false;
+        asio::co_spawn(ioc_,
+        [socketPath, this]() -> asio::awaitable<void>  {
+            auto executor = co_await asio::this_coro::executor;
 
-        try {
-            connected = wait.get();
-        } catch(const std::exception & ex) {
-            Application::error("{}: exception: {}", NS_FuncNameV, ex.what());
-            return false;
-        }
+            try {
+                co_await remote_->retryConnect(socketPath, 5);
+                co_await remote_->remoteHandshake();
 
-        if(connected) {
-            if(std::filesystem::is_socket(pcsc_ep_.path())) {
-                std::filesystem::remove(pcsc_ep_.path());
-                Application::warning("{}: old socket removed", NS_FuncNameV);
-            }
-
-            asio::co_spawn(clients_guard_, handlerLocalListener(),
+                // start local listener
+                asio::co_spawn(clients_guard_, listenerHandler(),
                            asio::bind_cancellation_slot(listen_stop_.slot(), asio::detached));
 
-            return true;
-        }
+            } catch(const system::system_error& err) {
+                auto ec = err.code();
+                if(ec != asio::error::operation_aborted) {
+                    Application::error("{}: system error: `{}', code: {}",
+                        NS_FuncNameV, ec.message(), ec.value());
+                }
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            }
 
-        return false;
+        }, asio::bind_cancellation_slot(remote_cancel_.slot(), asio::detached));
+
+        return true;
     }
 
     void PcscSessionBus::disconnectChannel(const std::string & clientPath) {
@@ -1967,8 +2109,6 @@ int main(int argc, char** argv) {
 #endif
 
         return LTSM::PcscSessionBus(std::move(conn), debug).start();
-    } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

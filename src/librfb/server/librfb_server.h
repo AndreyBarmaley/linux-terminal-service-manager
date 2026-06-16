@@ -82,6 +82,7 @@ namespace LTSM {
             NetworkStream* streamOut = nullptr;
 
             bool clientLtsmSupported = false;
+            bool clientLtsmKeyboard = false;
             bool clientVideoSupported = false;
             bool clientTrueColor = true;
             bool clientBigEndian = false;
@@ -117,10 +118,9 @@ namespace LTSM {
             void recvRaw(void* ptr, size_t len) const override;
             bool hasInput(void) const override;
             size_t hasData(void) const override;
-            uint8_t peekInt8(void) const override;
 
             // channel listenner interface
-            void recvChannelSystem(const std::vector<uint8_t> &) override;
+            void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
 
             //
             std::string serverEncryptionInfo(void) const;
@@ -130,9 +130,10 @@ namespace LTSM {
             void setEncodingOptions(const std::forward_list<std::string> &, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;
-            bool isClientVideoSupported(void) const;
+            bool isClientLtsmKeyboard(void) const;
             bool isClientSupportedEncoding(int) const;
             bool isContinueUpdatesProcessed(void) const;
+            bool isEncoderFFmpeg(void) const;
 
             bool isUpdateProcessed(void) const;
             void waitUpdateProcess(void);
@@ -146,7 +147,7 @@ namespace LTSM {
             bool sendFrameBufferUpdate(const FrameBuffer &);
             void sendColourMap(int first);
             void sendBellEvent(void);
-            void sendCutTextEvent(const uint8_t* buf, uint32_t len, bool ext);
+            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
             void sendContinuousUpdates(bool enable);
             bool sendUpdateSafe(const XCB::Region &);
             void sendEncodingLtsmSupported(void);
@@ -154,6 +155,7 @@ namespace LTSM {
                 return true;
             }
 
+            void recvLtsmProto(void);
             void recvPixelFormat(void);
             void recvSetEncodings(void);
             void recvKeyCode(void);
@@ -185,8 +187,10 @@ namespace LTSM {
             void sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
             void sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
-            void sendEncodingLtsmData(const uint8_t*, size_t);
-            void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override final;
+            void sendEncodingLtsmData(std::span<const uint8_t>);
+            void sendLtsmChannel(uint8_t channel, std::span<const uint8_t>);
+            void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override final;
+            void sendLtsmChannelData(uint8_t channel, std::string&&) override final;
 
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);
@@ -212,7 +216,7 @@ namespace LTSM {
             // server encoder events
             virtual void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) { /* empty */ }
             virtual void serverRecvSetEncodingsEvent(const std::vector<int> &) { /* empty */ }
-            virtual void serverRecvKeyEvent(bool pressed, uint32_t keysym) { /* empty */ }
+            virtual void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) { /* empty */ }
             virtual void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) { /* empty */ }
             virtual void serverRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
             virtual void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) { /* empty */ }

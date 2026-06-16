@@ -304,7 +304,7 @@ namespace LTSM {
             const auto & len = buf->buffer->datas[0].chunk->size;
 
             if(ptr && len) {
-                data_ready_cb_(ptr, len);
+                data_ready_cb_({ptr, len});
             }
 
             pw_stream_queue_buffer(stream_.get(), buf);

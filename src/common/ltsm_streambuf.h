@@ -32,7 +32,7 @@
 
 #include "ltsm_compat.h"
 
-#define LTSM_STREAMBUF_VERSION 20240810
+#define LTSM_STREAMBUF_VERSION 20260520
 
 namespace LTSM {
     /// @brief: byte array interface
@@ -51,60 +51,34 @@ namespace LTSM {
         bool operator!= (const ByteArray &) const;
     };
 
-    /// @brief: raw array wrapper
-    template<typename T>
-    struct RawPtr : ByteArray, std::pair<T*, size_t> {
-        RawPtr(T* ptr, size_t len) : std::pair<T*, size_t>(ptr, len) {}
-
-        template<size_t N>
-        explicit RawPtr(T(&arr)[N]) : std::pair<T*, size_t>(arr, N) {}
-
-
-        size_t size(void) const override {
-            return std::pair<T*, size_t>::second * sizeof(T);
-        }
-
-        uint8_t* data(void) override {
-            return (uint8_t*) std::pair<T*, size_t>::first;
-        }
-
-        const uint8_t* data(void) const override {
-            return (const uint8_t*) std::pair<T*, size_t>::first;
-        }
-    };
-
     /// @brief: extend binary vector
     struct BinaryBuf : ByteArray, std::vector<uint8_t> {
-        BinaryBuf() = default;
+        using std::vector<uint8_t>::vector;
 
-        BinaryBuf(size_t len, uint8_t val = 0) : std::vector<uint8_t>(len, val) {}
-
-        BinaryBuf(const_iterator it1, const_iterator it2) : std::vector<uint8_t>(it1, it2) {}
-
-        BinaryBuf(const uint8_t* ptr, size_t len) : std::vector<uint8_t>(ptr, ptr + len) {}
-
-        explicit BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {}
-
-        explicit BinaryBuf(std::vector<uint8_t> && v) noexcept {
-            swap(v);
+        BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {
         }
 
-        template<size_t N>
-        explicit BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
+        BinaryBuf(std::vector<uint8_t> && v) noexcept : std::vector<uint8_t>(std::move(v)) {
+        }
 
-
-        BinaryBuf & operator= (const std::vector<uint8_t> & v) {
-            assign(v.begin(), v.end());
+        BinaryBuf & operator=(const std::vector<uint8_t> & v) {
+            if(this != &v) {
+                assign(v.begin(), v.end());
+            }
             return *this;
         }
 
+        BinaryBuf & operator=(std::vector<uint8_t> && v) noexcept {
+            if(this != &v) {
+                swap(v);
+            }
+            return *this;
+        }
+    
         BinaryBuf & operator= (const ByteArray & v) {
-            assign(v.data(), v.data() + v.size());
-            return *this;
-        }
-
-        BinaryBuf & operator= (std::vector<uint8_t> && v) noexcept {
-            swap(v);
+            if(this != &v) {
+                assign(v.data(), v.data() + v.size());
+            }
             return *this;
         }
 
@@ -173,8 +147,9 @@ namespace LTSM {
             return getInt8();
         }
 
-        inline void writeInt8(uint8_t v) {
+        inline MemoryStream & writeInt8(uint8_t v) {
             putInt8(v);
+            return *this;
         }
 
         /// @brief: read uint16 (depends on current endian mode)
@@ -222,13 +197,6 @@ namespace LTSM {
         /// @brief: read all data from stream to vector
         const MemoryStream & operator>>(std::vector<uint8_t> &) const;
 
-        /// @brief: fixed data to array
-        template<typename T>
-        const MemoryStream & operator>>(const RawPtr<T> & v) const {
-            readTo(v.first, v.size());
-            return *this;
-        }
-
         template<size_t N>
         const MemoryStream & operator>>(uint8_t (&arr)[N]) const {
             readTo(arr, N);
@@ -272,6 +240,11 @@ namespace LTSM {
             return *this;
         }
 
+        inline MemoryStream & writeZero(size_t len) {
+            fill(len, 0);
+            return *this;
+        }
+
         MemoryStream & write(const void*, size_t);
         MemoryStream & write(std::string_view);
         MemoryStream & write(const std::vector<uint8_t> &);
@@ -284,13 +257,6 @@ namespace LTSM {
         MemoryStream & operator<<(const uint64_t &);
         MemoryStream & operator<<(std::string_view);
         MemoryStream & operator<<(const std::vector<uint8_t> &);
-
-        /// @brief: fixed data from array
-        template<typename T>
-        MemoryStream & operator<<(const RawPtr<T> & v) {
-            putRaw(v.data(), v.size());
-            return *this;
-        }
 
         template<size_t N>
         MemoryStream & operator<<(const uint8_t (&arr)[N]) {
@@ -335,6 +301,7 @@ namespace LTSM {
         uint8_t peek(void) const override;
         void skip(size_t) const override;
 
+        void readTo(void* ptr, size_t len) const;
         const uint8_t* data(void) const;
 
         uint16_t peekIntLE16(void) const;

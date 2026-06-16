@@ -52,7 +52,11 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20250320
+#ifdef LTSM_WITH_ZLIB
+#include "ltsm_zlib.h"
+#endif
+
+#define LTSM_SOCKETS_VERSION 20260520
 
 namespace LTSM {
     struct network_error : public std::runtime_error {
@@ -137,7 +141,6 @@ namespace LTSM {
 
         virtual bool hasInput(void) const = 0;
         virtual size_t hasData(void) const = 0;
-        virtual uint8_t peekInt8(void) const = 0;
 
         inline uint16_t recvIntBE16(void) const {
             return getIntBE16();
@@ -202,7 +205,6 @@ namespace LTSM {
 
         bool hasInput(void) const override;
         size_t hasData(void) const override;
-        uint8_t peekInt8(void) const override;
 
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;
@@ -229,7 +231,6 @@ namespace LTSM {
 #endif
         bool hasInput(void) const override;
         size_t hasData(void) const override;
-        uint8_t peekInt8(void) const override;
 
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;
@@ -328,7 +329,6 @@ namespace LTSM {
             bool hasInput(void) const override;
             size_t hasData(void) const override;
             void sendFlush(void) override;
-            uint8_t peekInt8(void) const override;
 
             void sendRaw(const void*, size_t) override;
             void recvRaw(void*, size_t) const override;
@@ -377,7 +377,6 @@ namespace LTSM {
             void sendRaw(const void*, size_t) override;
             void sendFlush(void) override;
             void recvRaw(void*, size_t) const override;
-            uint8_t peekInt8(void) const override;
 
             BaseLayer(NetworkStream* st, size_t capacity = 4096);
         };
@@ -402,6 +401,7 @@ namespace LTSM {
             bool handshakeLayer(std::string_view service);
         };
 
+/*
         /// @brief: gss api client layer
         class Client : public BaseLayer, public Gss::ClientContext {
           protected:
@@ -421,86 +421,10 @@ namespace LTSM {
             bool checkUserCredential(std::string_view) const;
             bool handshakeLayer(std::string_view service, bool mutual = false, std::string_view username = "");
         };
+*/
     }
 
 #endif // LTSM_WITH_GSSAPI
-
-#ifdef LTSM_WITH_ZLIB
-    struct zlib_error : public std::runtime_error {
-        explicit zlib_error(std::string_view what) : std::runtime_error(view2string(what)) {}
-    };
-
-    namespace ZLib {
-        class DeflateBase {
-          protected:
-            z_stream zs{};
-            std::array<uint8_t, 1024> tmp;
-
-          public:
-            explicit DeflateBase(int level = Z_BEST_COMPRESSION);
-            virtual ~DeflateBase();
-
-            DeflateBase(const DeflateBase &) = delete;
-            DeflateBase & operator=(const DeflateBase &) = delete;
-
-            std::vector<uint8_t> deflateData(const void* buf, size_t len, int flushPolicy = Z_SYNC_FLUSH);
-        };
-
-        /// @brief: zlib compress output stream only
-        class DeflateStream : public DeflateBase, public NetworkStream {
-          protected:
-            std::vector<uint8_t> bb;
-
-          public:
-            explicit DeflateStream(int level = Z_BEST_COMPRESSION);
-
-            std::vector<uint8_t> deflateFlush(void);
-
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            void sendRaw(const void*, size_t) override;
-
-          private:
-            void recvRaw(void*, size_t) const override;
-            uint8_t peekInt8(void) const override;
-        };
-
-        /// @brief: zlib compress input stream only
-        class InflateBase {
-          protected:
-            z_stream zs{};
-            std::array<uint8_t, 1024> tmp;
-
-          public:
-            InflateBase();
-            virtual ~InflateBase();
-
-            InflateBase(const InflateBase &) = delete;
-            InflateBase & operator=(const InflateBase &) = delete;
-
-            /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
-            std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH);
-        };
-
-        class InflateStream : public InflateBase, public NetworkStream {
-          protected:
-            StreamBuf sb;
-
-          public:
-            InflateStream();
-
-            void appendData(const std::vector<uint8_t> &);
-
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            void recvRaw(void*, size_t) const override;
-            uint8_t peekInt8(void) const override;
-
-          private:
-            void sendRaw(const void*, size_t) override;
-        };
-    } // Zlib
-#endif // LTSM_WITH_ZLIB
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

@@ -31,9 +31,18 @@
 #include <cassert>
 
 #include <boost/endian.hpp>
+/*
+    example:
+    std::ofstream ofs(...);
+    byte::ostream bs(ofs);
+
+    bs.write_byte(0);
+    bs.write_be16(host.size());
+    bs.write_string(host);
+*/
 
 namespace byte {
-    class ostream : public std::ostream {
+    class ostream {
         std::ostream & st;
 
       protected:
@@ -54,7 +63,7 @@ namespace byte {
         }
 
       public:
-        ostream(std::ostream & os) : st(os) {}
+        explicit ostream(std::ostream & os) : st(os) {}
 
         inline ostream & write_be64(uint64_t val) {
             return write_be<uint64_t>(val);
@@ -79,6 +88,10 @@ namespace byte {
             assert(st.good());
             return *this;
         }
+        ostream & write_zero(uint32_t len) {
+            std::vector<uint8_t> zero(len, 0);
+            return write_bytes(zero);
+        }
         template<typename T>
         ostream & write_bytes(const std::vector<T> & buf) {
             st.write(reinterpret_cast<const char*>(buf.data()), buf.size());
@@ -92,7 +105,7 @@ namespace byte {
         }
     };
 
-    class istream : public std::istream {
+    class istream {
         std::istream & st;
 
       protected:
@@ -113,7 +126,7 @@ namespace byte {
         }
 
       public:
-        istream(std::istream & is) : st(is) {}
+        explicit istream(std::istream & is) : st(is) {}
 
         inline uint64_t read_be64(void) {
             return read_be<uint64_t>();
@@ -137,6 +150,9 @@ namespace byte {
             auto val = st.get();
             assert(st.gcount() == 1);
             return val;
+        }
+        void skip_bytes(size_t len) {
+            [[maybe_unused]] auto buf = read_bytes(len);
         }
         std::vector<uint8_t> read_bytes(size_t len) {
             std::vector<uint8_t> buf(len);

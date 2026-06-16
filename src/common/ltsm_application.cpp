@@ -134,6 +134,9 @@ namespace LTSM {
             case DebugType::Common:
                 return "common";
 
+            case DebugType::Pam:
+                return "pam";
+
             case DebugType::Default:
                 return "default";
         }
@@ -189,6 +192,8 @@ namespace LTSM {
                 types |= DebugType::Fork;
             } else if(slower == "common") {
                 types |= DebugType::Common;
+            } else if(slower == "pam") {
+                types |= DebugType::Pam;
             } else if(slower == "default") {
                 types |= DebugType::Default;
             } else if(slower == "all") {
@@ -401,12 +406,12 @@ namespace LTSM {
         }
     }
 
+#ifdef __UNIX__
     // WatchModification
     WatchModification::~WatchModification() {
         inotifyWatchStop();
     }
 
-#ifdef __UNIX__
 #ifdef LTSM_WITH_BOOST
     boost::asio::awaitable<void> WatchModification::inotifyWatchCb(void) {
         auto len = co_await _inotifyStream.async_read_some(boost::asio::buffer(_inotifyBuf), boost::asio::use_awaitable);
@@ -547,17 +552,6 @@ namespace LTSM {
         _inotifyFd = -1;
         _inotifyWd = -1;
     }
-#else
-    void WatchModification::inotifyWatchCb(void) const {
-    }
-
-    bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
-        return false;
-    }
-
-    void WatchModification::inotifyWatchStop(void) {
-    }
-#endif
 
     // ApplicationJsonConfig
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident)
@@ -686,7 +680,8 @@ namespace LTSM {
             configReloadedEvent();
         }
     }
-#endif
+#endif // __UNIX__
+#endif // LTSM_WITH_JSON
 
 #ifdef LTSM_WITH_AUDIT
     AuditLog::AuditLog() {
@@ -753,6 +748,8 @@ namespace LTSM {
             throw std::runtime_error(NS_FuncNameS);
         }
 
+        spdlog::apply_all([&](auto log) { log->flush(); });
+
         // parent mode
         if(0 < pid) {
             Application::debug(DebugType::App, "{}: child pid: {}", NS_FuncNameV, pid);
@@ -760,15 +757,20 @@ namespace LTSM {
         }
 
         // child mode
+        spdlog::shutdown();
+
+        if(Application::isDebugTarget(DebugTarget::Syslog)) {
+#ifdef LTSM_WITH_SYSTEMD
+            if(sd_booted()) {
+                Application::setDebugTarget(DebugTarget::Console);
+            }
+#endif
+        }
+
         signal(SIGTERM, SIG_DFL);
         signal(SIGCHLD, SIG_DFL);
         signal(SIGINT, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
-
-        // skip closelog, glibc dead lock
-        spdlog::drop("default");
-        auto log = Application::logger(DebugType::Default);
-        spdlog::set_default_logger(log);
 
         // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
         for(int fd = 3; fd < 1024; ++fd) {
@@ -778,6 +780,10 @@ namespace LTSM {
 
             close(fd);
         }
+
+        // register log
+        auto log = Application::logger(DebugType::Default);
+        spdlog::set_default_logger(log);
 
         if(debug) {
             auto file = fmt::format("/var/tmp/.fork_{}_{}.log", appIdent, getpid());

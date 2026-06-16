@@ -28,7 +28,6 @@
 #include "ltsm_tools.h"
 #include "ltsm_connector_proto.h"
 #include "ltsm_xcb_wrapper.h"
-#include "ltsm_sdl_wrapper.h"
 #include "ltsm_channels.h"
 
 using namespace std::chrono_literals;
@@ -60,7 +59,6 @@ namespace LTSM::Connector {
         Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
 
         _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
-        _frameRate = config().getInteger("vnc:frame:rate", 0);
 
         return rfbCommunication();
     }
@@ -309,7 +307,9 @@ namespace LTSM::Connector {
     }
 
     uint32_t ConnectorLtsm::frameRateOption(void) const {
-        return _frameRate;
+        constexpr uint32_t minFps = 5;
+        constexpr uint32_t maxFps = 20;
+        return std::clamp(_frameRate, minFps, maxFps);
     }
 
     bool ConnectorLtsm::xcbNoDamageOption(void) const {
@@ -326,8 +326,8 @@ namespace LTSM::Connector {
         return it != _keymap.end() ? it->second : 0;
     }
 
-    void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keysym) {
-        X11Server::serverRecvKeyEvent(pressed, keysym);
+    void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
+        X11Server::serverRecvKeyEvent(pressed, keycode, scancode);
         _idleSessionTp = std::chrono::steady_clock::now();
     }
 
@@ -368,9 +368,9 @@ namespace LTSM::Connector {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
             _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
             _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
-            _frameRate = opts->getInteger("frame:rate", 0);
+            _frameRate = opts->getInteger("frame:rate", _frameRate);
 
-            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), _frameRate);
+            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), frameRateOption());
 
             if(_x11NoDamage && ! XCB::RootDisplay::hasError()) {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
@@ -384,39 +384,6 @@ namespace LTSM::Connector {
         if(cursorId) {
             Application::debug(DebugType::App, "{}: cursor id: {:#010x}", NS_FuncNameV, cursorId);
             cursorFailed(cursorId);
-        }
-    }
-
-    void ConnectorLtsm::systemKeyboardEvent(const JsonObject & jo) {
-        // event supported
-        if(20250808 > _ltsmClientVersion) {
-            return;
-        }
-
-        if(xcbAllowMessages()) {
-            auto pressed = jo.getBoolean("pressed");
-            auto scancode = jo.getInteger("scancode");
-            auto keycode = jo.getInteger("keycode");
-
-            auto xksym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
-
-            if(xksym == 0) {
-                xksym = keycode;
-            }
-
-            if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
-                int group = xkb->getLayoutGroup();
-                auto keycodeGroup = keysymToKeycodeGroup(xksym);
-
-                if(group != keycodeGroup.second) {
-                    xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
-                }
-            }
-
-            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#010x}, keycode: {}", NS_FuncNameV, (int) pressed, scancode, keycode);
-
-            serverRecvKeyEvent(pressed, xksym);
-            X11Server::serverScreenUpdateRequest();
         }
     }
 

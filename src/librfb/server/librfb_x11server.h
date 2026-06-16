@@ -57,7 +57,7 @@ namespace LTSM {
           protected:
             // root display
             void xcbFixesCursorChangedEvent(void) override;
-            void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
+            void xcbDamageNotifyEvent(const xcb_rectangle_t &, uint8_t level) override;
             void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
             void xcbRandrScreenSetSizeEvent(const XCB::Size &) override;
             void xcbDisplayConnectedEvent(void) override;
@@ -69,7 +69,7 @@ namespace LTSM {
             std::vector<uint8_t> selectionSourceData(xcb_atom_t, size_t offset, uint32_t length) const override;
 
             // selection recipient
-            void selectionReceiveData(xcb_atom_t, const uint8_t* ptr, uint32_t len) const override;
+            void selectionReceiveData(xcb_atom_t, std::vector<uint8_t>&&) const override;
             void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override;
             void selectionChangedEvent(void) const override;
 
@@ -80,13 +80,13 @@ namespace LTSM {
             void serverScreenUpdateRequest(void) override;
             void serverScreenUpdateRequest(const XCB::Region &) override;
             XcbFrameBuffer serverFrameBuffer(const XCB::Region &) const override;
-
+            
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
             std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
             void extClipboardRemoteTypesEvent(uint16_t type) override;
-            void extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> &) override;
-            void extClipboardSendEvent(const std::vector<uint8_t> &) override;
+            void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
+            void extClipboardSendEvent(std::vector<uint8_t> &&) override;
 
             XCB::RootDisplay* xcbDisplay(void);
             const XCB::Region & getClientRegion(void) const;
@@ -122,7 +122,7 @@ namespace LTSM {
             // server encoder events
             void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) override;
             void serverRecvSetEncodingsEvent(const std::vector<int> &) override;
-            void serverRecvKeyEvent(bool pressed, uint32_t keysym) override;
+            void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) override;
             void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
             void serverRecvCutTextEvent(std::vector<uint8_t> &&) override;
             void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) override;

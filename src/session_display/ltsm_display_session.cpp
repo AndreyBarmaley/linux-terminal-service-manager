@@ -227,6 +227,16 @@ namespace LTSM::DisplaySession {
         default_height_ = configGetInteger("default:height", 1024);
         default_depth_ = configGetInteger("default:depth", 24);
 
+        if(default_depth_ == 32) {
+            // xorg supported: 30, 24, 16, 15, 8
+            default_depth_ = 30;
+        }
+
+        if(default_depth_ != 15 && default_depth_ != 16 && default_depth_ != 30) {
+            default_depth_ = 24;
+            Application::warning("{}: {} failed, used {}", NS_FuncNameV, "default:depth", default_depth_);
+        }
+
         std::string xorgBin;
         ArgsList xorgArgs;
 
@@ -261,11 +271,13 @@ namespace LTSM::DisplaySession {
             if(useXorg) {
                 xorgArgs.emplace_back("-config");
                 xorgArgs.emplace_back("ltsm.conf");
+                xorgArgs.emplace_back("-depth");
+                xorgArgs.emplace_back("%{depth}");
                 xorgArgs.emplace_back("-quiet");
             } else {
                 xorgArgs.emplace_back("-screen");
                 xorgArgs.emplace_back("0");
-                xorgArgs.emplace_back("%{width}x%{height}x24");
+                xorgArgs.emplace_back("%{width}x%{height}x%{depth}");
             }
 
             xorgArgs.emplace_back("-auth");
@@ -552,8 +564,8 @@ namespace LTSM::DisplaySession {
         auto sdbus_job = std::thread([this]() {
            try {
                 dbus_conn_->enterEventLoop();
-            } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", err.what());
+            } catch(const sdbus::Error& err) {
+                Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
                 boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             }
         });

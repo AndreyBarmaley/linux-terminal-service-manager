@@ -25,22 +25,19 @@
 #define _LTSM_PCSC_SESSION_
 
 #include <tuple>
-#include <thread>
-#include <atomic>
 #include <memory>
-#include <future>
 #include <string>
 #include <vector>
-#include <functional>
 #include <forward_list>
 
 #include "pcsclite.h"
 
 #include "ltsm_pcsc.h"
-#include "ltsm_async_socket.h"
-#include "ltsm_application.h"
-#include "ltsm_pcsc_adaptor.h"
+#include "ltsm_async_sdbus.h"
 #include "ltsm_async_mutex.h"
+#include "ltsm_application.h"
+#include "ltsm_async_socket.h"
+#include "ltsm_pcsc_adaptor.h"
 
 namespace PcscLite {
     // origin READER_STATE: PCSC/src/eventhandler.h
@@ -99,7 +96,7 @@ namespace LTSM {
         Transaction(const boost::asio::any_io_executor & ex) : trans_lock{ex} {}
     };
 
-    class PcscRemote : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+    class PcscRemote : protected AsyncLocalStream {
 
         std::unordered_map<uint32_t, uint64_t> map_context_;
 
@@ -110,7 +107,6 @@ namespace LTSM {
         Transaction trans_lock_;
 
         boost::system::error_code ec_;
-        bool connected_{false};
 
       protected:
         [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaderStatus(const int32_t &, const uint64_t &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
@@ -118,12 +114,13 @@ namespace LTSM {
 
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
-            : AsyncSocket<boost::asio::local::stream_protocol::socket>(std::move(sock))
+            : AsyncLocalStream(std::move(sock))
             , send_lock_{socket().get_executor()}
             , trans_lock_{socket().get_executor()} {}
         ~PcscRemote() = default;
 
-        [[nodiscard]] boost::asio::awaitable<bool> handlerWaitConnect(const std::string & path);
+        [[nodiscard]] boost::asio::awaitable<void> retryConnect(const std::string & path, int attempts);
+        [[nodiscard]] boost::asio::awaitable<void> remoteHandshake(void);
 
         [[nodiscard]] boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
         [[nodiscard]] boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);
@@ -147,7 +144,11 @@ namespace LTSM {
         }
 
         bool isConnected(void) const {
-            return connected_;
+            return socket().is_open();
+        }
+
+        std::string socketPath(void) const {
+            return socket().remote_endpoint().path();
         }
 
         [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
@@ -163,7 +164,7 @@ namespace LTSM {
 
     class PcscSessionBus;
 
-    class PcscLocal : protected AsyncSocket<boost::asio::local::stream_protocol::socket> {
+    class PcscLocal : protected AsyncLocalStream {
         uint64_t context64_ = 0; ///< remote context
         uint64_t handle64_ = 0;  ///< remote handle
 
@@ -206,7 +207,7 @@ namespace LTSM {
 
       public:
         PcscLocal(boost::asio::local::stream_protocol::socket && sock, int cid, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* bus)
-            : AsyncSocket(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {
+            : AsyncLocalStream(std::move(sock)), cid_{cid}, remote_{ptr}, session_{bus} {
         }
         ~PcscLocal() = default;
 
@@ -242,26 +243,28 @@ namespace LTSM {
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
-    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor> {
+    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
 
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;
-
+        boost::asio::cancellation_signal remote_cancel_;
         boost::asio::cancellation_signal listen_stop_;
 
         std::list<PcscLocal> clients_;
         boost::asio::strand<boost::asio::any_io_executor> clients_guard_{ioc_.get_executor()};
 
-        DBusConnectionPtr dbus_conn_;
         std::shared_ptr<PcscRemote> remote_;
 
       protected:
         void stop(void);
 
-        [[nodiscard]] boost::asio::awaitable<void> handlerLocalAccept(PcscLocal & client);
-        [[nodiscard]] boost::asio::awaitable<void> handlerLocalListener(void);
-        void handlerLocalStopped(const PcscLocal* client, std::exception_ptr);
+        [[nodiscard]] boost::asio::awaitable<void> signalsHandler(void);
+        [[nodiscard]] boost::asio::awaitable<void> sdbusHandler(void);
+        [[nodiscard]] boost::asio::awaitable<void> acceptHandler(PcscLocal & client);
+        [[nodiscard]] boost::asio::awaitable<void> listenerHandler(void);
+
+        void clientStoppedHandler(const PcscLocal* client, std::exception_ptr);
 
       public:
         PcscSessionBus(DBusConnectionPtr, bool debug = false);
@@ -269,7 +272,7 @@ namespace LTSM {
 
         int start(void);
 
-        [[nodiscard]] boost::asio::awaitable<void> handlerStopClient(uint64_t);
+        void stopClientContext(uint64_t);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;

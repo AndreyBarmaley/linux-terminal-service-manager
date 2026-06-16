@@ -28,6 +28,7 @@
 #include <thread>
 
 #include "ltsm_application.h"
+#include "ltsm_sdl_wrapper.h"
 #include "librfb_x11server.h"
 
 #ifdef LTSM_ENCODING_FFMPEG
@@ -49,7 +50,7 @@ namespace LTSM {
         clientUpdateCursor = isClientSupportedEncoding(ENCODING_RICH_CURSOR);
     }
 
-    void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt) {
+    void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
         const std::scoped_lock guard{ serverLock };
         damageRegion.join(rt.x, rt.y, rt.width, rt.height);
     }
@@ -180,17 +181,12 @@ namespace LTSM {
         xcbShmInit();
 
         serverConnectedEvent();
-        Application::info("{}: wait RFB messages...", NS_FuncNameV);
+        Application::info("{}: wait RFB messages, fps: {}", NS_FuncNameV, frameRateOption());
 
         // xcb on
         xcbDisableMessages(false);
         bool mainLoop = true;
         auto frameTimePoint = std::chrono::steady_clock::now();
-        size_t delayTimeout = 75;
-
-        if(0 == frameRateOption()) {
-            delayTimeout = 0;
-	}
 
         // process rfb messages background
         auto rfbThread = std::thread([this]() {
@@ -201,66 +197,67 @@ namespace LTSM {
             this->xcbProcessingEvents();
         });
 
-        std::this_thread::sleep_for(10ms);
-
         // main loop
         while(mainLoop) {
             serverMainLoopEvent();
 
             if(! rfbMessagesRunning()) {
                 mainLoop = false;
-                continue;
-            }
-
-            if(! xcbAllowMessages()) {
-                std::this_thread::sleep_for(20ms);
-                continue;
-            }
-
-            if(displayResizeProcessed || displayResizeNegotiation) {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-                continue;
+                break;
             }
 
             // check timepoint frame
-            if(isClientLtsmSupported() && delayTimeout) {
-                auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+            if(auto frameRate = frameRateOption()) {
+                int delayTimeout = 1000 / frameRate;
 
-                if(dt.count() < delayTimeout) {
-                    Application::debug(DebugType::X11Srv, "{}: update time ms: {}", NS_FuncNameV, dt.count());
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
+                if(isEncoderFFmpeg()) {
+                    // ffmpeg encoding: fixed fps
+                    fullscreenUpdateReq = true;
+                } else if(xcbNoDamageOption()) {
+                    // no damage: fixed fps
+                } else if(! damageRegion.isEmpty()) {
+                    // damage present - 16 fps
+                    delayTimeout = 65;
+                }
+
+                auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+                int last = delayTimeout - static_cast<int>(dt.count());
+                Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
+
+                // large timepoint
+                if(30 < last) {
+                    std::this_thread::sleep_for(30ms);
                     continue;
                 }
 
-                if(isClientVideoSupported()) {
-                    fullscreenUpdateReq = true;
+                // small timepoint
+                if(0 < last) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(last));
                 }
             }
 
-            if(xcbNoDamageOption() || fullscreenUpdateReq) {
-                const std::scoped_lock guard{ serverLock };
-                damageRegion = XCB::RootDisplay::region();
-                fullscreenUpdateReq = false;
-            }
+            // processed frame update
+            if(fullscreenUpdateReq || ! damageRegion.isEmpty()) {
+                // wait condition
+                if(! xcbAllowMessages() || displayResizeProcessed ||
+                   displayResizeNegotiation || clientRegion.isEmpty()) {
+                    std::this_thread::sleep_for(10ms);
+                    continue;
+                }
 
-            if(clientRegion.isEmpty()) {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
-
-            if(damageRegion.isEmpty()) {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-            } else {
-                // processed frame update
                 frameTimePoint = std::chrono::steady_clock::now();
                 auto serverRegion = XCB::RootDisplay::region();
 
                 const std::scoped_lock guard{ serverLock };
-                // fix out of screen
-                damageRegion = serverRegion.intersected(damageRegion.align(4));
+
+                if(fullscreenUpdateReq) {
+                    damageRegion = serverRegion;
+                    fullscreenUpdateReq = false;
+                } else {
+                    // fix out of screen
+                    damageRegion = serverRegion.intersected(damageRegion.align(4));
+                }
+
                 if(clientRegion != serverRegion) {
                     damageRegion = clientRegion.intersected(damageRegion);
                 }
@@ -276,11 +273,6 @@ namespace LTSM {
                 }
 
                 damageRegion.reset();
-
-                // update timepoint
-                if(auto frameRate = frameRateOption()) {
-                    delayTimeout = 1000 / frameRate;
-                }
             }
         } // main loop
 
@@ -314,10 +306,31 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keysym) {
-        auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST));
+    void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
+        if(! xcbAllowMessages()) {
+            return;
+        }
 
-        if(xcbAllowMessages() && test) {
+        auto keysym = keycode;
+
+        if(isClientLtsmKeyboard()) {
+            auto x11sym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
+
+            if(x11sym) {
+                keysym = static_cast<uint32_t>(x11sym);
+            }
+
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtension(XCB::Module::XKB))) {
+                int group = xkb->getLayoutGroup();
+                auto keycodeGroup = keysymToKeycodeGroup(x11sym);
+
+                if(group != keycodeGroup.second) {
+                    keysym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                }
+            }
+        }
+
+        if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST))) {
             auto keycode = rfbUserKeycode(keysym);
 
             if(! keycode) {
@@ -365,8 +378,8 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        sendCutTextEvent(buf.data(), buf.size(), true);
+    void RFB::X11Server::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
+        sendCutTextEvent(buf, true);
     }
 
     uint16_t RFB::X11Server::extClipboardLocalTypes(void) const {
@@ -421,23 +434,23 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
+    void RFB::X11Server::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ serverLock };
-            clientClipboard = buf;
+            clientClipboard.swap(buf);
         } else {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
     }
 
-    void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, const uint8_t* buf, uint32_t len) const {
+    void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
         if(auto ptr = const_cast<RFB::X11Server*>(this)) {
             if(extClipboardRemoteCaps()) {
                 const std::scoped_lock guard{ serverLock };
-                ptr->clientClipboard.assign(buf, buf + len);
+                ptr->clientClipboard.swap(buf);
             } else {
-                ptr->sendCutTextEvent(buf, len, false);
+                ptr->sendCutTextEvent(buf, false);
             }
         }
     }
@@ -653,6 +666,7 @@ namespace LTSM {
     void RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
+
             if(psz && dsz < *psz) {
                 Application::warning("{}: display size: {}, select size: {}", NS_FuncNameV, dsz, *psz);
                 dsz = *psz;
@@ -661,7 +675,7 @@ namespace LTSM {
             auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
             size_t shmsz = dsz.width * dsz.height * bpp;
 
-            if(!shm || shm->owner != uid || shm->size < shmsz) {
+            if(! shm || shm->owner != uid || shm->size < shmsz) {
                 Application::info("{}: size: {}", NS_FuncNameV, shmsz);
                 shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
             }

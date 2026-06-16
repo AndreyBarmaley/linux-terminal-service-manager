@@ -24,6 +24,7 @@
 #ifndef _LTSM_AUDIO_DECODER_
 #define _LTSM_AUDIO_DECODER_
 
+#include <span>
 #include <array>
 #include <vector>
 #include <memory>
@@ -39,7 +40,7 @@ namespace LTSM {
             BaseDecoder() = default;
             virtual ~BaseDecoder() = default;
 
-            virtual std::vector<uint8_t> decode(const uint8_t* ptr, size_t len) = 0;
+            virtual std::vector<uint8_t> decode(std::span<const uint8_t>) = 0;
         };
 
 #ifdef LTSM_WITH_OPUS
@@ -56,7 +57,7 @@ namespace LTSM {
           public:
             Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample);
 
-            std::vector<uint8_t> decode(const uint8_t* ptr, size_t len) override;
+            std::vector<uint8_t> decode(std::span<const uint8_t>) override;
         };
 
 #endif

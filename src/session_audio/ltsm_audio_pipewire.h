@@ -24,6 +24,7 @@
 #ifndef _LTSM_AUDIO_PIPEWIRE_
 #define _LTSM_AUDIO_PIPEWIRE_
 
+#include <span>
 #include <future>
 #include <string>
 #include <memory>
@@ -34,7 +35,7 @@
 
 namespace LTSM::PipeWire {
 
-    using DataReadyFunc = std::function<void(const uint8_t*, size_t)>;
+    using DataReadyFunc = std::function<void(std::span<const uint8_t>)>;
     uint16_t formatBits(const spa_audio_format & fmt);
 
     enum class MediaCategory { Playback, Capture };

@@ -21,7 +21,6 @@
  ***************************************************************************/
 
 #include <chrono>
-#include <future>
 #include <algorithm>
 #include <filesystem>
 
@@ -41,7 +40,7 @@ using namespace std::chrono_literals;
 using namespace boost;
 
 Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
-    AsyncSocket<asio::local::stream_protocol::socket>(member.get_executor()),
+    AsyncLocalStream(member.get_executor()),
     ioc_{member},
     work_guard_{asio::make_work_guard(ioc_)},
     send_lock_{ioc_.get_executor()},
@@ -58,87 +57,95 @@ Pkcs11Client::~Pkcs11Client() {
     }
 }
 
-void Pkcs11Client::stop(void) {
-    update_tokens_.emit(asio::cancellation_type::terminal);
-
-    system::error_code ec;
-    socket().cancel(ec);
-    socket().close(ec);
-
-    work_guard_.reset();
+void Pkcs11Client::stop(void) noexcept {
+    try {
+        socket().cancel();
+        client_cancel_.emit(asio::cancellation_type::terminal);
+        work_guard_.reset();
+    } catch(...) {
+    }
 }
 
 void Pkcs11Client::run(void) {
-    asio::co_spawn(ioc_, remoteConnect(), asio::detached);
+    asio::co_spawn(ioc_, clientHandler(),
+        asio::bind_cancellation_slot(client_cancel_.slot(), asio::detached));
 
     ioc_.run();
     Q_EMIT pkcs11Shutdown();
 }
 
-asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
-    const int attempts = 7;
-    const auto path = templatePath.toStdString();
+asio::awaitable<void> Pkcs11Client::clientHandler(void) {
+    const int attempts = 5;
+    try {
+        co_await retryConnect(templatePath.toStdString(), attempts);
+        co_await remoteHandshake();
+        co_await updateTokensTimer();
+    } catch(const boost::system::system_error& err) {
+        auto ec = err.code();
+        if(ec != asio::error::operation_aborted) {
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+        }
+    } catch(const std::exception & err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        asio::post(ioc_, std::bind(&Pkcs11Client::stop, this));
+        Q_EMIT pkcs11Error("PKCS11 initialization failed");
+    }
+}
+
+asio::awaitable<void> Pkcs11Client::retryConnect(const std::string& path, int attempts) {
+    auto ex = co_await asio::this_coro::executor;
+    asio::steady_timer timer{ex};
 
     for(int it = 1; it <= attempts; it++) {
         try {
             co_await socket().async_connect(path, asio::use_awaitable);
-            break;
+            Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", NS_FuncNameV, path);
+            co_return;
         } catch(const system::system_error& err) {
             if(it == attempts) {
-                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}", NS_FuncNameV, "connect", path, attempts, err.code().message());
-                co_return;
+                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}",
+                    NS_FuncNameV, "connect", path, attempts, err.code().message());
+                throw system::system_error(asio::error::operation_aborted);
             }
         }
 
-        asio::steady_timer timer{ioc_, 300ms};
+        timer.expires_after(300ms);
         co_await timer.async_wait(asio::use_awaitable);
     }
+}
 
-    Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", NS_FuncNameV, path);
+asio::awaitable<void> Pkcs11Client::remoteHandshake(void) {
     uint16_t cmd, err;
 
-    try {
-        co_await async_send_values(
+    co_await async_send_values(
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::Init)),
-            endian::native_to_little(static_cast<uint16_t>(1 /* proto version */)));
+            endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::ProtoVer)));
 
-        // client reply: cmd16, err16
-        co_await async_recv_values(cmd, err);
-        endian::little_to_native_inplace(cmd);
-        endian::little_to_native_inplace(err);
-    } catch(const std::exception & exp) {
-        Application::error("{}: exception: {}", NS_FuncNameV, "PKCS11 initialization failed");
-        Q_EMIT pkcs11Error("PKCS11 initialization failed");
-        stop();
-        co_return;
-    }
+    // client reply: cmd16, err16
+    co_await async_recv_values(cmd, err);
+    endian::little_to_native_inplace(cmd);
+    endian::little_to_native_inplace(err);
 
     if(cmd != Pkcs11Op::Init) {
         Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
-        Q_EMIT pkcs11Error("PKCS11 initialization failed");
-        stop();
-        co_return;
+        throw pkcs11_error(NS_FuncNameS);
     }
 
     if(err) {
-        auto str = co_await async_recv_buf<std::string>(err);
+        auto str = co_await async_recv_string(err);
         Application::error("{}: recv error: {}", NS_FuncNameV, str);
-        Q_EMIT pkcs11Error(QString("PKCS11 error: %1").arg(str.c_str()));
-        stop();
-        co_return;
+        throw pkcs11_error(NS_FuncNameS);
     }
 
     // proto version
-    auto ver = co_await async_recv_le16();
+    auto protoVer = co_await async_recv_le16();
 
-    if(ver != 1) {
-        Application::error("{}: {}: failed, ver: {:#06x}", NS_FuncNameV, "version", ver);
-        Q_EMIT pkcs11Error("PKCS11 initialization failed");
-        stop();
-        co_return;
+    if(protoVer != Pkcs11Op::ProtoVer) {
+        Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
+        throw pkcs11_error(NS_FuncNameS);
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", NS_FuncNameV, ver);
+    Application::debug(DebugType::Pkcs11, "{}: proto version: {}", NS_FuncNameV, protoVer);
 
     // library info
     PKCS11::LibraryInfo info;
@@ -162,40 +169,27 @@ asio::awaitable<void> Pkcs11Client::remoteConnect(void) {
 
     Application::debug(DebugType::Pkcs11, "{}: library version: {}.{}",
                        NS_FuncNameV, info.libraryVersion.major, info.libraryVersion.minor);
-
-    // update tokens timer
-    asio::co_spawn(ioc_, updateTokensTimer(), asio::bind_cancellation_slot(update_tokens_.slot(), asio::detached));
-
     co_return;
 }
 
 asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
-    bool success = false;
+    auto ex = co_await asio::this_coro::executor;
+    asio::steady_timer timer{ex};
 
-    try {
-        for(;;) {
-            asio::steady_timer timer(ioc_, std::chrono::milliseconds(450));
-            co_await timer.async_wait(asio::use_awaitable);
-            co_await send_lock_.async_lock();
-            auto success = co_await updateTokens();
-            send_lock_.unlock();
+    for(;;) {
+        timer.expires_after(450ms);
+        co_await timer.async_wait(asio::use_awaitable);
 
-            if(success) {
-                Q_EMIT pkcs11TokensChanged();
-            }
+        co_await send_lock_.async_lock();
+        bool success = co_await updateTokens();
+        send_lock_.unlock();
+
+        if(success) {
+            Q_EMIT pkcs11TokensChanged();
         }
-    } catch(const boost::system::system_error& err) {
-        auto ec = err.code();
-
-        if(ec != asio::error::operation_aborted) {
-            Application::error("{}: {} failed, code: {}, error: {}", NS_FuncNameV, "timer", ec.value(), ec.message());
-        }
-    } catch(const std::exception& err) {
-        Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
-        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> { stop(); co_return; }, asio::detached);
     }
 
-    send_lock_.unlock();
+    co_return;
 }
 
 asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
@@ -212,15 +206,10 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(counts);
 
-//    auto cmd = co_await async_recv_le16();
-
     if(cmd != Pkcs11Op::GetSlots) {
         Application::error("{}: {}: failed, cmd: {:#06x}", NS_FuncNameV, "id", cmd);
         throw pkcs11_error(NS_FuncNameS);
     }
-
-    // slot counts
-//    uint16_t counts = co_await async_recv_le16();
 
     ListTokens newTokens;
     Application::debug(DebugType::Pkcs11, "{}: tokens counts: {}", NS_FuncNameV, counts);
@@ -324,32 +313,38 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
 
 ListTokens Pkcs11Client::getTokens(void) const {
 
-    std::promise<ListTokens> promise;
-    auto res = promise.get_future();
-
-    asio::co_spawn(ioc_, [&promise, this]() -> asio::awaitable<void> {
+    auto res = asio::co_spawn(ioc_, [this]() -> asio::awaitable<ListTokens> {
         co_await send_lock_.async_lock();
         auto tokens = this->tokens;
         send_lock_.unlock();
-        promise.set_value(std::move(tokens));
-        co_return;
-    }, asio::detached);
+        co_return tokens;
+    }, asio::use_future);
+
+    if(ioc_.get_executor().running_in_this_thread()) {
+        // future: skip deadlock
+        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ioc_.run_one();
+        }
+    }
 
     return res.get();
 }
 
 ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
 
-    std::promise<ListCertificates> promise;
-    auto res = promise.get_future();
-
-    asio::co_spawn(ioc_, [&promise, &slotId, this]() -> asio::awaitable<void> {
+    auto res = asio::co_spawn(ioc_, [&slotId, this]() -> asio::awaitable<ListCertificates> {
         co_await send_lock_.async_lock();
         auto certs = co_await this->loadCertificates(slotId);
         send_lock_.unlock();
-        promise.set_value(std::move(certs));
-        co_return;
-    }, asio::detached);
+        co_return certs;
+    }, asio::use_future);
+
+    if(ioc_.get_executor().running_in_this_thread()) {
+        // future: skip deadlock
+        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ioc_.run_one();
+        }
+    }
 
     return res.get();
 }
@@ -383,9 +378,9 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
         // <LEN32> - cert data len
         // <DATA> - cert data
         auto idLen = co_await async_recv_le16();
-        auto id = co_await async_recv_buf<binary_buf>(idLen);
+        auto id = co_await async_recv_buffer(idLen);
         auto valueLen = co_await async_recv_le32();
-        auto value = co_await async_recv_buf<binary_buf>(valueLen);
+        auto value = co_await async_recv_buffer(valueLen);
 
         certs.emplace_back(Pkcs11Cert{ .objectId = std::move(id), .objectValue = std::move(value) });
     }
@@ -395,16 +390,19 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
 
 ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
 
-    std::promise<ListMechanisms> promise;
-    auto res = promise.get_future();
-
-    asio::co_spawn(ioc_, [&promise, &slotId, this]() -> asio::awaitable<void> {
+    auto res = asio::co_spawn(ioc_, [&slotId, this]() -> asio::awaitable<ListMechanisms> {
         co_await send_lock_.async_lock();
         auto mechs = co_await this->loadMechanisms(slotId);
         send_lock_.unlock();
-        promise.set_value(std::move(mechs));
-        co_return;
-    }, asio::detached);
+        co_return mechs;
+    }, asio::use_future);
+
+    if(ioc_.get_executor().running_in_this_thread()) {
+        // future: skip deadlock
+        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ioc_.run_one();
+        }
+    }
 
     return res.get();
 }
@@ -442,7 +440,7 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
         endian::little_to_native_inplace(flags);
         endian::little_to_native_inplace(len);
 
-        auto name = co_await async_recv_buf<std::string>(len);
+        auto name = co_await async_recv_string(len);
         res.emplace_back(Pkcs11Mech{ .mechId = id, .minKey = min, .maxKey = max, .flags = flags, .name = name });
     }
 
@@ -452,16 +450,19 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
 binary_buf Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
                                   const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    std::promise<binary_buf> promise;
-    auto res = promise.get_future();
-
-    asio::co_spawn(ioc_, [&promise, &slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<void> {
+    auto res = asio::co_spawn(ioc_, [&slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<binary_buf> {
         co_await send_lock_.async_lock();
         auto buf = co_await this->loadSignData(slotId, pin, certId, data, len, mechType);
         send_lock_.unlock();
-        promise.set_value(std::move(buf));
-        co_return;
-    }, asio::detached);
+        co_return buf;
+    }, asio::use_future);
+
+    if(ioc_.get_executor().running_in_this_thread()) {
+        // future: skip deadlock
+        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ioc_.run_one();
+        }
+    }
 
     return res.get();
 }
@@ -491,7 +492,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
 
     if(length) {
         // sign result
-        co_return co_await async_recv_buf<binary_buf>(length);
+        co_return co_await async_recv_buffer(length);
     }
 
     co_return binary_buf{};
@@ -500,16 +501,19 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
 std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    std::promise<binary_buf> promise;
-    auto res = promise.get_future();
-
-    asio::co_spawn(ioc_, [&promise, &slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<void> {
+    auto res = asio::co_spawn(ioc_, [&slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<binary_buf> {
         co_await send_lock_.async_lock();
         auto buf = co_await this->loadDecryptData(slotId, pin, certId, data, len, mechType);
         send_lock_.unlock();
-        promise.set_value(std::move(buf));
-        co_return;
-    }, asio::detached);
+        co_return buf;
+    }, asio::use_future);
+
+    if(ioc_.get_executor().running_in_this_thread()) {
+        // future: skip deadlock
+        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ioc_.run_one();
+        }
+    }
 
     return res.get();
 }
@@ -539,7 +543,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const
 
     if(length) {
         // decrypt result
-        co_return co_await async_recv_buf<binary_buf>(length);
+        co_return co_await async_recv_buffer(length);
     }
 
     co_return binary_buf{};
