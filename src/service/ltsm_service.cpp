@@ -3110,7 +3110,7 @@ namespace LTSM::Manager {
             }
             
             setsid();
-            chdir("/");
+            [[maybe_unused]] int ret = chdir("/");
         }
 
 #ifdef SDBUS_2_0_API

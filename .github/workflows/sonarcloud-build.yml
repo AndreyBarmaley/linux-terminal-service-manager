@@ -35,18 +35,18 @@ jobs:
            xserver-xorg-video-dummy xserver-xorg xterm x11-xserver-utils dbus-x11 \
            libexpat1 libpam0g-dev gnutls-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
-           libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
+           libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
            libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
            liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
            libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
-           libspdlog-dev libboost-dev libpipewire-0.3-dev
+           libaudit-dev libspdlog-dev libboost-dev libpipewire-0.3-dev
 
       - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
           java-version: 11
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
       - name: Set up Python 3.8 for gcovr
         uses: actions/setup-python@v2
@@ -99,18 +99,26 @@ jobs:
       - name: Prepare LTSM coverage tests
         run: |
           echo "::group::scripts"
+          echo "info"
+          /usr/bin/id
           echo "generate certs"
           openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout ${{github.workspace}}/etc/ltsm/server.key -out ${{github.workspace}}/etc/ltsm/server.crt
           echo "copy ltsm files"
           chmod +x ${{github.workspace}}/etc/ltsm/xclients
-          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
-          echo "change groups"
-          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          chmod +x ${{github.workspace}}/etc/ltsm/xsetup
+          echo "change configs"
           sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/ltsm_session_display.json
+          sed -i -e 's|#starter|starter|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e 's|"#session:start:timeout": 3|"session:start:timeout": 7|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e 's|#helper|helper|' ${{github.workspace}}/etc/ltsm/ltsm_session_display.json
+          echo "change group"
           sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf
+          sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/etc/dbus-1/ltsm.session.display.conf
           echo "copy configs"
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
-          sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
+          sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /usr/share/dbus-1/system.d
+          sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.session.display.conf /usr/share/dbus-1/session.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
           echo "::endgroup::"
@@ -131,18 +139,18 @@ jobs:
           echo "::group::test services"
           echo "run ltsm service"
           sudo ./ltsm_service &
-          sleep 5
+          sleep 3
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./ltsm_connector --config /etc/ltsm/ltsm_connector.json --type ltsm" &
-          sleep 5
+          sleep 3
           echo "get vnc screenshot"
           ./ltsm_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
-          sleep 5
+          sleep 3
           grep -i ltsm /var/log/syslog
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
-          sleep 5
+          sleep 3
           echo "::endgroup::"
           echo "::group::x11 tests"
           /usr/bin/Xorg :55 -config ltsm.conf -nolisten tcp -quiet > /dev/null 2>&1 &
