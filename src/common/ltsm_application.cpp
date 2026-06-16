@@ -224,7 +224,7 @@ namespace LTSM {
             case DebugTarget::Syslog:
 #ifdef __UNIX__
 #ifdef LTSM_WITH_SYSTEMD
-                if(sd_booted()) {
+                if(0 < sd_booted()) {
  #if 11000 <= SPDLOG_VERSION
                     log = spdlog::systemd_logger_mt(name, appIdent);
  #else
@@ -761,7 +761,7 @@ namespace LTSM {
 
         if(Application::isDebugTarget(DebugTarget::Syslog)) {
 #ifdef LTSM_WITH_SYSTEMD
-            if(sd_booted()) {
+            if(0 < sd_booted()) {
                 Application::setDebugTarget(DebugTarget::Console);
             }
 #endif
