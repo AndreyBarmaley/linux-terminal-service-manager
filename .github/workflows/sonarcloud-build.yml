@@ -46,7 +46,7 @@ jobs:
         with:
           java-version: 11
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python 3.8 for gcovr
         uses: actions/setup-python@v2
