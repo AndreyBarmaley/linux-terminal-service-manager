@@ -31,7 +31,7 @@ if(LTSM_WITH_EXECUTION_PAR)
         target_link_libraries(${CUR_TARGET} PRIVATE TBB::tbb)
     else()
         set(LTSM_WITH_EXECUTION_PAR OFF)
-        message(STATUS "TBB not found")
+        #message(STATUS "TBB not found")
     endif()
 endif()
 
