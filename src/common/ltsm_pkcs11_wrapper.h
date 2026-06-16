@@ -269,7 +269,7 @@ namespace LTSM {
                 return day;
             }
 
-            std::string toString(const std::string & format = "%Y%m{}" /*strftime format*/) const;
+            std::string toString(const std::string & format = "%F" /*strftime format*/) const;
         };
 
         /// BaseObject
