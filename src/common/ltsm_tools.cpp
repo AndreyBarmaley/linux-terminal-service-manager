@@ -52,6 +52,8 @@
 #include <stdexcept>
 #include <filesystem>
 
+#include <openssl/evp.h>
+
 #include "ltsm_tools.h"
 #include "ltsm_sockets.h"
 #include "ltsm_streambuf.h"
@@ -890,5 +892,55 @@ namespace LTSM {
         }
 
         return buf;
+    }
+
+    std::vector<uint8_t> OpenSSL::encryptDES(std::span<const uint8_t> data, std::string_view str) {
+        std::array<uint8_t, 8> _key = {0};
+        std::array<uint8_t, 8> _iv = {0};
+    
+        std::copy_n(reinterpret_cast<const uint8_t*>(str.data()), 
+                    std::min(str.size(), _key.size()), _key.begin());
+
+        for (auto & val : _key) {
+            if (val) {
+                val = ((val * 0x0202020202ULL & 0x010884422010ULL) % 1023) & 0xfe;
+            }
+        }
+
+        std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx{ EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free };
+    
+        if (!ctx) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_CIPHER_CTX");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        if (1 != EVP_EncryptInit_ex(ctx.get(), EVP_des_cbc(), nullptr, _key.data(), _iv.data())) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_EncryptInit");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        if (1 != EVP_CIPHER_CTX_set_padding(ctx.get(), 0)) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_CIPHER_CTX_set_padding");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        std::vector<uint8_t> res(data.size());
+        int out_len = 0;
+        int final_len = 0;
+
+        if (!data.empty()) {
+            if (1 != EVP_EncryptUpdate(ctx.get(), res.data(), &out_len, data.data(), data.size())) {
+                Application::error("{}: {} failed", NS_FuncNameV, "EVP_EncryptUpdate");
+                throw std::runtime_error(NS_FuncNameS);
+            }
+        }
+
+        if (1 != EVP_EncryptFinal_ex(ctx.get(), res.data() + out_len, &final_len)) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_EncryptFinal");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        res.resize(out_len + final_len);
+        return res;
     }
 } // LTSM

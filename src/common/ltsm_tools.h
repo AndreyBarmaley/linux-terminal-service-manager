@@ -469,6 +469,9 @@ namespace LTSM {
         };
     }
 
+    namespace OpenSSL {
+        std::vector<uint8_t> encryptDES(std::span<const uint8_t> data, std::string_view pass);
+    }
 }
 #define NS_FuncNameS LTSM::view2string(LTSM::Tools::prettyFuncNameView(__PRETTY_FUNCTION__))
 #define NS_FuncNameV LTSM::Tools::prettyFuncNameView(__PRETTY_FUNCTION__)

@@ -69,7 +69,7 @@ namespace LTSM {
             Application::debug(DebugType::Rfb, "{}: challenge: {}", NS_FuncNameV, tmp);
         }
 
-        auto crypt = TLS::encryptDES(challenge, password);
+        auto crypt = OpenSSL::encryptDES(challenge, password);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::hexString(crypt, 2);
