@@ -187,10 +187,10 @@ namespace LTSM {
     /// @brief: socket stream
     class SocketStream : public NetworkStream {
       protected:
-        int sock;
+        int sock = -1;
 
       public:
-        explicit SocketStream(int fd = 0, bool statistic = true);
+        explicit SocketStream(int fd, bool statistic = true);
         ~SocketStream();
 
         SocketStream(const SocketStream &) = delete;
@@ -199,8 +199,8 @@ namespace LTSM {
 #ifdef LTSM_WITH_GNUTLS
         void setupTLS(gnutls::session*) const override;
 #endif
-        void setSocket(int fd) {
-            sock = fd;
+        bool isValid(void) const {
+            return 0 <= sock;
         }
 
         bool hasInput(void) const override;
@@ -216,24 +216,9 @@ namespace LTSM {
     };
 
     /// @brief: inetd stream
-    class InetStream : public NetworkStream {
-      protected:
-        int fdin = -1;
-        int fdout = -1;
-
-        void inetFdClose(void);
-
+    class InetStream : public SocketStream {
       public:
         InetStream();
-
-#ifdef LTSM_WITH_GNUTLS
-        void setupTLS(gnutls::session*) const override;
-#endif
-        bool hasInput(void) const override;
-        size_t hasData(void) const override;
-
-        void sendRaw(const void*, size_t) override;
-        void recvRaw(void*, size_t) const override;
     };
 
     /// @brief: proxy socket: stdin/stdout to local socket

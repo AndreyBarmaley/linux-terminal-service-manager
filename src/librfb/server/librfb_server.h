@@ -168,7 +168,8 @@ namespace LTSM {
             void cursorFailed(uint32_t);
 
           public:
-            ServerEncoder(int sockfd = 0);
+            ServerEncoder();
+            ~ServerEncoder() = default;
 
             // EncoderStream interface
             const PixelFormat & clientFormat(void) const override;

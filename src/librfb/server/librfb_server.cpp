@@ -68,13 +68,8 @@ namespace LTSM {
     }
 
     // ServerEncoder
-    RFB::ServerEncoder::ServerEncoder(int sockfd) {
-        if(0 < sockfd) {
-            socket = std::make_unique<SocketStream>(sockfd);
-        } else {
-            socket = std::make_unique<InetStream>();
-        }
-
+    RFB::ServerEncoder::ServerEncoder() {
+        socket = std::make_unique<InetStream>();
         streamIn = streamOut = socket.get();
     }
 

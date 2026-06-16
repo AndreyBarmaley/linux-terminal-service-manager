@@ -409,47 +409,7 @@ namespace LTSM {
     }
 
     /* InetStream */
-    InetStream::InetStream() {
-        fdin = dup(fileno(stdin));
-        fdout = dup(fileno(stdout));
-    }
-
-    void InetStream::inetFdClose(void) {
-        if(0 <= fdin) {
-            close(fdin);
-            fdin = -1;
-        }
-
-        if(0 <= fdout) {
-            close(fdout);
-            fdout = -1;
-        }
-    }
-
-#ifdef LTSM_WITH_GNUTLS
-    void InetStream::setupTLS(gnutls::session* sess) const {
-        sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(fdin),
-                                reinterpret_cast<gnutls_transport_ptr_t>(fdout));
-    }
-
-#endif
-
-    bool InetStream::hasInput(void) const {
-        return 0 <= fdin ? NetworkStream::hasInput(fdin) : false;
-    }
-
-    size_t InetStream::hasData(void) const {
-        return 0 <= fdin ? NetworkStream::hasData(fdin) : false;
-    }
-
-    void InetStream::recvRaw(void* ptr, size_t len) const {
-        recvFrom(fdin, ptr, len);
-        NetworkStream::bytesIn += len;
-    }
-
-    void InetStream::sendRaw(const void* ptr, size_t len) {
-        sendTo(fdout, ptr, len);
-        NetworkStream::bytesOut += len;
+    InetStream::InetStream() : SocketStream(dup(STDIN_FILENO)) {
     }
 
     /* ProxySocket */
@@ -460,7 +420,7 @@ namespace LTSM {
     void ProxySocket::proxyShutdown(void) {
         Application::info("{}: client {}, bridge: {}", NS_FuncNameV, clientSock, bridgeSock);
         loopTransmission = false;
-        inetFdClose();
+        SocketStream::reset();
 
         if(0 < bridgeSock) {
             close(bridgeSock);
@@ -520,15 +480,15 @@ namespace LTSM {
     }
 
     bool ProxySocket::transmitDataIteration(void) {
-        if(0 > fdin) {
+        if(! SocketStream::isValid()) {
             return false;
         }
 
         size_t dataSz = 0;
 
         // inetFd -> bridgeSock
-        if(NetworkStream::hasInput(fdin)) {
-            dataSz = NetworkStream::hasData(fdin);
+        if(SocketStream::hasInput()) {
+            dataSz = SocketStream::hasData();
 
             if(0 < dataSz) {
                 auto buf = recvData(dataSz);
@@ -541,7 +501,7 @@ namespace LTSM {
             }
         }
 
-        if(0 > fdout) {
+        if(! SocketStream::isValid()) {
             return false;
         }
 
