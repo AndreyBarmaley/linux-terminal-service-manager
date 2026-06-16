@@ -42,7 +42,7 @@ namespace LTSM {
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
-        : Application("ltsm_vnc2image"), ClientDecoder(ioc_.get_executor()) {
+        : Application("ltsm_vnc2image"), ClientDecoder(ioc().get_executor()) {
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 
@@ -75,7 +75,7 @@ namespace LTSM {
 
     int Vnc2Image::start(void) {
 
-        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> {
+        asio::co_spawn(ioc(), [this]() -> asio::awaitable<void> {
             try {
                 co_await rfbHostConnectAwait(host, port, false);
             } catch(const system::system_error& err) {
@@ -108,7 +108,7 @@ namespace LTSM {
             }
 
             try {
-                co_await asio::co_spawn(ioc_, rfbMessagesLoopAwait(), asio::use_awaitable);
+                co_await asio::co_spawn(ioc(), rfbMessagesLoopAwait(), asio::use_awaitable);
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
@@ -119,7 +119,7 @@ namespace LTSM {
             }
         }, asio::detached);
 
-        ioc_.run();
+        ioc().run();
         return 0;
     }
 
