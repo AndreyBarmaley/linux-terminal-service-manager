@@ -179,7 +179,7 @@ namespace LTSM::DisplaySession {
 
         void timerChildsAliveCheck(const boost::system::error_code &);
 
-        void stop(void);
+        void stop(void) noexcept;
 
       public:
         DBusAdaptor(int displayNum, const char* xauthFile, bool debug);

@@ -64,7 +64,7 @@ value_to_buffer(T&& val) {
     if constexpr (std::is_integral_v<DecayedT>) {
         return boost::asio::buffer(&val, sizeof(val));
     } else if constexpr (is_mutable_buffer_v<DecayedT>) {
-        return std::move(val);
+        return std::forward<T>(val);
     } else if constexpr (has_data_size_v<DecayedT>) {
         if constexpr (sizeof(typename DecayedT::value_type) == 1) {
             return boost::asio::buffer(val.data(), val.size());

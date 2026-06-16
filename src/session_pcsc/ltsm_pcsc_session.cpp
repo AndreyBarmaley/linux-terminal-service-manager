@@ -1859,13 +1859,15 @@ namespace LTSM {
         unregisterAdaptor();
     }
 
-    void PcscSessionBus::stop(void) {
+    void PcscSessionBus::stop(void) noexcept {
         sdbusLoopCancel();
         remote_cancel_.emit(asio::cancellation_type::terminal);
         listen_stop_.emit(asio::cancellation_type::terminal);
         clients_.clear();
         remote_.reset();
-        signals_.cancel();
+
+        system::error_code ec;
+        signals_.cancel(ec);
     }
 
     asio::awaitable<void> PcscSessionBus::signalsHandler(void) {

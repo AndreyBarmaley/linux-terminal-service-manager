@@ -321,11 +321,13 @@ namespace LTSM {
         unregisterAdaptor();
     }
 
-    void AudioSessionBus::stop(void) {
+    void AudioSessionBus::stop(void) noexcept {
         sdbusLoopCancel();
         connect_cancel_.emit(asio::cancellation_type::terminal);
         clients_.clear();
-        signals_.cancel();
+
+        system::error_code ec;
+        signals_.cancel(ec);
     }
 
     asio::awaitable<void> AudioSessionBus::signalsHandler(void) {
