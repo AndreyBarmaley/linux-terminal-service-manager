@@ -33,8 +33,20 @@
 #define LTSM_VNC2IMAGE_VERSION 20260414
 
 namespace LTSM {
-    class Vnc2Image : public Application, protected RFB::ClientDecoder {
-        boost::asio::io_context ioc_;
+    class BoostContext {
+        mutable boost::asio::io_context ioc_;
+
+      protected:
+        inline boost::asio::io_context & ioc(void) const { return ioc_; }
+        inline size_t concurency(void) const { return 1; }
+        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
+
+      public:
+        BoostContext() = default;
+        ~BoostContext() = default;
+    };
+
+    class Vnc2Image : public BoostContext, public Application, protected RFB::ClientDecoder {
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 
