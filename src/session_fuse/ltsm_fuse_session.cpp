@@ -195,11 +195,11 @@ namespace LTSM {
         }
 
         std::string socketPath(void) const {
-            return socket().local_endpoint().path();
+            return const_cast<FuseSession&>(*this).socket().local_endpoint().path();
         }
 
         inline bool socketConnected(void) const {
-            return socket().is_open();
+            return const_cast<FuseSession&>(*this).socket().is_open();
         }
 
         asio::strand<asio::any_io_executor> & strand(void) {
