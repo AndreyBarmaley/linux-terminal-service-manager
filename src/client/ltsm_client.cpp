@@ -1375,15 +1375,15 @@ namespace LTSM {
 
     void ClientApp::postDecoderJob(RFB::PostDecoderJobCb && func, std::vector<uint8_t> && buf, const XCB::Region & reg, uint32_t pitch, const PixelFormat & pf) const {
         // decoder job
-        boost::asio::post(ioc(), [this, job=std::move(func), buf1=std::move(buf), pitch, reg, pf]() {
-            decoder_jobs_.fetch_add(1, std::memory_order_relaxed);
+        boost::asio::post(const_cast<ClientApp&>(*this).ioc(), [this, job=std::move(func), buf1=std::move(buf), pitch, reg, pf]() {
+            decoder_jobs_.fetch_add(1);
             updateRawPixels(reg, job(buf1, reg, pitch, pf), pitch, pf);
-            decoder_jobs_.fetch_sub(1, std::memory_order_release);
+            decoder_jobs_.fetch_sub(1);
         });
     }
 
     void ClientApp::waitDecoderJobs(void) const {
-        while(decoder_jobs_.load(std::memory_order_acquire)) {
+        while(decoder_jobs_.load()) {
             std::this_thread::yield();
         }
     }

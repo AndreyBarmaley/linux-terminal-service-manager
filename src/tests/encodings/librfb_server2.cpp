@@ -59,7 +59,6 @@ namespace LTSM {
     void RFB::ServerEncoderBuf::sendRaw(const void* ptr, size_t len) {
         try {
             streamOut->sendRaw(ptr, len);
-            netStatTx += len;
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
@@ -68,7 +67,6 @@ namespace LTSM {
     void RFB::ServerEncoderBuf::recvRaw(void* ptr, size_t len) const {
         try {
             streamIn->recvRaw(ptr, len);
-            netStatRx += len;
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }

@@ -39,7 +39,7 @@ namespace LTSM {
 
             mutable std::mutex clientLock;
 
-            mutable uint16_t clipLocalTypes = 0;
+            uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
           protected:
@@ -53,7 +53,7 @@ namespace LTSM {
 
             // selection recipient
             void selectionReceiveData(xcb_atom_t, std::vector<uint8_t>&&) const override;
-            void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override;
+            void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) override;
             void selectionChangedEvent(void) const override;
 
             // ext clipboard

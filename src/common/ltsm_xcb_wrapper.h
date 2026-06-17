@@ -381,14 +381,14 @@ namespace LTSM {
 
         struct ModuleTest : ModuleExtension {
             xcb_window_t screen = 0;
-            mutable std::array<xcb_keycode_t, 16> keycodes;
+            std::array<xcb_keycode_t, 16> keycodes;
 
             explicit ModuleTest(const ConnectionShared &, xcb_window_t win);
             ~ModuleTest();
 
             bool fakeInputRaw(xcb_window_t, uint8_t type, uint8_t detail, int16_t posx, int16_t posy) const;
 
-            void screenInputReset(void) const;
+            void screenInputReset(void);
             void screenInputKeycode(xcb_keycode_t, bool pressed) const;
             void screenInputButton(uint8_t button, const Point &, bool pressed) const;
             void screenInputButtonClick(uint8_t button, const Point &) const;
@@ -471,7 +471,7 @@ namespace LTSM {
         class SelectionRecipient {
           public:
             virtual void selectionReceiveData(xcb_atom_t, std::vector<uint8_t>&&) const = 0;
-            virtual void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const = 0;
+            virtual void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) = 0;
             virtual void selectionChangedEvent(void) const = 0;
 
             SelectionRecipient() = default;
@@ -674,6 +674,8 @@ namespace LTSM {
         enum InitModules { All = 0xFFFF, Shm = 0x0001, Damage = 0x0002, XFixes = 0x0004, RandR = 0x0008, Test = 0x0010, Xkb = 0x0020, SelCopy = 0x0040, SelPaste = 0x0080 };
 
         class RootDisplay : public Connector {
+            mutable std::shared_mutex _lockGeometry;
+
           protected:
             std::unique_ptr<ModuleShm> _modShm;
             std::unique_ptr<ModuleWindowFixes> _modWinFixes;
@@ -687,8 +689,6 @@ namespace LTSM {
             xcb_screen_t* _screen = nullptr;
             xcb_format_t* _format = nullptr;
             xcb_visualtype_t* _visual = nullptr;
-
-            mutable std::shared_mutex _lockGeometry;
 
           protected:
 

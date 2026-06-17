@@ -127,7 +127,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Client::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const {
+    void RFB::X11Client::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) {
         Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
         clipLocalTypes = 0;
 
