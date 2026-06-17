@@ -9,7 +9,3 @@ target_include_directories(${CUR_TARGET} PRIVATE ${PAM_INCLUDE_PATH})
 target_link_libraries(${CUR_TARGET} PRIVATE ${PAM_LIBRARIES} ${PAM_MISC_LIBRARIES} stdc++)
 target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_BOOST)
 
-if(LTSM_BUILD_COVERAGE_TESTS)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_BUILD_COVERAGE_TESTS)
-endif()
-

@@ -336,9 +336,8 @@ namespace LTSM::Manager {
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
     class XvfbSessions {
-      protected:
-        std::vector<XvfbSessionPtr> sessions;
         mutable std::mutex lockSessions;
+        std::vector<XvfbSessionPtr> sessions;
 
       public:
         XvfbSessions(size_t);
@@ -348,11 +347,17 @@ namespace LTSM::Manager {
         XvfbSessionPtr findDisplaySession(int display) const;
         std::forward_list<XvfbSessionPtr> findUserSessions(const std::string & username) const;
         XvfbSessionPtr findUserSession(const std::string & username) const;
-        XvfbSessionPtr registryNewSession(int min, int max);
         void removeDisplaySession(int display);
         std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void) const;
         std::forward_list<XvfbSessionPtr> getOnlineSessions(void) const;
+        std::forward_list<XvfbSessionPtr> getValidSessions(void) const;
 
+        std::unordered_set<uid_t> getSessionsUsersUid(void) const;
+
+        void sessionsResize(size_t);
+        bool isSessionsFull(void) const;
+        size_t countValidSessions(void) const;
+        bool appendNewSession(XvfbSessionPtr);
         std::string toJsonString(void) const;
     };
 
@@ -383,6 +388,7 @@ namespace LTSM::Manager {
 #ifdef LTSM_WITH_AUDIT
         std::unique_ptr<AuditService> auditLog;
 #endif
+        int free_display_ = 101;
 
       private:
         void stop(void) noexcept;
