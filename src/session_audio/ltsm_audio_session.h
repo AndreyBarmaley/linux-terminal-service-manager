@@ -85,11 +85,11 @@ namespace LTSM {
         std::list<AudioPacketPtr> dataEncode(std::span<const uint8_t>);
 
         bool socketPath(std::string_view path) const {
-            return socket().local_endpoint().path() == path;
+            return const_cast<AudioClient&>(*this).socket().local_endpoint().path() == path;
         }
 
         bool socketConnected(void) const {
-            return socket().is_open();
+            return const_cast<AudioClient&>(*this).socket().is_open();
         }
     };
 

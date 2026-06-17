@@ -144,11 +144,11 @@ namespace LTSM {
         }
 
         bool isConnected(void) const {
-            return socket().is_open();
+            return const_cast<PcscRemote&>(*this).socket().is_open();
         }
 
         std::string socketPath(void) const {
-            return socket().remote_endpoint().path();
+            return const_cast<PcscRemote&>(*this).socket().remote_endpoint().path();
         }
 
         [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);
