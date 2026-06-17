@@ -761,6 +761,26 @@ namespace LTSM::Manager {
         return res;
     }
 
+    size_t XvfbSessions::countValidSessions(void) const {
+        std::scoped_lock guard{ lockSessions };
+        return std::ranges::count_if(sessions, [](auto & ptr) {
+            return !!ptr;
+        });
+    }
+
+    std::forward_list<XvfbSessionPtr> XvfbSessions::getValidSessions(void) const {
+        std::forward_list<XvfbSessionPtr> res;
+        std::scoped_lock guard{ lockSessions };
+
+        for(const auto & ptr : sessions) {
+            if(ptr) {
+                res.push_front(ptr);
+            }
+        }
+
+        return res;
+    }
+
     std::forward_list<XvfbSessionPtr> XvfbSessions::getOnlineSessions(void) const {
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard{ lockSessions };
@@ -785,35 +805,46 @@ namespace LTSM::Manager {
         }
     }
 
-    XvfbSessionPtr XvfbSessions::registryNewSession(int min, int max) {
-        if(max < min) {
-            std::swap(max, min);
-        }
-
+    void XvfbSessions::sessionsResize(size_t poolsz) {
         std::scoped_lock guard{ lockSessions };
-        auto freeDisplay = min;
-
-        for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
-                break;
-            }
+        if(poolsz > sessions.size()) {
+            sessions.resize(poolsz);
         }
-
-        if(freeDisplay <= max) {
-            auto it = std::ranges::find_if(sessions, [](auto & ptr) {
-                return ! ptr;
-            });
-
-            if(it != sessions.end()) {
-                (*it) = std::make_shared<XvfbSession>();
-                (*it)->displayNum = freeDisplay;
-            }
-
-            return *it;
-        }
-
-        return nullptr;
     }
+
+    std::unordered_set<uid_t> XvfbSessions::getSessionsUsersUid(void) const {
+        std::unordered_set<uid_t> res;
+        std::scoped_lock guard{ lockSessions };
+        res.reserve(sessions.size());
+        for(const auto & ptr: sessions) {
+            if(ptr) {
+                res.emplace(ptr->userInfo->uid());
+            }
+        }
+        return res;
+    }
+
+    bool XvfbSessions::isSessionsFull(void) const {
+        std::scoped_lock guard{ lockSessions };
+        return std::ranges::all_of(sessions, [](auto & ptr) {
+            return !!ptr;
+        });
+    }
+
+    bool XvfbSessions::appendNewSession(XvfbSessionPtr sess) {
+        std::scoped_lock guard{ lockSessions };
+        auto freeSlot = std::ranges::find_if(sessions, [](auto & ptr) {
+            return !ptr;
+        });
+        
+        if(freeSlot == sessions.end()) {
+            return false;
+        }
+
+        (*freeSlot) = std::move(sess);
+        return true;
+    }
+
 
     std::string XvfbSessions::toJsonString(void) const {
         JsonArrayStream jas;
@@ -979,7 +1010,8 @@ namespace LTSM::Manager {
         createRuntimeDir();
 
         // set pool sessions
-        sessions.resize(std::abs(configGetInteger("limit:sessions", 20)));
+        sessionsResize(std::abs(configGetInteger("limit:sessions", 20)));
+        free_display_ = configGetInteger("display:init", 101);
 
         //
         saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").string();
@@ -1034,18 +1066,12 @@ namespace LTSM::Manager {
     void DBusAdaptor::stop(void) noexcept {
 
         // terminate connectors
-        for(const auto & ptr : sessions) {
-            if(ptr) {
-                displayShutdown(ptr, true);
-            }
+        for(const auto & ptr : getValidSessions()) {
+            displayShutdown(ptr, true);
         }
 
-        auto isValidSession = [](const XvfbSessionPtr & ptr) {
-            return !! ptr;
-        };
-
         // wait sessions
-        while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
+        while(auto sessionsAlive = countValidSessions()) {
             Application::debug(DebugType::App, "{}: wait sessions: {}", NS_FuncNameV, sessionsAlive);
             std::this_thread::sleep_for(50ms);
         }
@@ -1114,11 +1140,7 @@ namespace LTSM::Manager {
         // check pool sessions
         size_t poolsz = std::abs(configGetInteger("limit:sessions", 20));
 
-        if(poolsz > sessions.size()) {
-            std::scoped_lock guard{ lockSessions };
-            sessions.resize(poolsz);
-        }
-
+        sessionsResize(poolsz);
         Application::notice("{}: success", NS_FuncNameV);
     }
 
@@ -1426,42 +1448,21 @@ namespace LTSM::Manager {
 
         const bool loginMode = username == ltsm_user_conn;
 
-        std::scoped_lock guard{ lockSessions };
-        
         // check limit:sessions
-        auto freeSlot = std::ranges::find_if(sessions, [](auto & ptr) {
-            return ! ptr;
-        });
-
-        if(freeSlot == sessions.end()) {
+        if(isSessionsFull()) {
             Application::error("{}: limit:sessions overload", NS_FuncNameV);
             return nullptr;
         }
 
         // check limit:users
         if(int usersLimitMax = configGetInteger("limit:users", 0); 0 < usersLimitMax) {
-            std::unordered_set<uid_t> users;
-            users.reserve(sessions.size());
-            for(const auto & ptr: sessions) {
-                if(ptr) {
-                    users.emplace(ptr->userInfo->uid());
-                }
-            }
-            if(usersLimitMax <= users.size()) {
+            if(auto users = getSessionsUsersUid(); usersLimitMax <= users.size()) {
                 Application::error("{}: limit:users overload", NS_FuncNameV);
                 return nullptr;
             }
         }
 
-        int freeDisplay = configGetInteger("display:init", 101);
-        const int freeDisplayMax = freeDisplay + sessions.size();
-    
-        for(; freeDisplay <= freeDisplayMax; ++freeDisplay) {
-            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
-                break;
-            }
-        }
-
+        int freeDisplay = free_display_++;
         if(auto x11SocketDir = std::filesystem::path(Tools::x11UnixPath(freeDisplay)).parent_path();
                                     ! std::filesystem::is_directory(x11SocketDir)) {
             std::error_code fserr;
@@ -1551,8 +1552,12 @@ namespace LTSM::Manager {
                 Tools::setFileOwner(Tools::x11UnixPath(sess->displayNum),
                             sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0660);
 
-                (*freeSlot) = std::move(sess);
-                return *freeSlot;
+                if(! appendNewSession(sess)) {
+                    Application::error("{}: limit:sessions overload", NS_FuncNameV);
+                    return nullptr;
+                }
+
+                return sess;
             } catch(const std::exception & err) {
                 Application::error("{}: {}", NS_FuncNameV, "permission", err.what());
             }
