@@ -39,7 +39,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
         }
     }
 
-    void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override {
+    void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) override {
         std::for_each(beg, end, [&](auto & atom) {
             Application::info("{}: target: `{}'", "selectionReceiveTargets", getAtomName(atom).data());
 

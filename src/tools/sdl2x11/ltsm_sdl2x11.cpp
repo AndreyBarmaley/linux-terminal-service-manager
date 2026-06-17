@@ -88,7 +88,7 @@ namespace LTSM {
             SDL_SetClipboardText(reinterpret_cast<const char*>(buf.data()));
         }
 
-        void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override {
+        void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) override {
             auto targets = selectionSourceTargets();
 
             auto ptr = const_cast<SDL2X11*>(this);

@@ -233,21 +233,21 @@ class AsyncSocket : public AsyncSocketBase {
 
     void sync_recv_buf(void* ptr, size_t len) const final {
         if (len) {
-            boost::asio::read(socket(), boost::asio::buffer(ptr, len),
+            boost::asio::read(const_cast<AsyncSocket&>(*this).socket(), boost::asio::buffer(ptr, len),
                               boost::asio::transfer_all());
         }
     }
 
     void sync_send_buf(const void* ptr, size_t len) const final {
         if (len) {
-            boost::asio::write(socket(), boost::asio::buffer(ptr, len),
+            boost::asio::write(const_cast<AsyncSocket&>(*this).socket(), boost::asio::buffer(ptr, len),
                               boost::asio::transfer_all());
         }
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_recv_buf(void* ptr, size_t len) const final {
         if (len) {
-            co_await boost::asio::async_read(socket(), boost::asio::buffer(ptr, len),
+            co_await boost::asio::async_read(const_cast<AsyncSocket&>(*this).socket(), boost::asio::buffer(ptr, len),
                                              boost::asio::transfer_exactly(len), boost::asio::use_awaitable);
         }
         co_return;
@@ -255,36 +255,36 @@ class AsyncSocket : public AsyncSocketBase {
 
     [[nodiscard]] boost::asio::awaitable<void> async_recv_buffers(
         std::initializer_list<boost::asio::mutable_buffer> list) const final {
-        co_await boost::asio::async_read(socket(), list, boost::asio::transfer_all(), boost::asio::use_awaitable);
+        co_await boost::asio::async_read(const_cast<AsyncSocket&>(*this).socket(), list, boost::asio::transfer_all(), boost::asio::use_awaitable);
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_buf(const boost::asio::const_buffer& buf) const final {
-        co_await boost::asio::async_write(socket(), buf, boost::asio::transfer_all(), boost::asio::use_awaitable);
+        co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), buf, boost::asio::transfer_all(), boost::asio::use_awaitable);
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_buffers(
         std::initializer_list<boost::asio::const_buffer> list) const final {
-        co_await boost::asio::async_write(socket(), list, boost::asio::transfer_all(), boost::asio::use_awaitable);
+        co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), list, boost::asio::transfer_all(), boost::asio::use_awaitable);
     }
 
     template <typename Buffers>
     [[nodiscard]] boost::asio::awaitable<void> async_send_buffers(const Buffers& bufs) const {
-        co_await boost::asio::async_write(socket(), bufs, boost::asio::transfer_all(), boost::asio::use_awaitable);
+        co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), bufs, boost::asio::transfer_all(), boost::asio::use_awaitable);
     }
 
-    virtual Socket& socket(void) const = 0;
+    virtual Socket& socket(void) = 0;
 };
 
 using AsioTcpSocket = boost::asio::ip::tcp::socket;
 
 class AsyncTcpStream : public AsyncSocket<AsioTcpSocket> {
-    mutable AsioTcpSocket sock_;
+    AsioTcpSocket sock_;
 
   public:
     explicit AsyncTcpStream(const boost::asio::any_io_executor& ex) : sock_{ex} {}
     explicit AsyncTcpStream(AsioTcpSocket&& sock) : sock_{std::move(sock)} {}
 
-    AsioTcpSocket& socket(void) const override { return sock_; }
+    AsioTcpSocket& socket(void) override { return sock_; }
 
     void closeSocket(void) override {
         if (sock_.is_open()) {
@@ -299,13 +299,13 @@ class AsyncTcpStream : public AsyncSocket<AsioTcpSocket> {
 using AsioLocalSocket = boost::asio::local::stream_protocol::socket;
 
 class AsyncLocalStream : public AsyncSocket<AsioLocalSocket> {
-    mutable AsioLocalSocket sock_;
+    AsioLocalSocket sock_;
 
   public:
     explicit AsyncLocalStream(const boost::asio::any_io_executor& ex) : sock_{ex} {}
     explicit AsyncLocalStream(AsioLocalSocket&& sock) : sock_{std::move(sock)} {}
 
-    AsioLocalSocket& socket(void) const override { return sock_; }
+    AsioLocalSocket& socket(void) override { return sock_; }
 
     void closeSocket(void) override {
         if (sock_.is_open()) {

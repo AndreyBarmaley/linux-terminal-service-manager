@@ -886,6 +886,12 @@ bool LTSM::ChannelClient::createChannelSocketFd(uint8_t channel, int sock, const
 }
 #endif
 
+void LTSM::ChannelClient::plannedEmplace(Channel::Planned && val) {
+    const std::scoped_lock guard{lockpl};
+
+    channelsPlanned.emplace_back(std::move(val));
+}
+
 void LTSM::ChannelClient::destroyChannel(uint8_t channel) {
     std::thread([this, channel] {
         const std::scoped_lock guard{this->lockch};
@@ -1064,10 +1070,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
         Application::error("{}: all channels busy", NS_FuncNameV);
         return false;
     } else {
-        const std::scoped_lock guard{lockpl};
-
-        channelsPlanned.emplace_back(
-            Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock, .channel = channel });
+        plannedEmplace(Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock, .channel = channel });
     }
 
     // send channel open to client

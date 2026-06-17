@@ -112,7 +112,7 @@ namespace LTSM::SDBus {
                 }
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                    throw err;
+                    throw;
                 }
             }
 

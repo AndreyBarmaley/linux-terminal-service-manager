@@ -587,7 +587,7 @@ namespace LTSM {
         }
     }
 
-    void XCB::ModuleTest::screenInputReset(void) const {
+    void XCB::ModuleTest::screenInputReset(void) {
         if(auto ptr = conn.lock()) {
             // release all buttons
             for(uint8_t button = 1; button <= 5; button++) {
@@ -1861,7 +1861,7 @@ namespace LTSM {
                 auto len = xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
 
                 if(ptr) {
-                    recipient->selectionReceiveTargets(ptr, ptr + len);
+                    const_cast<SelectionRecipient*>(recipient)->selectionReceiveTargets(ptr, ptr + len);
                 } else {
                     Application::warning("{}: property empty", NS_FuncNameV);
                 }

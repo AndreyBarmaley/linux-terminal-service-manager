@@ -39,7 +39,7 @@ namespace LTSM {
         }
 
         boost::asio::awaitable<void> async_lock(void) {
-            if(0 < queue_.fetch_add(1, std::memory_order_acquire)) {
+            if(0 < queue_.fetch_add(1)) {
                 //  we are not the first here, we need to wait on the timer...
                 try {
                     co_await timer_.async_wait(boost::asio::use_awaitable);
@@ -52,7 +52,7 @@ namespace LTSM {
         }
 
         void unlock(void) {
-            if(1 < queue_.fetch_sub(1, std::memory_order_release)) {
+            if(1 < queue_.fetch_sub(1)) {
                 // there's someone else waiting, let's skip one
                 while(0 == timer_.cancel_one()) {
                     std::this_thread::yield();

@@ -45,9 +45,6 @@ namespace LTSM {
             PixelFormat         clientPf, serverPf;
             std::mutex          sendLock;
 
-            mutable size_t      netStatRx = 0;
-            mutable size_t      netStatTx = 0;
-
             NetworkStream*      streamIn = nullptr;
             NetworkStream*      streamOut = nullptr;
 

@@ -93,7 +93,6 @@ namespace LTSM {
         try {
             if(rfbMessages) {
                 streamOut->sendRaw(ptr, len);
-                netStatTx += len;
             }
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -105,7 +104,6 @@ namespace LTSM {
         try {
             if(rfbMessages) {
                 streamIn->recvRaw(ptr, len);
-                netStatRx += len;
             }
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());

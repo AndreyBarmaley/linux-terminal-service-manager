@@ -75,9 +75,6 @@ namespace LTSM {
             std::atomic<bool> rfbMessages{true};
             std::atomic<bool> fbUpdateProcessing{false};
 
-            mutable size_t netStatRx = 0;
-            mutable size_t netStatTx = 0;
-
             NetworkStream* streamIn = nullptr;
             NetworkStream* streamOut = nullptr;
 

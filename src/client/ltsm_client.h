@@ -54,10 +54,10 @@ namespace LTSM {
 
     class BoostContext {
         const int concurency_ = 4;
-        mutable boost::asio::io_context ioc_{concurency_};
+        boost::asio::io_context ioc_{concurency_};
 
       protected:
-        inline boost::asio::io_context & ioc(void) const { return ioc_; }
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
         inline size_t concurency(void) const { return concurency_; }
         boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 

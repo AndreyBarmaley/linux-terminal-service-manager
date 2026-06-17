@@ -455,7 +455,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const {
+    void RFB::X11Server::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) {
         clipLocalTypes = 0;
 
         if(extClipboardRemoteCaps()) {

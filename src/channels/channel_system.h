@@ -199,9 +199,9 @@ namespace LTSM {
 
         // Remote2Local
         class Remote2Local {
+            mutable std::mutex lockQueue;
           protected:
             std::list<std::vector<uint8_t>> queueBufs;
-            mutable std::mutex lockQueue;
 
             std::chrono::milliseconds delay{100};
 
@@ -557,15 +557,18 @@ namespace LTSM {
     }
 
     class ChannelClient {
-      protected:
+        mutable std::mutex lockch;
+        mutable std::mutex lockpl;
+
         std::list<std::unique_ptr<Channel::ConnectorBase>> channels;
         std::list<Channel::Planned> channelsPlanned;
 
-        mutable std::mutex lockch, lockpl;
-
+      protected:
         int channelDebug = -1;
 
       protected:
+        void plannedEmplace(Channel::Planned &&);
+
         Channel::ConnectorBase* findChannel(uint8_t);
         Channel::Planned* findPlanned(uint8_t);
         bool channelPlannedCreate(uint8_t, const Channel::Planned &);
@@ -577,7 +580,6 @@ namespace LTSM {
         virtual bool isUserSession(void) const {
             return false;
         }
-
 
         // recv system events
         virtual void systemClientVariables(const JsonObject &) { /* empty */ }

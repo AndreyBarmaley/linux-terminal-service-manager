@@ -45,11 +45,11 @@ enum class HandshakeType { Client, Srrver };
 
 class AsyncStream : public AsyncSocket<AsioSslStream> {
     AsioSslContext ssl_ctx_;
-    mutable AsioSslStream ssl_sock_;
+    AsioSslStream ssl_sock_;
     bool ssl_connected_ = false;
 
   protected:
-    AsioSslStream& socket(void) const override { return ssl_sock_; }
+    AsioSslStream& socket(void) override { return ssl_sock_; }
 
   public:
     explicit AsyncStream(const boost::asio::any_io_executor& ex, const AsioSslContext::method& method)
