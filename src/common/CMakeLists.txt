@@ -9,6 +9,9 @@ endif()
 
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_WITH_EXECUTION_PAR OFF)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_BUILD_COVERAGE_TESTS)
+    target_compile_options(${CUR_TARGET} PRIVATE --coverage -O0 -g)
+    target_link_options(${CUR_TARGET} PRIVATE --coverage)
 endif()
 
 target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)

@@ -63,7 +63,7 @@ namespace LTSM::DisplaySession {
     class SessionProcess {
         std::string filename_;
 
-        mutable bp::child proc_;
+        bp::child proc_;
         bp::ipstream proc_out_, proc_err_;
 
       protected:
@@ -125,7 +125,7 @@ namespace LTSM::DisplaySession {
         }
 
         bool isRunning(void) const {
-            return proc_.running();
+            return const_cast<bp::child&>(proc_).running();
         }
     };
 

@@ -21,10 +21,6 @@ if(LTSM_BUILD_PROFILING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
 endif()
 
-if(LTSM_BUILD_COVERAGE_TESTS)
-    set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
-endif()
-
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 

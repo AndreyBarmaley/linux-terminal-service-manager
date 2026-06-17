@@ -37,7 +37,7 @@ namespace LTSM {
         mutable boost::asio::io_context ioc_;
 
       protected:
-        inline boost::asio::io_context & ioc(void) const { return ioc_; }
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
         inline size_t concurency(void) const { return 1; }
         boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 
