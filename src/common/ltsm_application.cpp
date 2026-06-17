@@ -217,6 +217,7 @@ namespace LTSM {
         Logger log;
 
         switch(appDebugTarget) {
+            default:
             case DebugTarget::Console:
                 log = spdlog::stderr_logger_mt(name);
                 break;
