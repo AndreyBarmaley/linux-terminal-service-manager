@@ -1,3 +1,5 @@
+// Google Gemini AI
+
 #include <unordered_set>
 #include <string_view>
 #include <stdexcept>

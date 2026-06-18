@@ -24,6 +24,7 @@
 #define _LTSM_PARALLELS_JOBS_
 
 #include <list>
+#include <mutex>
 #include <thread>
 #include <chrono>
 #include <future>
@@ -36,6 +37,7 @@ namespace LTSM {
         using JobFuture = std::future<JobResult>;
         using JobList = std::list<JobFuture>;
 
+        std::mutex mutex_;
         JobList jobs;
         const int tnum;
 
@@ -44,13 +46,16 @@ namespace LTSM {
         }
 
         ~ParallelsJobs() {
-            for(auto & job : jobs)
+            for(auto & job : jobs) {
                 if(job.valid()) {
                     job.wait();
                 }
+            }
         }
 
         void addJob(JobFuture && job) {
+            std::unique_lock<std::mutex> lock{mutex_};
+
             while(! jobs.empty()) {
                 auto busy = std::ranges::count_if(jobs, [](auto & job) {
                     return job.wait_for(1us) != std::future_status::ready;
@@ -59,6 +64,10 @@ namespace LTSM {
                 if(busy < tnum) {
                     break;
                 }
+
+                lock.unlock();
+                std::this_thread::yield();
+                lock.lock();
             }
 
             jobs.emplace_back(std::move(job));
