@@ -113,12 +113,12 @@ namespace LTSM {
         uint32_t g = col.g;
         uint32_t b = col.b;
 
-        r = (r * redMax) >> 8;
-        g = (g * greenMax) >> 8;
-        b = (b * blueMax) >> 8;
+        r = (redMax == 0xFF) ? r : (r * redMax) / 255;
+        g = (greenMax == 0xFF) ? g : (g * greenMax) / 255;
+        b = (blueMax == 0xFF) ? b : (b * blueMax) / 255;
 
         if(alphaMax) {
-            a = (a * alphaMax) >> 8;
+            a = (alphaMax == 0xFF) ? a : (a * blueMax) / 255;
             return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
         }
 

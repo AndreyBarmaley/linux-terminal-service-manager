@@ -163,6 +163,11 @@ namespace LTSM {
         return jv;
     }
 
+    JsonArray & operator<< (JsonArray & jv, const char* st) {
+        jv.addString(st);
+        return jv;
+    }
+
     JsonArray & operator<< (JsonArray & jv, std::string_view st) {
         jv.addString(st);
         return jv;
@@ -360,6 +365,9 @@ namespace LTSM {
     }
 
     JsonValuePtr::JsonValuePtr(double v) : std::unique_ptr<JsonValue>(std::make_unique<JsonDouble>(v)) {
+    }
+
+    JsonValuePtr::JsonValuePtr(const char* v) : std::unique_ptr<JsonValue>(std::make_unique<JsonString>(v)) {
     }
 
     JsonValuePtr::JsonValuePtr(std::string_view v) : std::unique_ptr<JsonValue>(std::make_unique<JsonString>(v)) {
@@ -654,7 +662,7 @@ namespace LTSM {
                 auto it = content.find(key);
 
                 if(it != content.end() && (*it).second->isArray()) {
-                    static_cast<JsonArray*>((*it).second.get())->join(static_cast<const JsonArray &>(*valptr.get()));
+                    static_cast<JsonArray*>((*it).second.get())->addArray(static_cast<const JsonArray &>(*valptr.get()));
                 } else {
                     content.emplace(key, valptr);
                 }
@@ -817,32 +825,6 @@ namespace LTSM {
 
     void JsonArray::swap(JsonArray & ja) noexcept {
         content.swap(ja.content);
-    }
-
-    void JsonArray::join(const JsonArray & ja) {
-        if(content.size() <= ja.content.size()) {
-            content = ja.content;
-            return;
-        }
-
-        for(int pos = 0; pos < ja.content.size(); ++pos) {
-            auto & ptr1 = content[pos];
-            auto & ptr2 = ja.content[pos];
-
-            if(ptr2->isArray()) {
-                if(ptr1->isArray()) {
-                    static_cast<JsonArray*>(ptr1.get())->join(static_cast<const JsonArray &>(*ptr2.get()));
-                } else {
-                    ptr1.assign(ptr2);
-                }
-            } else if(ptr2->isObject()) {
-                if(ptr1->isObject()) {
-                    static_cast<JsonObject*>(ptr1.get())->join(static_cast<const JsonObject &>(*ptr2.get()));
-                } else {
-                    ptr1.assign(ptr2);
-                }
-            }
-        }
     }
 
     /* JsonContent */

@@ -13,7 +13,7 @@ env:
     SONAR_SCANNER_VERSION: 5.0.2.4997 # 5.0.1.3006 # https://github.com/SonarSource/sonar-scanner-cli/releases
     SONAR_SERVER_URL: "https://sonarcloud.io"
     BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
-    BUILD_TYPE: Release
+    BUILD_TYPE: Debug
     DEBIAN_FRONTEND: noninteractive
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
            libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
            liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
            libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
-           libaudit-dev libspdlog-dev libboost-dev libpipewire-0.3-dev libgtest-dev
+           libaudit-dev libspdlog-dev libboost-dev libpipewire-0.3-dev libgmock-dev libgtest-dev
 
       - name: Set up JDK 11
         uses: actions/setup-java@v2
@@ -95,7 +95,7 @@ jobs:
                 -DLTSM_BUILD_TOOLS=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
           echo "start build"
-          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 4
 
       - name: Prepare LTSM coverage tests
         run: |
@@ -131,10 +131,19 @@ jobs:
         shell: bash
         run: |
           echo "::group::run tests"
-          ./ltsm_test_framebuf
+          ./ltsm_test_application
+          ./ltsm_test_zlib
+          ./ltsm_test_binarybuf
           ./ltsm_test_streambuf
+          ./ltsm_test_xcbtypes
+          ./ltsm_test_framebuffer
+          ./ltsm_test_tools
+          ./ltsm_test_jsonwrapper
+          ./ltsm_test_bytestream
+          ./ltsm_test_asyncmutex
+          ./ltsm_test_asyncsocket
+          ./ltsm_test_parallels
           ./ltsm_test_unixsocket
-          ./ltsm_test_json ./src/tests/json/test.json
           ./ltsm_test_encodings --images src/tests/encodings/images
           echo "::endgroup::"
           echo "::group::test services"
@@ -157,7 +166,6 @@ jobs:
           /usr/bin/Xorg :55 -config ltsm.conf -nolisten tcp -quiet > /dev/null 2>&1 &
           sleep 1
           xsetroot -solid "#4e7db7"
-          ./ltsm_test_framebuf2
           ./ltsm_test_xrandr
           ./ltsm_test_x11enc --fps 10 --count 10 --threads 4
           echo "::endgroup::"

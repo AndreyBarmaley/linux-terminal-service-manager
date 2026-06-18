@@ -217,6 +217,7 @@ namespace LTSM {
         Logger log;
 
         switch(appDebugTarget) {
+            default:
             case DebugTarget::Console:
                 log = spdlog::stderr_logger_mt(name);
                 break;
@@ -322,6 +323,10 @@ namespace LTSM {
     }
 
     bool Application::isDebugLevel(const DebugLevel & lvl) {
+        if(DebugLevel::Warn == lvl || DebugLevel::Error == lvl) {
+            return true;
+        }
+
         if(appDebugLevel == lvl) {
             return true;
         }

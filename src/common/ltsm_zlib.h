@@ -54,8 +54,8 @@ namespace LTSM::ZLib {
         InflateBase(const InflateBase &) = delete;
         InflateBase & operator=(const InflateBase &) = delete;
 
-        InflateBase(InflateBase &&) noexcept = default;
-        InflateBase & operator=(InflateBase &&) noexcept = default;
+        InflateBase(InflateBase &&) noexcept = delete;
+        InflateBase & operator=(InflateBase &&) noexcept = delete;
 
         std::vector<uint8_t> inflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
         void reset(void);
@@ -81,8 +81,8 @@ namespace LTSM::ZLib {
         DeflateBase(const DeflateBase &) = delete;
         DeflateBase & operator=(const DeflateBase &) = delete;
             
-        DeflateBase(DeflateBase &&) noexcept = default;
-        DeflateBase & operator=(DeflateBase &&) noexcept = default;
+        DeflateBase(DeflateBase &&) noexcept = delete;
+        DeflateBase & operator=(DeflateBase &&) noexcept = delete;
 
         std::vector<uint8_t> deflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
         void reset(void);

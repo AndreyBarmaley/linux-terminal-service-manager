@@ -354,40 +354,6 @@ namespace LTSM {
 
         void shrink(void);
     };
-
-    /// @brief: descriptor stream
-    class DescriptorStream : public ByteOrderInterface {
-        int fd = 0;
-        bool autoClose = true;
-
-      protected:
-        void getRaw(void* ptr, size_t len) const override;
-        void putRaw(const void* ptr, size_t len) override;
-
-      public:
-        DescriptorStream() = default;
-
-        explicit DescriptorStream(int fd0, bool autoclose);
-        ~DescriptorStream();
-
-        DescriptorStream(const DescriptorStream &) = delete;
-        DescriptorStream & operator=(const DescriptorStream &) = delete;
-
-        void setDescriptor(int fd0) {
-            fd = fd0;
-        }
-
-        int getDescriptor(void) const {
-            return fd;
-        }
-
-        void readTo(void* ptr, ssize_t len) const;
-        void writeFrom(const void* ptr, ssize_t len) const;
-
-        static void readFromTo(int fd, void* ptr, ssize_t len);
-        static void writeFromTo(const void* ptr, ssize_t len, int fd);
-    };
-
 } // _LTSM_STREAMBUF_
 
 #endif
