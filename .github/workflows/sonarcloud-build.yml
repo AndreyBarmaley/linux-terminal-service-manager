@@ -131,12 +131,15 @@ jobs:
         shell: bash
         run: |
           echo "::group::run tests"
+          ./ltsm_test_application
           ./ltsm_test_zlib
           ./ltsm_test_binarybuf
           ./ltsm_test_streambuf
-          ./ltsm_test_framebuf
+          ./ltsm_test_xcbtypes
+          ./ltsm_test_framebuffer
+          ./ltsm_test_tools
+          ./ltsm_test_jsonwrapper
           ./ltsm_test_unixsocket
-          ./ltsm_test_json ./src/tests/json/test.json
           ./ltsm_test_encodings --images src/tests/encodings/images
           echo "::endgroup::"
           echo "::group::test services"

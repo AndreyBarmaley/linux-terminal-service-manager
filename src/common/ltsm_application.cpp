@@ -323,6 +323,10 @@ namespace LTSM {
     }
 
     bool Application::isDebugLevel(const DebugLevel & lvl) {
+        if(DebugLevel::Warn == lvl || DebugLevel::Warn == lvl) {
+            return true;
+        }
+
         if(appDebugLevel == lvl) {
             return true;
         }
