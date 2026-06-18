@@ -102,8 +102,8 @@ namespace LTSM::DisplaySession {
 
       public:
         SessionProcess() = default;
-        SessionProcess(SessionProcess &&) = default;
-        SessionProcess & operator=(SessionProcess &&) = default;
+        SessionProcess(SessionProcess &&) noexcept = default;
+        SessionProcess & operator=(SessionProcess &&) noexcept = default;
 
         SessionProcess(const std::string & cmd, const Args&... args)
             : filename_(std::filesystem::path(cmd).filename()) {

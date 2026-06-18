@@ -34,7 +34,7 @@
 
 namespace LTSM {
     class BoostContext {
-        mutable boost::asio::io_context ioc_;
+        boost::asio::io_context ioc_;
 
       protected:
         inline boost::asio::io_context & ioc(void) { return ioc_; }
