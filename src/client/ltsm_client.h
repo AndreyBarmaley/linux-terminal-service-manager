@@ -175,7 +175,7 @@ namespace LTSM {
         void stop(void);
 
       public:
-        ClientApp(int argc, const char** argv);
+        ClientApp(int argc, char** argv);
 
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                                 const std::vector<RFB::ScreenInfo> &) override;

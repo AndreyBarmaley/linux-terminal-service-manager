@@ -753,7 +753,7 @@ namespace LTSM {
             throw std::runtime_error(NS_FuncNameS);
         }
 
-        spdlog::apply_all([&](auto log) { log->flush(); });
+        spdlog::apply_all([](auto log) { log->flush(); });
 
         // parent mode
         if(0 < pid) {
