@@ -25,6 +25,7 @@
 #define _LTSM_ASYNC_MUTEX_
 
 #include <boost/asio.hpp>
+#include <boost/system/system_error.hpp>
 #include <atomic>
 
 namespace LTSM {
@@ -32,6 +33,7 @@ namespace LTSM {
     class async_mutex {
         boost::asio::steady_timer timer_;
         std::atomic<uint32_t> queue_{0};
+        std::atomic<bool> cancelled_{false};
 
       public:
         explicit async_mutex(const boost::asio::any_io_executor & ex) : timer_(ex) {
@@ -39,6 +41,10 @@ namespace LTSM {
         }
 
         boost::asio::awaitable<void> async_lock(void) {
+            if (cancelled_.load(std::memory_order_relaxed)) {
+                throw boost::system::system_error(boost::asio::error::operation_aborted);
+            }
+
             if(0 < queue_.fetch_add(1)) {
                 //  we are not the first here, we need to wait on the timer...
                 try {
@@ -48,11 +54,18 @@ namespace LTSM {
                         throw;
                     }
                 }
+
+                if (cancelled_.load(std::memory_order_relaxed)) {
+                    throw boost::system::system_error(boost::asio::error::operation_aborted);
+                }
             }
         }
 
         void unlock(void) {
             if(1 < queue_.fetch_sub(1)) {
+                if (cancelled_.load(std::memory_order_relaxed)) {
+                    return;
+                }
                 // there's someone else waiting, let's skip one
                 while(0 == timer_.cancel_one()) {
                     std::this_thread::yield();
@@ -61,7 +74,9 @@ namespace LTSM {
         }
 
         void cancel(void) {
+            cancelled_.store(true, std::memory_order_relaxed);
             timer_.cancel();
+            queue_.store(0);
         }
     };
 }

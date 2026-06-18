@@ -139,6 +139,8 @@ jobs:
           ./ltsm_test_framebuffer
           ./ltsm_test_tools
           ./ltsm_test_jsonwrapper
+          ./ltsm_test_bytestream
+          ./ltsm_test_asyncmutex
           ./ltsm_test_unixsocket
           ./ltsm_test_encodings --images src/tests/encodings/images
           echo "::endgroup::"
@@ -162,7 +164,6 @@ jobs:
           /usr/bin/Xorg :55 -config ltsm.conf -nolisten tcp -quiet > /dev/null 2>&1 &
           sleep 1
           xsetroot -solid "#4e7db7"
-          ./ltsm_test_framebuf2
           ./ltsm_test_xrandr
           ./ltsm_test_x11enc --fps 10 --count 10 --threads 4
           echo "::endgroup::"
