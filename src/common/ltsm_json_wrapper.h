@@ -202,6 +202,8 @@ namespace LTSM {
         explicit JsonValuePtr(int);
         explicit JsonValuePtr(bool);
         explicit JsonValuePtr(double);
+        // JsonValuePtr("test")
+        explicit JsonValuePtr(const char*);
         explicit JsonValuePtr(std::string_view);
 
         explicit JsonValuePtr(JsonValue*);
@@ -297,7 +299,6 @@ namespace LTSM {
         void addArray(JsonArray &&);
         void addObject(JsonObject &&);
 
-        void join(const JsonArray &);
         void swap(JsonArray &) noexcept;
 
         template<typename T>
@@ -353,6 +354,7 @@ namespace LTSM {
         }
     };
 
+    JsonArray & operator<< (JsonArray &, const char*);
     JsonArray & operator<< (JsonArray &, std::string_view);
     //
     JsonArray & operator<< (JsonArray &, int);
@@ -540,8 +542,12 @@ namespace LTSM {
         virtual ~JsonStream() = default;
 
         virtual json_plain flush(void) = 0;
+        virtual bool isObject(void) const { return false; }
+
         void reset(void) {
             os.str("");
+            comma = false;
+            os << (isObject() ? "{" : "[");
         }
     };
 
@@ -577,6 +583,7 @@ namespace LTSM {
         }
 
         json_plain flush(void) override;
+        bool isObject(void) const override { return true; }
     };
 
     class JsonArrayStream : public JsonStream {
@@ -608,6 +615,7 @@ namespace LTSM {
             } else if constexpr(std::is_integral_v<T> && sizeof(T) == 1) {
                 os << static_cast<int>(val);
             } else if constexpr (std::ranges::range<T>) {
+                comma = false;
                 for(const auto & v: val) {
                     push(v);
                 }

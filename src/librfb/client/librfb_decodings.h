@@ -28,6 +28,7 @@
 #include <functional>
 
 #include "ltsm_librfb.h"
+#include "ltsm_streambuf.h"
 #include "ltsm_boost_socket.h"
 
 #ifdef LTSM_WITH_BOOST

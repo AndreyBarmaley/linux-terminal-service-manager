@@ -30,7 +30,7 @@
 
 #include "ltsm_global.h"
 #include "ltsm_xcb_types.h"
-#include "ltsm_streambuf.h"
+//#include "ltsm_streambuf.h"
 
 namespace LTSM {
     struct Color {
