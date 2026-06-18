@@ -255,7 +255,7 @@ namespace LTSM {
         }
     }
 
-    ClientApp::ClientApp(int argc, const char** argv)
+    ClientApp::ClientApp(int argc, char** argv)
         : Application("ltsm_client")
 #ifdef LTSM_WITH_X11
         , RFB::X11Client(get_executor())
@@ -294,7 +294,7 @@ namespace LTSM {
                 parseCommand(*it, *val);
 
                 if(0 == strcmp(*it, "--password")) {
-                    hidePasswordArgument(const_cast<char*>(*val));
+                    hidePasswordArgument(*val);
                 }
 
                 it = val;
@@ -1694,11 +1694,7 @@ namespace LTSM {
 
 using namespace LTSM;
 
-#ifdef __WIN32__
 int main(int argc, char** argv)
-#else
-int main(int argc, const char** argv)
-#endif
 {
 #ifdef __WIN32__
     auto localcfg = Tools::replace(usercfgdef, "$LOCALAPPDATA", getenv("LOCALAPPDATA"));

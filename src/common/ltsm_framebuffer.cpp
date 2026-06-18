@@ -884,7 +884,7 @@ namespace PNG {
         }
 
         setjmp(png_jmpbuf(png_ptr));
-        std::unique_ptr<FILE, int(*)(FILE*)> fp{fopen(file.c_str(), "wb"), fclose};
+        std::unique_ptr<FILE, int(*)(FILE*)> fp{fopen(file.c_str(), "wb"), &fclose};
 
         png_init_io(png_ptr, fp.get());
         png_set_IHDR(png_ptr, info_ptr, fb.width(), fb.height(), 8,

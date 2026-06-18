@@ -31,7 +31,6 @@
 #include <sdbus-c++/sdbus-c++.h>
 
 namespace LTSM::SDBus {
-    using namespace boost;
 
     class AsioCoroConnector {
         std::unique_ptr<sdbus::IConnection> dbus_conn_;
@@ -39,9 +38,9 @@ namespace LTSM::SDBus {
 
       protected:
         template<typename ExecutionContext>
-        struct weak_stream_descriptor : asio::posix::stream_descriptor {
-            weak_stream_descriptor(ExecutionContext & context, const asio::posix::stream_descriptor::native_handle_type & fd)
-                : asio::posix::stream_descriptor(context, fd) {
+        struct weak_stream_descriptor : boost::asio::posix::stream_descriptor {
+            weak_stream_descriptor(ExecutionContext & context, const boost::asio::posix::stream_descriptor::native_handle_type & fd)
+                : boost::asio::posix::stream_descriptor(context, fd) {
             }
 
             ~weak_stream_descriptor() {
@@ -50,68 +49,68 @@ namespace LTSM::SDBus {
         };
 
 #ifdef SDBUS_2_0_API
-        [[nodiscard]] asio::awaitable<void> waitPollDataEventFd(const sdbus::IConnection::PollData & pollData) {
-            auto ex = co_await asio::this_coro::executor;
+        [[nodiscard]] boost::asio::awaitable<void> waitPollDataEventFd(const sdbus::IConnection::PollData & pollData) {
+            auto ex = co_await boost::asio::this_coro::executor;
             weak_stream_descriptor sd{ex, pollData.eventFd};
 
-            co_await sd.async_wait(asio::posix::descriptor::wait_read,
-                asio::use_awaitable);
+            co_await sd.async_wait(boost::asio::posix::descriptor::wait_read,
+                boost::asio::use_awaitable);
 
             co_return;
         }
 #endif
 
-        [[nodiscard]] asio::awaitable<void> waitPollDataFd(const sdbus::IConnection::PollData & pollData) {
-            auto ex = co_await asio::this_coro::executor;
+        [[nodiscard]] boost::asio::awaitable<void> waitPollDataFd(const sdbus::IConnection::PollData & pollData) {
+            auto ex = co_await boost::asio::this_coro::executor;
             weak_stream_descriptor sd{ex, pollData.fd};
 
             if((pollData.events & POLLIN) && (pollData.events & POLLOUT)) {
-                using namespace asio::experimental::awaitable_operators;
+                using namespace boost::asio::experimental::awaitable_operators;
                 co_await (
-                    sd.async_wait(asio::posix::descriptor::wait_read,
-                        asio::use_awaitable) ||
-                    sd.async_wait(asio::posix::descriptor::wait_write,
-                        asio::use_awaitable)
+                    sd.async_wait(boost::asio::posix::descriptor::wait_read,
+                        boost::asio::use_awaitable) ||
+                    sd.async_wait(boost::asio::posix::descriptor::wait_write,
+                        boost::asio::use_awaitable)
                 );
             } else if(pollData.events & POLLIN) {
-                co_await sd.async_wait(asio::posix::descriptor::wait_read,
-                    asio::use_awaitable);
+                co_await sd.async_wait(boost::asio::posix::descriptor::wait_read,
+                    boost::asio::use_awaitable);
             } else if(pollData.events & POLLOUT) {
-                co_await sd.async_wait(asio::posix::descriptor::wait_write,
-                    asio::use_awaitable);
+                co_await sd.async_wait(boost::asio::posix::descriptor::wait_write,
+                    boost::asio::use_awaitable);
             }
 
             co_return;
         }
 
-        [[nodiscard]] asio::awaitable<void> waitTimeout(uint32_t timeout_ms) {
-            auto ex = co_await asio::this_coro::executor;
-            asio::steady_timer tm{ex, std::chrono::milliseconds(timeout_ms)};
-            co_await tm.async_wait(asio::use_awaitable);
+        [[nodiscard]] boost::asio::awaitable<void> waitTimeout(uint32_t timeout_ms) {
+            auto ex = co_await boost::asio::this_coro::executor;
+            boost::asio::steady_timer tm{ex, std::chrono::milliseconds(timeout_ms)};
+            co_await tm.async_wait(boost::asio::use_awaitable);
             co_return;
         }
 
       public:
-        AsioCoroConnector(std::unique_ptr<sdbus::IConnection> && ptr) : dbus_conn_{std::move(ptr)} {
+        explicit AsioCoroConnector(std::unique_ptr<sdbus::IConnection> && ptr) : dbus_conn_{std::move(ptr)} {
         }
 
         ~AsioCoroConnector() {
-            sdbus_cancel_.emit(asio::cancellation_type::terminal);
+            sdbus_cancel_.emit(boost::asio::cancellation_type::terminal);
         }
 
         void sdbusLoopCancel(void) {
-            sdbus_cancel_.emit(asio::cancellation_type::terminal);
+            sdbus_cancel_.emit(boost::asio::cancellation_type::terminal);
         }
 
-        [[nodiscard]] asio::awaitable<void> sdbusEventLoop(void) {
+        [[nodiscard]] boost::asio::awaitable<void> sdbusEventLoop(void) {
             try {
-                auto ex = co_await asio::this_coro::executor;
+                auto ex = co_await boost::asio::this_coro::executor;
                 for(;;) {
-                    co_await asio::co_spawn(ex, sdbusEventProcess(),
-                        asio::bind_cancellation_slot(sdbus_cancel_.slot(), asio::use_awaitable));
+                    co_await boost::asio::co_spawn(ex, sdbusEventProcess(),
+                        boost::asio::bind_cancellation_slot(sdbus_cancel_.slot(), boost::asio::use_awaitable));
                 }
-            } catch(const system::system_error& err) {
-                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+            } catch(const boost::system::system_error& err) {
+                if(auto ec = err.code(); ec != boost::asio::error::operation_aborted) {
                     throw;
                 }
             }
@@ -119,7 +118,7 @@ namespace LTSM::SDBus {
             co_return;
         }
 
-        [[nodiscard]] asio::awaitable<void> sdbusEventProcess(void) {
+        [[nodiscard]] boost::asio::awaitable<void> sdbusEventProcess(void) {
             /*
                 https://github.com/Kistler-Group/sdbus-cpp/blob/v2.2.0/docs/using-sdbus-c++.md#using-sdbus-c-in-external-event-loops
                 -
@@ -133,11 +132,11 @@ namespace LTSM::SDBus {
                 This enables the bus connection to process any incoming or outgoing D-Bus messages.
             */
 
-            auto ex = co_await asio::this_coro::executor;
+            auto ex = co_await boost::asio::this_coro::executor;
             auto pollData = dbus_conn_->getEventLoopPollData();
 
 #ifdef SDBUS_2_0_API
-            using namespace asio::experimental::awaitable_operators;
+            using namespace boost::asio::experimental::awaitable_operators;
             co_await (waitPollDataFd(pollData) || waitPollDataEventFd(pollData));
 #else
             co_await (waitPollDataFd(pollData));

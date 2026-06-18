@@ -172,7 +172,7 @@ namespace LTSM {
         void setAppLog(const JsonObject*);
 
       public:
-        ApplicationLog(std::string_view ident);
+        explicit ApplicationLog(std::string_view ident);
     };
 
 #ifdef __UNIX__
@@ -208,7 +208,7 @@ namespace LTSM {
         WatchModification(boost::asio::io_context& ctx, const WatchModificationCb & cb)
             : _inotifyStream{ctx}, closeWriteCb(cb) {};
 #else
-        WatchModification(const WatchModificationCb & cb) : closeWriteCb(cb) {};
+        explicit WatchModification(const WatchModificationCb & cb) : closeWriteCb(cb) {};
 #endif
         ~WatchModification();
 

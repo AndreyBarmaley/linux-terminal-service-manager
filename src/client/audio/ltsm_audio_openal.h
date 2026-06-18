@@ -41,8 +41,8 @@ namespace LTSM {
         const char* alcErrorName(ALCenum);
 
         class Playback : public AudioPlayer {
-            std::unique_ptr<ALCdevice, ALCboolean(*)(ALCdevice*)> dev{ nullptr, alcCloseDevice };
-            std::unique_ptr<ALCcontext, void(*)(ALCcontext*)> ctx{ nullptr, alcDestroyContext };
+            std::unique_ptr<ALCdevice, ALCboolean(*)(ALCdevice*)> dev{ nullptr, &alcCloseDevice };
+            std::unique_ptr<ALCcontext, void(*)(ALCcontext*)> ctx{ nullptr, &alcDestroyContext };
 
             ALuint sourceId = 0;
             const ALuint autoPlayAfterSec = 0;
@@ -58,7 +58,7 @@ namespace LTSM {
             ALuint findFreeBufferId(void) const;
 
           public:
-            Playback(const AudioFormat &, ALuint autoPlayAfterSec = 0);
+            explicit Playback(const AudioFormat &, ALuint autoPlayAfterSec = 0);
             ~Playback();
 
             bool streamWrite(std::span<const uint8_t>) const override;

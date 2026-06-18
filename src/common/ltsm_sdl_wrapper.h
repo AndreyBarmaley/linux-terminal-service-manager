@@ -58,11 +58,11 @@ namespace LTSM {
         };
 
         class Surface {
-            std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> ptr_{nullptr, SDL_FreeSurface};
+            std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> ptr_{nullptr, &SDL_FreeSurface};
 
           public:
             explicit Surface(SDL_Surface* ptr = nullptr)
-                : ptr_{ptr, SDL_FreeSurface} {}
+                : ptr_{ptr, &SDL_FreeSurface} {}
             explicit Surface(Surface&&) = default;
             ~Surface() = default;
 

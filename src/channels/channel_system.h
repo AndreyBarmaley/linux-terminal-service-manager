@@ -155,6 +155,9 @@ namespace LTSM {
             Local2Remote(uint8_t cid, int flags);
             virtual ~Local2Remote();
 
+            Local2Remote(const Local2Remote&) = delete;
+            Local2Remote& operator=(const Local2Remote&) = delete;
+
             virtual bool hasInput(void) const = 0;
             virtual size_t hasData(void) const = 0;
             virtual ssize_t readDataTo(void* buf, size_t len) = 0;
@@ -218,6 +221,9 @@ namespace LTSM {
           public:
             Remote2Local(uint8_t cid, int flags);
             virtual ~Remote2Local();
+
+            Remote2Local(const Remote2Local&) = delete;
+            Remote2Local& operator=(const Remote2Local&) = delete;
 
             virtual ssize_t writeDataFrom(const void* buf, size_t len) = 0;
 
