@@ -1,7 +1,7 @@
 project(ltsm_common_tests)
 
 foreach(CUR_TARGET ltsm_test_zlib ltsm_test_binarybuf ltsm_test_streambuf ltsm_test_application ltsm_test_asyncmutex
-         ltsm_test_xcbtypes ltsm_test_framebuffer ltsm_test_tools ltsm_test_jsonwrapper ltsm_test_bytestream)
+         ltsm_test_xcbtypes ltsm_test_framebuffer ltsm_test_tools ltsm_test_jsonwrapper ltsm_test_bytestream ltsm_test_asyncsocket)
 
     CommonDefaults(JSON ZLIB SDL XCB)
     add_executable(${CUR_TARGET} src/${CUR_TARGET}.cpp)
