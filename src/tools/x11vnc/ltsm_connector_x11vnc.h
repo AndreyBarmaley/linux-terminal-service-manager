@@ -67,7 +67,7 @@ namespace LTSM {
             bool loadKeymap(void);
 
           public:
-            X11VNC(int fd, const JsonObject & jo);
+            X11VNC(const JsonObject & jo);
         };
     }
 }

@@ -37,13 +37,6 @@ TEST(BinaryBufTest, SizeAndDataAccess) {
     EXPECT_EQ(buf.size(), 3);
     ASSERT_NE(buf.data(), nullptr);
     EXPECT_EQ(buf.data()[0], 0xAA);
-
-    buf.data()[1] = 0xFF;
-    
-    const ByteArray& base = buf;
-    EXPECT_EQ(base.size(), 3);
-    ASSERT_NE(base.data(), nullptr);
-    EXPECT_EQ(base.data()[1], 0xFF);
 }
 
 TEST(BinaryBufTest, AppendMethods) {
@@ -82,43 +75,10 @@ TEST(BinaryBufTest, CopyMethod) {
     EXPECT_EQ(cloned.data()[0], 0x99);
 }
 
-TEST(BinaryBufTest, PolymorphicAssignment) {
-    BinaryBuf src({0x01, 0x02, 0x03});
-    const ByteArray& base_ref = src;
-
-    BinaryBuf dest;
-    dest = base_ref;
-
-    EXPECT_EQ(dest.size(), 3);
-    EXPECT_EQ(dest.data()[2], 0x03);
-}
-
-TEST(ByteArrayTest, ComparisonOperators) {
-    BinaryBuf buf1({0x01, 0x02});
-    BinaryBuf buf2({0x01, 0x02});
-    BinaryBuf buf3({0x01, 0x03});
-    BinaryBuf buf4({0x01, 0x02, 0x03});
-
-    const ByteArray& base1 = buf1;
-    const ByteArray& base2 = buf2;
-    const ByteArray& base3 = buf3;
-    const ByteArray& base4 = buf4;
-
-    EXPECT_TRUE(base1 == base2);
-    EXPECT_FALSE(base1 != base2);
-
-    EXPECT_FALSE(base1 == base3);
-    EXPECT_TRUE(base1 != base3);
-
-    EXPECT_FALSE(base1 == base4);
-    EXPECT_TRUE(base1 != base4);
-}
-
-TEST(ByteArrayTest, ToStringConversion) {
+TEST(BinaryBufTest, ToStringConversion) {
     BinaryBuf buf({0x48, 0x65, 0x6C, 0x6C, 0x6F}); 
-    const ByteArray& base = buf;
 
-    EXPECT_EQ(base.toString(), "Hello");
+    EXPECT_EQ(buf.toString(), "Hello");
 
     BinaryBuf empty_buf;
     EXPECT_EQ(empty_buf.toString(), "");

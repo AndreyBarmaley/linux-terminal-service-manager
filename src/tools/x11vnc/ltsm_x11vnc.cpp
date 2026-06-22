@@ -181,7 +181,8 @@ namespace LTSM {
                 int res = EXIT_FAILURE;
 
                 try {
-                    auto connector = std::make_unique<Connector::X11VNC>(sock, config());
+                    auto connector = std::make_unique<Connector::X11VNC>(config());
+                    connector->assignSocket(sock);
                     res = connector->rfbCommunication();
                 } catch(const std::exception & err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -203,7 +204,7 @@ namespace LTSM {
         int res = EXIT_FAILURE;
 
         try {
-            auto connector = std::make_unique<Connector::X11VNC>(-1, config());
+            auto connector = std::make_unique<Connector::X11VNC>(config());
             res = connector->rfbCommunication();
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());

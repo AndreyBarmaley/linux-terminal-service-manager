@@ -29,7 +29,7 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
-    Connector::X11VNC::X11VNC(int fd, const JsonObject & jo) : RFB::X11Server(fd) {
+    Connector::X11VNC::X11VNC(const JsonObject & jo) {
         _config = & jo;
         _remoteaddr.assign("local");
 

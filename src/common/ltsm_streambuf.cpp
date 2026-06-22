@@ -31,19 +31,31 @@
 #include "ltsm_application.h"
 
 namespace LTSM {
-    bool ByteArray::operator== (const ByteArray & ba) const {
-        return ba.size() == size() && 0 == std::memcmp(ba.data(), data(), size());
+    /* BinaryBuf */
+    BinaryBuf::BinaryBuf(const std::vector<uint8_t>& v) : std::vector<uint8_t>(v) {
     }
 
-    bool ByteArray::operator!= (const ByteArray & ba) const {
-        return ba.size() != size() || 0 != std::memcmp(ba.data(), data(), size());
+    BinaryBuf::BinaryBuf(std::vector<uint8_t> && v) noexcept : std::vector<uint8_t>(std::move(v)) {
     }
 
-    std::string ByteArray::toString(void) const {
+    BinaryBuf & BinaryBuf::operator=(const std::vector<uint8_t> & v) {
+        if(this != &v) {
+            assign(v.begin(), v.end());
+        }
+        return *this;
+    }
+
+    BinaryBuf & BinaryBuf::operator=(std::vector<uint8_t> && v) noexcept {
+        if(this != &v) {
+            swap(v);
+        }
+        return *this;
+    }
+
+    std::string BinaryBuf::toString(void) const {
         return std::string(data(), data() + size());
     }
 
-    /* BinaryBuf */
     BinaryBuf & BinaryBuf::append(std::string_view s) {
         insert(end(), s.begin(), s.end());
         return *this;
@@ -61,18 +73,6 @@ namespace LTSM {
 
     BinaryBuf BinaryBuf::copy(void) const {
         return BinaryBuf(begin(), end());
-    }
-
-    size_t BinaryBuf::size(void) const {
-        return std::vector<uint8_t>::size();
-    }
-
-    uint8_t* BinaryBuf::data(void) {
-        return std::vector<uint8_t>::data();
-    }
-
-    const uint8_t* BinaryBuf::data(void) const {
-        return std::vector<uint8_t>::data();
     }
 
     /* ByteOrderInterface */

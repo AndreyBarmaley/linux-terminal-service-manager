@@ -73,6 +73,11 @@ namespace LTSM {
         streamIn = streamOut = socket.get();
     }
 
+    void RFB::ServerEncoder::assignSocket(int fd) {
+        socket = std::make_unique<SocketStream>(fd);
+        streamIn = streamOut = socket.get();
+    }
+
     void RFB::ServerEncoder::sendFlush(void) {
         try {
             if(rfbMessages) {

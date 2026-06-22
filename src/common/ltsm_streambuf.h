@@ -35,61 +35,22 @@
 #define LTSM_STREAMBUF_VERSION 20260520
 
 namespace LTSM {
-    /// @brief: byte array interface
-    class ByteArray {
-      public:
-        virtual ~ByteArray() = default;
-
-        virtual size_t size(void) const = 0;
-
-        virtual uint8_t* data(void) = 0;
-        virtual const uint8_t* data(void) const = 0;
-
-        std::string toString(void) const;
-
-        bool operator== (const ByteArray &) const;
-        bool operator!= (const ByteArray &) const;
-    };
-
     /// @brief: extend binary vector
-    struct BinaryBuf : ByteArray, std::vector<uint8_t> {
+    struct BinaryBuf : std::vector<uint8_t> {
         using std::vector<uint8_t>::vector;
 
-        BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {
-        }
+        explicit BinaryBuf(const std::vector<uint8_t> &);
+        explicit BinaryBuf(std::vector<uint8_t> && v) noexcept;
 
-        BinaryBuf(std::vector<uint8_t> && v) noexcept : std::vector<uint8_t>(std::move(v)) {
-        }
-
-        BinaryBuf & operator=(const std::vector<uint8_t> & v) {
-            if(this != &v) {
-                assign(v.begin(), v.end());
-            }
-            return *this;
-        }
-
-        BinaryBuf & operator=(std::vector<uint8_t> && v) noexcept {
-            if(this != &v) {
-                swap(v);
-            }
-            return *this;
-        }
-    
-        BinaryBuf & operator= (const ByteArray & v) {
-            if(this != &v) {
-                assign(v.data(), v.data() + v.size());
-            }
-            return *this;
-        }
+        BinaryBuf & operator=(const std::vector<uint8_t> &);
+        BinaryBuf & operator=(std::vector<uint8_t> &&) noexcept;
 
         BinaryBuf & append(const uint8_t*, size_t);
         BinaryBuf & append(const std::vector<uint8_t> &);
         BinaryBuf & append(std::string_view);
-        BinaryBuf copy(void) const;
 
-        size_t size(void) const override;
-        uint8_t* data(void) override;
-        const uint8_t* data(void) const override;
+        BinaryBuf copy(void) const;
+        std::string toString(void) const;
     };
 
     /// @brief: base stream interface

@@ -168,6 +168,8 @@ namespace LTSM {
             ServerEncoder();
             ~ServerEncoder() = default;
 
+            void assignSocket(int);
+
             // EncoderStream interface
             const PixelFormat & clientFormat(void) const override;
             bool clientIsBigEndian(void) const override;
