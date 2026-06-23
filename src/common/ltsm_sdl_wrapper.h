@@ -160,6 +160,18 @@ namespace LTSM {
 
             std::pair<int, int> scaleCoord(int posx, int posy) const;
         };
+
+        class Clipboard {
+            std::unique_ptr<char, void(*)(void*)> buf_{ nullptr, SDL_free };
+
+          public:
+            Clipboard() = default;
+            ~Clipboard() = default;
+
+            size_t size(void) const { return buf_ ? SDL_strlen(buf_.get()) : 0; }
+            const char* data(void) const { return buf_ ? buf_.get() : nullptr; }
+            bool receive(void) { buf_.reset(SDL_HasClipboardText() ? SDL_GetClipboardText() : nullptr); return !!buf_; }
+        };
     }
 }
 

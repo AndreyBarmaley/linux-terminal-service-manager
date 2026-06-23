@@ -49,7 +49,7 @@ namespace LTSM {
         XCB::Region damage_;
         XCB::ShmIdShared shm_;
 
-        std::unique_ptr<char, void(*)(void*)> clientClipboard{ nullptr, SDL_free };
+        SDL::Clipboard clip_;
 
       public:
         SDL2X11(const char* title, const XCB::Size & winsz, bool accel)
@@ -126,7 +126,7 @@ namespace LTSM {
                 return 0;
             }
 
-            return clientClipboard ? SDL_strlen(clientClipboard.get()) : 0;
+            return clip_.size();
         }
 
         std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override {
@@ -136,11 +136,9 @@ namespace LTSM {
                 return {};
             }
 
-            if(clientClipboard) {
-                auto len = SDL_strlen(clientClipboard.get());
-
+            if(auto len = clip_.size()) {
                 if(offset + length <= len) {
-                    auto beg = clientClipboard.get() + offset;
+                    auto beg = clip_.data() + offset;
                     return std::vector<uint8_t>(beg, beg + length);
                 } else {
                     Application::error("{}: invalid length: {}, offset: {}", NS_FuncNameV, length, offset);
@@ -199,7 +197,7 @@ namespace LTSM {
         }
 
         void sdlClipboardEvent(void) {
-            if(clientClipboard.reset(SDL_GetClipboardText()); !!clientClipboard) {
+            if(clip_.receive()) {
                 asio::post(x11_strand_, [this](){
                     if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
                         paste->setSelectionOwner(*this);
