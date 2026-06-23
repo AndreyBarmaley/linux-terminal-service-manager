@@ -733,7 +733,7 @@ namespace LTSM {
 
             for(uint32_t it = 0; it < statesCount; ++it) {
                 const SCARD_READERSTATE & state = states[it];
-                auto len = strnlen(state.szReader, MAX_READERNAME);
+                auto len = strnlen(state.szReader, sizeof(state.szReader));
 
                 co_await async_send_values(
                     endian::native_to_little(static_cast<uint32_t>(len)),

@@ -388,10 +388,13 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
     if(ret == SCARD_S_SUCCESS) {
         std::list<std::string> readers;
         auto it1 = readersBuf.get();
+        auto end = it1 + readersLength;
 
-        while(*it1) {
-            auto it2 = it1 + strnlen(it1, std::min((DWORD)MAX_READERNAME, readersLength));
-            readers.emplace_back(it1, it2);
+        while(it1 < end) {
+            auto it2 = std::find(it1, end, 0);
+            if(it1 != it2) {
+                readers.emplace_back(it1, it2);
+            }
             it1 = std::next(it2);
         }
 
