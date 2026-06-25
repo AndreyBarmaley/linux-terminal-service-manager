@@ -440,7 +440,9 @@ namespace LTSM {
     void RFB::ClientDecoder::rfbMessagesShutdown(void) {
         channelsShutdown();
         incr_update_timer_.cancel();
-        static_cast<AsioTls::AsyncStream&>(*stream_).closeSocket();
+        if(stream_) {
+            stream_->closeSocket();
+        }
     }
 
     std::list<int> RFB::ClientDecoder::supportedEncodings(bool extclip) {
