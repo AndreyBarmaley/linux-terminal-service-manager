@@ -49,6 +49,8 @@ namespace LTSM {
             Point() = default;
             virtual ~Point() = default;
 
+            bool operator==(const Point &) const = default;
+
             virtual bool isValid(void) const {
                 return 0 <= x && 0 <= y;
             }
@@ -56,15 +58,9 @@ namespace LTSM {
             inline Point operator+(const Point & pt) const {
                 return Point(x + pt.x, y + pt.y);
             }
+
             inline Point operator-(const Point & pt) const {
                 return Point(x - pt.x, y - pt.y);
-            }
-
-            inline bool operator==(const Point & pt) const {
-                return pt.x == x && pt.y == y;
-            }
-            inline bool operator!=(const Point & pt) const {
-                return pt.x != x || pt.y != y;
             }
         };
 
@@ -76,6 +72,8 @@ namespace LTSM {
 
             Size() = default;
             virtual ~Size() = default;
+
+            bool operator==(const Size &) const = default;
 
             inline bool isEmpty(void) const {
                 return width == 0 || height == 0;
@@ -91,12 +89,6 @@ namespace LTSM {
             }
             inline bool operator<(const Size & sz) const {
                 return sz.width * sz.height > width * height;
-            }
-            inline bool operator==(const Size & sz) const {
-                return sz.width == width && sz.height == height;
-            }
-            inline bool operator!=(const Size & sz) const {
-                return sz.width != width || sz.height != height;
             }
         };
 
@@ -125,6 +117,8 @@ namespace LTSM {
             Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 
+            bool operator== (const Region &) const = default;
+
             inline const Point & topLeft(void) const {
                 return *this;
             }
@@ -134,13 +128,6 @@ namespace LTSM {
 
             PointIterator coordBegin(void) const {
                 return PointIterator(0, 0, toSize());
-            }
-
-            inline bool operator== (const Region & rt) const {
-                return rt.topLeft() == topLeft() && rt.toSize() == toSize();
-            }
-            inline bool operator!= (const Region & rt) const {
-                return rt.topLeft() != topLeft() || rt.toSize() != toSize();
             }
 
             void reset(void) override;

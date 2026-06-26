@@ -91,7 +91,7 @@ namespace LTSM {
 
             virtual XCB::Size clientSize(void) const = 0;
             virtual void postDecoderJob(PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) const = 0;
-            virtual void waitDecoderJobs(void) const = 0;
+            virtual void waitDecoderJobs(void) const {}
 
             virtual int clientPrefferedVideoEncoding(void) const {
                 return 0;
@@ -147,7 +147,7 @@ namespace LTSM {
           public:
             void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
+            DecodingHexTile(bool zlib = false) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
             bool isZlibHex(void) const {
                 return type() == ENCODING_ZLIBHEX;

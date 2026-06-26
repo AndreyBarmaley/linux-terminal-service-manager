@@ -1,4 +1,5 @@
 add_subdirectory(common)
+add_subdirectory(librfb)
 add_subdirectory(xrandr)
 add_subdirectory(x11enc)
 add_subdirectory(x11clip)

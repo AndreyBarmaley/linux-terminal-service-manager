@@ -89,11 +89,7 @@ namespace LTSM {
         PixelFormat(uint8_t bpp, uint16_t rmax, uint16_t gmax, uint16_t bmax, uint16_t amax,
                         uint8_t rshift, uint8_t gshift, uint8_t bshift, uint8_t ashift);
 
-        bool operator!= (const PixelFormat & pf) const {
-            return bitsPerPixel() != pf.bitsPerPixel() ||
-                   redMax != pf.redMax || greenMax != pf.greenMax || blueMax != pf.blueMax || alphaMax != pf.alphaMax ||
-                   redShift != pf.redShift || greenShift != pf.greenShift || blueShift != pf.blueShift || alphaShift != pf.alphaShift;
-        }
+        bool operator==(const PixelFormat&) const = default;
 
         bool compare(const PixelFormat & pf, bool skipAlpha) const {
             return bitsPerPixel() == pf.bitsPerPixel() &&
