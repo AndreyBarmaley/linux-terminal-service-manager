@@ -159,6 +159,54 @@ TEST(XCBRegionPixelTest, DataAccess) {
     EXPECT_EQ(pixel_node.region(), r);
 }
 
+TEST(XCBRegionContainsTest, InsideScenarios) {
+    Region outer{10, 10, 100, 100};
+
+    Region inner{20, 20, 50, 50};
+    EXPECT_TRUE(outer.contains(inner));
+
+    Region exactSame{10, 10, 100, 100};
+    EXPECT_TRUE(outer.contains(exactSame));
+
+    Region touchTopLeft{10, 10, 30, 30};
+    EXPECT_TRUE(outer.contains(touchTopLeft));
+
+    Region touchBottomRight{60, 60, 50, 50};
+    EXPECT_TRUE(outer.contains(touchBottomRight));
+}
+
+TEST(XCBRegionContainsTest, OutsideScenarios) {
+    Region outer{10, 10, 100, 100};
+
+    Region outLeft{9, 20, 50, 50};
+    EXPECT_FALSE(outer.contains(outLeft));
+
+    Region outTop{20, 9, 50, 50};
+    EXPECT_FALSE(outer.contains(outTop));
+
+    Region outRight{20, 20, 91, 50};
+    EXPECT_FALSE(outer.contains(outRight));
+
+    Region outBottom{20, 20, 50, 91};
+    EXPECT_FALSE(outer.contains(outBottom));
+
+    Region farAway{200, 200, 10, 10};
+    EXPECT_FALSE(outer.contains(farAway));
+}
+
+TEST(XCBRegionContainsTest, ZeroSizeScenarios) {
+    Region outer{10, 10, 100, 100};
+
+    Region pointInside{50, 50, 0, 0};
+    EXPECT_TRUE(outer.contains(pointInside));
+
+    Region pointOnEdge{10, 50, 0, 0};
+    EXPECT_TRUE(outer.contains(pointOnEdge));
+
+    Region pointOutside{9, 50, 0, 0};
+    EXPECT_FALSE(outer.contains(pointOutside));
+}
+
 int main(int argc, char** argv) {
     Application::setDebugTarget(DebugTarget::SyslogFile, "test_xcbtypes.log");
     testing::InitGoogleTest(&argc, argv);

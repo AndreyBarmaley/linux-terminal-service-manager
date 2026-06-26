@@ -95,6 +95,30 @@ TEST(ZLibStreamTest, InflateBaseStream) {
     EXPECT_EQ(original, result_str);
 }
 
+TEST(ZLibStreamTest, DeflateInflateStream) {
+    DeflateBase compressor(Z_DEFAULT_COMPRESSION);
+    std::string part1 = "Data chunk number one. ";
+    std::string part2 = "Data chunk number two.";
+
+    std::span<const uint8_t> span1(reinterpret_cast<const uint8_t*>(part1.data()), part1.size());
+    std::span<const uint8_t> span2(reinterpret_cast<const uint8_t*>(part2.data()), part2.size());
+
+    auto comp1 = compressor.deflateData(span1, Z_NO_FLUSH);
+    auto comp2 = compressor.deflateData(span2, Z_SYNC_FLUSH);
+    auto comp3 = compressor.deflateData({}, Z_FINISH);
+
+    std::vector<uint8_t> total_compressed;
+    total_compressed.insert(total_compressed.end(), comp1.begin(), comp1.end());
+    total_compressed.insert(total_compressed.end(), comp2.begin(), comp2.end());
+    total_compressed.insert(total_compressed.end(), comp3.begin(), comp3.end());
+
+    InflateBase decompressor;
+    auto uncompressed = decompressor.inflateData(total_compressed, Z_SYNC_FLUSH);
+    std::string result_str(reinterpret_cast<char*>(uncompressed.data()), uncompressed.size());
+
+    EXPECT_EQ(part1 + part2, result_str);
+}
+
 int main(int argc, char** argv) {
     Application::setDebugTarget(DebugTarget::SyslogFile, "test_zlib.log");
     testing::InitGoogleTest(&argc, argv);

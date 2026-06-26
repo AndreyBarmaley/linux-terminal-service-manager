@@ -139,6 +139,7 @@ namespace LTSM {
             void join(const Region &);
 
             bool isValid(void) const override;
+            bool contains(const Region &) const;
 
             Region intersected(const Region &) const;
             Region align(size_t) const;
