@@ -132,8 +132,7 @@ jobs:
         run: |
           echo "::group::run tests"
           ctest --test-dir build/src/tests/common
-          ./ltsm_test_unixsocket
-          ./ltsm_test_encodings --images src/tests/encodings/images
+          ctest --test-dir build/src/tests/librfb
           echo "::endgroup::"
           echo "::group::test services"
           echo "run ltsm service"
