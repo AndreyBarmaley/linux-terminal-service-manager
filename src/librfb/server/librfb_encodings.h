@@ -147,7 +147,7 @@ namespace LTSM {
                 return getType() == ENCODING_CORRE ? "CoRRE" : "RRE";
             }
 
-            EncodingRRE(bool co) : EncodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
+            EncodingRRE(bool co = false) : EncodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
             bool isCoRRE(void) const {
                 return getType() == ENCODING_CORRE;
@@ -192,7 +192,7 @@ namespace LTSM {
                 return isZRLE() ? "ZRLE" : "TRLE";
             }
 
-            EncodingTRLE(bool zlib) : EncodingBase(zlib ? ENCODING_ZRLE : ENCODING_TRLE),
+            EncodingTRLE(bool zlib = false) : EncodingBase(zlib ? ENCODING_ZRLE : ENCODING_TRLE),
                 zlib_{std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED)} {}
 
             bool isZRLE(void) const {

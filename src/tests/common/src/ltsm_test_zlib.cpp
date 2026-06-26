@@ -35,7 +35,7 @@ TEST(ZLibToolsTest, EmptyInput) {
 
 TEST(ZLibToolsTest, BadDecompressionThrows) {
     std::array<uint8_t, 5> invalid_data = {1, 2, 3, 4, 5};
-    EXPECT_THROW(Tools::zlibUncompress(invalid_data), LTSM::zlib_error);
+    EXPECT_THROW(Tools::zlibUncompress(invalid_data), zlib_error);
 }
 
 TEST(ZLibStreamTest, DeflateBaseStream) {

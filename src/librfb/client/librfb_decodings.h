@@ -129,7 +129,7 @@ namespace LTSM {
           public:
             void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
+            DecodingRRE(bool co = false) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
             bool isCoRRE(void) const {
                 return type() == ENCODING_CORRE;
@@ -164,7 +164,7 @@ namespace LTSM {
           public:
             void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE),
+            DecodingTRLE(bool zip = false) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE),
                 zlib_{std::make_unique<ZLib::InflateBase>()} {}
 
             bool isZRLE(void) const {

@@ -297,15 +297,15 @@ TEST(FrameBufferTest, RawPixelStaticDecoder) {
 }
 
 // FrameBufferParamTest
-class FrameBufferParamTest : public ::testing::TestWithParam<LTSM::PixelFormat> {
+class FrameBufferParamTest : public ::testing::TestWithParam<PixelFormat> {
 protected:
     XCB::Size testSize{16, 16}; // Небольшой размер для быстрой проверки
 };
 
 TEST_P(FrameBufferParamTest, InitializationProps) {
-    const LTSM::PixelFormat& fmt = GetParam();
+    const PixelFormat& fmt = GetParam();
     
-    LTSM::FrameBuffer fb(testSize, fmt);
+    FrameBuffer fb(testSize, fmt);
 
     EXPECT_EQ(fb.width(), testSize.width);
     EXPECT_EQ(fb.height(), testSize.height);
@@ -322,8 +322,8 @@ TEST_P(FrameBufferParamTest, InitializationProps) {
 }
 
 TEST_P(FrameBufferParamTest, SetAndGetPixel) {
-    const LTSM::PixelFormat& fmt = GetParam();
-    LTSM::FrameBuffer fb(testSize, fmt);
+    const PixelFormat& fmt = GetParam();
+    FrameBuffer fb(testSize, fmt);
 
     XCB::Point pt1{0, 0};
     XCB::Point pt2{5, 5};
@@ -338,8 +338,8 @@ TEST_P(FrameBufferParamTest, SetAndGetPixel) {
 }
 
 TEST_P(FrameBufferParamTest, FillPixelRegion) {
-    const LTSM::PixelFormat& fmt = GetParam();
-    LTSM::FrameBuffer fb(testSize, fmt);
+    const PixelFormat& fmt = GetParam();
+    FrameBuffer fb(testSize, fmt);
 
     XCB::Region fillReg(XCB::Point(2, 2), XCB::Size(4, 4));
     uint32_t fillPixelValue = 0xAABBCCDD & ((1ULL << fmt.bitsPerPixel()) - 1);
@@ -352,14 +352,14 @@ TEST_P(FrameBufferParamTest, FillPixelRegion) {
 }
 
 TEST_P(FrameBufferParamTest, SubBufferCoordinates) {
-    const LTSM::PixelFormat& fmt = GetParam();
-    LTSM::FrameBuffer parentFb(testSize, fmt);
+    const PixelFormat& fmt = GetParam();
+    FrameBuffer parentFb(testSize, fmt);
 
     XCB::Point subTopLeft{4, 4};
     XCB::Size subSize{4, 4};
     XCB::Region subReg(subTopLeft, subSize);
 
-    LTSM::FrameBuffer childFb(subReg, parentFb);
+    FrameBuffer childFb(subReg, parentFb);
 
     uint32_t testPixel = 0x7F7F7F7F & ((1ULL << fmt.bitsPerPixel()) - 1);
 
