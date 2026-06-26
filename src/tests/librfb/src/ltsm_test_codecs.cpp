@@ -140,8 +140,7 @@ class TestFrameBuffer: public FrameBuffer {
 
   public:
     TestFrameBuffer(const XCB::Size & sz, const PixelFormat & pf) : FrameBuffer(sz, pf) {
-        const uint32_t testPixel = 0xAA55CCFF;
-        fillPixel(region(), testPixel);
+        fillColor(region(), Color(0xAA,0x55,0xCC));
         fillRandomRegions(64);
     }
 };
@@ -157,7 +156,7 @@ template <typename T>
 class CodecTypedTest : public ::testing::Test {
   protected:
     XCB::Size displaySize{320, 240};
-    PixelFormat pixelFormat{RGBA32};
+    PixelFormat pixelFormat{RGBX32};
 };
 
 template <typename T>
@@ -171,7 +170,11 @@ class CodecTypedTest2 : public CodecTypedTest<T> {
 //  codecs (block data) for tests
 using CodecTypes1 = ::testing::Types <
                       CodecPair<RFB::EncodingRaw, RFB::DecodingRaw>,
-                      CodecPair<RFB::EncodingZlib, RFB::DecodingZlib>
+                      CodecPair<RFB::EncodingZlib, RFB::DecodingZlib>,
+#ifdef LTSM_DECODING_LZ4
+                      CodecPair<RFB::EncodingLZ4, RFB::DecodingLZ4>,
+#endif
+                      CodecPair<RFB::EncodingQOI, RFB::DecodingQOI>
                       >;
 
 TYPED_TEST_SUITE(CodecTypedTest1, CodecTypes1);
@@ -182,6 +185,8 @@ TYPED_TEST(CodecTypedTest1, LoopbackEncodeDecode) {
 
     auto encoder = std::make_unique<EncoderT>();
     auto decoder = std::make_unique<DecoderT>();
+
+    encoder->setThreads(1);
 
     TestFrameBuffer srcFb(this->displaySize, this->pixelFormat);
     FrameBuffer dstFb(this->displaySize, this->pixelFormat);
@@ -227,6 +232,9 @@ TYPED_TEST(CodecTypedTest1, LoopbackEncodeDecode) {
     // decoder process
     ASSERT_NO_THROW(decoder->updateRegionBuf(std::move(buf2), testDecoder, srcFb.region()));
 
+    // no data
+    ASSERT_FALSE(sb.last());
+
     // testing
     EXPECT_TRUE(std::ranges::equal(dstFb.span(), srcFb.span()));
 }
@@ -238,9 +246,6 @@ using CodecTypes2 = ::testing::Types <
                          CodecPair<RFB::EncodingTRLE, RFB::DecodingTRLE>
                          >;
 
-/*
-#include <iostream>
-
 TYPED_TEST_SUITE(CodecTypedTest2, CodecTypes2);
 
 TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
@@ -249,6 +254,8 @@ TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
 
     auto encoder = std::make_unique<EncoderT>();
     auto decoder = std::make_unique<DecoderT>();
+
+    encoder->setThreads(1);
 
     TestFrameBuffer srcFb(this->displaySize, this->pixelFormat);
     FrameBuffer dstFb(this->displaySize, this->pixelFormat);
@@ -277,20 +284,22 @@ TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
         const uint16_t rw = sb.readIntBE16();
         const uint16_t rh = sb.readIntBE16();
 
-        std::cerr << rx << "," << ry << "," << rw << "," << rh << std::endl;
-        ASSERT_TRUE(srcFb.region().contains(XCB::Region(rx, ry, rw, rh)));
+        const XCB::Region dstreg(rx, ry, rw, rh);
+        ASSERT_TRUE(srcFb.region().contains(dstreg));
 
         const int type = sb.readIntBE32();
         ASSERT_EQ(type, encoder->getType());
 
         // decoder process
-        ASSERT_NO_THROW(decoder->updateRegionStream(TestDecoderStream(sb), testDecoder, srcFb.region()));
+        ASSERT_NO_THROW(decoder->updateRegionStream(TestDecoderStream(sb), testDecoder, dstreg));
     }
+
+    // no data
+    ASSERT_FALSE(sb.last());
 
     // testing
     EXPECT_TRUE(std::ranges::equal(dstFb.span(), srcFb.span()));
 }
-*/
 
 int main(int argc, char** argv) {
     Application::setDebugTarget(DebugTarget::SyslogFile, "test_codecs.log");

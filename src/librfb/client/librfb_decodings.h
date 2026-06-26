@@ -226,7 +226,7 @@ namespace LTSM {
           public:
             void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingQOI(bool lz4) : DecodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
+            DecodingQOI(bool lz4 = false) : DecodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
 
             bool isZQOI(void) const {
                 return type() == ENCODING_LTSM_ZQOI;

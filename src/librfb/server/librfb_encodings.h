@@ -266,7 +266,7 @@ namespace LTSM {
                 return isZQOI() ? "ZQOI" : "QOI";
             }
 
-            EncodingQOI(bool lz4) : EncodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
+            EncodingQOI(bool lz4 = false) : EncodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
 
             bool isZQOI(void) const {
                 return getType() == ENCODING_LTSM_ZQOI;
