@@ -16,6 +16,5 @@ foreach(CUR_TARGET ltsm_test_zlib ltsm_test_binarybuf ltsm_test_streambuf ltsm_t
     target_link_libraries(${CUR_TARGET} PRIVATE ${SDL2_IMAGE_LIBRARIES})
     target_link_libraries(${CUR_TARGET} PRIVATE GTest::gmock)
 
-    set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
-    #add_test(NAME LtsmCommonTests COMMAND ${CUR_TARGET})
+    add_test(NAME ${CUR_TARGET} COMMAND ${CUR_TARGET})
 endforeach()

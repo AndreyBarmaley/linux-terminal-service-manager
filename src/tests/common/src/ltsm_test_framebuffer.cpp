@@ -296,6 +296,90 @@ TEST(FrameBufferTest, RawPixelStaticDecoder) {
     EXPECT_NO_THROW(FrameBuffer::rawPixel(&le_pixel, 32, true));
 }
 
+// FrameBufferParamTest
+class FrameBufferParamTest : public ::testing::TestWithParam<LTSM::PixelFormat> {
+protected:
+    XCB::Size testSize{16, 16}; // Небольшой размер для быстрой проверки
+};
+
+TEST_P(FrameBufferParamTest, InitializationProps) {
+    const LTSM::PixelFormat& fmt = GetParam();
+    
+    LTSM::FrameBuffer fb(testSize, fmt);
+
+    EXPECT_EQ(fb.width(), testSize.width);
+    EXPECT_EQ(fb.height(), testSize.height);
+    EXPECT_EQ(fb.pixelFormat().bitsPerPixel(), fmt.bitsPerPixel());
+    EXPECT_EQ(fb.bitsPerPixel(), fmt.bitsPerPixel());
+    EXPECT_EQ(fb.bytePerPixel(), fmt.bytePerPixel());
+    
+    size_t expectedMinimumPitch = (testSize.width * fmt.bitsPerPixel() + 7) / 8;
+    EXPECT_GE(fb.pitchSize(), expectedMinimumPitch);
+
+    auto bufferSpan = fb.span();
+    EXPECT_FALSE(bufferSpan.empty());
+    EXPECT_EQ(bufferSpan.size(), fb.pitchSize() * testSize.height);
+}
+
+TEST_P(FrameBufferParamTest, SetAndGetPixel) {
+    const LTSM::PixelFormat& fmt = GetParam();
+    LTSM::FrameBuffer fb(testSize, fmt);
+
+    XCB::Point pt1{0, 0};
+    XCB::Point pt2{5, 5};
+    
+    uint32_t testPixelValue = 0x1F2F3F4F & ((1ULL << fmt.bitsPerPixel()) - 1);
+
+    fb.setPixel(pt1, testPixelValue);
+    fb.setPixel(pt2, testPixelValue);
+
+    EXPECT_EQ(fb.pixel(pt1), testPixelValue);
+    EXPECT_EQ(fb.pixel(pt2), testPixelValue);
+}
+
+TEST_P(FrameBufferParamTest, FillPixelRegion) {
+    const LTSM::PixelFormat& fmt = GetParam();
+    LTSM::FrameBuffer fb(testSize, fmt);
+
+    XCB::Region fillReg(XCB::Point(2, 2), XCB::Size(4, 4));
+    uint32_t fillPixelValue = 0xAABBCCDD & ((1ULL << fmt.bitsPerPixel()) - 1);
+
+    fb.fillPixel(fillReg, fillPixelValue);
+
+    EXPECT_EQ(fb.pixel(XCB::Point(3, 3)), fillPixelValue);
+    
+    EXPECT_NE(fb.pixel(XCB::Point(1, 1)), fillPixelValue);
+}
+
+TEST_P(FrameBufferParamTest, SubBufferCoordinates) {
+    const LTSM::PixelFormat& fmt = GetParam();
+    LTSM::FrameBuffer parentFb(testSize, fmt);
+
+    XCB::Point subTopLeft{4, 4};
+    XCB::Size subSize{4, 4};
+    XCB::Region subReg(subTopLeft, subSize);
+
+    LTSM::FrameBuffer childFb(subReg, parentFb);
+
+    uint32_t testPixel = 0x7F7F7F7F & ((1ULL << fmt.bitsPerPixel()) - 1);
+
+    childFb.setPixel(XCB::Point(0, 0), testPixel);
+
+    EXPECT_EQ(parentFb.pixel(subTopLeft), testPixel);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllPixelFormats,
+    FrameBufferParamTest,
+    ::testing::Values(
+        RGB555, BGR555, RGB565, BGR565,
+        RGB24, BGR24, RGB30, BGR30,
+        RGBA1010102, BGRA1010102,
+        RGBA32, BGRA32, ARGB32, ABGR32,
+        RGBX32, BGRX32, XRGB32, XBGR32
+    )
+);
+
 int main(int argc, char** argv) {
     Application::setDebugTarget(DebugTarget::SyslogFile, "test_framebuf.log");
     testing::InitGoogleTest(&argc, argv);

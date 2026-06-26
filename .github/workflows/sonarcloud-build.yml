@@ -131,18 +131,7 @@ jobs:
         shell: bash
         run: |
           echo "::group::run tests"
-          ./ltsm_test_application
-          ./ltsm_test_zlib
-          ./ltsm_test_binarybuf
-          ./ltsm_test_streambuf
-          ./ltsm_test_xcbtypes
-          ./ltsm_test_framebuffer
-          ./ltsm_test_tools
-          ./ltsm_test_jsonwrapper
-          ./ltsm_test_bytestream
-          ./ltsm_test_asyncmutex
-          ./ltsm_test_asyncsocket
-          ./ltsm_test_parallels
+          ctest --test-dir build/src/tests/common
           ./ltsm_test_unixsocket
           ./ltsm_test_encodings --images src/tests/encodings/images
           echo "::endgroup::"
