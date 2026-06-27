@@ -29,20 +29,20 @@
 
 namespace LTSM {
     const char* LdapResult::dn(void) const {
-        return _dn.get();
+        return dn_.get();
     }
 
     const char* LdapResult::attr(void) const {
-        return _attr.get();
+        return attr_.get();
     }
 
     int LdapResult::valuesCount(void) const {
-        return _vals ? ldap_count_values_len(_vals.get()) : 0;
+        return vals_ ? ldap_count_values_len(vals_.get()) : 0;
     }
 
     std::string_view LdapResult::valueString(void) const {
         if(0 < valuesCount()) {
-            auto arr = _vals.get();
+            auto arr = vals_.get();
             return string2view(arr[0]->bv_val, arr[0]->bv_val + arr[0]->bv_len);
         }
 
@@ -51,7 +51,7 @@ namespace LTSM {
 
     std::list<std::string_view> LdapResult::valueListString(void) const {
         int count = valuesCount();
-        auto arr = _vals.get();
+        auto arr = vals_.get();
         std::list<std::string_view> res;
 
         for(int it = 0; it < count; ++it) {
@@ -63,7 +63,7 @@ namespace LTSM {
 
     bool LdapResult::hasValue(std::string_view str) const {
         int count = valuesCount();
-        auto arr = _vals.get();
+        auto arr = vals_.get();
 
         for(int it = 0; it < count; ++it) {
             if(str == string2view(arr[0]->bv_val, arr[0]->bv_val + arr[0]->bv_len)) {
@@ -76,7 +76,7 @@ namespace LTSM {
 
     bool LdapResult::hasValue(const char* ptr, size_t len) const {
         int count = valuesCount();
-        auto arr = _vals.get();
+        auto arr = vals_.get();
 
         for(int it = 0; it < count; ++it) {
             if(len == arr[it]->bv_len && std::equal(ptr, ptr + len, arr[it]->bv_val)) {
@@ -143,8 +143,8 @@ namespace LTSM {
             BerElement* ber = nullptr;
 
             for(char* attr = ldap_first_attribute(ldap, entry, & ber); attr; attr = ldap_next_attribute(ldap, entry, ber)) {
-                std::unique_ptr<char[], void(*)(void*)> guard_attr{ attr, ldap_memfree };
-                std::unique_ptr<berval*, void(*)(berval**)> vals{ ldap_get_values_len(ldap, entry, attr), ldap_value_free_len };
+                std::shared_ptr<char[]> guard_attr{ attr, ldap_memfree };
+                std::shared_ptr<berval*> vals{ ldap_get_values_len(ldap, entry, attr), ldap_value_free_len };
 
                 Application::debug(DebugType::Ldap, "{}: attr: `{}'", NS_FuncNameV, attr);
                 res.emplace_back(LdapResult{ dn, std::move(guard_attr), std::move(vals) });

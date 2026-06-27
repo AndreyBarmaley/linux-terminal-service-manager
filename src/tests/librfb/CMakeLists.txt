@@ -1,6 +1,6 @@
 project(ltsm_librfb_tests)
 
-foreach(CUR_TARGET ltsm_test_codecs)
+foreach(CUR_TARGET ltsm_test_codecs ltsm_test_streambit ltsm_test_librfb)
 
     CommonDefaults(JSON ZLIB XCB ENCODER DECODER SDL OPENSSL GNUTLS)
     add_executable(${CUR_TARGET} src/${CUR_TARGET}.cpp)
