@@ -25,7 +25,6 @@
 #define _LTSM_SERVICE_
 
 #include <chrono>
-#include <future>
 #include <stdexcept>
 #include <functional>
 #include <filesystem>
@@ -48,8 +47,6 @@ namespace LTSM::Manager {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    using Job = std::future<void>;
-    using PidStatus = std::pair<pid_t, std::future<int>>;
     using StatusStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;

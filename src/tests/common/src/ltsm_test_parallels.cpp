@@ -19,13 +19,13 @@ protected:
 };
 
 TEST_F(ParallelsJobsTest, AddAndGetResults) {
-    auto f1 = std::async(std::launch::async, []() { return 10; });
-    auto f2 = std::async(std::launch::async, []() { return 20; });
+    auto f1 = make_async_job([]() { return 10; });
+    auto f2 = make_async_job([]() { return 20; });
 
     pool.addJob(std::move(f1));
     pool.addJob(std::move(f2));
 
-    auto& results = pool.waitAll();
+    auto& results = pool.jobList();
     EXPECT_EQ(results.size(), 2);
 
     std::vector<int> values;
@@ -44,26 +44,26 @@ TEST_F(ParallelsJobsTest, ThrottlingLimitsConcurrentJobs) {
         return 0;
     };
 
-    pool.addJob(std::async(std::launch::async, long_worker));
-    pool.addJob(std::async(std::launch::async, long_worker));
+    pool.addJob(make_async_job(long_worker));
+    pool.addJob(make_async_job(long_worker));
 
     std::this_thread::sleep_for(5ms);
 
     auto busy_before = std::ranges::count_if(pool.jobList(), [](auto & job) {
-        return job.wait_for(1us) != std::future_status::ready;
+        return ! job.isReady();
     });
     EXPECT_EQ(busy_before, 2);
 
-    pool.addJob(std::async(std::launch::async, long_worker));
-    pool.addJob(std::async(std::launch::async, long_worker));
+    pool.addJob(make_async_job(long_worker));
+    pool.addJob(make_async_job(long_worker));
 
-    pool.waitAll();
-    EXPECT_EQ(pool.jobList().size(), 4);
+    auto& results = pool.jobList();
+    EXPECT_EQ(results.size(), 4);
 }
 
 TEST_F(ParallelsJobsTest, ClearEmptiesTheList) {
-    pool.addJob(std::async(std::launch::async, []() { return 1; }));
-    pool.addJob(std::async(std::launch::async, []() { return 2; }));
+    pool.addJob(make_async_job([]() { return 1; }));
+    pool.addJob(make_async_job([]() { return 2; }));
 
     EXPECT_EQ(pool.jobList().size(), 2);
     pool.clear();
@@ -77,7 +77,7 @@ TEST(ParallelsJobsDestructorTest, DestructorWaitsForRunningJobs) {
     {
         ParallelsJobs<void> void_pool{1};
         
-        auto long_job = std::async(std::launch::async, [&]() {
+        auto long_job = make_async_job([&]() {
             std::this_thread::sleep_for(30ms);
             job_finished = true;
         });
@@ -89,12 +89,11 @@ TEST(ParallelsJobsDestructorTest, DestructorWaitsForRunningJobs) {
 }
 
 TEST_F(ParallelsJobsTest, HandlesExceptionsInFutures) {
-    auto exception_job = std::async(std::launch::async, []() -> int {
+    auto exception_job = make_async_job([]() -> int {
         throw std::runtime_error("Job failed successfully");
     });
 
     pool.addJob(std::move(exception_job));
-    pool.waitAll();
 
     auto& list = pool.jobList();
     ASSERT_EQ(list.size(), 1);

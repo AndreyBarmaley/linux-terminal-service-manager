@@ -24,7 +24,6 @@
 #include <bit>
 #include <cctype>
 #include <thread>
-#include <future>
 #include <algorithm>
 #include <exception>
 
@@ -345,8 +344,7 @@ namespace LTSM {
                 ParallelsJobs<void> jobs;
 
                 for(int yy = 0; yy < reg.height; ++yy) {
-                    jobs.addJob(std::async(std::launch::async,
-                                           &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
+                    jobs.addJob(make_async_job(&FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
                 }
 
                 return;
@@ -377,8 +375,7 @@ namespace LTSM {
                 ParallelsJobs<void> jobs;
 
                 for(int yy = 0; yy < reg.height; ++yy) {
-                    jobs.addJob(std::async(std::launch::async,
-                                           &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
+                    jobs.addJob(make_async_job(&FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
                 }
 
                 return;
@@ -403,11 +400,9 @@ namespace LTSM {
             if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
                 ParallelsJobs<void> jobs;
 
-                jobs.addJob(std::async(std::launch::async,
-                                       &FrameBuffer::setPixelRow, this, reg.topLeft(), raw, reg.width));
-                jobs.addJob(std::async(std::launch::async,
-                                       &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width));
-                jobs.addJob(std::async(std::launch::async, [&reg, &raw, this]() {
+                jobs.addJob(make_async_job(&FrameBuffer::setPixelRow, this, reg.topLeft(), raw, reg.width));
+                jobs.addJob(make_async_job(&FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width));
+                jobs.addJob(make_async_job([&reg, &raw, this]() {
                     for(int yy = 1; yy < reg.height - 1; ++yy) {
                         setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, 1);
                         setPixelRow(reg.topLeft() + XCB::Point(reg.width - 1, yy), raw, 1);
@@ -496,7 +491,7 @@ namespace LTSM {
 
             if(pixelFormat() != fb.pixelFormat()) {
                 for(auto & subdst : dst.divideCounts(2, 2)) {
-                    jobs.addJob(std::async(std::launch::async, [subdst, off = subdst.topLeft() - dst.topLeft(), &fb, &reg, this]() {
+                    jobs.addJob(make_async_job([subdst, off = subdst.topLeft() - dst.topLeft(), &fb, &reg, this]() {
                         for(auto coord = subdst.coordBegin(); coord.isValid(); ++coord) {
                             setPixel(subdst.topLeft() + coord, fb.pixel(reg.topLeft() + off + coord), & fb.pixelFormat());
                         }
@@ -504,7 +499,7 @@ namespace LTSM {
                 }
             } else {
                 for(int row = 0; row < dst.height; ++row) {
-                    jobs.addJob(std::async(std::launch::async, rowCopy, row));
+                    jobs.addJob(make_async_job(rowCopy, row));
                 }
             }
 
@@ -554,7 +549,7 @@ namespace LTSM {
             auto bsz = XCB::Size(reg.width, reg.height / 4);
 
             for(auto & subreg : reg.divideBlocks(bsz)) {
-                jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
+                jobs.addJob(make_async_job(regionProcessed, subreg));
             }
 
             for(auto & job : jobs.jobList()) {
@@ -595,7 +590,7 @@ namespace LTSM {
             auto bsz = XCB::Size(fbreg.width, fbreg.height / 4);
 
             for(auto & subreg : fbreg.divideBlocks(bsz)) {
-                jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
+                jobs.addJob(make_async_job(regionProcessed, subreg));
             }
 
             for(auto & job : jobs.jobList()) {
@@ -639,7 +634,7 @@ namespace LTSM {
             auto bsz = XCB::Size(reg.width, reg.height / 4);
 
             for(auto & subreg : reg.divideBlocks(bsz)) {
-                jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
+                jobs.addJob(make_async_job(regionProcessed, subreg));
             }
 
             for(auto & job : jobs.jobList()) {
@@ -696,7 +691,7 @@ namespace LTSM {
             auto bsz = XCB::Size(reg.width, reg.height / 4);
 
             for(auto & subreg : reg.divideBlocks(bsz)) {
-                jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
+                jobs.addJob(make_async_job(regionProcessed, subreg));
             }
 
             for(auto & job : jobs.jobList()) {
@@ -801,8 +796,7 @@ namespace LTSM {
         ParallelsJobs<bool> jobs;
 
         for(auto it = str.cbegin(); it != str.cend(); ++it) {
-            jobs.addJob(std::async(std::launch::async,
-                                   &FrameBuffer::renderChar, this, *it, col, XCB::Point(pos.x + std::distance(str.cbegin(), it) * _systemfont.width, pos.y)));
+            jobs.addJob(make_async_job(&FrameBuffer::renderChar, this, *it, col, XCB::Point(pos.x + std::distance(str.cbegin(), it) * _systemfont.width, pos.y)));
         }
 
 #else
