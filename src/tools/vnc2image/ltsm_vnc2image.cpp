@@ -180,9 +180,6 @@ namespace LTSM {
         updateRawPixels(reg, std::move(buf2), pitch, pf);
     }
 
-    void Vnc2Image::waitDecoderJobs(void) const {
-    }
-
     const PixelFormat & Vnc2Image::clientFormat(void) const {
         return fbPtr->pixelFormat();
     }

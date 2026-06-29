@@ -91,7 +91,7 @@ namespace LTSM {
 
             virtual XCB::Size clientSize(void) const = 0;
             virtual void postDecoderJob(PostDecoderJobCb &&, std::vector<uint8_t> &&, const XCB::Region &, uint32_t pitch, const PixelFormat &) const = 0;
-            virtual void waitDecoderJobs(void) const = 0;
+            virtual void waitDecoderJobs(void) const {}
 
             virtual int clientPrefferedVideoEncoding(void) const {
                 return 0;
@@ -129,7 +129,7 @@ namespace LTSM {
           public:
             void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
+            DecodingRRE(bool co = false) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
             bool isCoRRE(void) const {
                 return type() == ENCODING_CORRE;
@@ -147,7 +147,7 @@ namespace LTSM {
           public:
             void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
+            DecodingHexTile(bool zlib = false) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
             bool isZlibHex(void) const {
                 return type() == ENCODING_ZLIBHEX;
@@ -164,7 +164,7 @@ namespace LTSM {
           public:
             void updateRegionStream(const DecoderStream &, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE),
+            DecodingTRLE(bool zip = false) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE),
                 zlib_{std::make_unique<ZLib::InflateBase>()} {}
 
             bool isZRLE(void) const {
@@ -226,7 +226,7 @@ namespace LTSM {
           public:
             void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
-            DecodingQOI(bool lz4) : DecodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
+            DecodingQOI(bool lz4 = false) : DecodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
 
             bool isZQOI(void) const {
                 return type() == ENCODING_LTSM_ZQOI;

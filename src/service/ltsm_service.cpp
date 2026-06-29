@@ -184,11 +184,16 @@ namespace LTSM::Manager {
             if(pid_t pid = ForkMode::forkStart(); 0 != pid) {
                 pidNext = pid;
                 const bool notSysUser = std::string_view(ltsm_user_conn) != userInfo->user();
-                std::future<void> detach;
+                std::future<void> scriptEnded;
 
                 // logon
                 if(notSysUser && json.configHasKey("system:logon")) {
-                    detach = std::async(std::launch::async, &runSystemScript, sess, json.configGetString("system:logon"));
+                    std::promise<void> promise;
+                    scriptEnded = promise.get_future();
+                    std::thread([ptr=sess, script=json.configGetString("system:logon"), promise=std::move(promise)]() mutable {
+                        runSystemScript(ptr, script);
+                        promise.set_value();
+                    }).detach();
                 }
 
                 // main2 thread
@@ -201,6 +206,9 @@ namespace LTSM::Manager {
                     runSystemScript(sess, json.configGetString("system:logoff"));
                 }
 
+                if(scriptEnded.valid()) {
+                    scriptEnded.wait();
+                }
                 return;
             }
 

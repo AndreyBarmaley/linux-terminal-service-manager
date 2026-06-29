@@ -25,7 +25,6 @@
 #define _LTSM_AUDIO_PIPEWIRE_
 
 #include <span>
-#include <future>
 #include <string>
 #include <memory>
 #include <functional>

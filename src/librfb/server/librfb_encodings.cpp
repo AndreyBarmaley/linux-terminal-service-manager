@@ -266,7 +266,7 @@ namespace LTSM {
         ParallelsJobs<EncodingRet> jobs(threads);
 
         for(auto & reg : regions) {
-            jobs.addJob(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs.addJob(make_async_job(&EncodingRRE::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
@@ -382,7 +382,7 @@ namespace LTSM {
         ParallelsJobs<EncodingRet> jobs(threads);
 
         for(auto & reg : regions) {
-            jobs.addJob(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs.addJob(make_async_job(&EncodingHexTile::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
@@ -528,7 +528,7 @@ namespace LTSM {
         ParallelsJobs<EncodingRet> jobs(threads);
 
         for(auto & reg : regions) {
-            jobs.addJob(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs.addJob(make_async_job(&EncodingTRLE::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
@@ -739,7 +739,7 @@ namespace LTSM {
         EncoderWrapper wrap(& buf, st);
 
         sendRawRegionPixels(& wrap, st, reg, fb);
-        auto zip = zlib_->deflateData(buf, Z_NO_FLUSH);
+        auto zip = zlib_->deflateData(buf, Z_SYNC_FLUSH);
 
         return std::make_pair(reg + top, std::move(zip));
     }
@@ -807,7 +807,7 @@ namespace LTSM {
         ParallelsJobs<EncodingRet> jobs(threads);
 
         for(auto & reg : regions) {
-            jobs.addJob(std::async(std::launch::async, & EncodingLZ4::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs.addJob(make_async_job(&EncodingLZ4::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
@@ -946,7 +946,7 @@ namespace LTSM {
         ParallelsJobs<EncodingRet> jobs(threads);
 
         for(auto & reg : regions) {
-            jobs.addJob(std::async(std::launch::async, & EncodingTJPG::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs.addJob(make_async_job(&EncodingTJPG::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
@@ -1044,7 +1044,7 @@ namespace LTSM {
         ParallelsJobs<EncodingRet> jobs(threads);
 
         for(auto & reg : regions) {
-            jobs.addJob(std::async(std::launch::async, & EncodingQOI::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs.addJob(make_async_job(&EncodingQOI::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs

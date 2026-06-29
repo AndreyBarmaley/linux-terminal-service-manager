@@ -39,9 +39,9 @@ namespace LTSM {
     };
 
     struct LdapResult {
-        std::shared_ptr<char[]> _dn;
-        std::unique_ptr<char[], void(*)(void*)> _attr;
-        std::unique_ptr<berval*, void(*)(berval**)> _vals;
+        std::shared_ptr<char[]> dn_;
+        std::shared_ptr<char[]> attr_;
+        std::shared_ptr<berval*> vals_;
 
         const char* dn(void) const;
         const char* attr(void) const;
@@ -54,14 +54,20 @@ namespace LTSM {
         bool hasValue(const char* ptr, size_t len) const;
     };
 
-    class LdapWrapper {
+    class ILdapWrapper {
+      public:
+        virtual ~ILdapWrapper() = default;
+        virtual std::list<LdapResult> search(int scope, std::vector<const char*> attrs, const char* filter = nullptr, const char* basedn = nullptr) = 0;
+    };
+
+    class LdapWrapper : public ILdapWrapper {
         LDAP* ldap = nullptr;
 
       public:
         LdapWrapper();
         ~LdapWrapper();
 
-        std::list<LdapResult> search(int scope, std::vector<const char*> attrs, const char* filter = nullptr, const char* basedn = nullptr);
+        std::list<LdapResult> search(int scope, std::vector<const char*> attrs, const char* filter = nullptr, const char* basedn = nullptr) override;
     };
 }
 

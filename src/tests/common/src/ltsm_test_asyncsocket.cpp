@@ -18,7 +18,7 @@ using namespace LTSM;
 using ::testing::_;
 using ::testing::Invoke;
 
-class MockAsyncSocket : public LTSM::AsyncSocketBase {
+class MockAsyncSocket : public AsyncSocketBase {
 public:
     MOCK_METHOD(void, closeSocket, (), (override));
     MOCK_METHOD(void, sync_recv_buf, (void* ptr, size_t len), (const, override));
@@ -41,7 +41,7 @@ protected:
 
 TEST_F(AsyncSocketTest, ValueToBufferWithIntegral) {
     uint32_t val = 0x11223344;
-    boost::asio::mutable_buffer buf = LTSM::value_to_buffer(val);
+    boost::asio::mutable_buffer buf = value_to_buffer(val);
     
     EXPECT_EQ(buf.data(), &val);
     EXPECT_EQ(buf.size(), sizeof(val));
@@ -49,7 +49,7 @@ TEST_F(AsyncSocketTest, ValueToBufferWithIntegral) {
 
 TEST_F(AsyncSocketTest, ValueToConstBufferWithStdString) {
     std::string str = "Hello";
-    boost::asio::const_buffer buf = LTSM::value_to_const_buffer(str);
+    boost::asio::const_buffer buf = value_to_const_buffer(str);
     
     EXPECT_EQ(buf.data(), str.data());
     EXPECT_EQ(buf.size(), str.size());
@@ -87,7 +87,7 @@ TEST_F(AsyncSocketTest, AsyncRecvValuesFillsVariables) {
 TEST(AsyncTcpStreamTest, SocketAccessAndLifecycle) {
     boost::asio::io_context local_ctx;
     
-    LTSM::AsyncTcpStream stream(local_ctx.get_executor());
+    AsyncTcpStream stream(local_ctx.get_executor());
     
     boost::asio::ip::tcp::socket& raw_socket = stream.socket();
     EXPECT_FALSE(raw_socket.is_open());

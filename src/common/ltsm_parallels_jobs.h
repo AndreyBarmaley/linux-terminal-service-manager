@@ -32,36 +32,88 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
+    template <typename ReturnType>
+    class AsyncJob {
+        std::future<ReturnType> future_;
+
+      public:
+        template <typename Callable, typename... Args>
+        explicit AsyncJob(Callable&& job, Args&&... args) {
+            std::promise<ReturnType> promise;
+            future_ = promise.get_future();
+
+            std::thread thr(
+            [p = std::move(promise)](auto&& func, auto&&... bound_args) mutable {
+                try {
+                    if constexpr(std::is_void_v<ReturnType>) {
+                        std::invoke(std::forward<decltype(func)>(func), std::forward<decltype(bound_args)>(bound_args)...);
+                        p.set_value();
+                    } else {
+                        p.set_value(std::invoke(std::forward<decltype(func)>(func), std::forward<decltype(bound_args)>(bound_args)...));
+                    }
+                } catch(...) {
+                    p.set_exception(std::current_exception());
+                }
+            },
+            std::forward<Callable>(job),
+            std::forward<Args>(args)...
+            );
+
+            thr.detach();
+        }
+
+        ReturnType get(void) {
+            return future_.get();
+        }
+
+        bool isReady(void) const {
+            return future_.wait_for(1us) == std::future_status::ready;
+        }
+
+        ~AsyncJob() {
+            if(future_.valid())
+                future_.wait();
+        }
+
+        AsyncJob(const AsyncJob &) = delete;
+        AsyncJob & operator=(const AsyncJob &) = delete;
+
+        AsyncJob(AsyncJob &&) noexcept = default;
+        AsyncJob & operator=(AsyncJob &&) noexcept = default;
+    };
+
+    template <typename Callable, typename... Args>
+    auto make_async_job(Callable&& job, Args&&... args) {
+        using ReturnType = std::invoke_result_t<std::decay_t<Callable>, std::decay_t<Args>...>;
+        return AsyncJob<ReturnType>(std::forward<Callable>(job), std::forward<Args>(args)...);
+    }
+
     template<typename JobResult>
     class ParallelsJobs {
-        using JobFuture = std::future<JobResult>;
+        using JobFuture = AsyncJob<JobResult>; //std::future<JobResult>;
         using JobList = std::list<JobFuture>;
 
         std::mutex mutex_;
-        JobList jobs;
-        const int tnum;
+        JobList jobs_;
+        const int tnum_;
 
       public:
-        explicit ParallelsJobs(int num = std::thread::hardware_concurrency()) : tnum(num) {
+        explicit ParallelsJobs(int num = std::thread::hardware_concurrency()) : tnum_(num) {
         }
 
         ~ParallelsJobs() {
-            for(auto & job : jobs) {
-                if(job.valid()) {
-                    job.wait();
-                }
-            }
+            clear();
         }
 
         void addJob(JobFuture && job) {
             std::unique_lock<std::mutex> lock{mutex_};
 
-            while(! jobs.empty()) {
-                auto busy = std::ranges::count_if(jobs, [](auto & job) {
-                    return job.wait_for(1us) != std::future_status::ready;
+            while(! jobs_.empty()) {
+                auto busy = std::ranges::count_if(jobs_, [](auto & job) {
+                    return ! job.isReady();
                 });
 
-                if(busy < tnum) {
+                if(busy < tnum_) {
                     break;
                 }
 
@@ -70,23 +122,16 @@ namespace LTSM {
                 lock.lock();
             }
 
-            jobs.emplace_back(std::move(job));
-        }
-
-        JobList & waitAll(void) {
-            for(auto & job : jobs) {
-                job.wait();
-            }
-
-            return jobs;
+            jobs_.emplace_back(std::move(job));
         }
 
         JobList & jobList(void) {
-            return jobs;
+            return jobs_;
         }
 
-        void clear(void) {
-            waitAll().clear();
+        void clear(void) noexcept {
+            std::unique_lock<std::mutex> lock{mutex_};
+            jobs_.clear();
         }
     };
 }

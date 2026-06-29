@@ -138,6 +138,24 @@ namespace LTSM {
             return Point::isValid() && ! isEmpty();
         }
 
+        bool Region::contains(const Region & reg) const {
+            if(reg.x < x || reg.y < y) {
+                return false;
+            }
+
+            int thisRight  = x + width;
+            int thisBottom = y + height;
+
+            int regRight  = reg.x + reg.width;
+            int regBottom = reg.y + reg.height;
+
+            if(regRight > thisRight || regBottom > thisBottom) {
+                return false;
+            }
+
+            return true;
+        }
+
         Region Region::intersected(const Region & reg) const {
             Region res;
             intersection(*this, reg, & res);
