@@ -741,7 +741,7 @@ namespace LTSM {
         sendRawRegionPixels(& wrap, st, reg, fb);
         auto zip = zlib_->deflateData(buf, Z_SYNC_FLUSH);
 
-        return std::make_pair(reg + top, std::move(zip));
+        return std::make_pair(reg + top, BinaryBuf(std::move(zip)));
     }
 
     bool RFB::EncodingZlib::setEncodingOptions(const std::forward_list<std::string> & encopts) {

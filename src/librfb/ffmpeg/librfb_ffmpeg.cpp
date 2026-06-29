@@ -541,7 +541,7 @@ namespace LTSM {
         Application::debug(DebugType::Enc, "{}: success", NS_FuncNameV);
     }
 
-    void RFB::DecodingFFmpeg::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
+    void RFB::DecodingFFmpeg::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::trace(DebugType::Enc, "{}: decoding region {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         if(! localFrame || XCB::Size(localFrame->width, localFrame->height) != rend.clientSize()) {

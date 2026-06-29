@@ -162,7 +162,7 @@ namespace LTSM {
         return type_;
     }
 
-    void RFB::DecodingRaw::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
+    void RFB::DecodingRaw::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         const uint32_t pitch = reg.width * rend.clientFormat().bytePerPixel();
@@ -470,7 +470,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::DecodingZlib::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
+    void RFB::DecodingZlib::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         const uint32_t pitch = reg.width * rend.clientFormat().bytePerPixel();
@@ -483,7 +483,7 @@ namespace LTSM {
 #ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
-    void RFB::DecodingLZ4::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
+    void RFB::DecodingLZ4::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         const uint32_t pitch = rend.serverFormat().bytePerPixel() * reg.width;
@@ -511,7 +511,7 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING_TJPG
     /// DecodingTJPG
-    void RFB::DecodingTJPG::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
+    void RFB::DecodingTJPG::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         const uint32_t pitch = reg.width * tjPixelSize[pixfmt];
@@ -551,7 +551,7 @@ namespace LTSM {
 #endif // LTSM_DECODING_TJPG
 
     /// DecodingQOI
-    void RFB::DecodingQOI::updateRegionBuf(BinaryBuf && buf, const DecoderRender & rend, const XCB::Region & reg) {
+    void RFB::DecodingQOI::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "{}: decoding region: {}, data length: {}", NS_FuncNameV, reg, buf.size());
 
         const uint32_t pitch = rend.serverFormat().bytePerPixel() * reg.width;
