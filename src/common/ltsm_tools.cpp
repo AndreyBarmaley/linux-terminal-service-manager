@@ -869,8 +869,8 @@ namespace LTSM {
         return false;
     }
 
-    std::vector<uint8_t> Tools::fileToBinaryBuf(const std::filesystem::path & file) {
-        std::vector<uint8_t> buf;
+    BinaryBuf Tools::fileToBinaryBuf(const std::filesystem::path & file) {
+        BinaryBuf buf;
         std::error_code err;
 
         if(std::filesystem::exists(file, err)) {

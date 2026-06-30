@@ -93,7 +93,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
     XCB::ModulePasteSelection* paste = nullptr;
     xcb_atom_t target = XCB_ATOM_NONE;
 
-    std::vector<uint8_t> buf;
+    BinaryBuf buf;
 
   protected:
     std::vector<xcb_atom_t> selectionSourceTargets(void) const override {
