@@ -37,7 +37,7 @@ namespace LTSM {
     void connectorHelp(const char* prog) {
         std::cout << "version: " << LTSM_VNC2IMAGE_VERSION << std::endl;
         std::cout << "usage: " << prog <<
-                     " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]"
+                     " --host <localhost> [--port 5900] [--password <pass>] [--password-file <file>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]"
                   << std::endl;
     }
 
@@ -46,6 +46,10 @@ namespace LTSM {
         Application::setDebugTarget(DebugTarget::Console);
         Application::setDebugLevel(DebugLevel::Info);
 
+        if(auto pass = getenv("VNC2IMAGE_PASS")) {
+            password.assign(pass);
+        }
+        
         for(int it = 1; it < argc; ++it) {
             if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {
                 connectorHelp(argv[0]);
@@ -55,6 +59,9 @@ namespace LTSM {
                 it = it + 1;
             } else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc) {
                 filename.assign(argv[it + 1]);
+                it = it + 1;
+            } else if(0 == std::strcmp(argv[it], "--password-file") && it + 1 < argc) {
+                password.assign(Tools::fileToBinaryBuf(argv[it + 1]).toString());
                 it = it + 1;
             } else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc) {
                 password.assign(argv[it + 1]);

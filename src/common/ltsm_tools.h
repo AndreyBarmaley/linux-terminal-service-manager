@@ -55,6 +55,7 @@
 #include <functional>
 
 #include "ltsm_compat.h"
+#include "ltsm_streambuf.h"
 
 #include <cassert>
 // Use (void) to silence unused warnings.
@@ -165,7 +166,7 @@ namespace LTSM {
 
     namespace Tools {
         bool binaryToFile(const void*, size_t len, const std::filesystem::path &, bool append = false);
-        std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
+        BinaryBuf fileToBinaryBuf(const std::filesystem::path &);
 
         std::list<std::string> readDir(const std::filesystem::path &, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);

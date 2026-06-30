@@ -33,7 +33,7 @@ TEST(ToolsTest, FileOperationsAndIO) {
     EXPECT_EQ(read_str, test_data);
 
     // fileToBinaryBuf
-    std::vector<uint8_t> read_bin = fileToBinaryBuf(test_file);
+    auto read_bin = fileToBinaryBuf(test_file);
     std::string bin_str(read_bin.begin(), read_bin.end());
     EXPECT_EQ(bin_str, test_data);
 
