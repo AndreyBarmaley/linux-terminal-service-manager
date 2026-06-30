@@ -30,7 +30,7 @@
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
 
-#define LTSM_VNC2IMAGE_VERSION 20260414
+#define LTSM_VNC2IMAGE_VERSION 20260630
 
 namespace LTSM {
     class BoostContext {
