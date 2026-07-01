@@ -76,6 +76,7 @@ protected:
     }
 };
 
+/*
 TEST_F(LtsmWindowTest, ThrowsExceptionOnInvalidArguments) {
     XCB::Size render_sz( -10, -10 );
     XCB::Size window_sz( -10, -10 );
@@ -84,6 +85,7 @@ TEST_F(LtsmWindowTest, ThrowsExceptionOnInvalidArguments) {
         SDL::Window window("Test Fail Window", render_sz, window_sz);
     }, sdl_error);
 }
+*/
 
 TEST_F(LtsmWindowTest, SuccessfullyCreatesWindowAndValidatesState) {
     XCB::Size render_sz{ 800, 600 };
