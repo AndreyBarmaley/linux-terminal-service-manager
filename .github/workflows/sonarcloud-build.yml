@@ -82,6 +82,11 @@ jobs:
           unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
           echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
 
+      - name: Clean old coverage artifacts
+        run: |
+          find . -name "*.gcda" -delete
+          find . -name "*.gcno" -delete
+
       - name: Run build-wrapper
         run: |
           echo "fix user group"
@@ -162,7 +167,7 @@ jobs:
 
       - name: Collect coverage into one XML report
         run: |
-          gcovr --gcov-ignore-parse-errors --sonarqube -o coverage.xml .
+          gcovr --gcov-ignore-parse-errors --sonarqube -j 1 -o coverage.xml .
 
       - name: Run sonar-scanner
         env:
