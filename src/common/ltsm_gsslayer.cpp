@@ -420,11 +420,11 @@ namespace Gss {
     }
 
     CredentialPtr acquireUserCredential(std::string_view username, ErrorCodes* err) {
-        return acquireCredential(username.data(), Gss::NameType::NtUserName, Gss::CredentialUsage::Initiate, err);
+        return acquireCredential(username, Gss::NameType::NtUserName, Gss::CredentialUsage::Initiate, err);
     }
 
     CredentialPtr acquireServiceCredential(std::string_view service, ErrorCodes* err) {
-        return acquireCredential(service.data(), Gss::NameType::NtHostService, Gss::CredentialUsage::Accept, err);
+        return acquireCredential(service, Gss::NameType::NtHostService, Gss::CredentialUsage::Accept, err);
     }
 
     // BaseContext
