@@ -160,7 +160,7 @@ jobs:
 
       - name: Collect coverage into one XML report
         run: |
-          gcovr --gcov-use-json-files --sonarqube -o coverage.xml . #gcovr --gcov-ignore-parse-errors --sonarqube -o coverage.xml .
+          gcovr --gcov-ignore-parse-errors --sonarqube -o coverage.xml .
 
       - name: Run sonar-scanner
         env:
