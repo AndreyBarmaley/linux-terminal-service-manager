@@ -56,7 +56,7 @@ jobs:
 
       - name: install gcovr
         run: |
-          pip install gcovr #==5.0 # 5.1 is not supported
+          pip install gcovr
 
       - name: Cache SonarCloud packages
         uses: actions/cache@v5
@@ -81,11 +81,6 @@ jobs:
           curl -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip ${{ env.BUILD_WRAPPER_DOWNLOAD_URL }}
           unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
           echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
-
-      - name: Clean old coverage artifacts
-        run: |
-          find . -name "*.gcda" -delete
-          find . -name "*.gcno" -delete
 
       - name: Run build-wrapper
         run: |
@@ -167,7 +162,7 @@ jobs:
 
       - name: Collect coverage into one XML report
         run: |
-          gcovr --gcov-ignore-parse-errors --sonarqube -o coverage.xml .
+          gcovr --gcov-use-json-files --sonarqube -o coverage.xml . #gcovr --gcov-ignore-parse-errors --sonarqube -o coverage.xml .
 
       - name: Run sonar-scanner
         env:
