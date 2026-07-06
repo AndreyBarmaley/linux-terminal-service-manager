@@ -96,6 +96,20 @@ namespace Gss {
         return os.str();
     }
 
+    inline gss_buffer_desc make_buffer_token(std::span<const uint8_t> buf) {
+        gss_buffer_desc ret = {};
+        ret.length = buf.size();
+        ret.value = (void*) buf.data();
+        return ret;
+    }
+
+    inline gss_buffer_desc make_buffer_view(std::string_view str) {
+        gss_buffer_desc ret = {};
+        ret.length = str.size();
+        ret.value = (void*) str.data();
+        return ret;
+    }
+
     gss_name_t importName(std::string_view name, const NameType & type, ErrorCodes* err) {
         OM_uint32 stat;
         gss_OID oid = GSS_C_NO_OID;
@@ -134,7 +148,7 @@ namespace Gss {
                 break;
         }
 
-        gss_buffer_desc buf{ name.size(), (void*) name.data() };
+        gss_buffer_desc buf = make_buffer_view(name);
         gss_name_t res = nullptr;
 
         auto ret = gss_import_name(& stat, & buf, oid, & res);
@@ -398,7 +412,7 @@ namespace Gss {
             return nullptr;
         }
 
-        gss_buffer_desc pass{ password.size(), (void*) password.data() };
+        gss_buffer_desc pass = make_buffer_view(password);
 
         CredentialPtr res = std::make_unique<Credential>();
         res->name = name;
@@ -438,8 +452,8 @@ namespace Gss {
 
         Application::debug(DebugType::Gss, "{}: data length: {}", NS_FuncNameV, buf.size());
 
-        gss_buffer_desc in_buf{ buf.size(), (void*) buf.data() };
-        gss_buffer_desc out_buf{ 0, nullptr, };
+        gss_buffer_desc in_buf = make_buffer_token(buf);
+        gss_buffer_desc out_buf{ 0, nullptr };
 
         auto ret = gss_unwrap(& stat, ctx->sec, & in_buf, & out_buf, nullptr, nullptr);
         std::vector<uint8_t> res;
@@ -463,8 +477,8 @@ namespace Gss {
         Application::debug(DebugType::Gss, "{}: data length: {}", NS_FuncNameV, len);
 
         OM_uint32 stat;
-        gss_buffer_desc in_buf{ len, (void*) buf };
-        gss_buffer_desc out_buf{ 0, nullptr, };
+        gss_buffer_desc in_buf{ len, const_cast<void*>(buf) };
+        gss_buffer_desc out_buf{ 0, nullptr };
 
         auto ret = gss_wrap(& stat, ctx->sec, encrypt, GSS_C_QOP_DEFAULT, & in_buf, nullptr, & out_buf);
         bool res = true;
@@ -491,8 +505,8 @@ namespace Gss {
         Application::debug(DebugType::Gss, "{}: data length: {}", NS_FuncNameV, buf.size());
 
         OM_uint32 stat;
-        gss_buffer_desc in_buf{ msgsz, (void*) msg };
-        gss_buffer_desc out_buf{ buf.size(), (void*) buf.data() };
+        gss_buffer_desc in_buf{ msgsz, const_cast<void*>(msg) };
+        gss_buffer_desc out_buf = make_buffer_token(buf);
 
         auto ret = gss_verify_mic(& stat, ctx->sec, & in_buf, & out_buf, nullptr);
 
@@ -512,7 +526,7 @@ namespace Gss {
         Application::debug(DebugType::Gss, "{}: data length: {}", NS_FuncNameV, msgsz);
 
         OM_uint32 stat;
-        gss_buffer_desc in_buf{ msgsz, (void*) msg };
+        gss_buffer_desc in_buf{ msgsz, const_cast<void*>(msg) };
         gss_buffer_desc out_buf{ 0, nullptr };
 
         auto ret = gss_get_mic(& stat, ctx->sec, GSS_C_QOP_DEFAULT, & in_buf, & out_buf);
@@ -542,7 +556,7 @@ namespace Gss {
             // recv token
             auto buf = recvToken();
 
-            gss_buffer_desc recv_tok{ buf.size(), (void*) buf.data() };
+            gss_buffer_desc recv_tok = make_buffer_token(buf);
             gss_buffer_desc send_tok{ 0, nullptr };
 
             ret = gss_accept_sec_context(& stat, & ctx->sec, ptr ? ptr->cred : GSS_C_NO_CREDENTIAL, & recv_tok, GSS_C_NO_CHANNEL_BINDINGS,
@@ -594,7 +608,7 @@ namespace Gss {
         }
 
         gss_buffer_desc recv_tok{ 0, nullptr };
-        gss_buffer_desc send_tok{ service.size(), (void*) service.data() };
+        gss_buffer_desc send_tok = make_buffer_view(service);
 
         OM_uint32 ret = GSS_S_CONTINUE_NEEDED;
 
