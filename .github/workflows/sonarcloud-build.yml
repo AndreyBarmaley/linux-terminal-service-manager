@@ -160,7 +160,7 @@ jobs:
 
       - name: Collect coverage into one XML report
         run: |
-          gcovr --gcov-ignore-parse-errors --merge-mode-functions=MERGE_MODE --sonarqube -o coverage.xml .
+          gcovr --gcov-ignore-parse-errors=all --merge-mode-functions=merge-use-line-max --sonarqube -o coverage.xml .
 
       - name: Run sonar-scanner
         env:
