@@ -141,7 +141,7 @@ namespace LTSM {
             void resizedEvent(const XCB::Size &) override;
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 
-            explicit EncodingFFmpeg(int type);
+            explicit EncodingFFmpeg(int type = ENCODING_LTSM_H264);
             ~EncodingFFmpeg() = default;
 
             const char* getTypeName(void) const override;
@@ -180,7 +180,7 @@ namespace LTSM {
             void resizedEvent(const XCB::Size &) override;
             void updateRegionBuf(BinaryBuf &&, const DecoderRender &, const XCB::Region &) override;
 
-            explicit DecodingFFmpeg(int type, int fps = 25);
+            explicit DecodingFFmpeg(int type = ENCODING_LTSM_H264, int fps = 25);
             ~DecodingFFmpeg() = default;
         };
 

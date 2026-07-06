@@ -15,6 +15,10 @@
 #include "librfb_encodings.h"
 #include "librfb_decodings.h"
 
+#ifdef LTSM_DECODING_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
+
 using namespace LTSM;
 
 class TestEncoderStream : public RFB::EncoderStream {
@@ -167,6 +171,10 @@ template <typename T>
 class CodecTypedTest2 : public CodecTypedTest<T> {
 };
 
+template <typename T>
+class CodecTypedTest3 : public CodecTypedTest<T> {
+};
+
 //  codecs (block data) for tests
 using CodecTypes1 = ::testing::Types <
                       CodecPair<RFB::EncodingRaw, RFB::DecodingRaw>,
@@ -299,6 +307,68 @@ TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
 
     // testing
     EXPECT_TRUE(std::ranges::equal(dstFb.span(), srcFb.span()));
+}
+
+//  codecs (block data) for tests
+using CodecTypes3 = ::testing::Types <
+#ifdef LTSM_DECODING_TJPG
+                      CodecPair<RFB::EncodingTJPG, RFB::DecodingTJPG>,
+#endif
+#ifdef LTSM_DECODING_FFMPEG
+                      CodecPair<RFB::EncodingFFmpeg, RFB::DecodingFFmpeg>
+#endif
+                      >;
+
+TYPED_TEST_SUITE(CodecTypedTest3, CodecTypes3);
+
+TYPED_TEST(CodecTypedTest3, LoopbackEncodeDecode) {
+    using EncoderT = typename TypeParam::EncoderType;
+    using DecoderT = typename TypeParam::DecoderType;
+
+    auto encoder = std::make_unique<EncoderT>();
+    auto decoder = std::make_unique<DecoderT>();
+
+    encoder->setThreads(1);
+
+    TestFrameBuffer srcFb(this->displaySize, this->pixelFormat);
+    FrameBuffer dstFb(this->displaySize, this->pixelFormat);
+
+    ASSERT_EQ(dstFb.width(), srcFb.width());
+    ASSERT_EQ(dstFb.height(), srcFb.height());
+    ASSERT_EQ(dstFb.pixelFormat(), srcFb.pixelFormat());
+
+    BinaryBuf buf1;
+    buf1.reserve(1024 * 1024);
+
+    TestEncoderStream encoderStream(this->displaySize, this->pixelFormat, buf1);
+    TestDecoderRender testDecoder(dstFb);
+
+    // encoder process
+    ASSERT_NO_THROW(encoder->sendFrameBuffer(&encoderStream, srcFb));
+
+    // unpack header(count16,region16,type32,length32,data)
+    StreamBufRef sb(encoderStream.buf().data(), encoderStream.buf().size());
+    const int count = sb.readIntBE16();
+    ASSERT_EQ(count, 1);
+
+    const int16_t rx = sb.readIntBE16();
+    const int16_t ry = sb.readIntBE16();
+    const uint16_t rw = sb.readIntBE16();
+    const uint16_t rh = sb.readIntBE16();
+    ASSERT_EQ(XCB::Region(rx, ry, rw, rh), srcFb.region());
+
+    const int type = sb.readIntBE32();
+    ASSERT_EQ(type, encoder->getType());
+
+    const uint32_t length = sb.readIntBE32();
+    ASSERT_TRUE(0 < length);
+    auto buf2 = sb.read(length);
+
+    // decoder process
+    ASSERT_NO_THROW(decoder->updateRegionBuf(std::move(buf2), testDecoder, srcFb.region()));
+
+    // no data
+    ASSERT_FALSE(sb.last());
 }
 
 int main(int argc, char** argv) {

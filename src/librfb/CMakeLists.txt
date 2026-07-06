@@ -10,7 +10,7 @@ if(LTSM_WITH_DECODER)
     target_sources(${CUR_TARGET} PRIVATE ltsm_librfb.cpp librfb_extclip.cpp)
 
     if(LTSM_WITH_FFMPEG)
-        add_subdirectory(ffmpeg ${CMAKE_CURRENT_BINARY_DIR}/${CUR_TARGET}_ffmpeg)
+        add_subdirectory(ffmpeg ${CMAKE_CURRENT_BINARY_DIR}/${CUR_TARGET}_ffmpeg_dec)
 
         if(FFMPEG_FOUND)
             target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_DECODING_FFMPEG)
@@ -30,7 +30,7 @@ if(LTSM_WITH_ENCODER)
     target_sources(${CUR_TARGET} PRIVATE ltsm_librfb.cpp librfb_extclip.cpp)
 
     if(LTSM_WITH_FFMPEG)
-        add_subdirectory(ffmpeg ${CMAKE_CURRENT_BINARY_DIR}/${CUR_TARGET}_ffmpeg)
+        add_subdirectory(ffmpeg ${CMAKE_CURRENT_BINARY_DIR}/${CUR_TARGET}_ffmpeg_enc)
 
         if(FFMPEG_FOUND)
             target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_ENCODING_FFMPEG)
