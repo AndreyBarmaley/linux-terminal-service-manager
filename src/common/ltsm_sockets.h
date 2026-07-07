@@ -67,7 +67,6 @@ namespace LTSM {
     class NetworkStream : protected ByteOrderInterface {
         std::chrono::steady_clock::time_point tp;
 
-      protected:
         bool showStatistic = true;
         mutable size_t bytesIn = 0;
         mutable size_t bytesOut = 0;
@@ -87,6 +86,14 @@ namespace LTSM {
 
         void useStatistic(bool f) {
             showStatistic = f;
+        }
+
+        void incrBytesIn(size_t val) const {
+            bytesIn += val;
+        }
+
+        void incrBytesOut(size_t val) const {
+            bytesOut += val;
         }
 
         static bool hasInput(int fd, int timeoutMS = 1);

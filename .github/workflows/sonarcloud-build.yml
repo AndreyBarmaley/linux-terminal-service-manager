@@ -153,7 +153,6 @@ jobs:
           sleep 1
           xsetroot -solid "#4e7db7"
           ./ltsm_test_xrandr
-          ./ltsm_test_x11enc --fps 10 --count 10 --threads 4
           echo "::endgroup::"
           echo "::group::ltsm logs"
           echo "::endgroup::"

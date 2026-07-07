@@ -41,7 +41,7 @@ namespace LTSM {
         }
 
         boost::asio::awaitable<void> async_lock(void) {
-            if (cancelled_.load(std::memory_order_relaxed)) {
+            if (cancelled_.load()) {
                 throw boost::system::system_error(boost::asio::error::operation_aborted);
             }
 
@@ -55,7 +55,7 @@ namespace LTSM {
                     }
                 }
 
-                if (cancelled_.load(std::memory_order_relaxed)) {
+                if (cancelled_.load()) {
                     throw boost::system::system_error(boost::asio::error::operation_aborted);
                 }
             }
@@ -63,7 +63,7 @@ namespace LTSM {
 
         void unlock(void) {
             if(1 < queue_.fetch_sub(1)) {
-                if (cancelled_.load(std::memory_order_relaxed)) {
+                if (cancelled_.load()) {
                     return;
                 }
                 // there's someone else waiting, let's skip one
@@ -74,7 +74,7 @@ namespace LTSM {
         }
 
         void cancel(void) {
-            cancelled_.store(true, std::memory_order_relaxed);
+            cancelled_.store(true);
             timer_.cancel();
             queue_.store(0);
         }

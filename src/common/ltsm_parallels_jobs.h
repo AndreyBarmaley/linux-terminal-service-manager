@@ -38,6 +38,7 @@ namespace LTSM {
 
       public:
         template <typename Callable, typename... Args>
+        requires (!std::same_as<AsyncJob, std::remove_cvref_t<Callable>>)
         explicit AsyncJob(Callable&& job, Args&&... args) {
             std::promise<ReturnType> promise;
             future_ = promise.get_future();

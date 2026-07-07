@@ -292,33 +292,6 @@ namespace LTSM {
             return n & ~(alignment - 1);
         }
 
-        // BaseSpinLock
-        class SpinLock {
-            std::atomic<bool> flag{false};
-
-          public:
-            bool tryLock(void) noexcept {
-                return ! flag.load(std::memory_order_relaxed) &&
-                       ! flag.exchange(true, std::memory_order_acquire);
-            }
-
-            void lock(void) noexcept {
-                for(;;) {
-                    if(! flag.exchange(true, std::memory_order_acquire)) {
-                        break;
-                    }
-
-                    while(flag.load(std::memory_order_relaxed)) {
-                        std::this_thread::yield();
-                    }
-                }
-            }
-
-            void unlock(void) noexcept {
-                flag.store(false, std::memory_order_release);
-            }
-        };
-
         // Timeout
         template<typename TimeType = std::chrono::milliseconds>
         struct Timeout {

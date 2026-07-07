@@ -399,13 +399,13 @@ namespace LTSM {
 
     void SocketStream::recvRaw(void* ptr, size_t len) const {
         recvFrom(sock, ptr, len);
-        NetworkStream::bytesIn += len;
+        incrBytesIn(len);
     }
 
     void SocketStream::sendRaw(const void* ptr, size_t len) {
         assertm(ptr && len, "invalid pointer");
         sendTo(sock, ptr, len);
-        NetworkStream::bytesOut += len;
+        incrBytesOut(len);
     }
 
     /* InetStream */
@@ -815,7 +815,13 @@ namespace LTSM {
         }
 
         socketPath = path;
-        std::future<int> job = std::async(std::launch::async, &UnixSocket::accept, srvfd);
+        std::promise<int> promise;
+        auto job = promise.get_future();
+
+        std::thread([srvfd,promise=std::move(promise)]() mutable {
+            promise.set_value(UnixSocket::accept(srvfd));
+        }).detach();
+
         bridgeSock = -1;
         // socket fd: client part
         clientSock = UnixSocket::connect(socketPath);
@@ -1043,10 +1049,10 @@ namespace LTSM {
             if(ret < static_cast<ssize_t>(len)) {
                 ptr = static_cast<uint8_t*>(ptr) + ret;
                 len = len - ret;
-                NetworkStream::bytesIn += ret;
+                incrBytesIn(ret);
                 recvRaw(ptr, len);
             } else {
-                NetworkStream::bytesIn += len;
+                incrBytesIn(len);
             }
         }
 
@@ -1073,7 +1079,7 @@ namespace LTSM {
                 }
             }
 
-            NetworkStream::bytesOut += len;
+            incrBytesOut(len);
         }
 
         void Stream::sendFlush(void) {
@@ -1176,7 +1182,7 @@ namespace LTSM {
             }
 
             rcvbuf.readTo(static_cast<uint8_t*>(data), len);
-            NetworkStream::bytesIn += len;
+            incrBytesIn(len);
         }
 
         void BaseLayer::sendRaw(const void* data, size_t len) {
@@ -1208,7 +1214,7 @@ namespace LTSM {
 
             auto len = layer->recvIntBE32();
             auto buf = layer->recvData(len);
-            NetworkStream::bytesIn += buf.size();
+            incrBytesIn(buf.size());
             return buf;
         }
 
@@ -1221,7 +1227,7 @@ namespace LTSM {
             layer->sendIntBE32(len);
             layer->sendRaw(buf, len);
             layer->sendFlush();
-            NetworkStream::bytesOut += len;
+            incrBytesOut(len);
         }
 
         // GssApi::Server
