@@ -480,7 +480,7 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
             Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}",
-                               NS_FuncNameV, jobId, region- reg.topLeft(), pair.pixel());
+                               NS_FuncNameV, jobId, region - reg.topLeft(), pair.pixel());
         }
     }
 
@@ -711,6 +711,7 @@ namespace LTSM {
         if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION) {
             zlevel = Z_BEST_SPEED;
         }
+
         zlib_ = std::make_unique<ZLib::DeflateBase>(zlevel);
     }
 
@@ -754,6 +755,7 @@ namespace LTSM {
                     if(++it == str.npos) {
                         continue;
                     }
+
                     try {
                         zlevel = std::stoi(str.substr(it));
 
@@ -827,10 +829,12 @@ namespace LTSM {
         res.resize(LZ4_compressBound(buf.size()));
         const int acceleration = 1;
         int ret = LZ4_compress_fast((const char*) buf.data(), (char*) res.data(), buf.size(), res.size(), acceleration);
+
         if(ret < 0) {
             Application::error("{}: {} failed, ret: {}", NS_FuncNameV, "LZ4_compress_fast", ret);
             throw rfb_error(NS_FuncNameS);
         }
+
         res.resize(ret);
         return res;
     }
@@ -840,14 +844,14 @@ namespace LTSM {
 
         if(fb.width() == reg.width) {
             auto buf = std::span{ fb.pitchData(reg.y),
-                             fb.pitchSize() * reg.height };
+                                  fb.pitchSize()* reg.height };
             BinaryBuf bb = lz4CompressFast(buf);
             return std::make_pair(reg + top, std::move(bb));
         }
 
         auto fb2 = fb.copyRegion(reg);
         auto buf = std::span{ fb2.pitchData(0),
-                             fb2.pitchSize() * reg.height };
+                              fb2.pitchSize()* reg.height };
         BinaryBuf bb = lz4CompressFast(buf);
         return std::make_pair(reg + top, std::move(bb));
     }
@@ -863,6 +867,7 @@ namespace LTSM {
                     if(++it == str.npos) {
                         continue;
                     }
+
                     try {
                         jpegQuality = std::stoi(str.substr(it));
 
@@ -896,12 +901,10 @@ namespace LTSM {
                     } else if(0 == str.compare(it, 3, "444")) {
                         jpegSamp = TJSAMP_444;
                         fullscreenUpdate = true;
-                    }
-                    else if(0 == str.compare(it, 3, "411")) {
+                    } else if(0 == str.compare(it, 3, "411")) {
                         jpegSamp = TJSAMP_411;
                         fullscreenUpdate = true;
-                    }
-                    else if(0 == str.compare(it, 4, "gray")) {
+                    } else if(0 == str.compare(it, 4, "gray")) {
                         jpegSamp = TJSAMP_GRAY;
                         fullscreenUpdate = true;
                     }
@@ -1051,6 +1054,7 @@ namespace LTSM {
         for(auto & job : jobs.jobList()) {
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
+
             if(isZQOI()) {
                 BinaryBuf bb = lz4CompressFast(ret.second);
                 st->sendIntBE32(bb.size());
