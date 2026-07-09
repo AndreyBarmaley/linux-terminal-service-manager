@@ -105,12 +105,8 @@ namespace LTSM {
                 codec = avcodec_find_encoder(AV_CODEC_ID_H264);
                 break;
 
-            case RFB::ENCODING_LTSM_VP8:
-                codec = avcodec_find_encoder(AV_CODEC_ID_VP8);
-                break;
-
-            case RFB::ENCODING_LTSM_AV1:
-                codec = avcodec_find_encoder(AV_CODEC_ID_AV1);
+            case RFB::ENCODING_LTSM_MPEG4:
+                codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
                 break;
 
             default:
@@ -129,11 +125,8 @@ namespace LTSM {
             case RFB::ENCODING_LTSM_H264:
                 return "FFMPEG_H264";
 
-            case RFB::ENCODING_LTSM_VP8:
-                return "FFMPEG_VP8";
-
-            case RFB::ENCODING_LTSM_AV1:
-                return "FFMPEG_AV1";
+            case RFB::ENCODING_LTSM_MPEG4:
+                return "FFMPEG_MPEG4";
 
             default:
                 break;
@@ -228,15 +221,15 @@ namespace LTSM {
                 av_opt_set(avcctx.get(), "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
                 break;
 
-            case AV_CODEC_ID_AV1:
-                // In versions prior to 0.9.0, valid presets are 0 to 8.
-                // higher numbers providing a higher encoding speed.
-                av_opt_set(avcctx.get(), "preset", "7", AV_OPT_SEARCH_CHILDREN);
-                break;
-
-            case AV_CODEC_ID_VP8:
-                av_opt_set(avcctx.get(), "quality", "realtime", AV_OPT_SEARCH_CHILDREN);
-                av_opt_set_int(avcctx.get(), "speed", 6, AV_OPT_SEARCH_CHILDREN);
+            case AV_CODEC_ID_MPEG4:
+                avcctx->max_b_frames = 0;
+                avcctx->delay = 0;
+                avcctx->gop_size = 12;
+                //
+                avcctx->flags |= AV_CODEC_FLAG_QSCALE;
+                avcctx->global_quality = 4 * FF_QP2LAMBDA;
+                //
+                av_opt_set(avcctx.get(), "mbd", "0", 0);
                 break;
 
             default:
@@ -355,16 +348,10 @@ namespace LTSM {
                 codec = avcodec_find_decoder(AV_CODEC_ID_H264);
                 break;
 #endif
-#ifdef LTSM_DECODING_VP8
+#ifdef LTSM_DECODING_MPEG4
 
-            case RFB::ENCODING_LTSM_VP8:
-                codec = avcodec_find_decoder(AV_CODEC_ID_VP8);
-                break;
-#endif
-#ifdef LTSM_DECODING_AV1
-
-            case RFB::ENCODING_LTSM_AV1:
-                codec = avcodec_find_decoder(AV_CODEC_ID_AV1);
+            case RFB::ENCODING_LTSM_MPEG4:
+                codec = avcodec_find_decoder(AV_CODEC_ID_MPEG4);
                 break;
 #endif
 

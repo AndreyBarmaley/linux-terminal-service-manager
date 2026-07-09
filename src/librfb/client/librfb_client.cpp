@@ -462,11 +462,8 @@ namespace LTSM {
 #ifdef LTSM_DECODING_H264
             ENCODING_LTSM_H264,
 #endif
-#ifdef LTSM_DECODING_AV1
-            ENCODING_LTSM_AV1,
-#endif
-#ifdef LTSM_DECODING_VP8
-            ENCODING_LTSM_VP8,
+#ifdef LTSM_DECODING_MPEG4
+            ENCODING_LTSM_MPEG4,
 #endif
 #endif
             ENCODING_LTSM_KEYB,
@@ -527,12 +524,8 @@ namespace LTSM {
                 encodings.remove(ENCODING_LTSM_H264);
             }
 
-            if(prefferedEncoding != ENCODING_LTSM_AV1) {
-                encodings.remove(ENCODING_LTSM_AV1);
-            }
-
-            if(prefferedEncoding != ENCODING_LTSM_VP8) {
-                encodings.remove(ENCODING_LTSM_VP8);
+            if(prefferedEncoding != ENCODING_LTSM_MPEG4) {
+                encodings.remove(ENCODING_LTSM_MPEG4);
             }
 
 #endif
@@ -602,8 +595,7 @@ namespace LTSM {
         if(decoder_) {
             switch(decoder_->type()) {
                 case RFB::ENCODING_LTSM_H264:
-                case RFB::ENCODING_LTSM_AV1:
-                case RFB::ENCODING_LTSM_VP8:
+                case RFB::ENCODING_LTSM_MPEG4:
                     return true;
 
                 default: break;
@@ -1176,8 +1168,7 @@ namespace LTSM {
 #ifdef LTSM_DECODING_FFMPEG
 
                 case ENCODING_LTSM_H264:
-                case ENCODING_LTSM_AV1:
-                case ENCODING_LTSM_VP8:
+                case ENCODING_LTSM_MPEG4:
                     decoder_ = std::make_unique<DecodingFFmpeg>(type, frameRateOption());
                     // FIXME
                     // decoder_->setDebug(4 /* AV_LOG_VERBOSE */);
@@ -1209,8 +1200,7 @@ namespace LTSM {
             case ENCODING_LTSM_LZ4:
             case ENCODING_LTSM_TJPG:
             case ENCODING_LTSM_H264:
-            case ENCODING_LTSM_AV1:
-            case ENCODING_LTSM_VP8:
+            case ENCODING_LTSM_MPEG4:
             case ENCODING_ZLIB:
                 {
                     auto len = co_await stream_->async_recv_be32();

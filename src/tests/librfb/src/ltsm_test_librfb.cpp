@@ -40,7 +40,7 @@ TEST(EncodingNameTest, ReturnsCorrectNameForPseudoEncodings) {
 }
 
 TEST(EncodingNameTest, ReturnsCorrectNameForLtsmEncodings) {
-    EXPECT_STRCASEEQ(encodingName(ENCODING_LTSM_AV1), "FFMPEG_AV1");
+    EXPECT_STRCASEEQ(encodingName(ENCODING_LTSM_MPEG4), "FFMPEG_MPEG4");
     EXPECT_STRCASEEQ(encodingName(ENCODING_LTSM_H264), "FFMPEG_H264");
 }
 
@@ -55,7 +55,7 @@ TEST(EncodingTypeTest, ReturnsCorrectTypeForStandardNames) {
 }
 
 TEST(EncodingTypeTest, ReturnsCorrectTypeForLtsmNames) {
-    EXPECT_EQ(encodingType("FFMPEG_AV1"), ENCODING_LTSM_AV1);
+    EXPECT_EQ(encodingType("FFMPEG_MPEG4"), ENCODING_LTSM_MPEG4);
     EXPECT_EQ(encodingType("LTSM_QOI"), ENCODING_LTSM_QOI);
 }
 

@@ -6,12 +6,12 @@ if(LTSM_WITH_FFMPEG)
     if(FFMPEG_FOUND)
         if(LTSM_WITH_DECODER)
             target_compile_definitions(${CUR_TARGET} PUBLIC
-                -DLTSM_DECODING_H264 -DLTSM_DECODING_AV1 -DLTSM_DECODING_VP8)
+                -DLTSM_DECODING_H264 -DLTSM_DECODING_MPEG4)
         endif()
 
         if(LTSM_WITH_DECODER)
             target_compile_definitions(${CUR_TARGET} PUBLIC
-                -DLTSM_ENCODING_H264 -DLTSM_ENCODING_AV1 -DLTSM_ENCODING_VP8)
+                -DLTSM_ENCODING_H264 -DLTSM_ENCODING_MPEG4)
         endif()
 
         target_sources(${CUR_TARGET} PRIVATE librfb_ffmpeg.cpp)

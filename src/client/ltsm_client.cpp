@@ -91,11 +91,8 @@ namespace LTSM {
 #ifdef LTSM_DECODING_H264
         "[--h264] " <<
 #endif
-#ifdef LTSM_DECODING_AV1
-        "[--av1] " <<
-#endif
-#ifdef LTSM_DECODING_VP8
-        "[--vp8] " <<
+#ifdef LTSM_DECODING_MPEG4
+        "[--mpeg4] " <<
 #endif
 #endif
         "[--video <enc>] " <<
@@ -152,11 +149,8 @@ namespace LTSM {
 #ifdef LTSM_DECODING_H264
                                   "    --h264 (the same as --video ffmpeg_h264)" << std::endl <<
 #endif
-#ifdef LTSM_DECODING_AV1
-                                  "    --av1 (the same as --video ffmpeg_av1)" << std::endl <<
-#endif
-#ifdef LTSM_DECODING_VP8
-                                  "    --vp8 (the same as --video ffmpeg_vp8)" << std::endl <<
+#ifdef LTSM_DECODING_MPEG4
+                                  "    --mpeg4 (the same as --video ffmpeg_mpeg4)" << std::endl <<
 #endif
 #endif
                                   "    --video <enc> (set preffered encoding: " << Tools::join(videoEncodings, ",") << ")" << std::endl <<
@@ -343,8 +337,7 @@ namespace LTSM {
         if(frameRate == 0) {
             switch(videoEncoding) {
                 case RFB::ENCODING_LTSM_H264:
-                case RFB::ENCODING_LTSM_AV1:
-                case RFB::ENCODING_LTSM_VP8:
+                case RFB::ENCODING_LTSM_MPEG4:
                     // set default
                     frameRate = 16;
                     break;
@@ -453,15 +446,9 @@ namespace LTSM {
         }
 
 #endif
-#ifdef LTSM_DECODING_AV1
-        else if(cmd == "--av1") {
-            videoEncoding = RFB::ENCODING_LTSM_AV1;
-        }
-
-#endif
-#ifdef LTSM_DECODING_VP8
-        else if(cmd == "--vp8") {
-            videoEncoding = RFB::ENCODING_LTSM_VP8;
+#ifdef LTSM_DECODING_MPEG4
+        else if(cmd == "--mpeg4") {
+            videoEncoding = RFB::ENCODING_LTSM_MPEG4;
         }
 
 #endif

@@ -734,8 +734,7 @@ namespace LTSM {
                 case RFB::ENCODING_LTSM_LZ4:
                 case RFB::ENCODING_LTSM_TJPG:
                 case RFB::ENCODING_LTSM_H264:
-                case RFB::ENCODING_LTSM_AV1:
-                case RFB::ENCODING_LTSM_VP8:
+                case RFB::ENCODING_LTSM_MPEG4:
                 case RFB::ENCODING_LTSM_CURSOR:
                     clientLtsmSupported = true;
                     break;
@@ -1038,8 +1037,7 @@ namespace LTSM {
         std::initializer_list<int> encs = {
 #ifdef LTSM_ENCODING_FFMPEG
             RFB::ENCODING_LTSM_H264,
-            RFB::ENCODING_LTSM_AV1,
-            RFB::ENCODING_LTSM_VP8,
+            RFB::ENCODING_LTSM_MPEG4,
 #endif
 #ifdef LTSM_ENCODING
             RFB::ENCODING_LTSM_ZQOI,
@@ -1110,8 +1108,7 @@ namespace LTSM {
 #ifdef LTSM_ENCODING_FFMPEG
 
             case RFB::ENCODING_LTSM_H264:
-            case RFB::ENCODING_LTSM_VP8:
-            case RFB::ENCODING_LTSM_AV1:
+            case RFB::ENCODING_LTSM_MPEG4:
                 encoder = std::make_unique<EncodingFFmpeg>(compatible);
                 break;
 #endif
@@ -1343,8 +1340,7 @@ namespace LTSM {
         if(encoder) {
             switch(encoder->getType()) {
                 case RFB::ENCODING_LTSM_H264:
-                case RFB::ENCODING_LTSM_AV1:
-                case RFB::ENCODING_LTSM_VP8:
+                case RFB::ENCODING_LTSM_MPEG4:
                     return true;
 
                 default: break;
