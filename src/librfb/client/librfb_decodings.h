@@ -183,7 +183,6 @@ namespace LTSM {
                 zlib_{std::make_unique<ZLib::InflateBase>()} {}
         };
 
-#ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
         /// DecodingLZ4
         class DecodingLZ4 : public DecodingBase {
@@ -232,7 +231,6 @@ namespace LTSM {
                 return type() == ENCODING_LTSM_ZQOI;
             }
         };
-#endif
     }
 }
 

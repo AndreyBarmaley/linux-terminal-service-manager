@@ -77,7 +77,6 @@ namespace LTSM {
 #ifdef LTSM_WITH_GSSAPI
         "[--kerberos <" << krb5def << ">] " <<
 #endif
-#ifdef LTSM_DECODING
         "[--qoi] " <<
 #ifdef LTSM_DECODING_LZ4
         "[--zqoi] " <<
@@ -85,7 +84,6 @@ namespace LTSM {
 #endif
 #ifdef LTSM_DECODING_TJPG
         "[--tjpg] " <<
-#endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
@@ -135,7 +133,6 @@ namespace LTSM {
                                   "    --kerberos <" << krb5def <<
                                   "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
-#ifdef LTSM_DECODING
                                   "    --qoi (the same as --video ltsm_qoi)" << std::endl <<
 #ifdef LTSM_DECODING_LZ4
                                   "    --zqoi (the same as --video ltsm_zqoi (qoi+lz4))" << std::endl <<
@@ -143,7 +140,6 @@ namespace LTSM {
 #endif
 #ifdef LTSM_DECODING_TJPG
                                   "    --tjpg (the same as --video ltsm_tjpg)" << std::endl <<
-#endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
@@ -417,8 +413,6 @@ namespace LTSM {
             setExtClipboardLocalCaps(ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml |
                                      ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
         }
-
-#ifdef LTSM_DECODING
         else if(cmd == "--qoi") {
             videoEncoding = RFB::ENCODING_LTSM_QOI;
         }
@@ -437,7 +431,6 @@ namespace LTSM {
             }
             videoEncoding = RFB::ENCODING_LTSM_TJPG;
         }
-#endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264

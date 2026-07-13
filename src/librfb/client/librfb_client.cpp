@@ -448,15 +448,11 @@ namespace LTSM {
     std::list<int> RFB::ClientDecoder::supportedEncodings(bool extclip) {
         std::list<int> encodings = {
             // first preffered
-#ifdef LTSM_DECODING
-            ENCODING_LTSM_QOI,
 #ifdef LTSM_DECODING_LZ4
             ENCODING_LTSM_ZQOI,
-            ENCODING_LTSM_LZ4,
 #endif
 #ifdef LTSM_DECODING_TJPG
             ENCODING_LTSM_TJPG,
-#endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
@@ -466,6 +462,10 @@ namespace LTSM {
             ENCODING_LTSM_MPEG4,
 #endif
 #endif
+#ifdef LTSM_DECODING_LZ4
+            ENCODING_LTSM_LZ4,
+#endif
+            ENCODING_LTSM_QOI,
             ENCODING_LTSM_KEYB,
             ENCODING_LTSM_CURSOR,
             // compatible RFB encodings
@@ -1147,7 +1147,7 @@ namespace LTSM {
                 case ENCODING_ZLIB:
                     decoder_ = std::make_unique<DecodingZlib>();
                     break;
-#ifdef LTSM_DECODING
+
                 case ENCODING_LTSM_QOI:
                     decoder_ = std::make_unique<DecodingQOI>(false);
                     break;
@@ -1164,11 +1164,14 @@ namespace LTSM {
                     decoder_ = std::make_unique<DecodingTJPG>();
                     break;
 #endif
-#endif
-#ifdef LTSM_DECODING_FFMPEG
 
+#ifdef LTSM_DECODING_FFMPEG
+#ifdef LTSM_DECODING_H264
                 case ENCODING_LTSM_H264:
+#endif
+#ifdef LTSM_DECODING_MPEG4
                 case ENCODING_LTSM_MPEG4:
+#endif
                     decoder_ = std::make_unique<DecodingFFmpeg>(type, frameRateOption());
                     // FIXME
                     // decoder_->setDebug(4 /* AV_LOG_VERBOSE */);

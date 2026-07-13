@@ -30,13 +30,11 @@
 #include "librfb_decodings.h"
 #include "ltsm_tools.h"
 
-#ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
 #include "lz4.h"
 #endif
 #ifdef LTSM_DECODING_TJPG
 #include "turbojpeg.h"
-#endif
 #endif
 
 #include "SDL.h"
@@ -480,7 +478,6 @@ namespace LTSM {
         rend.updateRawPixels(reg, std::move(pixels), pitch, rend.serverFormat());
     }
 
-#ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
     void RFB::DecodingLZ4::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
@@ -706,5 +703,4 @@ namespace LTSM {
 
         return res;
     }
-#endif // LTSM_DECODING
 }
