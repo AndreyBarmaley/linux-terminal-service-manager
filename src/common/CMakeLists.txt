@@ -1,10 +1,9 @@
 if(APPLE)
-    target_include_directories(${CUR_TARGET} PRIVATE mingw)
+    set(LTSM_WITH_EXECUTION_PAR OFF)
 elseif(UNIX)
     set(LTSM_WITH_EXECUTION_PAR OFF)
 elseif(MINGW)
     set(LTSM_WITH_EXECUTION_PAR OFF)
-    target_include_directories(${CUR_TARGET} PUBLIC mingw)
 endif()
 
 if(LTSM_BUILD_COVERAGE_TESTS)
