@@ -1,6 +1,5 @@
 # LTSM librfb server
 
-target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_ENCODING)
 target_sources(${CUR_TARGET} PRIVATE librfb_encodings.cpp librfb_server.cpp librfb_x11server.cpp)
 
 pkg_check_modules(LZ4 liblz4)

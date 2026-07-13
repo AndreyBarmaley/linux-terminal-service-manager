@@ -5,7 +5,6 @@ if(LTSM_WITH_DECODER)
     add_subdirectory(client ${CMAKE_CURRENT_BINARY_DIR}/librfb_client)
 
     target_include_directories(${CUR_TARGET} PRIVATE client)
-
     target_sources(${CUR_TARGET} PRIVATE ltsm_librfb.cpp librfb_extclip.cpp)
 
     if(LTSM_WITH_FFMPEG)
@@ -24,8 +23,6 @@ if(LTSM_WITH_ENCODER)
     add_subdirectory(server ${CMAKE_CURRENT_BINARY_DIR}/librfb_server)
 
     target_include_directories(${CUR_TARGET} PRIVATE server)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_ENCODING)
-
     target_sources(${CUR_TARGET} PRIVATE ltsm_librfb.cpp librfb_extclip.cpp)
 
     if(LTSM_WITH_FFMPEG)
