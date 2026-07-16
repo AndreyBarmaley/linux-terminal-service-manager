@@ -353,11 +353,11 @@ namespace LTSM::Connector {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
+        Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
         proxyStartEventLoop();
         // create FreeRdpCallback
         Application::info("{}: {}", NS_FuncNameV, "create freerdp context");
-        freeRdp = std::make_unique<FreeRdpCallback>(proxyClientSocket(), _remoteaddr, config(), this);
+        freeRdp = std::make_unique<FreeRdpCallback>(proxyClientSocket(), remoteAddress(), config(), this);
         auto freeRdpThread = std::thread([ptr = freeRdp.get()] { FreeRdpCallback::enterEventLoop(ptr); });
         damageRegion.assign(0, 0, 0, 0);
         // rdp session not activated trigger
@@ -462,7 +462,7 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorRdp::createX11Session(uint8_t depth) {
-        int screen = busStartLoginSession(getpid(), depth, _remoteaddr, "rdp");
+        int screen = busStartLoginSession(getpid(), depth, remoteAddress(), "rdp");
 
         if(screen <= 0) {
             Application::error("{}", "login session request failure");
@@ -509,7 +509,7 @@ namespace LTSM::Connector {
 
         Application::notice("{}: dbus signal, display: {}, username: {}", NS_FuncNameV, display, userName);
         int oldDisplay = displayNum();
-        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
 
         if(newDisplay < 0) {
             Application::error("{}: {} failed", NS_FuncNameV, "user session request");
@@ -1017,7 +1017,7 @@ namespace LTSM::Connector {
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
-        connector->_idleSessionTp = std::chrono::steady_clock::now();
+        connector->idleSessionReset();
 
         if(connector->xcbAllowMessages()) {
             auto test = static_cast<const XCB::ModuleTest*>(xcbDisplay->getExtension(XCB::Module::TEST));
@@ -1070,7 +1070,7 @@ namespace LTSM::Connector {
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
-        connector->_idleSessionTp = std::chrono::steady_clock::now();
+        connector->idleSessionReset();
 
         if(connector->xcbAllowMessages()) {
             auto test = static_cast<const XCB::ModuleTest*>(xcbDisplay->getExtension(XCB::Module::TEST));
