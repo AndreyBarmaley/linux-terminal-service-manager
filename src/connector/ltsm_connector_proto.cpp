@@ -56,9 +56,9 @@ namespace LTSM::Connector {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
+        Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
 
-        _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
+        x11NoDamage_ = config().getBoolean("vnc:xcb:nodamage", false);
 
         return rfbCommunication();
     }
@@ -70,11 +70,10 @@ namespace LTSM::Connector {
 
         xcbDisableMessages(true);
         waitUpdateProcess();
-        _shmUid = userUid;
         Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
                             userName, userUid);
         int oldDisplay = displayNum();
-        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
 
         if(newDisplay < 0) {
             Application::error("{}: {} failed", NS_FuncNameV, "user session request");
@@ -93,7 +92,7 @@ namespace LTSM::Connector {
             busShutdownDisplay(oldDisplay);
         }
 
-        xcbShmInit(_shmUid);
+        xcbShmInit(userUid);
         xcbDisableMessages(false);
         auto & clientRegion = getClientRegion();
 
@@ -108,16 +107,15 @@ namespace LTSM::Connector {
             }
         } else {
             // full update
-            if(! _x11NoDamage) {
+            if(! x11NoDamage_) {
                 X11Server::serverScreenUpdateRequest();
             }
         }
 
         auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
 
-        _idleTimeoutSec = json.getInteger("session:idle:timeout", 0);
-        _idleSessionTp = std::chrono::steady_clock::now();
-        _userSession = true;
+        setIdleTimeoutSec(json.getInteger("session:idle:timeout", 0));
+        userSession_ = true;
 
         busConnectorConnected(newDisplay, getpid());
         busSetSessionEncodings(newDisplay, getClientEncodings().toVector());
@@ -147,7 +145,7 @@ namespace LTSM::Connector {
     }
 
     const PixelFormat & ConnectorLtsm::serverFormat(void) const {
-        return _serverPf;
+        return serverPf_;
     }
 
     void ConnectorLtsm::serverFrameBufferModifyEvent(FrameBuffer & fb) const {
@@ -164,7 +162,7 @@ namespace LTSM::Connector {
                 }
 
                 try {
-                    _keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
+                    keymap_.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
                 } catch(const std::exception &) { }
             }
         }
@@ -172,7 +170,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::serverHandshakeVersionEvent(void) {
         // Xvfb: session request
-        int screen = busStartLoginSession(getpid(), 24, _remoteaddr, "ltsm");
+        int screen = busStartLoginSession(getpid(), 24, remoteAddress(), "ltsm");
 
         if(screen <= 0) {
             Application::error("{}: login session request: failure", NS_FuncNameV);
@@ -195,7 +193,7 @@ namespace LTSM::Connector {
 
         Application::debug(DebugType::Xcb, "{}: xcb max request: {}", NS_FuncNameV, xcbDisplay()->getMaxRequest());
         // init server format
-        _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        serverPf_ = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // load keymap
         if(config().hasKey("vnc:keymap:file")) {
@@ -301,7 +299,7 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region & reg) {
-        if(xcbAllowMessages() && ! _x11NoDamage) {
+        if(xcbAllowMessages() && ! x11NoDamage_) {
             X11Server::serverScreenUpdateRequest(reg);
         }
     }
@@ -309,12 +307,12 @@ namespace LTSM::Connector {
     uint32_t ConnectorLtsm::frameRateOption(void) const {
         constexpr uint32_t minFps = 5;
         constexpr uint32_t maxFps = 20;
-        return std::clamp(_frameRate, minFps, maxFps);
+        return std::clamp(frameRate_, minFps, maxFps);
     }
 
     bool ConnectorLtsm::xcbNoDamageOption(void) const {
         return isClientLtsmSupported() ?
-               static_cast<bool>(_x11NoDamage) : false;
+               static_cast<bool>(x11NoDamage_) : false;
     }
 
     void ConnectorLtsm::xcbDisableMessages(bool f) {
@@ -322,22 +320,22 @@ namespace LTSM::Connector {
     }
 
     int ConnectorLtsm::rfbUserKeycode(uint32_t keysym) const {
-        auto it = _keymap.find(keysym);
-        return it != _keymap.end() ? it->second : 0;
+        auto it = keymap_.find(keysym);
+        return it != keymap_.end() ? it->second : 0;
     }
 
     void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
         X11Server::serverRecvKeyEvent(pressed, keycode, scancode);
-        _idleSessionTp = std::chrono::steady_clock::now();
+        idleSessionReset();
     }
 
     void ConnectorLtsm::serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) {
         X11Server::serverRecvPointerEvent(mask, posx, posy);
-        _idleSessionTp = std::chrono::steady_clock::now();
+        idleSessionReset();
     }
 
     bool ConnectorLtsm::isUserSession(void) const {
-        return _userSession;
+        return userSession_;
     }
 
     void ConnectorLtsm::systemClientVariables(const JsonObject & jo) {
@@ -366,13 +364,13 @@ namespace LTSM::Connector {
 
         if(auto opts = jo.getObject("options")) {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
-            _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
-            _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
-            _frameRate = opts->getInteger("frame:rate", _frameRate);
+            [[maybe_unused]] int clientVersion = opts->getInteger("ltsm:client", 0);
+            x11NoDamage_ = opts->getBoolean("x11:nodamage", x11NoDamage_);
+            frameRate_ = opts->getInteger("frame:rate", frameRate_);
 
             setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), frameRateOption());
 
-            if(_x11NoDamage && ! XCB::RootDisplay::hasError()) {
+            if(x11NoDamage_ && ! XCB::RootDisplay::hasError()) {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
             }
         }
@@ -446,7 +444,7 @@ namespace LTSM::Connector {
                 std::string fname = jo2->getString("file");
                 size_t fsize = jo2->getInteger("size");
 
-                if(std::ranges::any_of(_transferPlanned, [&](auto & st) { return fname == std::get<0>(st); })) {
+                if(std::ranges::any_of(transferPlanned_, [&](auto & st) { return fname == std::get<0>(st); })) {
                     Application::warning("{}: found planned and skipped, file: {}", NS_FuncNameV, fname);
                     continue;
                 }
@@ -461,25 +459,25 @@ namespace LTSM::Connector {
                 }
 
                 // add planned transfer
-                std::scoped_lock<std::mutex> guard{_lockTransfer};
-                _transferPlanned.emplace_back(std::move(fname), fsize);
+                std::scoped_lock<std::mutex> guard{lockTransfer_};
+                transferPlanned_.emplace_back(std::move(fname), fsize);
             }
 
             size_t freeChannels = countFreeChannels();
 
-            if(_transferPlanned.empty()) {
+            if(transferPlanned_.empty()) {
                 Application::warning("{}: file list empty", NS_FuncNameV);
             } else if(! freeChannels) {
                 Application::warning("{}: no free channels", NS_FuncNameV);
             } else {
-                std::scoped_lock<std::mutex> guard{_lockTransfer};
+                std::scoped_lock<std::mutex> guard{lockTransfer_};
 
-                if(_transferPlanned.size() <= freeChannels) {
+                if(transferPlanned_.size() <= freeChannels) {
                     // send request to manager
-                    busTransferFilesRequest(displayNum(), {_transferPlanned.begin(), _transferPlanned.end() });
+                    busTransferFilesRequest(displayNum(), {transferPlanned_.begin(), transferPlanned_.end() });
                 } else {
                     // transfer background
-                    std::thread(& ConnectorLtsm::transferFilesPartial, this, _transferPlanned).detach();
+                    std::thread(& ConnectorLtsm::transferFilesPartial, this, transferPlanned_).detach();
                 }
             }
         }
@@ -526,12 +524,12 @@ namespace LTSM::Connector {
         Application::debug(DebugType::App, "{}: display: {}", NS_FuncNameV, display);
 
         if(display == displayNum()) {
-            std::scoped_lock<std::mutex> guard{_lockTransfer};
-            auto it = std::ranges::find_if(_transferPlanned, [&](auto & st) {
+            std::scoped_lock<std::mutex> guard{lockTransfer_};
+            auto it = std::ranges::find_if(transferPlanned_, [&](auto & st) {
                 return filepath == std::get<0>(st);
             });
 
-            if(it == _transferPlanned.end()) {
+            if(it == transferPlanned_.end()) {
                 Application::error("{}: transfer not found, file: {}", NS_FuncNameV, filepath);
                 return;
             }
@@ -547,7 +545,7 @@ namespace LTSM::Connector {
             }
 
             // remove planned
-            _transferPlanned.erase(it);
+            transferPlanned_.erase(it);
         }
     }
 
@@ -607,15 +605,7 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorLtsm::noVncMode(void) const {
-        return _remoteaddr == "127.0.0.1" &&
+        return remoteAddress() == "127.0.0.1" &&
                config().getBoolean("vnc:novnc:allow", false);
-    }
-
-    std::string ConnectorLtsm::remoteClientAddress(void) const {
-        return _remoteaddr;
-    }
-
-    int ConnectorLtsm::remoteClientVersion(void) const {
-        return _ltsmClientVersion;
     }
 }

@@ -55,21 +55,18 @@ namespace LTSM::Connector {
 #endif
 
     class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
-      protected:
-        std::list<RenderPrimitivePtr> _renderPrimitives;
+        std::list<RenderPrimitivePtr> renderPrimitives_;
+        std::string connType_;
+        std::string remoteAddr_;
 
-        std::string _conntype;
-        std::string _remoteaddr;
-
-        std::atomic<int> _xcbDisplayNum{0};
-        std::atomic<bool> _xcbDisable{true};
-
-        std::chrono::time_point<std::chrono::steady_clock> _idleSessionTp;
-        uint32_t _idleTimeoutSec = 0;
+        std::atomic<int> xcbDisplayNum_{0};
+        std::atomic<bool> xcbDisable_{true};
 
 #ifdef LTSM_WITH_AUDIT
-        std::unique_ptr<AuditConnector> auditLog;
+        std::unique_ptr<AuditConnector> auditLog_;
 #endif
+        std::chrono::time_point<std::chrono::steady_clock> idleSessionTp_;
+        uint32_t idleTimeoutSec_ = 0;
 
       private:
         // dbus virtual signals
@@ -109,7 +106,10 @@ namespace LTSM::Connector {
 
         void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
 
-      protected:
+    protected:
+        void setIdleTimeoutSec(uint32_t);
+        void idleSessionReset(void);
+
         // dbus virtual signals
         void onPingConnector(const int32_t & display) override;
         void onClearRenderPrimitives(const int32_t & display) override;
@@ -136,6 +136,7 @@ namespace LTSM::Connector {
 
         std::string checkFileOption(const std::string &) const;
         const std::string & connectorType(void) const;
+        const std::string & remoteAddress(void) const;
 
         void checkIdleTimeout(void);
     };

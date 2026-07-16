@@ -42,21 +42,15 @@ namespace LTSM::Connector {
     using TupleFileSize = sdbus::Struct<std::string, uint32_t>;
 
     class ConnectorLtsm : public DBusProxy, protected RFB::X11Server {
-        PixelFormat _serverPf;
-        std::unordered_map<uint32_t, int> _keymap;
+        PixelFormat serverPf_;
+        std::unordered_map<uint32_t, int> keymap_;
 
-        std::list<TupleFileSize> _transferPlanned;
-        std::mutex _lockTransfer;
+        std::list<TupleFileSize> transferPlanned_;
+        std::mutex lockTransfer_;
 
-        uint32_t _frameRate{0};
-        bool _userSession{false};
-        bool _x11NoDamage{false};
-
-        //std::chrono::time_point<std::chrono::steady_clock> _idleSession;
-        //uint32_t _idleTimeoutSec = 0;
-
-        uid_t _shmUid = 0;
-        int _ltsmClientVersion = 0;
+        uint32_t frameRate_{0};
+        bool userSession_{false};
+        bool x11NoDamage_{false};
 
       protected:
         // rfb server encoding
@@ -115,10 +109,7 @@ namespace LTSM::Connector {
         void systemClientVariables(const JsonObject &) override;
         void systemKeyboardChange(const JsonObject &) override;
         void systemCursorFailed(const JsonObject & jo) override;
-
         bool noVncMode(void) const override;
-        int remoteClientVersion(void) const override;
-        std::string remoteClientAddress(void) const override;
 
       protected:
         void loadKeymap(const std::string & file);

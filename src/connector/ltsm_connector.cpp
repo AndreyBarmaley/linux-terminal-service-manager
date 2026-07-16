@@ -35,6 +35,8 @@
 #include <iostream>
 #include <filesystem>
 
+#include <boost/asio.hpp>
+
 #ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
 #include <systemd/sd-daemon.h>
@@ -53,6 +55,7 @@
 #include "ltsm_render_primitives.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM::Connector {
     //
@@ -112,24 +115,24 @@ namespace LTSM::Connector {
         ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
 #endif
     {
-        _remoteaddr.assign("local");
+        remoteAddr_.assign("local");
 
         switch(type) {
             case ConnectorType::RDP:
-                _conntype = "rdp";
+                connType_ = "rdp";
                 break;
 
             case ConnectorType::VNC:
-                _conntype = "vnc";
+                connType_ = "vnc";
                 break;
 
             case ConnectorType::LTSM:
-                _conntype = "ltsm";
+                connType_ = "ltsm";
                 break;
         }
 
         if(auto env = std::getenv("REMOTE_ADDR")) {
-            _remoteaddr.assign(env);
+            remoteAddr_.assign(env);
         }
 
         if(debug) {
@@ -137,8 +140,8 @@ namespace LTSM::Connector {
         }
 
 #ifdef LTSM_WITH_AUDIT
-        auditLog = std::make_unique<AuditConnector>();
-        auditLog->auditRemoteConnected(_remoteaddr);
+        auditLog_ = std::make_unique<AuditConnector>();
+        auditLog_->auditRemoteConnected(remoteAddr_);
 #endif
 
         registerProxy();
@@ -155,13 +158,17 @@ namespace LTSM::Connector {
 
     DBusProxy::~DBusProxy() {
 #ifdef LTSM_WITH_AUDIT
-        auditLog->auditRemoteDisconnected(_remoteaddr);
+        auditLog_->auditRemoteDisconnected(remoteAddr_);
 #endif
         unregisterProxy();
     }
 
+    const std::string & DBusProxy::remoteAddress(void) const {
+        return remoteAddr_;
+    }
+
     const std::string & DBusProxy::connectorType(void) const {
-        return _conntype;
+        return connType_;
     }
 
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
@@ -189,20 +196,20 @@ namespace LTSM::Connector {
             return false;
         }
 
-        _xcbDisplayNum = screen;
+        xcbDisplayNum_ = screen;
         return true;
     }
 
     int DBusProxy::displayNum(void) const {
-        return _xcbDisplayNum;
+        return xcbDisplayNum_;
     }
 
     void DBusProxy::xcbDisableMessages(bool f) {
-        _xcbDisable = f;
+        xcbDisable_ = f;
     }
 
     bool DBusProxy::xcbAllowMessages(void) const {
-        return ! _xcbDisable;
+        return ! xcbDisable_;
     }
 
     std::string DBusProxy::checkFileOption(const std::string & param) const {
@@ -222,13 +229,13 @@ namespace LTSM::Connector {
         if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
-            for(const auto & ptr : _renderPrimitives) {
+            for(const auto & ptr : renderPrimitives_) {
                 if(auto prim = ptr.get()) {
                     serverScreenUpdateRequest(prim->xcbRegion());
                 }
             }
 
-            _renderPrimitives.clear();
+            renderPrimitives_.clear();
         }
     }
 
@@ -237,7 +244,7 @@ namespace LTSM::Connector {
         if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
-            _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
+            renderPrimitives_.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
     }
@@ -250,7 +257,7 @@ namespace LTSM::Connector {
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
                                      _systemfont.width * text.size(), _systemfont.height);
 
-            _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rect, color));
+            renderPrimitives_.emplace_back(std::make_unique<RenderText>(text, rect, color));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
     }
@@ -267,7 +274,7 @@ namespace LTSM::Connector {
     }
 
     void DBusProxy::renderPrimitivesToFB(FrameBuffer & fb) const {
-        for(const auto & ptr : _renderPrimitives) {
+        for(const auto & ptr : renderPrimitives_) {
             if(auto prim = static_cast<const RenderRect*>(ptr.get())) {
                 prim->renderTo(fb);
             }
@@ -275,11 +282,20 @@ namespace LTSM::Connector {
     }
 
     void DBusProxy::checkIdleTimeout(void) {
-        if(_idleTimeoutSec &&
-           _idleTimeoutSec < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - _idleSessionTp).count()) {
+        if(idleTimeoutSec_ &&
+           idleTimeoutSec_ < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - idleSessionTp_).count()) {
             busSessionIdleTimeout(displayNum());
-            _idleSessionTp = std::chrono::steady_clock::now();
+            idleSessionReset();
         }
+    }
+
+    void DBusProxy::idleSessionReset(void) {
+        idleSessionTp_ = std::chrono::steady_clock::now();
+    }
+
+    void DBusProxy::setIdleTimeoutSec(uint32_t sec) {
+        idleTimeoutSec_ = sec;
+        idleSessionTp_ = std::chrono::steady_clock::now();
     }
 
     /* Connector::startService */
@@ -327,22 +343,14 @@ namespace LTSM::Connector {
             connector = std::make_unique<ConnectorLtsm>(confile, debug);
         }
 
-        int res = 0;
-
-        try {
 #ifdef LTSM_WITH_SYSTEMD
-            sd_notify(0, "READY=1");
+        sd_notify(0, "READY=1");
 #endif
-            res = connector->communication();
-#ifdef LTSM_WITH_SYSTEMD
-            sd_notify(0, "STOPPING=1");
-#endif
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            // terminated connection: exit normal
-            res = EXIT_SUCCESS;
-        }
+        int res = connector->communication();
 
+#ifdef LTSM_WITH_SYSTEMD
+        sd_notify(0, "STOPPING=1");
+#endif
         return res;
     }
 
