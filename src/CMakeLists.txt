@@ -342,7 +342,6 @@ if(LTSM_BUILD_TOOLS)
 
     add_executable(${CUR_TARGET})
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
-    target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_BOOST)
 
     add_subdirectory(common ${CUR_TARGET}_common)
     add_subdirectory(channels ${CUR_TARGET}_channels)
@@ -355,7 +354,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_x11vnc)
     set(CUR_TARGET ltsm_x11vnc)
 
-    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB SDL)
+    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB SDL BOOST OPENSSL)
 
     add_executable(${CUR_TARGET} tools/x11vnc/ltsm_x11vnc.cpp tools/x11vnc/ltsm_connector_x11vnc.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
@@ -373,7 +372,6 @@ if(LTSM_BUILD_TOOLS)
     CommonDefaults(SDL BOOST)
 
     add_executable(${CUR_TARGET} tools/sdl2x11/ltsm_sdl2x11.cpp)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_BOOST)
 
     target_include_directories(${CUR_TARGET} PRIVATE common)
     add_subdirectory(common ${CUR_TARGET}_common)

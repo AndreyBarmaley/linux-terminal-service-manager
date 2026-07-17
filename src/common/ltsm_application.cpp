@@ -417,7 +417,6 @@ namespace LTSM {
         inotifyWatchStop();
     }
 
-#ifdef LTSM_WITH_BOOST
     boost::asio::awaitable<void> WatchModification::inotifyWatchCb(void) {
         auto len = co_await _inotifyStream.async_read_some(boost::asio::buffer(_inotifyBuf), boost::asio::use_awaitable);
 
@@ -438,49 +437,6 @@ namespace LTSM {
 
         co_return;
     }
-#else
-    void WatchModification::inotifyWatchCb(void) const {
-        std::array<char, 256> buf = {};
-
-        while(true) {
-            auto len = read(_inotifyFd, buf.data(), buf.size());
-
-            if(len < 0) {
-                if(errno == EAGAIN) {
-                    continue;
-                }
-
-                if(errno != EBADF) {
-                    Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                       NS_FuncNameV, "inotify read", strerror(errno), errno, _filePath.string());
-                }
-
-                break;
-            }
-
-            if(len < sizeof(struct inotify_event)) {
-                Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                   NS_FuncNameV, "inotify read", strerror(errno), errno, _filePath.string());
-                break;
-            }
-
-            auto beg = buf.begin();
-            auto end = buf.begin() + len;
-
-            while(beg < end) {
-                auto st = (const struct inotify_event*) std::addressof(*beg);
-
-                if(st->mask == IN_CLOSE_WRITE) {
-                    if(st->len && _filePath.filename() == st->name && closeWriteCb) {
-                        closeWriteCb(_filePath.string());
-                    }
-                }
-
-                beg += sizeof(struct inotify_event) + st->len;
-            }
-        }
-    }
-#endif
 
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
         if(! std::filesystem::is_regular_file(file)) {
@@ -488,11 +444,7 @@ namespace LTSM {
             return false;
         }
 
-#ifdef LTSM_WITH_BOOST
         _inotifyFd = inotify_init1(IN_NONBLOCK);
-#else
-        _inotifyFd = inotify_init();
-#endif
 
         if(0 > _inotifyFd) {
             Application::error("{}: {} failed, error: {}, code: {}",
@@ -511,7 +463,6 @@ namespace LTSM {
             return false;
         }
 
-#ifdef LTSM_WITH_BOOST
         _inotifyStream.assign(_inotifyFd);
 
         boost::asio::co_spawn(_inotifyStream.get_executor(),
@@ -529,9 +480,6 @@ namespace LTSM {
                     co_return;
                 }
             }, boost::asio::bind_cancellation_slot(_inotifyStop.slot(), boost::asio::detached));
-#else
-        _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
-#endif
 
         Application::debug(DebugType::App, "{}: path: `{}'", NS_FuncNameV, file);
         return true;
@@ -542,17 +490,7 @@ namespace LTSM {
             inotify_rm_watch(_inotifyFd, _inotifyWd);
         }
 
-#ifdef LTSM_WITH_BOOST
         _inotifyStop.emit(boost::asio::cancellation_type::terminal);
-#else
-        if(0 <= _inotifyFd) {
-            close(_inotifyFd);
-        }
-
-        if(_inotifyJob.joinable()) {
-            _inotifyJob.join();
-        }
-#endif
 
         _inotifyFd = -1;
         _inotifyWd = -1;
@@ -636,7 +574,6 @@ namespace LTSM {
         return true;
     }
 
-#ifdef LTSM_WITH_BOOST
     bool ApplicationJsonConfig::inotifyWatchStart(boost::asio::io_context& ctx) {
         if(! watcher) {
             watcher = std::make_unique<WatchModification>(ctx, std::bind(& ApplicationJsonConfig::closeWriteEvent, this, std::placeholders::_1));
@@ -644,15 +581,6 @@ namespace LTSM {
 
         return watcher->inotifyWatchStart(configGetString("config:path"));
     }
-#else
-    bool ApplicationJsonConfig::inotifyWatchStart(void) {
-        if(! watcher) {
-            watcher = std::make_unique<WatchModification>(std::bind(& ApplicationJsonConfig::closeWriteEvent, this, std::placeholders::_1));
-        }
-
-        return watcher->inotifyWatchStart(configGetString("config:path"));
-    }
-#endif
 
     void ApplicationJsonConfig::inotifyWatchStop(void) {
         if(watcher) {

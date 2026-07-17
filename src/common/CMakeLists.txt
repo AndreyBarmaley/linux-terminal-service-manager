@@ -18,6 +18,12 @@ target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)
 find_package(spdlog CONFIG REQUIRED)
 target_link_libraries(${CUR_TARGET} PRIVATE spdlog::spdlog_header_only)
 
+set(Boost_USE_STATIC_LIBS ON)
+set(Boost_USE_MULTITHREADED ON)
+find_package(Boost 1.78 REQUIRED)
+target_include_directories(${CUR_TARGET} PRIVATE ${Boost_INCLUDE_DIR})
+target_link_libraries(${CUR_TARGET} PRIVATE ${Boost_LIBRARIES})
+
 target_sources(${CUR_TARGET} PRIVATE
     ltsm_application.cpp
     ltsm_tools.cpp
@@ -48,14 +54,6 @@ endif()
 if(LTSM_WITH_JSON)
     target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_JSON)
     target_sources(${CUR_TARGET} PRIVATE ltsm_json_wrapper.cpp)
-endif()
-
-if(LTSM_WITH_BOOST)
-    set(Boost_USE_STATIC_LIBS ON)
-    set(Boost_USE_MULTITHREADED ON)
-    find_package(Boost 1.78 REQUIRED)
-    target_include_directories(${CUR_TARGET} PRIVATE ${Boost_INCLUDE_DIR})
-    target_link_libraries(${CUR_TARGET} PRIVATE ${Boost_LIBRARIES})
 endif()
 
 if(LTSM_WITH_PNG)

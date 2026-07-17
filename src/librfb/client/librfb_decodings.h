@@ -31,9 +31,7 @@
 #include "ltsm_streambuf.h"
 #include "ltsm_boost_socket.h"
 
-#ifdef LTSM_WITH_BOOST
 #include <boost/asio/post.hpp>
-#endif
 
 #ifdef LTSM_DECODING_TJPG
 #include "turbojpeg.h"

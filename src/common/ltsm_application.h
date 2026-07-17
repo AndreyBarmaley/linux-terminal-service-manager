@@ -36,9 +36,7 @@
 #endif
 
 #ifdef __UNIX__
-#ifdef LTSM_WITH_BOOST
 #include <boost/asio.hpp>
-#endif
 #endif
 
 #ifdef LTSM_WITH_JSON
@@ -179,13 +177,9 @@ namespace LTSM {
     using WatchModificationCb = std::function<void(const std::string &)>;
 
     class WatchModification {
-#ifdef LTSM_WITH_BOOST
         std::array<char, 1024> _inotifyBuf;
         boost::asio::posix::stream_descriptor _inotifyStream;
         boost::asio::cancellation_signal _inotifyStop;
-#else
-        std::thread _inotifyJob;
-#endif
         std::filesystem::path _filePath;
 
         int _inotifyFd = -1;
@@ -194,22 +188,14 @@ namespace LTSM {
         WatchModificationCb closeWriteCb;
 
       protected:
-#ifdef LTSM_WITH_BOOST
         boost::asio::awaitable<void> inotifyWatchCb(void);
-#else
-        void inotifyWatchCb(void) const;
-#endif
 
         WatchModification(const WatchModification &) = delete;
         WatchModification & operator=(const WatchModification &) = delete;
 
       public:
-#ifdef LTSM_WITH_BOOST
         WatchModification(boost::asio::io_context& ctx, const WatchModificationCb & cb)
             : _inotifyStream{ctx}, closeWriteCb(cb) {};
-#else
-        explicit WatchModification(const WatchModificationCb & cb) : closeWriteCb(cb) {};
-#endif
         ~WatchModification();
 
         bool inotifyWatchStart(const std::filesystem::path &);
@@ -223,10 +209,7 @@ namespace LTSM {
       protected:
         void closeWriteEvent(const std::string &);
 
-#ifdef LTSM_WITH_BOOST
         bool inotifyWatchStart(boost::asio::io_context&);
-#endif
-        bool inotifyWatchStart(void);
         void inotifyWatchStop(void);
         void readDefaultConfig(void);
 
