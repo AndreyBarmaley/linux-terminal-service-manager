@@ -43,7 +43,7 @@
 #include "librfb_winclient.h"
 #endif
 
-#define LTSM_CLIENT_VERSION 20260510
+#define LTSM_CLIENT_VERSION 20260610
 
 namespace LTSM {
     struct ColorCursor {
@@ -53,8 +53,8 @@ namespace LTSM {
     };
 
     class BoostContext {
-        const int concurency_ = 4;
-        boost::asio::io_context ioc_{concurency_};
+        const int concurency_ = 1;
+        boost::asio::io_context ioc_;
 
       protected:
         inline boost::asio::io_context & ioc(void) { return ioc_; }
@@ -62,7 +62,7 @@ namespace LTSM {
         boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 
       public:
-        BoostContext() = default;
+        explicit BoostContext(int concurency) : concurency_{concurency}, ioc_{concurency} {}
         ~BoostContext() = default;
     };
 
@@ -175,7 +175,7 @@ namespace LTSM {
         void stop(void);
 
       public:
-        ClientApp(int argc, char** argv);
+        ClientApp(int threads, int argc, char** argv);
 
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                                 const std::vector<RFB::ScreenInfo> &) override;

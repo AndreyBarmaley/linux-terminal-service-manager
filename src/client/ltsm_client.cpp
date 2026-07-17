@@ -72,7 +72,7 @@ namespace LTSM {
         std::cout << std::endl <<
         "usage: " << prog <<
         ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] " <<
-        "[--version] [--debug [<types>]] [--trace] [--syslog [<tofile>]] " <<
+        "[--version] [--debug [<types>]] [--trace] [--syslog [<tofile>]] [--thread <num>]" <<
         "[--noltsm] [--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--resize] " <<
 #ifdef LTSM_WITH_GSSAPI
         "[--kerberos <" << krb5def << ">] " <<
@@ -113,6 +113,7 @@ namespace LTSM {
                                   "    --debug <types> (allow types: [all],xcb,rfb,clip,sock,tls,chnl,conn,enc,x11srv,x11cli,audio,fuse,pcsc,pkcs11,sdl,app,ldap,gss,mgr)" << std::endl <<
                                   "    --trace (big more debug)" << std::endl <<
                                   "    --syslog (to syslog or <file>)" << std::endl <<
+                                  "    --thread <num> (use thread, default: 4)" << std::endl <<
                                   "    --host <localhost> " << std::endl <<
                                   "    --port <port> " << std::endl <<
                                   "    --username <user> " << std::endl <<
@@ -245,8 +246,8 @@ namespace LTSM {
         }
     }
 
-    ClientApp::ClientApp(int argc, char** argv)
-        : Application("ltsm_client")
+    ClientApp::ClientApp(int threads, int argc, char** argv)
+        : BoostContext(threads), Application("ltsm_client")
 #ifdef LTSM_WITH_X11
         , RFB::X11Client(get_executor())
 #else
@@ -632,6 +633,8 @@ namespace LTSM {
             // skip exception
         } else if(cmd == "--save") {
             // skip exception
+        } else if(cmd == "--thread") {
+            // skip exception
         } else {
             throw std::invalid_argument(view2string(cmd));
         }
@@ -860,7 +863,7 @@ namespace LTSM {
             asio::post(thread_pool_, [this](){ ioc().run(); });
         }
 
-        Application::info("{}: client starting", NS_FuncNameV);
+        Application::info("{}: client starting, use thread: {}", NS_FuncNameV, concurency());
 
         sdl_ctx_.run();
         thread_pool_.join();
@@ -1687,6 +1690,7 @@ int main(int argc, char** argv)
     auto localcfg = Tools::replace(usercfgdef, "$HOME", home);
 #endif
 
+    unsigned int thread = 4;
     auto argBeg = argv + 1;
     auto argEnd = argv + argc;
 
@@ -1696,6 +1700,7 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    // save params
     if(auto it = std::ranges::find_if(argBeg, argEnd,
         [](std::string_view arg) { return arg == "--save"; }); it != argEnd) {
         std::string_view path = localcfg;
@@ -1710,6 +1715,20 @@ int main(int argc, char** argv)
 
         saveConfig(argBeg, it, path);
         return 0;
+    }
+
+    // thread params
+    if(auto it = std::ranges::find_if(argBeg, argEnd,
+        [](std::string_view arg) { return arg == "--thread"; }); it != argEnd) {
+
+        if(auto it2 = std::next(it); it2 != argEnd) {
+            std::string_view val = *it2;
+
+            if(! startsWith(val, "--")) {
+                thread = std::stoul(view2string(val));
+                thread = std::min(thread, std::thread::hardware_concurrency());
+            }
+        }
     }
 
     // init network
@@ -1737,9 +1756,9 @@ int main(int argc, char** argv)
     while(programRestarting) {
         try {
 #ifdef __WIN32__
-            ClientApp app(argc, (const char**) argv);
+            ClientApp app(thread, argc, (const char**) argv);
 #else
-            ClientApp app(argc, argv);
+            ClientApp app(thread, argc, argv);
 #endif
 
             if(! app.isAlwaysRunning()) {
