@@ -257,8 +257,7 @@ namespace LTSM {
 
                 // continue tls
                 if(sec.authVenCrypt) {
-                    co_await authVenCryptInitAwait(sec);
-                    co_return true; 
+                    co_return co_await authVenCryptInitAwait(sec);
                 }
 
                 co_return true;
