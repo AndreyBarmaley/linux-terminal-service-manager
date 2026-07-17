@@ -40,7 +40,6 @@
 
 #include "channel_system.h"
 #include "ltsm_application.h"
-#include "ltsm_sockets.h"
 #include "ltsm_tools.h"
 #include "ltsm_librfb.h"
 #include "ltsm_json_wrapper.h"

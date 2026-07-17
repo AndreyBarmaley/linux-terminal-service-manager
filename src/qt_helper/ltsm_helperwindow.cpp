@@ -53,7 +53,6 @@
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_pkcs11.h"
-#include "ltsm_sockets.h"
 #include "ltsm_application.h"
 #include "ltsm_helperwindow.h"
 #include "ltsm_pkcs11_session.h"

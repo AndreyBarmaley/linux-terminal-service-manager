@@ -55,7 +55,6 @@
 #include "ltsm_tools.h"
 #include "ltsm_pkcs11.h"
 #include "ltsm_global.h"
-#include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
 #include "ltsm_byte_stream.h"
