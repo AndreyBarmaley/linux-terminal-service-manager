@@ -31,6 +31,10 @@
 #include "librfb_client.h"
 #include "ltsm_application.h"
 
+#ifdef LTSM_WITH_GSSAPI
+#include "ltsm_gsslayer.h"
+#endif
+
 #ifdef LTSM_DECODING_FFMPEG
 #include "librfb_ffmpeg.h"
 #endif

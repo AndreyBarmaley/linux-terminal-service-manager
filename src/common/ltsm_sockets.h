@@ -40,16 +40,6 @@
 
 #include <zlib.h>
 
-#ifdef LTSM_WITH_GNUTLS
-#include "gnutls/gnutls.h"
-#define GNUTLS_GNUTLSXX_NO_HEADERONLY 1
-#include "gnutls/gnutlsxx.h"
-#endif
-
-#ifdef LTSM_WITH_GSSAPI
-#include "ltsm_gsslayer.h"
-#endif
-
 #include "ltsm_streambuf.h"
 
 #ifdef LTSM_WITH_ZLIB
@@ -98,11 +88,6 @@ namespace LTSM {
 
         static bool hasInput(int fd, int timeoutMS = 1);
         static size_t hasData(int fd);
-
-#ifdef LTSM_WITH_GNUTLS
-        virtual void setupTLS(gnutls::session*) const { /* default empty */ }
-
-#endif
 
         inline NetworkStream & sendIntBE16(uint16_t x) {
             putIntBE16(x);
@@ -203,9 +188,6 @@ namespace LTSM {
         SocketStream(const SocketStream &) = delete;
         SocketStream & operator=(const SocketStream &) = delete;
 
-#ifdef LTSM_WITH_GNUTLS
-        void setupTLS(gnutls::session*) const override;
-#endif
         bool isValid(void) const {
             return 0 <= sock;
         }
@@ -274,149 +256,6 @@ namespace LTSM {
         int accept(int fd);
     }
 #endif
-
-#ifdef LTSM_WITH_GNUTLS
-    struct gnutls_error : public std::runtime_error {
-        explicit gnutls_error(std::string_view what) : std::runtime_error(view2string(what)) {}
-    };
-
-    /// transport layer security
-    namespace TLS {
-        std::vector<uint8_t> randomKey(size_t);
-        std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & crypt, std::string_view key);
-
-        class Session : public gnutls::session {
-          public:
-#if GNUTLS_VERSION_NUMBER < 0x030603
-            static gnutls_session_t ptr(gnutls::session* sess) {
-                return sess->*(& Session::s);
-            }
-
-#else
-            static gnutls_session_t ptr(gnutls::session* sess) {
-                return sess->ptr();
-            }
-
-#endif
-            Session() : gnutls::session(0) {}
-
-            ~Session() = default;
-        };
-
-        /// @brief: tls stream
-        class Stream : public NetworkStream {
-          private:
-            bool startHandshake(void);
-            const NetworkStream* layer = nullptr;
-
-            gnutls::dh_params dhparams;
-            std::unique_ptr<gnutls::credentials> cred;
-            std::unique_ptr<gnutls::session> session;
-
-            mutable int peek = -1;
-
-          public:
-            explicit Stream(const NetworkStream*);
-
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            void sendFlush(void) override;
-
-            void sendRaw(const void*, size_t) override;
-            void recvRaw(void*, size_t) const override;
-
-            std::string sessionDescription(void) const;
-
-            bool initAnonHandshake(std::string priority, bool srvmode, int debug);
-            bool initX509Handshake(std::string priority, bool srvmode, const std::string & caFile, const std::string & certFile,
-                                   const std::string & keyFile, const std::string & crlFile, int debug);
-        };
-
-        class AnonSession : public Stream {
-          public:
-            AnonSession(const NetworkStream*, const std::string & priority, bool serverMode = true, int debug = 3);
-        };
-
-        class X509Session : public Stream {
-          public:
-            X509Session(const NetworkStream*, const std::string & cafile, const std::string & cert, const std::string & key,
-                        const std::string & crl, const std::string & priority, bool serverMode = true, int debug = 3);
-        };
-    } // TLS
-
-#endif // LTSM_WITH_GNUTLS
-
-#ifdef LTSM_WITH_GSSAPI
-    struct gssapi_error : public std::runtime_error {
-        explicit gssapi_error(std::string_view what) : std::runtime_error(view2string(what)) {}
-    };
-
-    namespace GssApi {
-        class BaseLayer : public NetworkStream {
-            BinaryBuf sndbuf;
-            mutable StreamBuf rcvbuf;
-
-          protected:
-            NetworkStream* layer = nullptr;
-
-            std::vector<uint8_t> recvLayer(void) const;
-            void sendLayer(const void*, size_t);
-
-          public:
-            // NetworkStream interface
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            void sendRaw(const void*, size_t) override;
-            void sendFlush(void) override;
-            void recvRaw(void*, size_t) const override;
-
-            BaseLayer(NetworkStream* st, size_t capacity = 4096);
-        };
-
-        /// @brief: gss api server layer
-        class Server : public BaseLayer, public Gss::ServiceContext {
-          protected:
-            // Gss::ServiceContext interface
-            void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const override;
-            std::vector<uint8_t> recvToken(void) const override {
-                return recvLayer();
-            }
-
-            void sendToken(const void* buf, size_t len) override {
-                sendLayer(buf, len);
-            }
-
-          public:
-            Server(NetworkStream* st) : BaseLayer(st, 4096) {}
-
-            bool checkServiceCredential(std::string_view service) const;
-            bool handshakeLayer(std::string_view service);
-        };
-
-/*
-        /// @brief: gss api client layer
-        class Client : public BaseLayer, public Gss::ClientContext {
-          protected:
-            // Gss::ServiceContext interface
-            void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const override;
-            std::vector<uint8_t> recvToken(void) const override {
-                return recvLayer();
-            }
-
-            void sendToken(const void* buf, size_t len) override {
-                sendLayer(buf, len);
-            }
-
-          public:
-            Client(NetworkStream* st) : BaseLayer(st, 4096) {}
-
-            bool checkUserCredential(std::string_view) const;
-            bool handshakeLayer(std::string_view service, bool mutual = false, std::string_view username = "");
-        };
-*/
-    }
-
-#endif // LTSM_WITH_GSSAPI
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

@@ -57,6 +57,10 @@
 #include "ltsm_compat.h"
 #include "ltsm_streambuf.h"
 
+#ifdef LTSM_WITH_OPENSSL
+#include <openssl/bio.h>
+#endif
+
 #include <cassert>
 // Use (void) to silence unused warnings.
 #define assertm(exp, msg) assert(((void)msg, exp))
@@ -445,7 +449,26 @@ namespace LTSM {
 
 #ifdef LTSM_WITH_OPENSSL
     namespace OpenSSL {
+        class BIO_buf {
+            std::unique_ptr<BIO, void(*)(BIO*)> bio_{ BIO_new(BIO_s_mem()), [](BIO* b) { if (b) BIO_free(b); } };
+
+        public:
+            BIO_buf() = default;
+            ~BIO_buf() = default;
+
+            BIO_buf(const BIO_buf&) = delete;
+            BIO_buf& operator=(const BIO_buf&) = delete;
+
+            BIO_buf(BIO_buf&&) = default;
+            BIO_buf& operator=(BIO_buf&&) = default;
+
+            std::span<const char> span(void) const;
+            BIO* get(void) { return bio_.get(); }
+        };
+
         std::vector<uint8_t> encryptDES(std::span<const uint8_t> data, std::string_view pass);
+        BIO_buf generateDH(uint16_t bits = 2048);
+        std::string streamDescription(SSL*);
     }
 #endif
 }

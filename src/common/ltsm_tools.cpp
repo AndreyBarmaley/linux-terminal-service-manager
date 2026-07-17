@@ -29,11 +29,6 @@
 #include <sys/socket.h>
 #endif
 
-#ifdef LTSM_WITH_GNUTLS
-#include "gnutls/x509.h"
-#include <gnutls/gnutls.h>
-#endif
-
 #include <bit>
 #include <ctime>
 #include <cstdio>
@@ -54,6 +49,8 @@
 
 #ifdef LTSM_WITH_OPENSSL
 #include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
 #endif
 
 #include "ltsm_tools.h"
@@ -945,6 +942,30 @@ namespace LTSM {
 
         res.resize(out_len + final_len);
         return res;
+    }
+
+    std::span<const char> OpenSSL::BIO_buf::span(void) const {
+        char* ptr = nullptr;
+        size_t len = BIO_get_mem_data(bio_.get(), &ptr);
+        return {ptr, len};
+    }
+
+    OpenSSL::BIO_buf OpenSSL::generateDH(uint16_t bits) {
+        std::unique_ptr<EVP_PKEY, void(*)(EVP_PKEY*)> pkey{
+            EVP_PKEY_Q_keygen(nullptr, nullptr, "DH", bits), EVP_PKEY_free };
+
+        BIO_buf buf;
+
+        if (PEM_write_bio_Parameters(buf.get(), pkey.get()) != 1) {
+            Application::error("{}: {} failed", NS_FuncNameV, "PEM_write_bio_Parameters");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        return buf;
+    }
+
+    std::string OpenSSL::streamDescription(SSL* ssl) {
+        return "";
     }
 #endif
 } // LTSM

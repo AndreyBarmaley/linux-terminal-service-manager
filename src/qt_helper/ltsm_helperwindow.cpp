@@ -43,6 +43,8 @@
 #ifdef LTSM_PKCS11_AUTH
 #include "gnutls/x509.h"
 #include "gnutls/abstract.h"
+#define GNUTLS_GNUTLSXX_NO_HEADERONLY 1
+#include "gnutls/gnutlsxx.h"
 #include "ltsm_ldap_wrapper.h"
 #endif
 
@@ -357,6 +359,10 @@ namespace LTSM::LoginHelper {
     }
 
 #ifdef LTSM_PKCS11_AUTH
+    struct gnutls_error : public std::runtime_error {
+        explicit gnutls_error(std::string_view what) : std::runtime_error(view2string(what)) {}
+    };
+
     struct DatumAlloc : gnutls_datum_t {
         DatumAlloc(const gnutls_datum_t & dt) {
             data = dt.data;
@@ -376,7 +382,7 @@ namespace LTSM::LoginHelper {
         if(int err = gnutls_x509_crt_init(& ptr1); err != GNUTLS_E_SUCCESS) {
             Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "gnutls_x509_crt_init", gnutls_strerror(err),
                                err);
-            throw LTSM::gnutls_error(NS_FuncNameS);
+            throw gnutls_error(NS_FuncNameS);
         }
 
         const gnutls_datum_t dt1 = { .data = (unsigned char*) certder.data(), .size = (unsigned int) certder.size() };

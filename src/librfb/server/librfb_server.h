@@ -32,6 +32,7 @@
 #include "librfb_extclip.h"
 #include "librfb_encodings.h"
 #include "ltsm_xcb_wrapper.h"
+#include "ltsm_async_socket.h"
 
 namespace LTSM {
     struct XcbFrameBuffer {
@@ -52,20 +53,36 @@ namespace LTSM {
         std::vector<int> toVector(void) const;
     };
 
+    class BoostContext {
+        const int concurency_ = 1;
+        boost::asio::io_context ioc_;
+
+      protected:
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline size_t concurency(void) const { return concurency_; }
+        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
+
+      public:
+        explicit BoostContext(int concurency) : concurency_{concurency}, ioc_{concurency} {}
+        ~BoostContext() = default;
+    };
+
     namespace RFB {
         int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
 
         /// ServerEncoder
-        class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip {
+        class ServerEncoder : public BoostContext, public ChannelListener, public EncoderStream, public ExtClip {
+
             std::forward_list<uint32_t> cursorSended;
             ClientEncodings clientEncodings;
             std::string clientAuthName;
             std::string clientAuthDomain;
 
-            std::unique_ptr<NetworkStream> socket; /// socket layer
-#ifdef LTSM_WITH_GNUTLS
-            std::unique_ptr<TLS::Stream> tls; /// tls layer
-#endif
+            boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+            std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
+
+//            std::unique_ptr<NetworkStream> socket; /// socket layer
+//            std::unique_ptr<TLS::Stream> tls; /// tls layer
             std::unique_ptr<EncodingBase> encoder;
 
             PixelFormat clientPf;
@@ -75,8 +92,8 @@ namespace LTSM {
             std::atomic<bool> rfbMessages{true};
             std::atomic<bool> fbUpdateProcessing{false};
 
-            NetworkStream* streamIn = nullptr;
-            NetworkStream* streamOut = nullptr;
+//            NetworkStream* streamIn = nullptr;
+//            NetworkStream* streamOut = nullptr;
 
             bool clientLtsmSupported = false;
             bool clientLtsmKeyboard = false;
@@ -137,10 +154,8 @@ namespace LTSM {
 
             void serverSelectClientEncoding(void);
 
-#ifdef LTSM_WITH_GNUTLS
             bool authVncInit(const std::string &);
             bool authVenCryptInit(const SecurityInfo &);
-#endif
             bool sendFrameBufferUpdate(const FrameBuffer &);
             void sendColourMap(int first);
             void sendBellEvent(void);

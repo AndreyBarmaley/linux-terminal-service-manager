@@ -35,8 +35,6 @@
 #include <iostream>
 #include <filesystem>
 
-#include <boost/asio.hpp>
-
 #ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
 #include <systemd/sd-daemon.h>
@@ -70,8 +68,7 @@ namespace LTSM::Connector {
                   Tools::join(proto, "|") << ">" << std::endl;
     }
 
-    int autoDetectType(void) {
-        auto fd = fileno(stdin);
+    int autoDetectType(int fd) {
         struct pollfd fds = {};
         fds.fd = fd;
         fds.events = POLLIN;
@@ -324,13 +321,14 @@ namespace LTSM::Connector {
 
         // signals
         signal(SIGPIPE, SIG_IGN);
+        const int fd = dup(STDIN_FILENO);
         std::unique_ptr<DBusProxy> connector;
 
 #ifdef LTSM_WITH_RDP
 
         // protocol up
         if(type == "auto") {
-            if(int first = autoDetectType(); first == 0x03) {
+            if(int first = autoDetectType(fd); first == 0x03) {
                 connector = std::make_unique<ConnectorRdp>(confile, debug);
             }
         } else if(type == "rdp") {
@@ -340,8 +338,11 @@ namespace LTSM::Connector {
 #endif
 
         if(! connector) {
-            connector = std::make_unique<ConnectorLtsm>(confile, debug);
+            auto conn = std::make_unique<ConnectorLtsm>(confile, debug);
+            conn->assignSocket(fd);
+            connector = std::move(conn);
         }
+
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");

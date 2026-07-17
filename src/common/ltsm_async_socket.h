@@ -116,6 +116,7 @@ class AsyncSocketBase {
 
     virtual void closeSocket(void) = 0;
 
+    virtual size_t sync_recv_available(void) const = 0;
     virtual void sync_recv_buf(void* ptr, size_t len) const = 0;
     virtual void sync_send_buf(const void* ptr, size_t len) const = 0;
 
@@ -286,6 +287,11 @@ class AsyncTcpStream : public AsyncSocket<AsioTcpSocket> {
 
     AsioTcpSocket& socket(void) override { return sock_; }
 
+    size_t sync_recv_available(void) const final {
+        return sock_.available();
+    }
+
+
     void closeSocket(void) override {
         if (sock_.is_open()) {
             boost::system::error_code ec;
@@ -306,6 +312,11 @@ class AsyncLocalStream : public AsyncSocket<AsioLocalSocket> {
     explicit AsyncLocalStream(AsioLocalSocket&& sock) : sock_{std::move(sock)} {}
 
     AsioLocalSocket& socket(void) override { return sock_; }
+
+    size_t sync_recv_available(void) const final {
+        return sock_.available();
+    }
+
 
     void closeSocket(void) override {
         if (sock_.is_open()) {

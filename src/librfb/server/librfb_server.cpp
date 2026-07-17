@@ -32,11 +32,20 @@
 #include "ltsm_zlib.h"
 #include "librfb_server.h"
 #include "ltsm_application.h"
+#include "ltsm_boost_socket.h"
+
+#ifdef LTSM_WITH_GSSAPI
+#include "ltsm_gsslayer.h"
+#endif
 
 #ifdef LTSM_ENCODING_FFMPEG
 #include "librfb_ffmpeg.h"
 #endif
 
+#include <boost/system/system_error.hpp>
+#include <boost/asio/ssl/stream.hpp>
+
+using namespace boost;
 using namespace std::chrono_literals;
 
 namespace LTSM {
@@ -68,43 +77,29 @@ namespace LTSM {
     }
 
     // ServerEncoder
-    RFB::ServerEncoder::ServerEncoder() {
-        socket = std::make_unique<InetStream>();
-        streamIn = streamOut = socket.get();
+    RFB::ServerEncoder::ServerEncoder() : BoostContext(2), rfb_strand_{ioc().get_executor()} {
+        stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
     void RFB::ServerEncoder::assignSocket(int fd) {
-        socket = std::make_unique<SocketStream>(fd);
-        streamIn = streamOut = socket.get();
+        dynamic_cast<AsyncTcpStream&>(*stream_).socket().assign(asio::ip::tcp::v4(), fd);
     }
 
     void RFB::ServerEncoder::sendFlush(void) {
-        try {
-            if(rfbMessages) {
-                streamOut->sendFlush();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            rfbMessagesShutdown();
-        }
     }
 
     void RFB::ServerEncoder::sendRaw(const void* ptr, size_t len) {
         try {
-            if(rfbMessages) {
-                streamOut->sendRaw(ptr, len);
-            }
+            stream_->sync_send_buf(ptr, len);
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            rfbMessagesShutdown();
+            const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
     }
 
     void RFB::ServerEncoder::recvRaw(void* ptr, size_t len) const {
         try {
-            if(rfbMessages) {
-                streamIn->recvRaw(ptr, len);
-            }
+            stream_->sync_recv_buf(ptr, len);
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
@@ -113,9 +108,7 @@ namespace LTSM {
 
     bool RFB::ServerEncoder::hasInput(void) const {
         try {
-            if(rfbMessages) {
-                return streamIn->hasInput();
-            }
+            return stream_->sync_recv_available();
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
@@ -126,9 +119,7 @@ namespace LTSM {
 
     size_t RFB::ServerEncoder::hasData(void) const {
         try {
-            if(rfbMessages) {
-                return streamIn->hasData();
-            }
+            return stream_->sync_recv_available();
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
@@ -147,7 +138,6 @@ namespace LTSM {
         }
     }
 
-#ifdef LTSM_WITH_GNUTLS
     bool RFB::ServerEncoder::authVncInit(const std::string & passwdFile) {
         std::vector<uint8_t> challenge = Tools::randomBytes(16);
 
@@ -170,7 +160,7 @@ namespace LTSM {
         while(ifs.good()) {
             std::string pass;
             std::getline(ifs, pass);
-            auto crypt = TLS::encryptDES(challenge, pass);
+            auto crypt = OpenSSL::encryptDES(challenge, pass);
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto tmp = Tools::hexString(crypt, 2);
@@ -291,22 +281,48 @@ namespace LTSM {
         sendInt8(1).sendFlush();
 
         try {
-            if(x509Mode)
-                tls = std::make_unique<TLS::X509Session>(socket.get(), secInfo.caFile, secInfo.certFile, secInfo.keyFile,
-                      secInfo.crlFile, secInfo.tlsPriority, true, secInfo.tlsDebug);
-            else {
-                tls = std::make_unique<TLS::AnonSession>(socket.get(), secInfo.tlsPriority, true, secInfo.tlsDebug);
+            auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).socket());
+            auto sock = std::make_unique<AsioTls::AsyncStream>(std::move(tcp_stream), asio::ssl::context::tlsv12_server);
+
+            auto& ssl_ctx = sock->ssl_context();
+            auto& ssl_stream = sock->ssl_stream();
+            int verify_mode = asio::ssl::verify_none;
+            // anonymous ciphers
+            const char* ciphers = "aNULL:ADH:AECDH:@SECLEVEL=0";
+
+            if(x509Mode) {
+                //SSL_CTX_set_security_level(ssl_ctx.native_handle(), 1);
+                ssl_ctx.set_default_verify_paths();
+
+                if(! secInfo.caFile.empty()) {
+                    ssl_ctx.load_verify_file(secInfo.caFile);
+                }
+
+                ssl_ctx.use_certificate_chain_file(secInfo.certFile);
+                ssl_ctx.use_private_key_file(secInfo.keyFile, asio::ssl::context::pem);
+                //verify_mode = asio::ssl::verify_peer;
+                // FIXME: !!! secInfo.crlFile, secInfo.tlsPriority, true, secInfo.tlsDebug);
+                ciphers = "AECDH-AES256-SHA:@SECLEVEL=1";
             }
-        } catch(gnutls::exception & err) {
-            Application::error("gnutls error: {}, code: {}", err.what(), err.get_code());
+
+            auto dh_buf = OpenSSL::generateDH(2048);
+            auto span = dh_buf.span();
+            ssl_ctx.use_tmp_dh(asio::const_buffer(span.data(), span.size()));
+
+            ssl_stream.set_verify_mode(verify_mode);
+
+            sock->setCipherSuite(ciphers);
+            sock->sslHandshake(AsioTls::HandshakeType::Server);
+            Application::info("{}: {}", NS_FuncNameV, "TLS handshake success");
+            stream_ = std::move(sock);
+        } catch(system::system_error & err) {
+            auto ec = err.code();
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             return false;
         }
 
-        socket->useStatistic(false);
-        streamIn = streamOut = tls.get();
         return true;
     }
-#endif
 
     int RFB::ServerEncoder::serverHandshakeVersion(void) {
         // RFB 6.1.1 version
@@ -328,6 +344,74 @@ namespace LTSM {
         return protover;
     }
 
+#ifdef LTSM_WITH_GSSAPI
+    namespace GssWrapper {
+        /// @brief: gss api server layer
+        class Service : public Gss::ServiceContext {
+            AsyncSocketBase & sock_;
+
+          protected:
+            // Gss::ServiceContext interface
+            void error(std::string_view func, std::string_view subfunc, OM_uint32 code1, OM_uint32 code2) const override {
+                auto err = Gss::error2str(code1, code2);
+                Application::error("{}: {} failed, error: '{}', codes: [ {:#010x}, {:#010x}]", func, subfunc, err, code1, code2);
+            }
+
+            uint32_t recvLength(void) const {
+                uint32_t val;
+                sock_.sync_recv_buf(&val, sizeof(val));
+                return boost::endian::big_to_native(val);
+            }
+
+            void sendLength(uint32_t val) {
+                val = boost::endian::native_to_big(val);
+                sock_.sync_recv_buf(&val, sizeof(val));
+            }
+
+          public:
+            Service(AsyncSocketBase & sock) : sock_{sock} {
+            }
+
+            bool checkServiceCredential(std::string_view service) const {
+                Gss::ErrorCodes err;
+                if(auto cred = Gss::acquireServiceCredential(service, & err)) {
+                    return true;
+                }
+                error(NS_FuncNameV, err.func, err.code1, err.code2);
+                return false;
+            }
+
+            bool handshakeLayer(std::string_view service) {
+                Gss::ErrorCodes err;
+                if(auto cred = Gss::acquireServiceCredential(service, & err)) {
+                    return acceptClient(std::move(cred));
+                }
+                error(NS_FuncNameV, err.func, err.code1, err.code2);
+                return false;
+            }
+
+            std::vector<uint8_t> recvToken(void) const override {
+                uint32_t len = recvLength();
+                std::vector<uint8_t> buf(len, 0);
+                sock_.sync_recv_buf(buf.data(), buf.size());
+                return buf;
+            }
+
+            std::string recvTokenString(void) const {
+                uint32_t len = recvLength();
+                std::string buf(len, 0);
+                sock_.sync_recv_buf(buf.data(), buf.size());
+                return buf;
+            }
+
+            void sendToken(const void* buf, size_t len) override {
+                sendLength(len);
+                sock_.sync_send_buf(buf, len);
+            }
+        };
+    }
+#endif
+
     bool RFB::ServerEncoder::serverSecurityInit(int protover, const SecurityInfo & secInfo) {
         // RFB 6.1.2 security
         if(protover == 33) {
@@ -348,8 +432,6 @@ namespace LTSM {
             res.push_back(SECURITY_TYPE_GSSAPI);
 #endif
 
-#ifdef LTSM_WITH_GNUTLS
-
             if(secInfo.authVenCrypt) {
                 res.push_back(RFB::SECURITY_TYPE_VENCRYPT);
             }
@@ -357,8 +439,6 @@ namespace LTSM {
             if(secInfo.authVnc) {
                 res.push_back(RFB::SECURITY_TYPE_VNC);
             }
-
-#endif
 
             if(noVncMode()) {
                 res.clear();
@@ -393,10 +473,7 @@ namespace LTSM {
             // RFB 6.1.3 security result
             if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
                 sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-            }
-
-#ifdef LTSM_WITH_GNUTLS
-            else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
+            } else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
                 if(secInfo.passwdFile.empty()) {
                     Application::error("{}: passwd file not defined", NS_FuncNameV);
                     sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
@@ -426,21 +503,18 @@ namespace LTSM {
 
                 sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
             }
-
-#endif
 #ifdef LTSM_WITH_GSSAPI
             else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
                 try {
-                    auto krb = std::make_unique<GssApi::Server>(socket.get());
+                    auto krb = std::make_unique<GssWrapper::Service>(*stream_);
                     Application::info("{}: kerberos service: `{}'", NS_FuncNameV, secInfo.krb5Service);
 
                     if(krb->handshakeLayer(secInfo.krb5Service)) {
                         auto remoteName = Gss::displayName(krb->securityContext()->name);
                         std::unique_ptr<JsonObject> jo;
 
-                        if(auto len = krb->recvIntBE32(); 0 < len) {
-                            auto raw = krb->recvData(len);
-                            jo = std::make_unique<JsonObject>(JsonContentString(std::string(raw.begin(), raw.end())).toObject());
+                        if(auto buf = krb->recvTokenString(); !buf.empty()) {
+                            jo = std::make_unique<JsonObject>(JsonContentString(std::move(buf)).toObject());
                         }
 
                         // stop kerbero session
@@ -996,11 +1070,12 @@ namespace LTSM {
 
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const {
-#ifdef LTSM_WITH_GNUTLS
-        return tls ? tls->sessionDescription() : "none";
-#else
-        return "unsupported";
-#endif
+        if(auto stream = dynamic_cast<AsioTls::AsyncStream*>(stream_.get())) {
+            auto& ssl_st = stream->ssl_stream();
+            return OpenSSL::streamDescription(ssl_st.native_handle());
+        }
+
+        return "none";
     }
 
     bool RFB::ServerEncoder::isContinueUpdatesProcessed(void) const {

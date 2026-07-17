@@ -41,7 +41,7 @@ using AsioSslContext = boost::asio::ssl::context;
 using AsioSslStream = boost::asio::ssl::stream<AsioTcpSocket>;
 
 namespace AsioTls {
-enum class HandshakeType { Client, Srrver };
+enum class HandshakeType { Client, Server };
 
 class AsyncStream : public AsyncSocket<AsioSslStream> {
     AsioSslContext ssl_ctx_;
@@ -57,6 +57,10 @@ class AsyncStream : public AsyncSocket<AsioSslStream> {
 
     explicit AsyncStream(AsioTcpSocket&& sock, const AsioSslContext::method& method)
         : ssl_ctx_{method}, ssl_sock_{std::move(sock), ssl_ctx_} {}
+
+    size_t sync_recv_available(void) const final {
+        return ssl_stream().lowest_layer().available();
+    }
 
     inline AsioSslContext& ssl_context(void) { return ssl_ctx_; }
 

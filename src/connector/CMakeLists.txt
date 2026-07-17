@@ -1,8 +1,6 @@
 # LTSM connector
 
 target_sources(${CUR_TARGET} PRIVATE ltsm_connector.cpp ltsm_connector_proto.cpp ltsm_render_primitives.cpp)
-
-target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_GNUTLS)
 target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_BOOST)
 
 # boost + openssl warnings

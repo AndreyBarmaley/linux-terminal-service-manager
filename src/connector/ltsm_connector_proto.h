@@ -41,7 +41,7 @@ namespace LTSM::Connector {
 
     using TupleFileSize = sdbus::Struct<std::string, uint32_t>;
 
-    class ConnectorLtsm : public DBusProxy, protected RFB::X11Server {
+    class ConnectorLtsm : public DBusProxy, public RFB::X11Server {
         PixelFormat serverPf_;
         std::unordered_map<uint32_t, int> keymap_;
 
