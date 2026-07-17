@@ -1116,12 +1116,11 @@ namespace LTSM {
             RFB::ENCODING_LTSM_H264,
             RFB::ENCODING_LTSM_MPEG4,
 #endif
-#ifdef LTSM_ENCODING
             RFB::ENCODING_LTSM_ZQOI,
             RFB::ENCODING_LTSM_QOI,
             RFB::ENCODING_LTSM_LZ4,
             RFB::ENCODING_LTSM_TJPG,
-#endif
+            // compat
             RFB::ENCODING_ZRLE, RFB::ENCODING_TRLE, RFB::ENCODING_ZLIB, RFB::ENCODING_HEXTILE,
             RFB::ENCODING_CORRE, RFB::ENCODING_RRE, RFB::ENCODING_RAW
         };
@@ -1189,8 +1188,6 @@ namespace LTSM {
                 encoder = std::make_unique<EncodingFFmpeg>(compatible);
                 break;
 #endif
-#ifdef LTSM_ENCODING
-
             case RFB::ENCODING_LTSM_ZQOI:
                 encoder = std::make_unique<EncodingQOI>(true);
                 break;
@@ -1206,7 +1203,6 @@ namespace LTSM {
             case RFB::ENCODING_LTSM_TJPG:
                 encoder = std::make_unique<EncodingTJPG>();
                 break;
-#endif
 
             default:
                 encoder = std::make_unique<EncodingRaw>();

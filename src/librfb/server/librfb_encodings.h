@@ -32,9 +32,7 @@
 #include "ltsm_streambuf.h"
 #include "ltsm_parallels_jobs.h"
 
-#ifdef LTSM_ENCODING
 #include "turbojpeg.h"
-#endif
 
 
 namespace LTSM {
@@ -218,8 +216,6 @@ namespace LTSM {
             bool setEncodingOptions(const std::forward_list<std::string> &) override;
         };
 
-#ifdef LTSM_ENCODING
-
         /// EncodingLZ4
         class EncodingLZ4 : public EncodingBase {
           protected:
@@ -272,7 +268,6 @@ namespace LTSM {
                 return getType() == ENCODING_LTSM_ZQOI;
             }
         };
-#endif
     }
 }
 

@@ -32,10 +32,8 @@
 #include "ltsm_application.h"
 #include "librfb_encodings.h"
 
-#ifdef LTSM_ENCODING
 #include "lz4.h"
 #include "turbojpeg.h"
-#endif
 
 using namespace std::chrono_literals;
 
@@ -775,7 +773,6 @@ namespace LTSM {
         return fullscreenUpdate;
     }
 
-#ifdef LTSM_ENCODING
     /// EncodingLZ4
     void RFB::EncodingLZ4::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
@@ -1187,6 +1184,4 @@ namespace LTSM {
 
         return sb.rawbuf();
     }
-
-#endif
 }
