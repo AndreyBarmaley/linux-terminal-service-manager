@@ -190,7 +190,12 @@ namespace LTSM {
 
         // process rfb messages background
         auto rfbThread = std::thread([this]() {
-            this->rfbMessagesLoop();
+            try {
+                this->rfbMessagesLoop();
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", "rfbMessagesLoop", err.what());
+                this->rfbMessagesShutdown();
+            }
         });
 
         auto xcbThread = std::thread([this]() {

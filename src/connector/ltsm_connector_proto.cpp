@@ -277,7 +277,7 @@ namespace LTSM::Connector {
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
                                 NS_FuncNameV, "is_regular_file", err.value(), err.message(), keytab);
                 secInfo.authKrb5 = false;
             }

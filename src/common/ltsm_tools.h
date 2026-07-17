@@ -467,7 +467,7 @@ namespace LTSM {
         };
 
         std::vector<uint8_t> encryptDES(std::span<const uint8_t> data, std::string_view pass);
-        BIO_buf generateDH(uint16_t bits = 2048);
+        BIO_buf generateDH2048(void);
         std::string streamDescription(SSL*);
     }
 #endif

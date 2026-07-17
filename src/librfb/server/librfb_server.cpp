@@ -89,6 +89,10 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::sendRaw(const void* ptr, size_t len) {
+        if(! rfbMessages) {
+            return;
+        }
+
         try {
             stream_->sync_send_buf(ptr, len);
         } catch(const std::exception & err) {
@@ -98,6 +102,10 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::recvRaw(void* ptr, size_t len) const {
+        if(! rfbMessages) {
+            return;
+        }
+
         try {
             stream_->sync_recv_buf(ptr, len);
         } catch(const std::exception & err) {
@@ -108,7 +116,7 @@ namespace LTSM {
 
     bool RFB::ServerEncoder::hasInput(void) const {
         try {
-            return stream_->sync_recv_available();
+            return rfbMessages ? stream_->sync_recv_available() : false;
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
@@ -119,7 +127,7 @@ namespace LTSM {
 
     size_t RFB::ServerEncoder::hasData(void) const {
         try {
-            return stream_->sync_recv_available();
+            return rfbMessages ? stream_->sync_recv_available() : 0;
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
@@ -305,7 +313,7 @@ namespace LTSM {
                 ciphers = "AECDH-AES256-SHA:@SECLEVEL=1";
             }
 
-            auto dh_buf = OpenSSL::generateDH(2048);
+            auto dh_buf = OpenSSL::generateDH2048();
             auto span = dh_buf.span();
             ssl_ctx.use_tmp_dh(asio::const_buffer(span.data(), span.size()));
 
@@ -645,14 +653,8 @@ namespace LTSM {
                     return;
                 }
 
-                try {
-                    recvLtsmProto();
-                    continue;
-                } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                    rfbMessagesShutdown();
-                    return;
-                }
+                recvLtsmProto();
+                continue;
             }
 
             switch(msgType) {

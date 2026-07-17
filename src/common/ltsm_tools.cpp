@@ -48,6 +48,7 @@
 #include <filesystem>
 
 #ifdef LTSM_WITH_OPENSSL
+#include <openssl/ssl.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/bio.h>
@@ -950,10 +951,34 @@ namespace LTSM {
         return {ptr, len};
     }
 
-    OpenSSL::BIO_buf OpenSSL::generateDH(uint16_t bits) {
-        std::unique_ptr<EVP_PKEY, void(*)(EVP_PKEY*)> pkey{
-            EVP_PKEY_Q_keygen(nullptr, nullptr, "DH", bits), EVP_PKEY_free };
+    OpenSSL::BIO_buf OpenSSL::generateDH2048(void) {
+        std::unique_ptr<EVP_PKEY_CTX, void(*)(EVP_PKEY_CTX*)> pkey_ctx{
+            EVP_PKEY_CTX_new_from_name(nullptr, "DH", nullptr), EVP_PKEY_CTX_free};
 
+        if(! pkey_ctx) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_CTX_new_from_name");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        if(1 != EVP_PKEY_paramgen_init(pkey_ctx.get())) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_paramgen_init");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+    
+        if(1 != EVP_PKEY_CTX_set_group_name(pkey_ctx.get(), "ffdhe2048")) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_CTX_set_group_name");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        EVP_PKEY* raw_pkey = nullptr;
+
+        if(1 != EVP_PKEY_generate(pkey_ctx.get(), &raw_pkey)) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_generate");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        std::unique_ptr<EVP_PKEY, void(*)(EVP_PKEY*)> pkey{
+            raw_pkey, EVP_PKEY_free };
         BIO_buf buf;
 
         if (PEM_write_bio_Parameters(buf.get(), pkey.get()) != 1) {
@@ -965,7 +990,25 @@ namespace LTSM {
     }
 
     std::string OpenSSL::streamDescription(SSL* ssl) {
-        return "";
+        std::ostringstream desc;
+        desc << "(" << SSL_get_version(ssl) << ")";
+
+        if(int group_nid = SSL_get_negotiated_group(ssl); group_nid != NID_undef) {
+            if(auto group_name = OBJ_nid2sn(group_nid)) {
+                desc << "-(" << group_name << ")";
+            }
+        }
+
+        const SSL_CIPHER* cipher = SSL_get_current_cipher(ssl);
+        if (cipher) {
+        // const char* cipher_name = SSL_CIPHER_standard_name(cipher);
+
+            if(auto cipher_name = SSL_get_cipher_name(ssl)) {
+                desc << "-(" << cipher_name << ")";
+            }
+        }
+
+        return desc.str();    
     }
 #endif
 } // LTSM
