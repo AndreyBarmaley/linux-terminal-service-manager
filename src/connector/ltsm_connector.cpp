@@ -25,7 +25,6 @@
 #include <sys/stat.h>
 
 #include <poll.h>
-#include <signal.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -319,8 +318,6 @@ namespace LTSM::Connector {
         Application::setDebugTarget(DebugTarget::Syslog, "ltsm_connector");
         Application::setDebugLevel(DebugLevel::Info);
 
-        // signals
-        signal(SIGPIPE, SIG_IGN);
         const int fd = dup(STDIN_FILENO);
         std::unique_ptr<DBusProxy> connector;
 

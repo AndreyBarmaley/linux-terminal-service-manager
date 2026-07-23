@@ -38,7 +38,13 @@ namespace LTSM {
             XCB::Region clientRegion;
             XCB::Region damageRegion;
 
+            boost::asio::signal_set signals_;
+            boost::asio::cancellation_signal xcb_cancel_;
+            boost::asio::cancellation_signal rfb_cancel_;
+            boost::asio::cancellation_signal srv_cancel_;
+
             mutable std::mutex serverLock;
+            std::chrono::time_point<std::chrono::steady_clock> frameTimePoint;
 
             std::atomic<int> pressedMask{0};
             std::atomic<int> randrSequence{0};
@@ -51,10 +57,14 @@ namespace LTSM {
 
             XCB::ShmIdShared shm;
 
+            int rfbStartingCode_ = 0;
             uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
           protected:
+            void stop(void);
+            boost::asio::awaitable<void> rfbStart(void);
+
             // root display
             void xcbFixesCursorChangedEvent(void) override;
             void xcbDamageNotifyEvent(const xcb_rectangle_t &, uint8_t level) override;
@@ -92,7 +102,12 @@ namespace LTSM {
             const XCB::Region & getClientRegion(void) const;
 
             void xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
-            bool xcbProcessingEvents(void);
+
+            boost::asio::awaitable<void> xcbEventsLoop(void);
+            boost::asio::awaitable<void> rfbReceiveMessages(void);
+            boost::asio::awaitable<void> signalsHandler(void);
+            boost::asio::awaitable<void> serverUpdateLoop(void);
+            boost::asio::awaitable<void> serverUpdateProcess(void);
 
             virtual bool xcbAllowMessages(void) const = 0;
             virtual void xcbDisableMessages(bool) = 0;
@@ -115,7 +130,7 @@ namespace LTSM {
             void sendUpdateRichCursor(void);
 
           public:
-            X11Server() = default;
+            X11Server() : signals_{ioc().get_executor()} {}
             ~X11Server() = default;
 
             int rfbCommunication(void);

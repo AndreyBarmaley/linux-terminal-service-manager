@@ -35,6 +35,7 @@
 #include "librfb_ffmpeg.h"
 #endif
 
+using namespace boost;
 using namespace std::chrono_literals;
 
 namespace LTSM {
@@ -85,6 +86,7 @@ namespace LTSM {
         if(isClientSupportedEncoding(ENCODING_EXT_DESKTOP_SIZE)) {
             auto status = randrSequence == notify.sequence ?
                           RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
+            // FIXME asio
             std::thread([this, status, wsz]() {
                 if(status == RFB::DesktopResizeStatus::ServerRuntime) {
                     this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
@@ -99,41 +101,203 @@ namespace LTSM {
         }
     }
 
-    bool RFB::X11Server::xcbProcessingEvents(void) {
-        while(rfbMessagesRunning()) {
-            if(! xcbAllowMessages()) {
-                std::this_thread::sleep_for(20ms);
-                continue;
+    void RFB::X11Server::stop(void) {
+        xcbDisableMessages(true);
+        rfbMessagesShutdown();
+
+        rfb_cancel_.emit(asio::cancellation_type::terminal);
+        xcb_cancel_.emit(asio::cancellation_type::terminal);
+        srv_cancel_.emit(asio::cancellation_type::terminal);
+
+        signals_.cancel();
+    }
+
+    asio::awaitable<void> RFB::X11Server::signalsHandler(void) {
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+        signals_.add(SIGPIPE);
+
+        try {
+            for(;;) {
+                int signal = co_await signals_.async_wait(asio::use_awaitable);
+                if(signal == SIGPIPE) {
+                    // ignore
+                    continue;
+                }
+                if(signal == SIGTERM || signal == SIGINT) {
+                    asio::post(ioc(), std::bind(&X11Server::stop, this));
+                    co_return;
+                }
             }
-
-            if(auto err = XCB::RootDisplay::hasError()) {
-                xcbDisableMessages(true);
-                rfbMessagesShutdown();
-                Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
-                return false;
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
+        }
+    }
 
-            if(auto ev = XCB::RootDisplay::pollEvent()) {
-                if(auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM)) {
-                    uint16_t opcode = 0;
+    asio::awaitable<void> RFB::X11Server::xcbEventsLoop(void) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
 
-                    if(shm && extShm->isEventError(ev, & opcode)) {
-                        Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "shm", opcode);
-                        shm.reset();
-                    }
-                } else if(auto extFixes = XCB::RootDisplay::getExtensionConst(XCB::Module::XFIXES)) {
-                    uint16_t opcode = 0;
+        try {
+            for(;;) {
+                if(auto err = XCB::RootDisplay::hasError()) {
+                    Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
+                    asio::post(ioc(), std::bind(&X11Server::stop, this));
+                    throw system::system_error(asio::error::operation_aborted);
+                }
 
-                    if(extFixes->isEventError(ev, & opcode)) {
-                        Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "xfixes", opcode);
+                co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
+
+                while(auto ev = XCB::RootDisplay::pollEvent()) {
+                    if(auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM)) {
+                        uint16_t opcode = 0;
+
+                        if(shm && extShm->isEventError(ev, & opcode)) {
+                            Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "shm", opcode);
+                            shm.reset();
+                        }
+                    } else if(auto extFixes = XCB::RootDisplay::getExtensionConst(XCB::Module::XFIXES)) {
+                        uint16_t opcode = 0;
+
+                        if(extFixes->isEventError(ev, & opcode)) {
+                            Application::warning("{}: {} error: {:#06x}", NS_FuncNameV, "xfixes", opcode);
+                        }
                     }
                 }
-            } else {
-                std::this_thread::sleep_for(10ms);
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&X11Server::stop, this));
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&X11Server::stop, this));
+        }
+
+        sd.release();
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::X11Server::rfbReceiveMessages(void) {
+        try {
+            Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
+            for(;;) {
+                co_await ServerEncoder::rfbWaitMessage();
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&X11Server::stop, this));
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&X11Server::stop, this));
+        }
+
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::X11Server::serverUpdateLoop(void) {
+        try {
+            frameTimePoint = std::chrono::steady_clock::now();
+
+            for(;;) {
+                co_await serverUpdateProcess();
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                asio::post(ioc(), std::bind(&X11Server::stop, this));
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&X11Server::stop, this));
+        }
+
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::X11Server::serverUpdateProcess(void) {
+        serverMainLoopEvent();
+
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer{ex};
+
+        // check timepoint frame
+        if(auto frameRate = frameRateOption()) {
+            int delayTimeout = 1000 / frameRate;
+
+            if(isEncoderFFmpeg()) {
+                // ffmpeg encoding: fixed fps
+                fullscreenUpdateReq = true;
+            } else if(xcbNoDamageOption()) {
+                // no damage: fixed fps
+            } else if(! damageRegion.isEmpty()) {
+                // damage present - 16 fps
+                delayTimeout = 65;
+            }
+
+            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+            int last = delayTimeout - static_cast<int>(dt.count());
+            Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
+
+            // large timepoint
+            if(30 < last) {
+                timer.expires_after(30ms);
+                co_await timer.async_wait(asio::use_awaitable);
+                co_return;
+            }
+
+            // small timepoint
+            if(0 < last) {
+                timer.expires_after(std::chrono::milliseconds(last));
+                co_await timer.async_wait(asio::use_awaitable);
             }
         }
 
-        return true;
+        // processed frame update
+        if(fullscreenUpdateReq || ! damageRegion.isEmpty()) {
+            // wait condition
+            if(! xcbAllowMessages() || displayResizeProcessed ||
+               displayResizeNegotiation || clientRegion.isEmpty()) {
+                timer.expires_after(10ms);
+                co_await timer.async_wait(asio::use_awaitable);
+                co_return;
+            }
+
+            frameTimePoint = std::chrono::steady_clock::now();
+            auto serverRegion = XCB::RootDisplay::region();
+
+            //const std::scoped_lock guard{ serverLock };
+
+            if(fullscreenUpdateReq) {
+                damageRegion = serverRegion;
+                fullscreenUpdateReq = false;
+            } else {
+                // fix out of screen
+                damageRegion = serverRegion.intersected(damageRegion.align(4));
+            }
+
+            if(clientRegion != serverRegion) {
+                damageRegion = clientRegion.intersected(damageRegion);
+            }
+
+            // FIXME co_await
+            sendUpdateScreen(damageRegion);
+
+            if(clientUpdateCursor) {
+                // FIXME co_await
+                sendUpdateRichCursor();
+                clientUpdateCursor = false;
+            }
+
+            damageRegion.reset();
+        }
+
+        co_return;
     }
 
     XCB::Size RFB::X11Server::displaySize(void) const {
@@ -149,35 +313,37 @@ namespace LTSM {
         damageRegion.join(reg);
     }
 
-    /* Connector::X11Server */
-    int RFB::X11Server::rfbCommunication(void) {
-        serverSelectEncodings();
+    asio::awaitable<void> RFB::X11Server::rfbStart(void) {
         // vnc session not activated trigger
-        auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]() {
-            if(this->rfbMessagesRunning()) {
-                Application::error("session timeout trigger: {}", "rfbMessagesRunning");
-                this->rfbMessagesShutdown();
+        boost::asio::steady_timer timerNotActivated(ioc(), 30s);
+        timerNotActivated.async_wait([this](const boost::system::error_code & ec) {
+            if(!ec) {
+                this->stop();
             }
         });
 
         // RFB 6.1.1 version
-        int protover = serverHandshakeVersion();
+        int protover = co_await serverHandshakeVersion();
 
         if(protover == 0) {
-            return EXIT_FAILURE;
+            rfbStartingCode_ = EXIT_FAILURE;
+            co_return;
         }
 
         serverHandshakeVersionEvent();
 
         // RFB 6.1.2 security
-        if(! serverSecurityInit(protover, rfbSecurityInfo())) {
-            return EXIT_FAILURE;
+        if(bool valid = co_await serverSecurityInit(protover, rfbSecurityInfo()); !valid) {
+            rfbStartingCode_ = EXIT_FAILURE;
+            co_return;
         }
 
         serverSecurityInitEvent();
+
         // RFB 6.3.1 client init
-        serverClientInit("X11 Remote Desktop", XCB::RootDisplay::size(), XCB::RootDisplay::depth(), serverFormat());
-        timerNotActivated->stop();
+        co_await serverClientInit("X11 Remote Desktop", XCB::RootDisplay::size(), XCB::RootDisplay::depth(), serverFormat());
+        timerNotActivated.cancel();
+
         xcbShmInit();
 
         serverConnectedEvent();
@@ -185,113 +351,31 @@ namespace LTSM {
 
         // xcb on
         xcbDisableMessages(false);
-        bool mainLoop = true;
-        auto frameTimePoint = std::chrono::steady_clock::now();
 
-        // process rfb messages background
-        auto rfbThread = std::thread([this]() {
-            try {
-                this->rfbMessagesLoop();
-            } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", "rfbMessagesLoop", err.what());
-                this->rfbMessagesShutdown();
-            }
-        });
+        asio::co_spawn(ioc(), signalsHandler(), asio::detached);
 
-        auto xcbThread = std::thread([this]() {
-            this->xcbProcessingEvents();
-        });
+        asio::co_spawn(rfb_strand(), rfbReceiveMessages(),
+            asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
 
-        // main loop
-        while(mainLoop) {
-            serverMainLoopEvent();
+        asio::co_spawn(xcb_strand(), xcbEventsLoop(),
+            asio::bind_cancellation_slot(xcb_cancel_.slot(), asio::detached));
 
-            if(! rfbMessagesRunning()) {
-                mainLoop = false;
-                break;
-            }
+        asio::co_spawn(rfb_strand(), serverUpdateLoop(),
+            asio::bind_cancellation_slot(srv_cancel_.slot(), asio::detached));
 
-            // check timepoint frame
-            if(auto frameRate = frameRateOption()) {
-                int delayTimeout = 1000 / frameRate;
+        co_return;
+    }
 
-                if(isEncoderFFmpeg()) {
-                    // ffmpeg encoding: fixed fps
-                    fullscreenUpdateReq = true;
-                } else if(xcbNoDamageOption()) {
-                    // no damage: fixed fps
-                } else if(! damageRegion.isEmpty()) {
-                    // damage present - 16 fps
-                    delayTimeout = 65;
-                }
+    /* Connector::X11Server */
+    int RFB::X11Server::rfbCommunication(void) {
+        serverSelectEncodings();
 
-                auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
-                int last = delayTimeout - static_cast<int>(dt.count());
-                Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
+        rfbStartingCode_ = EXIT_SUCCESS;
 
-                // large timepoint
-                if(30 < last) {
-                    std::this_thread::sleep_for(30ms);
-                    continue;
-                }
+        asio::co_spawn(ioc(), rfbStart(), asio::detached);
+        ioc().run();
 
-                // small timepoint
-                if(0 < last) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(last));
-                }
-            }
-
-            // processed frame update
-            if(fullscreenUpdateReq || ! damageRegion.isEmpty()) {
-                // wait condition
-                if(! xcbAllowMessages() || displayResizeProcessed ||
-                   displayResizeNegotiation || clientRegion.isEmpty()) {
-                    std::this_thread::sleep_for(10ms);
-                    continue;
-                }
-
-                frameTimePoint = std::chrono::steady_clock::now();
-                auto serverRegion = XCB::RootDisplay::region();
-
-                const std::scoped_lock guard{ serverLock };
-
-                if(fullscreenUpdateReq) {
-                    damageRegion = serverRegion;
-                    fullscreenUpdateReq = false;
-                } else {
-                    // fix out of screen
-                    damageRegion = serverRegion.intersected(damageRegion.align(4));
-                }
-
-                if(clientRegion != serverRegion) {
-                    damageRegion = clientRegion.intersected(damageRegion);
-                }
-
-                if(! sendUpdateSafe(damageRegion)) {
-                    rfbMessagesShutdown();
-                    continue;
-                }
-
-                if(clientUpdateCursor) {
-                    sendUpdateRichCursor();
-                    clientUpdateCursor = false;
-                }
-
-                damageRegion.reset();
-            }
-        } // main loop
-
-        waitUpdateProcess();
-
-        if(xcbThread.joinable()) {
-            xcbThread.join();
-        }
-
-        if(rfbThread.joinable()) {
-            rfbThread.join();
-        }
-
-        return EXIT_SUCCESS;
+        return rfbStartingCode_;
     }
 
     void RFB::X11Server::serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) {
@@ -384,7 +468,10 @@ namespace LTSM {
     }
 
     void RFB::X11Server::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
-        sendCutTextEvent(buf, true);
+        asio::co_spawn(ioc(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
+            co_await sendCutTextEventAwait(buf, true);
+            co_return;
+        }, asio::detached);
     }
 
     uint16_t RFB::X11Server::extClipboardLocalTypes(void) const {
@@ -455,7 +542,10 @@ namespace LTSM {
                 const std::scoped_lock guard{ serverLock };
                 ptr->clientClipboard.swap(buf);
             } else {
-                ptr->sendCutTextEvent(buf, false);
+                asio::co_spawn(ioc(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
+                    co_await sendCutTextEventAwait(buf, false);
+                    co_return;
+                }, asio::detached);
             }
         }
     }
@@ -621,6 +711,7 @@ namespace LTSM {
             std::thread([ &, sz = desktop.toSize()] {
                 uint16_t sequence = 0;
 
+                // FIXME rfb_strand sync
                 waitUpdateProcess();
 
                 if(XCB::RootDisplay::setRandrScreenSize(sz, & sequence)) {

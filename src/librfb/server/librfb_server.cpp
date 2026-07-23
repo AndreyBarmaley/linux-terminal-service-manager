@@ -77,8 +77,8 @@ namespace LTSM {
     }
 
     // ServerEncoder
-    RFB::ServerEncoder::ServerEncoder() : BoostContext(2), rfb_strand_{ioc().get_executor()} {
-        stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
+    RFB::ServerEncoder::ServerEncoder() : BoostContext(2) {
+        stream_ = std::make_unique<AsyncTcpStream>(rfb_strand());
     }
 
     void RFB::ServerEncoder::assignSocket(int fd) {
@@ -146,7 +146,7 @@ namespace LTSM {
         }
     }
 
-    bool RFB::ServerEncoder::authVncInit(const std::string & passwdFile) {
+    asio::awaitable<bool> RFB::ServerEncoder::authVncInit(const std::string & passwdFile) {
         std::vector<uint8_t> challenge = Tools::randomBytes(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -154,9 +154,8 @@ namespace LTSM {
             Application::debug(DebugType::Rfb, "{}: challenge: {}", NS_FuncNameV, tmp);
         }
 
-        sendRaw(challenge.data(), challenge.size());
-        sendFlush();
-        auto response = recvData(16);
+        co_await stream_->async_send_buf(asio::buffer(challenge));
+        auto response = co_await stream_->async_recv_buffer(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::hexString(response, 2);
@@ -176,43 +175,49 @@ namespace LTSM {
             }
 
             if(crypt == response) {
-                return true;
+                co_return true;
             }
         }
 
         const std::string err("password mismatch");
-        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+        co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+        co_await stream_->async_send_be32(err.size());
+        co_await stream_->async_send_buf(asio::buffer(err));
         Application::error("{}: {}, passwd file: {}", NS_FuncNameV, err, passwdFile);
-        return false;
+        co_return false;
     }
 
-    bool RFB::ServerEncoder::authVenCryptInit(const SecurityInfo & secInfo) {
-        // VenCrypt version
-        sendInt8(0).sendInt8(2).sendFlush();
+    asio::awaitable<bool> RFB::ServerEncoder::authVenCryptInit(const SecurityInfo & secInfo) {
+        // VenCrypt version 0.2
+        co_await stream_->async_send_byte(0);
+        co_await stream_->async_send_byte(2);
         // client req
-        int majorVer = recvInt8();
-        int minorVer = recvInt8();
+        const uint8_t majorVer = co_await stream_->async_recv_byte();
+        const uint8_t minorVer = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}: client vencrypt version {}.{}", NS_FuncNameV, majorVer, minorVer);
 
         if(majorVer != 0 || (minorVer < 1 || minorVer > 2)) {
             // send unsupported
-            sendInt8(255).sendFlush();
+            co_await stream_->async_send_byte(255);
             Application::error("{}: unsupported vencrypt version {}.{}", NS_FuncNameV, majorVer, minorVer);
-            return false;
+            co_return false;
         }
 
         // send supported
-        sendInt8(0);
+        co_await stream_->async_send_byte(0);
         bool x509Mode = false;
 
         if(minorVer == 1) {
             if(secInfo.tlsAnonMode) {
-                sendInt8(1).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendFlush();
+                co_await stream_->async_send_byte(1);
+                co_await stream_->async_send_byte(RFB::SECURITY_VENCRYPT01_TLSNONE);
             } else {
-                sendInt8(2).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendInt8(RFB::SECURITY_VENCRYPT01_X509NONE).sendFlush();
+                co_await stream_->async_send_byte(2);
+                co_await stream_->async_send_byte(RFB::SECURITY_VENCRYPT01_TLSNONE);
+                co_await stream_->async_send_byte(RFB::SECURITY_VENCRYPT01_X509NONE);
             }
 
-            int mode = recvInt8();
+            const uint8_t mode = co_await stream_->async_recv_byte();
             Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: {}", NS_FuncNameV, mode);
 
             switch(mode) {
@@ -222,7 +227,7 @@ namespace LTSM {
                 case RFB::SECURITY_VENCRYPT01_X509NONE:
                     if(secInfo.tlsAnonMode) {
                         Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, "x509");
-                        return false;
+                        co_return false;
                     }
 
                     x509Mode = true;
@@ -230,18 +235,21 @@ namespace LTSM {
 
                 default:
                     Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, mode);
-                    return false;
+                    co_return false;
             }
         } else
             // if(minorVer == 2)
         {
             if(secInfo.tlsAnonMode) {
-                sendInt8(1).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendFlush();
+                co_await stream_->async_send_byte(1);
+                co_await stream_->async_send_be32(RFB::SECURITY_VENCRYPT02_TLSNONE);
             } else {
-                sendInt8(2).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendIntBE32(RFB::SECURITY_VENCRYPT02_X509NONE).sendFlush();
+                co_await stream_->async_send_byte(2);
+                co_await stream_->async_send_be32(RFB::SECURITY_VENCRYPT02_TLSNONE);
+                co_await stream_->async_send_be32(RFB::SECURITY_VENCRYPT02_X509NONE);
             }
 
-            int mode = recvIntBE32();
+            const uint32_t mode = co_await stream_->async_recv_be32();
             Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: {}", NS_FuncNameV, mode);
 
             switch(mode) {
@@ -251,7 +259,7 @@ namespace LTSM {
                 case RFB::SECURITY_VENCRYPT02_X509NONE:
                     if(secInfo.tlsAnonMode) {
                         Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, "x509");
-                        return false;
+                        co_return false;
                     }
 
                     x509Mode = true;
@@ -259,7 +267,7 @@ namespace LTSM {
 
                 default:
                     Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, mode);
-                    return false;
+                    co_return false;
             }
         }
 
@@ -281,12 +289,12 @@ namespace LTSM {
 
             if(errFile) {
                 Application::error("{}: file not found: {}", NS_FuncNameV, errFile->c_str());
-                sendInt8(0).sendFlush();
-                return false;
+                co_await stream_->async_send_byte(0);
+                co_return false;
             }
         }
 
-        sendInt8(1).sendFlush();
+        co_await stream_->async_send_byte(1);
 
         try {
             auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).socket());
@@ -326,18 +334,18 @@ namespace LTSM {
         } catch(system::system_error & err) {
             auto ec = err.code();
             Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-            return false;
+            co_return false;
         }
 
-        return true;
+        co_return true;
     }
 
-    int RFB::ServerEncoder::serverHandshakeVersion(void) {
+    asio::awaitable<int> RFB::ServerEncoder::serverHandshakeVersion(void) {
         // RFB 6.1.1 version
         int protover = RFB::VERSION_MAJOR * 10 + RFB::VERSION_MINOR;
         auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
-        sendString(version).sendFlush();
-        std::string magick = recvString(12);
+        co_await stream_->async_send_buf(asio::buffer(version));
+        std::string magick = co_await stream_->async_recv_string(12);
         Application::debug(DebugType::Rfb, "{}: handshake version {}", NS_FuncNameV, magick);
 
         if(magick == "RFB 003.003\n") {
@@ -346,10 +354,10 @@ namespace LTSM {
             protover = 37;
         } else if(magick != version) {
             Application::error("{}: handshake failure, unknown magic: {}", NS_FuncNameV, magick);
-            return 0;
+            co_return 0;
         }
 
-        return protover;
+        co_return protover;
     }
 
 #ifdef LTSM_WITH_GSSAPI
@@ -420,7 +428,7 @@ namespace LTSM {
     }
 #endif
 
-    bool RFB::ServerEncoder::serverSecurityInit(int protover, const SecurityInfo & secInfo) {
+    asio::awaitable<bool> RFB::ServerEncoder::serverSecurityInit(int protover, const SecurityInfo & secInfo) {
         // RFB 6.1.2 security
         if(protover == 33) {
             uint32_t res = 0;
@@ -433,7 +441,7 @@ namespace LTSM {
                 res |= RFB::SECURITY_TYPE_NONE;
             }
 
-            sendIntBE32(res);
+            co_await stream_->async_send_be32(res);
         } else {
             std::vector<uint8_t> res;
 #ifdef LTSM_WITH_GSSAPI
@@ -456,36 +464,34 @@ namespace LTSM {
                 res.push_back(RFB::SECURITY_TYPE_NONE);
             }
 
-            sendInt8(res.size());
+            co_await stream_->async_send_byte(res.size());
 
             if(res.empty()) {
                 Application::error("{}: server security invalid", NS_FuncNameV);
-                sendFlush();
-                return false;
+                co_return false;
             }
 
-            sendData(res);
+            co_await stream_->async_send_buf(asio::buffer(res));
         }
-
-        sendFlush();
 
         // unsupported
         if(protover == 33) {
-            return true;
+            co_return true;
         }
 
-        int clientSecurity = recvInt8();
+        int clientSecurity = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}, client security: {:#04x}", NS_FuncNameV, clientSecurity);
 
         if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
             // RFB 6.1.3 security result
             if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
-                sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
             } else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
                 if(secInfo.passwdFile.empty()) {
                     Application::error("{}: passwd file not defined", NS_FuncNameV);
-                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                    return false;
+                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+                    co_await stream_->async_send_be32(0);
+                    co_return false;
                 }
 
                 std::error_code err;
@@ -493,23 +499,26 @@ namespace LTSM {
                 if(! std::filesystem::exists(secInfo.passwdFile, err)) {
                     Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
                                         NS_FuncNameV, "exists", err.value(), err.message(), secInfo.passwdFile);
-                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                    return false;
+                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+                    co_await stream_->async_send_be32(0);
+                    co_return false;
                 }
 
-                if(! authVncInit(secInfo.passwdFile)) {
-                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                    return false;
+                if(! co_await authVncInit(secInfo.passwdFile)) {
+                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+                    co_await stream_->async_send_be32(0);
+                    co_return false;
                 }
 
-                sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
             } else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt) {
-                if(! authVenCryptInit(secInfo)) {
-                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                    return false;
+                if(! co_await authVenCryptInit(secInfo)) {
+                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+                    co_await stream_->async_send_be32(0);
+                    co_return false;
                 }
 
-                sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
             }
 #ifdef LTSM_WITH_GSSAPI
             else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
@@ -540,89 +549,95 @@ namespace LTSM {
                         if(jo) {
                             auto tls = jo->getBoolean("continue:tls", false);
 
-                            if(tls && ! authVenCryptInit(secInfo)) {
-                                return false;
+                            if(tls && ! co_await authVenCryptInit(secInfo)) {
+                                co_return false;
                             }
                         }
 
-                        sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-                        return true;
+                        co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+                        co_return true;
                     }
                 } catch(const std::exception & err) {
                     LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 }
 
                 const std::string err("security kerberos failed");
-                sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+                co_await stream_->async_send_be32(err.size());
+                co_await stream_->async_send_buf(asio::buffer(err));
                 Application::error("{}: error: {}", NS_FuncNameV, err);
-                return false;
+                co_return false;
             }
 
 #endif
             else {
                 const std::string err("no matching security types");
-                sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
+                co_await stream_->async_send_be32(err.size());
+                co_await stream_->async_send_buf(asio::buffer(err));
                 Application::error("{}: error: {}", NS_FuncNameV, err);
-                return false;
+                co_return false;
             }
         }
 
-        return true;
+        co_return true;
     }
 
-    void RFB::ServerEncoder::serverClientInit(std::string_view desktopName, const XCB::Size & displaySize, int displayDepth,
+    asio::awaitable<void> RFB::ServerEncoder::serverClientInit(std::string_view desktopName, const XCB::Size & displaySize, int displayDepth,
             const PixelFormat & pf) {
         // RFB 6.3.1 client init
-        int clientSharedFlag = recvInt8();
+        int clientSharedFlag = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}: client shared: {:#04x}", NS_FuncNameV, clientSharedFlag);
         // RFB 6.3.2 server init
-        sendIntBE16(displaySize.width);
-        sendIntBE16(displaySize.height);
         Application::notice("{}: server pf - bpp: {}, depth: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                             NS_FuncNameV, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
                             pf.rmask(), pf.gmask(), pf.bmask());
         clientPf = serverFormat();
-        // send pixel format
-        sendInt8(pf.bitsPerPixel());
-        sendInt8(displayDepth);
-        sendInt8(platformBigEndian() ? 1 : 0);
-        // true color
-        sendInt8(1);
-        sendIntBE16(pf.rmax());
-        sendIntBE16(pf.gmax());
-        sendIntBE16(pf.bmax());
-        sendInt8(pf.rshift());
-        sendInt8(pf.gshift());
-        sendInt8(pf.bshift());
-        // send padding
-        sendInt8(0);
-        sendInt8(0);
-        sendInt8(0);
-        // send name desktop
-        sendIntBE32(desktopName.size()).sendString(desktopName).sendFlush();
+        StreamBuf sb(24 + desktopName.size());
+
+        sb.writeIntBE16(displaySize.width).
+            writeIntBE16(displaySize.height).
+            // send pixel format
+            writeInt8(pf.bitsPerPixel()).
+            writeInt8(displayDepth).
+            writeInt8(platformBigEndian() ? 1 : 0).
+            // true color
+            writeInt8(1).
+            writeIntBE16(pf.rmax()).
+            writeIntBE16(pf.gmax()).
+            writeIntBE16(pf.bmax()).
+            writeInt8(pf.rshift()).
+            writeInt8(pf.gshift()).
+            writeInt8(pf.bshift()).
+            // send padding
+            writeZero(3).
+            // send name desktop
+            writeIntBE32(desktopName.size()).
+            write(desktopName);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    bool RFB::ServerEncoder::sendUpdateSafe(const XCB::Region & area) {
-        fbUpdateProcessing = true;
-        bool res = false;
+    void RFB::ServerEncoder::sendUpdateScreen(const XCB::Region & area) {
+        if(! encoder) {
+            Application::warning("{}: encoder null", NS_FuncNameV);
+            return;
+        }
 
         try {
+            fbUpdateProcessing = true;
             auto reply = serverFrameBuffer(area);
-
-            if(sendFrameBufferUpdate(reply.fb)) {
-                serverSendFBUpdateEvent(area);
-                res = true;
-            }
+            sendFrameBufferUpdate(reply.fb);
+            serverSendFBUpdateEvent(area);
         } catch(const xcb_error_busy&) {
             Application::warning("{}: update busy, area: {}", NS_FuncNameV, area);
-            res = true;
         } catch(const std::exception & err) {
-            Application::error("{}: vnc exception: {}", NS_FuncNameV, err.what());
-        } catch(...) {
+            fbUpdateProcessing = false;
+            throw err;
         }
 
         fbUpdateProcessing = false;
-        return res;
     }
 
     bool RFB::ServerEncoder::rfbMessagesRunning(void) const {
@@ -635,80 +650,72 @@ namespace LTSM {
         rfbMessages = false;
     }
 
-    void RFB::ServerEncoder::rfbMessagesLoop(void) {
-        Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
+    asio::awaitable<void> RFB::ServerEncoder::rfbWaitMessage(void) {
 
-        while(rfbMessages) {
-            if(! hasInput()) {
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
+        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        int msgType = co_await stream_->async_recv_byte();
 
-            int msgType = recvInt8();
+        switch(msgType) {
+            case RFB::PROTOCOL_LTSM:
+                co_await recvLtsmProtoAwait();
+                break;
 
-            if(msgType == RFB::PROTOCOL_LTSM) {
-                if(! clientLtsmSupported) {
-                    Application::error("{}: client not support encoding: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
-                    rfbMessagesShutdown();
-                    return;
-                }
+            case RFB::CLIENT_SET_PIXEL_FORMAT:
+                co_await recvPixelFormatAwait();
+                break;
 
-                recvLtsmProto();
-                continue;
-            }
+            case RFB::CLIENT_SET_ENCODINGS:
+                co_await recvSetEncodingsAwait();
+                break;
 
-            switch(msgType) {
-                case RFB::CLIENT_SET_PIXEL_FORMAT:
-                    recvPixelFormat();
-                    break;
+            case RFB::CLIENT_REQUEST_FB_UPDATE:
+                co_await recvFramebufferUpdateAwait();
+                break;
 
-                case RFB::CLIENT_SET_ENCODINGS:
-                    recvSetEncodings();
-                    break;
+            case RFB::CLIENT_EVENT_KEY:
+                co_await recvKeyCodeAwait();
+                break;
 
-                case RFB::CLIENT_REQUEST_FB_UPDATE:
-                    recvFramebufferUpdate();
-                    break;
+            case RFB::CLIENT_EVENT_POINTER:
+                co_await recvPointerAwait();
+                break;
 
-                case RFB::CLIENT_EVENT_KEY:
-                    recvKeyCode();
-                    break;
+            case RFB::CLIENT_CUT_TEXT:
+                co_await recvCutTextAwait();
+                break;
 
-                case RFB::CLIENT_EVENT_POINTER:
-                    recvPointer();
-                    break;
+            case RFB::CLIENT_SET_DESKTOP_SIZE:
+                co_await recvSetDesktopSizeAwait();
+                break;
 
-                case RFB::CLIENT_CUT_TEXT:
-                    recvCutText();
-                    break;
+            case RFB::CLIENT_CONTINUOUS_UPDATES:
+                co_await recvSetContinuousUpdatesAwait();
+                break;
 
-                case RFB::CLIENT_SET_DESKTOP_SIZE:
-                    recvSetDesktopSize();
-                    break;
-
-                case RFB::CLIENT_CONTINUOUS_UPDATES:
-                    recvSetContinuousUpdates();
-                    break;
-
-                default:
-                    Application::error("{}: unknown message: {:#04x}", NS_FuncNameV, msgType);
-                    rfbMessagesShutdown();
-                    break;
-            }
+            default:
+                Application::error("{}: unknown message: {:#04x}", NS_FuncNameV, msgType);
+                throw rfb_error(NS_FuncNameS);
         }
+
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvLtsmProto(void) {
-        int version = recvInt8();
+    asio::awaitable<void> RFB::ServerEncoder::recvLtsmProtoAwait(void) {
+        if(! clientLtsmSupported) {
+            Application::error("{}: client not support encoding: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
+            throw channel_error(NS_FuncNameS);
+        }
+
+        const uint8_t version = co_await stream_->async_recv_byte();
 
         if(version != LtsmProtocolVersion) {
             Application::error("{}: unknown version: {:#04x}", NS_FuncNameV, version);
             throw channel_error(NS_FuncNameS);
         }
-        
-        auto channel = recvInt8();
-        auto length = recvIntBE16();
-        auto buf = recvData(length);
+
+        const uint8_t channel = co_await stream_->async_recv_byte();
+        const uint16_t length = co_await stream_->async_recv_be16();
+        auto buf = co_await stream_->async_recv_buffer(length);
 
         if(channelDebug == channel) {
             auto str = Tools::hexString(buf, 2);
@@ -717,25 +724,29 @@ namespace LTSM {
         }
 
         ChannelListener::recvLtsmEvent(channel, std::move(buf));
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvPixelFormat(void) {
-        waitUpdateProcess();
+    asio::awaitable<void> RFB::ServerEncoder::recvPixelFormatAwait(void) {
         // RFB: 6.4.1
+        auto buf = co_await stream_->async_recv_buffer(19);
+        StreamBufRef sb(buf.data(), buf.size());
+
         // skip padding
-        recvSkip(3);
-        auto bitsPerPixel = recvInt8();
-        auto depth = recvInt8();
-        auto bigEndian = recvInt8();
-        auto trueColor = recvInt8();
-        auto redMax = recvIntBE16();
-        auto greenMax = recvIntBE16();
-        auto blueMax = recvIntBE16();
-        auto redShift = recvInt8();
-        auto greenShift = recvInt8();
-        auto blueShift = recvInt8();
+        sb.skip(3);
+        const uint8_t bitsPerPixel = sb.readInt8();
+        const uint8_t depth = sb.readInt8();
+        const uint8_t bigEndian = sb.readInt8();
+        const uint8_t trueColor = sb.readInt8();
+        const uint16_t redMax = sb.readIntBE16();
+        const uint16_t greenMax = sb.readIntBE16();
+        const uint16_t blueMax = sb.readIntBE16();
+        const uint8_t redShift = sb.readInt8();
+        const uint8_t greenShift = sb.readInt8();
+        const uint8_t blueShift = sb.readInt8();
         // skip padding
-        recvSkip(3);
+        sb.skip(3);
+
         Application::debug(DebugType::Rfb, "{}: red({},{}), green({},{}), blue({},{})",
                             NS_FuncNameV, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
@@ -766,6 +777,8 @@ namespace LTSM {
 
         colourMap.clear();
         serverRecvPixelFormatEvent(clientPf, clientBigEndian);
+
+        co_return;
     }
 
     bool RFB::ServerEncoder::clientIsBigEndian(void) const {
@@ -776,12 +789,11 @@ namespace LTSM {
         return clientPf;
     }
 
-    void RFB::ServerEncoder::recvSetEncodings(void) {
-        waitUpdateProcess();
+    asio::awaitable<void> RFB::ServerEncoder::recvSetEncodingsAwait(void) {
         // RFB: 6.4.2
         // skip padding
-        recvSkip(1);
-        int numEncodings = recvIntBE16();
+        const auto pad1 = co_await stream_->async_recv_byte();
+        uint16_t numEncodings = co_await stream_->async_recv_be16();
         Application::info("{}: encoding counts: {}", NS_FuncNameV, numEncodings);
 
         bool extendedClipboard = false;
@@ -791,8 +803,11 @@ namespace LTSM {
         std::vector<int> recvEncodings;
         recvEncodings.reserve(numEncodings);
 
+        auto buf = co_await stream_->async_recv_buffer(numEncodings * sizeof(uint32_t));
+        StreamBufRef sb(buf.data(), buf.size());
+
         while(0 < numEncodings--) {
-            int encoding = recvIntBE32();
+            int encoding = sb.readIntBE32();
 
             if(! disabledEncodings.empty()) {
                 auto enclower = Tools::lower(RFB::encodingName(encoding));
@@ -840,6 +855,8 @@ namespace LTSM {
             } else {
                 Application::info("{}: request encodings: {}", NS_FuncNameV, RFB::encodingName(encoding));
             }
+
+            co_return;
         }
 
         clientEncodings.setPriority(recvEncodings);
@@ -866,63 +883,72 @@ namespace LTSM {
         }
 
         serverRecvSetEncodingsEvent(recvEncodings);
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvFramebufferUpdate(void) {
+    asio::awaitable<void> RFB::ServerEncoder::recvFramebufferUpdateAwait(void) {
         XCB::Region clientRegion;
         // RFB: 6.4.3
-        int incremental = recvInt8();
-        clientRegion.x = recvIntBE16();
-        clientRegion.y = recvIntBE16();
-        clientRegion.width = recvIntBE16();
-        clientRegion.height = recvIntBE16();
+        const bool incremental = co_await stream_->async_recv_byte();
+        clientRegion.x = co_await stream_->async_recv_be16();
+        clientRegion.y = co_await stream_->async_recv_be16();
+        clientRegion.width = co_await stream_->async_recv_be16();
+        clientRegion.height = co_await stream_->async_recv_be16();
         Application::debug(DebugType::Rfb, "{}: request update, region: {}, incremental: {}",
                            NS_FuncNameV, clientRegion, incremental);
-        serverRecvFBUpdateEvent(incremental != 0, clientRegion);
+
+        serverRecvFBUpdateEvent(incremental, clientRegion);
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvKeyCode(void) {
+    asio::awaitable<void> RFB::ServerEncoder::recvKeyCodeAwait(void) {
         if(clientLtsmKeyboard) {
-            bool pressed = recvInt8();
-            uint16_t scancode = recvIntBE16();
-            uint32_t keycode = recvIntBE32();
+            const bool pressed = co_await stream_->async_recv_byte();
+            const uint16_t scancode = co_await stream_->async_recv_be16();
+            const uint32_t keycode = co_await stream_->async_recv_be32();
             Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}, scancode: {:#06x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keycode, scancode);
             serverRecvKeyEvent(pressed, keycode, scancode);
         } else {
             // RFB: 6.4.4
-            bool pressed = recvInt8();
-            recvSkip(2);
-            uint32_t keycode = recvIntBE32();
+            const bool pressed = co_await stream_->async_recv_byte();
+            [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_be16();
+            const uint32_t keycode = co_await stream_->async_recv_be32();
             Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#010x}", NS_FuncNameV, (pressed ? "pressed" : "released"), keycode);
             serverRecvKeyEvent(pressed, keycode, 0);
         }
+
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvPointer(void) {
+    asio::awaitable<void> RFB::ServerEncoder::recvPointerAwait(void) {
         // RFB: 6.4.5
         // left 0x01, middle 0x02, right 0x04, scrollUp: 0x08, scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
-        uint8_t buttons = recvInt8();
-        uint16_t posx = recvIntBE16();
-        uint16_t posy = recvIntBE16();
+        const uint8_t buttons = co_await stream_->async_recv_byte();
+        const uint16_t posx = co_await stream_->async_recv_be16();
+        const uint16_t posy = co_await stream_->async_recv_be16();
         Application::debug(DebugType::Rfb, "{}: mask: {:#04x}, pos: [ {}, {}]", NS_FuncNameV, buttons, posx, posy);
+
         serverRecvPointerEvent(buttons, posx, posy);
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvCutText(void) {
+    asio::awaitable<void> RFB::ServerEncoder::recvCutTextAwait(void) {
         // RFB: 6.4.6
         // skip padding
-        recvSkip(3);
+        [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const auto pad2 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const auto pad3 = co_await stream_->async_recv_byte();
 
         // A negative value of length indicates that the extended message format is used and abs(length) is the total number of following bytes.
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        int32_t length = recvIntBE32();
+        const int32_t length = co_await stream_->async_recv_be32();
 
         if(0 < length) {
             Application::debug(DebugType::Rfb, "{}: text length: {}, limit: {}", NS_FuncNameV, length, localExtClipTypeTextSz);
             size_t recv = localExtClipTypeTextSz ?
                           std::min(static_cast<uint32_t>(length), localExtClipTypeTextSz) : length;
-            auto buffer = recvData(recv);
-            recvSkip(length - recv);
+            auto buffer = co_await stream_->async_recv_buffer(recv);
+            [[maybe_unused]] auto skip = co_await stream_->async_recv_buffer(length - recv);
             serverRecvCutTextEvent(std::move(buffer));
         } else if(length < 0) {
             if(0 == extClipboardLocalCaps()) {
@@ -930,46 +956,56 @@ namespace LTSM {
                 throw rfb_error(NS_FuncNameS);
             }
 
-            auto buffer = recvData(std::abs(length));
+            auto buffer = co_await stream_->async_recv_buffer(std::abs(length));
             recvExtClipboardCapsEvent(std::move(buffer));
         }
+
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvSetContinuousUpdates(void) {
-        int enable = recvInt8();
+    asio::awaitable<void> RFB::ServerEncoder::recvSetContinuousUpdatesAwait(void) {
+        const bool enable = co_await stream_->async_recv_byte();
         XCB::Region reg;
-        reg.x = recvIntBE16();
-        reg.y = recvIntBE16();
-        reg.width = recvIntBE16();
-        reg.height = recvIntBE16();
+        reg.x = co_await stream_->async_recv_be16();
+        reg.y = co_await stream_->async_recv_be16();
+        reg.width = co_await stream_->async_recv_be16();
+        reg.height = co_await stream_->async_recv_be16();
+
         Application::info("{}: region: {}, enabled: {}", NS_FuncNameV, reg, enable);
         continueUpdatesProcessed = enable;
+
         serverRecvSetContinuousUpdatesEvent(enable, reg);
+        co_return;
     }
 
-    void RFB::ServerEncoder::recvSetDesktopSize(void) {
+    asio::awaitable<void> RFB::ServerEncoder::recvSetDesktopSizeAwait(void) {
         // skip padding (one byte!)
-        recvSkip(1);
-        uint16_t width = recvIntBE16();
-        uint16_t height = recvIntBE16();
-        int numOfScreens = recvInt8();
-        recvSkip(1);
+        [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
+        const uint16_t width = co_await stream_->async_recv_be16();
+        const uint16_t height = co_await stream_->async_recv_be16();
+        const int numOfScreens = co_await stream_->async_recv_byte();
+
+        auto buf = co_await stream_->async_recv_buffer(1 + 16 * numOfScreens);
+        StreamBufRef sb(buf.data(), buf.size());
+
+        sb.skip(1);
         Application::info("{}: size: {}, screens: {}", NS_FuncNameV, XCB::Size(width, height), numOfScreens);
         // screens array
         std::vector<RFB::ScreenInfo> screens;
 
         for(int it = 0; it < numOfScreens; it++) {
             RFB::ScreenInfo info;
-            info.id = recvIntBE32();
-            info.x = recvIntBE16();
-            info.y = recvIntBE16();
-            info.width = recvIntBE16();
-            info.height = recvIntBE16();
-            info.flags = recvIntBE32();
+            info.id = sb.readIntBE32();
+            info.x = sb.readIntBE16();
+            info.y = sb.readIntBE16();
+            info.width = sb.readIntBE16();
+            info.height = sb.readIntBE16();
+            info.flags = sb.readIntBE32();
             screens.emplace_back(info);
         }
 
         serverRecvDesktopSizeEvent(screens);
+        co_return;
     }
 
     void RFB::ServerEncoder::displayResizeEvent(const XCB::Size & dsz) {
@@ -989,40 +1025,44 @@ namespace LTSM {
         Application::warning("{}: display: {}", NS_FuncNameV, display);
     }
 
-    void RFB::ServerEncoder::sendColourMap(int first) {
+    asio::awaitable<void> RFB::ServerEncoder::sendColourMapAwait(int first) {
         Application::info("{}: first: {}, colour map length: {}", NS_FuncNameV, first, colourMap.size());
-        std::scoped_lock guard{ sendLock };
+
+        StreamBuf sb(6 + colourMap.size() * 6);
         // RFB: 6.5.2
-        sendInt8(RFB::SERVER_SET_COLOURMAP);
-        sendInt8(0); // padding
-        sendIntBE16(first); // first color
-        sendIntBE16(colourMap.size());
+        sb.writeInt8(RFB::SERVER_SET_COLOURMAP).
+            // padding
+            writeInt8(0).
+            // first color
+            writeIntBE16(first).
+            writeIntBE16(colourMap.size());
 
         for(const auto & col : colourMap) {
-            sendIntBE16(col.r);
-            sendIntBE16(col.g);
-            sendIntBE16(col.b);
+            sb.writeIntBE16(col.r).
+                writeIntBE16(col.g).
+                writeIntBE16(col.b);
         }
 
-        sendFlush();
+        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendBellEvent(void) {
+    asio::awaitable<void> RFB::ServerEncoder::sendBellEventAwait(void) {
         Application::info("{}: process", NS_FuncNameV);
-        std::scoped_lock guard{ sendLock };
         // RFB: 6.5.3
-        sendInt8(RFB::SERVER_BELL);
-        sendFlush();
+        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await stream_->async_send_byte(RFB::SERVER_BELL);
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendCutTextEvent(std::span<const uint8_t> buf, bool ext) {
-        std::scoped_lock guard{ sendLock };
+    asio::awaitable<void> RFB::ServerEncoder::sendCutTextEventAwait(std::span<const uint8_t> buf, bool ext) const {
+        StreamBuf sb(8 + buf.size());
 
         // RFB: 6.5.4
-        sendInt8(RFB::SERVER_CUT_TEXT);
-        sendInt8(0); // padding
-        sendInt8(0); // padding
-        sendInt8(0); // padding
+        sb.writeInt8(RFB::SERVER_CUT_TEXT).
+            // padding
+            writeZero(3); 
 
         if(ext) {
             // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
@@ -1033,14 +1073,17 @@ namespace LTSM {
 
             // A negative value of length indicates that the extended message format
             // is used and abs(length) is the total number of following bytes.
-            sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - buf.size() + 1);
+            sb.writeIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - buf.size() + 1);
         } else {
             Application::debug(DebugType::Rfb, "{}: length text: {}", NS_FuncNameV, buf.size());
-            sendIntBE32(buf.size());
+            sb.writeIntBE32(buf.size());
         }
 
-        sendRaw(buf.data(), buf.size());
-        sendFlush();
+        sb.write(buf);
+
+        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
     void RFB::ServerEncoder::sendContinuousUpdates(bool enable) {
@@ -1051,12 +1094,7 @@ namespace LTSM {
         continueUpdatesProcessed = enable;
     }
 
-    bool RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb) {
-        if(! encoder) {
-            Application::warning("{}: encoder null", NS_FuncNameV);
-            return false;
-        }
-
+    void RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb) {
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
         std::scoped_lock guard{ sendLock };
@@ -1067,7 +1105,6 @@ namespace LTSM {
         // send encodings
         encoder->sendFrameBuffer(this, fb);
         sendFlush();
-        return true;
     }
 
 

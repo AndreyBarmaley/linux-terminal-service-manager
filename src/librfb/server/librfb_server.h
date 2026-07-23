@@ -55,15 +55,20 @@ namespace LTSM {
 
     class BoostContext {
         const int concurency_ = 1;
-        boost::asio::io_context ioc_;
+        mutable boost::asio::io_context ioc_;
+        boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+        boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
 
       protected:
-        inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline boost::asio::io_context & ioc(void) const { return ioc_; }
         inline size_t concurency(void) const { return concurency_; }
-        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
+        inline boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
+        inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }
+        inline boost::asio::strand<boost::asio::any_io_executor> xcb_strand(void) const { return xcb_strand_; }
 
       public:
-        explicit BoostContext(int concurency) : concurency_{concurency}, ioc_{concurency} {}
+        explicit BoostContext(int concurency)
+            : concurency_{concurency}, ioc_{concurency}, rfb_strand_{ioc_.get_executor()}, xcb_strand_{ioc_.get_executor()} {}
         ~BoostContext() = default;
     };
 
@@ -78,7 +83,6 @@ namespace LTSM {
             std::string clientAuthName;
             std::string clientAuthDomain;
 
-            boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
 
 //            std::unique_ptr<NetworkStream> socket; /// socket layer
@@ -154,28 +158,28 @@ namespace LTSM {
 
             void serverSelectClientEncoding(void);
 
-            bool authVncInit(const std::string &);
-            bool authVenCryptInit(const SecurityInfo &);
-            bool sendFrameBufferUpdate(const FrameBuffer &);
-            void sendColourMap(int first);
-            void sendBellEvent(void);
-            void sendCutTextEvent(std::span<const uint8_t>, bool ext);
+            boost::asio::awaitable<bool> authVncInit(const std::string &);
+            boost::asio::awaitable<bool> authVenCryptInit(const SecurityInfo &);
+            boost::asio::awaitable<void> sendColourMapAwait(int first);
+            boost::asio::awaitable<void> sendBellEventAwait(void);
+            boost::asio::awaitable<void> sendCutTextEventAwait(std::span<const uint8_t>, bool ext) const;
+            void sendFrameBufferUpdate(const FrameBuffer &);
             void sendContinuousUpdates(bool enable);
-            bool sendUpdateSafe(const XCB::Region &);
+            void sendUpdateScreen(const XCB::Region &);
             void sendEncodingLtsmSupported(void);
             bool serverSide(void) const override {
                 return true;
             }
 
-            void recvLtsmProto(void);
-            void recvPixelFormat(void);
-            void recvSetEncodings(void);
-            void recvKeyCode(void);
-            void recvPointer(void);
-            void recvCutText(void);
-            void recvFramebufferUpdate(void);
-            void recvSetContinuousUpdates(void);
-            void recvSetDesktopSize(void);
+            boost::asio::awaitable<void> recvLtsmProtoAwait(void);
+            boost::asio::awaitable<void> recvPixelFormatAwait(void);
+            boost::asio::awaitable<void> recvSetEncodingsAwait(void);
+            boost::asio::awaitable<void> recvFramebufferUpdateAwait(void);
+            boost::asio::awaitable<void> recvKeyCodeAwait(void);
+            boost::asio::awaitable<void> recvPointerAwait(void);
+            boost::asio::awaitable<void> recvCutTextAwait(void);
+            boost::asio::awaitable<void> recvSetContinuousUpdatesAwait(void);
+            boost::asio::awaitable<void> recvSetDesktopSizeAwait(void);
 
             void cursorFailed(uint32_t);
 
@@ -189,12 +193,13 @@ namespace LTSM {
             const PixelFormat & clientFormat(void) const override;
             bool clientIsBigEndian(void) const override;
 
-            int serverHandshakeVersion(void);
-            bool serverSecurityInit(int protover, const SecurityInfo &);
-            void serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
+            boost::asio::awaitable<int> serverHandshakeVersion(void);
+            boost::asio::awaitable<bool> serverSecurityInit(int protover, const SecurityInfo &);
+            boost::asio::awaitable<void> serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
             bool rfbMessagesRunning(void) const;
-            void rfbMessagesLoop(void);
             void rfbMessagesShutdown(void);
+
+            boost::asio::awaitable<void> rfbWaitMessage(void);
 
             void serverSelectEncodings(void);
 

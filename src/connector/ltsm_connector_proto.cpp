@@ -30,6 +30,7 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_channels.h"
 
+using namespace boost;
 using namespace std::chrono_literals;
 
 namespace LTSM::Connector {
@@ -140,7 +141,7 @@ namespace LTSM::Connector {
     void ConnectorLtsm::onSendBellSignal(const int32_t & display) {
         if(display == displayNum()) {
             Application::info("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            std::thread([this] { this->sendBellEvent(); }).detach();
+            asio::co_spawn(ioc(), sendBellEventAwait(), asio::detached);
         }
     }
 
