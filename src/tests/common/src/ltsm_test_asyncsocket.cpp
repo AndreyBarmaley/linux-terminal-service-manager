@@ -21,9 +21,10 @@ using ::testing::Invoke;
 class MockAsyncSocket : public AsyncSocketBase {
 public:
     MOCK_METHOD(void, closeSocket, (), (override));
+    MOCK_METHOD(size_t, sync_recv_available, (), (const, override));
     MOCK_METHOD(void, sync_recv_buf, (void* ptr, size_t len), (const, override));
     MOCK_METHOD(void, sync_send_buf, (const void* ptr, size_t len), (const, override));
-    
+
     MOCK_METHOD(boost::asio::awaitable<void>, async_recv_buf, (void* ptr, size_t len), (const, override));
     MOCK_METHOD(boost::asio::awaitable<void>, async_recv_buffers, 
                 (std::initializer_list<boost::asio::mutable_buffer> list), (const, override));

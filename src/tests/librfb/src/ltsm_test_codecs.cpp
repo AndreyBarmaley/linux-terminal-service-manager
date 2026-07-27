@@ -49,7 +49,7 @@ class TestEncoderStream : public RFB::EncoderStream {
 
     void sendRaw(const void* ptr, size_t len) override {
         if(ptr && len) {
-            buf_.append(static_cast<const uint8_t*>(ptr), len);
+            buf_.append(std::span{static_cast<const uint8_t*>(ptr), len});
         }
     }
 
