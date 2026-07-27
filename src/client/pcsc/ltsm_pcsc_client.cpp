@@ -578,7 +578,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteTransmit(const StreamBufRef & s
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, dwProtocol: {}, pciLength: {}, send size: {}, recv size: {}",
                        NS_FuncNameV, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
 
-    std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
+    if(0 == recvLength) {
+        recvLength = MAX_BUFFER_SIZE_EXTENDED;
+    }
+
+    std::vector<BYTE> recvBuffer(recvLength);
     uint32_t ret = SCardTransmit(hCard, & ioSendPci, sendBuffer.data(), sendBuffer.size(),
                                  & ioRecvPci, recvBuffer.data(), & recvLength);
 
@@ -594,7 +598,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteTransmit(const StreamBufRef & s
     reply.writeIntLE32(ioRecvPci.dwProtocol).writeIntLE32(ioRecvPci.cbPciLength).writeIntLE32(recvLength).writeIntLE32(ret);
 
     if(recvLength) {
-        reply.write(recvBuffer.data(), recvLength);
+        reply.write(std::span{recvBuffer.data(), recvLength});
     }
 
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
@@ -632,7 +636,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteStatus(const StreamBufRef & sb)
 
     reply.writeIntLE32(state).writeIntLE32(protocol).
         writeIntLE32(readerNameLen).writeIntLE32(atrLen).writeIntLE32(ret);
-    reply.write(readerName, readerNameLen).write(atrBuf, atrLen);
+    reply.write(std::span{readerName, readerNameLen}).write(std::span{atrBuf, atrLen});
 
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
 }
@@ -715,7 +719,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetStatusChange(const StreamBuf
         }
 
         if(state.cbAtr) {
-            reply.write(state.rgbAtr, state.cbAtr);
+            reply.write(std::span{state.rgbAtr, state.cbAtr});
         }
     }
 
@@ -755,7 +759,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteControl(const StreamBufRef & sb
     reply.writeIntLE32(bytesReturned).writeIntLE32(ret);
 
     if(bytesReturned) {
-        reply.write(recvBuffer.data(), bytesReturned);
+        reply.write(std::span{recvBuffer.data(), bytesReturned});
     }
 
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
@@ -805,7 +809,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetAttrib(const StreamBufRef & 
     reply.writeIntLE32(attrLen).writeIntLE32(ret);
 
     if(attrLen) {
-        reply.write(attrBuf.data(), attrLen);
+        reply.write(std::span{attrBuf.data(), attrLen});
     }
 
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));

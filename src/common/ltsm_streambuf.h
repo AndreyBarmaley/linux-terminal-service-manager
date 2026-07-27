@@ -23,12 +23,14 @@
 #ifndef _LTSM_STREAMBUF_
 #define _LTSM_STREAMBUF_
 
+#include <span>
 #include <string>
-#include <string_view>
-#include <stdexcept>
 #include <vector>
+#include <ranges>
 #include <utility>
 #include <cstdint>
+#include <string_view>
+#include <stdexcept>
 
 #include "ltsm_compat.h"
 
@@ -45,9 +47,12 @@ namespace LTSM {
         BinaryBuf & operator=(const std::vector<uint8_t> &);
         BinaryBuf & operator=(std::vector<uint8_t> &&) noexcept;
 
-        BinaryBuf & append(const uint8_t*, size_t);
-        BinaryBuf & append(const std::vector<uint8_t> &);
-        BinaryBuf & append(std::string_view);
+        template<typename Container>
+        requires std::ranges::contiguous_range<Container>
+        inline BinaryBuf & append(const Container& cont) {
+            insert(end(), cont.data(), cont.data() + cont.size());
+            return *this;
+        }
 
         BinaryBuf copy(void) const;
         std::string toString(void) const;
@@ -206,9 +211,13 @@ namespace LTSM {
             return *this;
         }
 
-        MemoryStream & write(const void*, size_t);
-        MemoryStream & write(std::string_view);
-        MemoryStream & write(const std::vector<uint8_t> &);
+        template<typename Container>
+        requires std::ranges::contiguous_range<Container>
+        inline MemoryStream & write(const Container& cont) {
+            putRaw(cont.data(), cont.size());
+            return *this;
+        }
+
         /// @brief: fill version
         MemoryStream & fill(size_t, char);
 

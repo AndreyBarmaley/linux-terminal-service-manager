@@ -134,7 +134,7 @@ namespace LTSM {
     // EncoderWrapper
     void RFB::EncoderWrapper::sendRaw(const void* ptr, size_t len) {
         if(ptr && len) {
-            buffer->append(static_cast<const uint8_t*>(ptr), len);
+            buffer->append(std::span{static_cast<const uint8_t*>(ptr), len});
         }
     }
 
@@ -1180,7 +1180,7 @@ namespace LTSM {
 
         // padding
         const std::array<uint8_t, 8> qoiPadding{0, 0, 0, 0, 0, 0, 0, 1};
-        sb.write(qoiPadding.data(), qoiPadding.size());
+        sb.write(qoiPadding);
 
         return sb.rawbuf();
     }

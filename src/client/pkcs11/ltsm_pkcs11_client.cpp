@@ -181,9 +181,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     // library info
     reply.writeInt8(info->cryptokiVersion.major);
     reply.writeInt8(info->cryptokiVersion.minor);
-    reply.write(info->manufacturerID, 32);
+    reply.write(std::span{info->manufacturerID});
     reply.writeIntLE64(info->flags);
-    reply.write(info->libraryDescription, 32);
+    reply.write(std::span{info->libraryDescription});
     reply.writeInt8(info->libraryVersion.major);
     reply.writeInt8(info->libraryVersion.minor);
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
@@ -216,8 +216,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
 
         if(slot.getSlotInfo(slotInfo)) {
             reply.writeInt8(1);
-            reply.write(slotInfo.slotDescription, 64);
-            reply.write(slotInfo.manufacturerID, 32);
+            reply.write(std::span{slotInfo.slotDescription});
+            reply.write(std::span{slotInfo.manufacturerID});
             reply.writeIntLE64(slotInfo.flags);
             reply.writeInt8(slotInfo.hardwareVersion.major);
             reply.writeInt8(slotInfo.hardwareVersion.minor);
@@ -229,10 +229,10 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
 
         if(slot.getTokenInfo(tokenInfo)) {
             reply.writeInt8(1);
-            reply.write(tokenInfo.label, 32);
-            reply.write(tokenInfo.manufacturerID, 32);
-            reply.write(tokenInfo.model, 16);
-            reply.write(tokenInfo.serialNumber, 16);
+            reply.write(std::span{tokenInfo.label});
+            reply.write(std::span{tokenInfo.manufacturerID});
+            reply.write(std::span{tokenInfo.model});
+            reply.write(std::span{tokenInfo.serialNumber});
             reply.writeIntLE64(tokenInfo.flags);
             reply.writeIntLE64(tokenInfo.ulMaxSessionCount);
             reply.writeIntLE64(tokenInfo.ulSessionCount);
@@ -248,7 +248,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
             reply.writeInt8(tokenInfo.hardwareVersion.minor);
             reply.writeInt8(tokenInfo.firmwareVersion.major);
             reply.writeInt8(tokenInfo.firmwareVersion.minor);
-            reply.write(tokenInfo.utcTime, 16);
+            reply.write(std::span{tokenInfo.utcTime});
         } else {
             reply.writeInt8(0);
         }
@@ -331,10 +331,10 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
         auto objInfo = sess->getObjectInfo(handle, { CKA_VALUE });
         auto rawId = objInfo.getId();
         reply.writeIntLE16(rawId.size());
-        reply.write(rawId.data(), rawId.size());
+        reply.write(rawId);
         auto rawValue = objInfo.getRawData(CKA_VALUE);
         reply.writeIntLE32(rawValue.size());
-        reply.write(rawValue.data(), rawValue.size());
+        reply.write(rawValue);
     }
 
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
@@ -392,7 +392,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     sess->login(pin);
     auto sign = sess->signData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
-    reply.write(sign.data(), sign.size());
+    reply.write(sign);
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
@@ -448,7 +448,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     sess->login(pin);
     auto sign = sess->decryptData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
-    reply.write(sign.data(), sign.size());
+    reply.write(sign);
     owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
     return true;
 }
