@@ -45,6 +45,7 @@
 #include "ltsm_json_wrapper.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
     namespace Channel {
@@ -585,7 +586,7 @@ void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string
     }
 }
 
-bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string> && files) {
+asio::awaitable<bool> LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string> files) {
     Application::info("{}", NS_FuncNameV);
 
     std::erase_if(files, [](auto & file) {
@@ -607,7 +608,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
 
     if(files.empty()) {
         Application::error("{}: failed,  empty list", NS_FuncNameV);
-        return false;
+        co_return false;
     }
 
     JsonObjectStream jo;
@@ -626,7 +627,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
     jo.push("files", ja.flush());
 
     sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
-    return true;
+    co_return true;
 }
 
 bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, const Channel::UrlMode & serverOpts, const Channel::Opts & chOpts) {

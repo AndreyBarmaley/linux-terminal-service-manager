@@ -163,13 +163,13 @@ namespace LTSM {
         boost::asio::awaitable<void> windowResizedEvent(const XCB::Size &);
         boost::asio::awaitable<void> sdlEventsLoop(void);
         boost::asio::awaitable<bool> sdlEventProcessing(void);
-        boost::asio::awaitable<void> sdlMouseMotion(SDL_Event &&);
-        boost::asio::awaitable<void> sdlMouseButton(SDL_Event &&);
-        boost::asio::awaitable<void> sdlMouseWheel(SDL_Event &&);
-        boost::asio::awaitable<void> sdlWindowEvent(SDL_Event &&);
-        boost::asio::awaitable<void> sdlKeyboardEvent(SDL_Event &&);
-        boost::asio::awaitable<void> sdlDropCompleteEvent(SDL_Event &&);
-        boost::asio::awaitable<void> sdlUserEvent(SDL_Event &&);
+        boost::asio::awaitable<void> sdlMouseMotion(const SDL_Event &);
+        boost::asio::awaitable<void> sdlMouseButton(const SDL_Event &);
+        boost::asio::awaitable<void> sdlMouseWheel(const SDL_Event &);
+        boost::asio::awaitable<void> sdlWindowEvent(const SDL_Event &);
+        boost::asio::awaitable<void> sdlKeyboardEvent(const SDL_Event &);
+        boost::asio::awaitable<void> sdlDropCompleteEvent(const SDL_Event &);
+        boost::asio::awaitable<void> sdlUserEvent(const SDL_Event &);
         boost::asio::awaitable<bool> sdlWindowInit(const XCB::Size &);
 
         void stop(void);
