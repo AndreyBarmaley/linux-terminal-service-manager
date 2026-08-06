@@ -104,7 +104,7 @@ namespace LTSM::Connector {
 
     /* DBusProxy */
     DBusProxy::DBusProxy(const ConnectorType & type, const std::filesystem::path & confile, bool debug)
-        : ApplicationJsonConfig("ltsm_connector", confile),
+        : ApplicationJsonConfig("ltsm_connector", confile), BoostContext(1),
 #ifdef SDBUS_2_0_API
         ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
@@ -263,9 +263,9 @@ namespace LTSM::Connector {
             Application::debug(DebugType::Dbus, "{}: display: {}",
                                NS_FuncNameV, display);
 
-            std::thread([this, display]() {
+            asio::dispatch(ioc(), [this, display]() {
                 this->busConnectorAlive(display);
-            }).detach();
+            });
         }
     }
 

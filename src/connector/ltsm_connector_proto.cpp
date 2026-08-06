@@ -121,12 +121,12 @@ namespace LTSM::Connector {
         busConnectorConnected(newDisplay, getpid());
         busSetSessionEncodings(newDisplay, getClientEncodings().toVector());
 
-        std::thread([this]() {
+        asio::dispatch(rfb_strand(), [this]() {
             JsonObjectStream jos;
             jos.push("cmd", SystemCommand::LoginSuccess);
             jos.push("action", true);
             static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
-        }).detach();
+        });
     }
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
@@ -221,7 +221,10 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::serverEncodingsEvent(void) {
         if(isClientLtsmSupported()) {
-            sendEncodingLtsmSupported();
+            asio::co_spawn(rfb_strand(), [this]() -> asio::awaitable<void> {
+		co_await sendEncodingLtsmSupportedAwait();
+		co_return;
+	    }, asio::detached);
         }
     }
 
@@ -354,13 +357,13 @@ namespace LTSM::Connector {
                 return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
             });
 
-            std::thread([group = std::distance(names.begin(), it), display = xcbDisplay()]() {
+            asio::dispatch(xcb_strand(), [group = std::distance(names.begin(), it), display = xcbDisplay()]() {
                 if(auto xkb = static_cast<const XCB::ModuleXkb*>(display->getExtension(XCB::Module::XKB))) {
                     // wait pause for apply layouts
                     std::this_thread::sleep_for(200ms);
                     xkb->switchLayoutGroup(group);
                 }
-            }).detach();
+            });
         }
 
         if(auto opts = jo.getObject("options")) {
@@ -478,13 +481,16 @@ namespace LTSM::Connector {
                     busTransferFilesRequest(displayNum(), {transferPlanned_.begin(), transferPlanned_.end() });
                 } else {
                     // transfer background
-                    std::thread(& ConnectorLtsm::transferFilesPartial, this, transferPlanned_).detach();
+                    asio::co_spawn(ioc(), transferFilesPartial(std::move(transferPlanned_)), asio::detached);
                 }
             }
         }
     }
 
-    void ConnectorLtsm::transferFilesPartial(std::list<TupleFileSize> files) {
+    asio::awaitable<void> ConnectorLtsm::transferFilesPartial(std::list<TupleFileSize>&& files) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer(ex, std::chrono::seconds(1));
+
         size_t freeChannels = countFreeChannels() / 3;
         using TimePointSeconds = Tools::TimePoint<std::chrono::seconds>;
         std::unique_ptr<TimePointSeconds> partial;
@@ -513,8 +519,9 @@ namespace LTSM::Connector {
                 it1 = it2;
             }
 
-            std::this_thread::sleep_for(1s);
+            co_await timer.async_wait(asio::use_awaitable);
         }
+        co_return;
     }
 
     void ConnectorLtsm::onTransferAllow(const int32_t & display, const std::string & filepath, const std::string & tmpfile,

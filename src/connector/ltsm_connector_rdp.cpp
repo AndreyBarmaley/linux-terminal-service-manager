@@ -358,7 +358,7 @@ namespace LTSM::Connector {
         // create FreeRdpCallback
         Application::info("{}: {}", NS_FuncNameV, "create freerdp context");
         freeRdp = std::make_unique<FreeRdpCallback>(proxyClientSocket(), remoteAddress(), config(), this);
-        auto freeRdpThread = std::thread([ptr = freeRdp.get()] { FreeRdpCallback::enterEventLoop(ptr); });
+        auto freeRdpThread = std::thread(&FreeRdpCallback::enterEventLoop, freeRdp.get());
         damageRegion.assign(0, 0, 0, 0);
         // rdp session not activated trigger
         auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]() {

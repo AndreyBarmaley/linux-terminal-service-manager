@@ -174,7 +174,6 @@ namespace LTSM {
 
     void RFB::EncodingFFmpeg::setFps(uint32_t val) {
         if(val != fps) {
-            std::scoped_lock guard{ lockUpdate };
             fps = val;
             Application::info("{}: set FPS: {}", NS_FuncNameV, fps);
             if(avcctx) {
@@ -184,8 +183,6 @@ namespace LTSM {
     }
 
     void RFB::EncodingFFmpeg::resizedEvent(const XCB::Size & nsz) {
-        std::scoped_lock guard{ lockUpdate };
-
         if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height)) {
             initContext(nsz, ffmpegPixelFormat);
         }
@@ -272,7 +269,7 @@ namespace LTSM {
         frame->chroma_location = AVCHROMA_LOC_LEFT;
 #endif
         frame->pts = 0;
-        ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
+        ret = av_frame_get_buffer(frame.get(), 0 /* align auto */);
 
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "av_frame_get_buffer", FFMPEG::error(ret), ret);
@@ -286,14 +283,16 @@ namespace LTSM {
         Application::info("{}: {}, size: {}", NS_FuncNameV, RFB::encodingName(getType()), csz);
     }
 
-    void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
-        std::scoped_lock guard{ lockUpdate };
+    void RFB::EncodingFFmpeg::reinitContext(const EncoderStream* st, const XCB::Size & fsz) {
+        initContext(fsz, st->serverFormat());
+    }
+
+    void RFB::EncodingFFmpeg::writeFrameBufferTo(const EncoderStream* st, const FrameBuffer & fb, StreamBuf& sb) const {
 
         if(! avcctx) {
-            initContext(fb.region().toSize(), st->serverFormat());
+            throw encoding_context_error(NS_FuncNameS);
         } else if(fb.width() != avcctx->width || fb.height() != avcctx->height) {
-            Application::warning("{}: incorrect region size: {}", NS_FuncNameV, fb.region().toSize());
-            initContext(fb.region().toSize(), st->serverFormat());
+            throw encoding_context_error(NS_FuncNameS);
         }
 
         const uint8_t* data[1] = { fb.pitchData(0) };
@@ -318,16 +317,14 @@ namespace LTSM {
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            st->sendIntBE16(1);
-            st->sendHeader(getType(), fb.region());
+            sb.writeIntBE16(1);
+            st->writeHeader(sb, getType(), fb.region());
 
             // send region
-            st->sendIntBE32(packet->size);
+            sb.writeIntBE32(packet->size);
             Application::trace(DebugType::Enc, "{}: packet size: {}", NS_FuncNameV, packet->size);
-            st->sendRaw(packet->data, packet->size);
+            sb.write(std::span{packet->data, static_cast<size_t>(packet->size)});
         }
-
-        st->sendFlush();
     }
 
 #endif

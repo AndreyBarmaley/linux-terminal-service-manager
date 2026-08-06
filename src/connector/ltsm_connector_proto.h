@@ -113,10 +113,11 @@ namespace LTSM::Connector {
 
       protected:
         void loadKeymap(const std::string & file);
-        void transferFilesPartial(std::list<TupleFileSize> files);
+        boost::asio::awaitable<void> transferFilesPartial(std::list<TupleFileSize>&&);
 
       public:
-        ConnectorLtsm(const std::filesystem::path & confile, bool debug) : DBusProxy(ConnectorType::LTSM, confile, debug) {}
+        ConnectorLtsm(const std::filesystem::path & confile, bool debug)
+            : DBusProxy(ConnectorType::LTSM, confile, debug), RFB::X11Server(ioc()) {}
         ~ConnectorLtsm();
 
         int communication(void) override;
