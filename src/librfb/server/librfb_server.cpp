@@ -77,8 +77,9 @@ namespace LTSM {
     }
 
     // ServerEncoder
-    RFB::ServerEncoder::ServerEncoder() : BoostContext(2) {
-        stream_ = std::make_unique<AsyncTcpStream>(rfb_strand());
+    RFB::ServerEncoder::ServerEncoder(const boost::asio::any_io_executor& ctx)
+        : rfb_strand_{ctx}, xcb_strand_{ctx} {
+        stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
     void RFB::ServerEncoder::assignSocket(int fd) {
@@ -619,16 +620,18 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ServerEncoder::sendUpdateScreen(const XCB::Region & area) {
-        if(! encoder) {
+    asio::awaitable<void> RFB::ServerEncoder::sendUpdateScreenAwait(const XCB::Region & area) {
+        if(! encoder_) {
             Application::warning("{}: encoder null", NS_FuncNameV);
-            return;
+            co_return;
         }
 
         try {
             fbUpdateProcessing = true;
+            co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
             auto reply = serverFrameBuffer(area);
-            sendFrameBufferUpdate(reply.fb);
+            co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+            co_await sendFrameBufferUpdateAwait(reply.fb);
             serverSendFBUpdateEvent(area);
         } catch(const xcb_error_busy&) {
             Application::warning("{}: update busy, area: {}", NS_FuncNameV, area);
@@ -638,6 +641,7 @@ namespace LTSM {
         }
 
         fbUpdateProcessing = false;
+        co_return;
     }
 
     bool RFB::ServerEncoder::rfbMessagesRunning(void) const {
@@ -648,11 +652,14 @@ namespace LTSM {
         channelsShutdown();
         std::this_thread::sleep_for(100ms);
         rfbMessages = false;
+        if(stream_) {
+            stream_->closeSocket();
+        }
     }
 
     asio::awaitable<void> RFB::ServerEncoder::rfbWaitMessage(void) {
 
-        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         int msgType = co_await stream_->async_recv_byte();
 
         switch(msgType) {
@@ -862,7 +869,7 @@ namespace LTSM {
         clientEncodings.setPriority(recvEncodings);
 
         if(continueUpdates) {
-            sendContinuousUpdates(true);
+            co_await sendContinuousUpdatesAwait(true);
         }
 
         if(extendedClipboard) {
@@ -1013,11 +1020,10 @@ namespace LTSM {
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
         if(isEncoderFFmpeg()) {
-    	    std::thread([this, sz = dsz]() {
-                this->encoder->resizedEvent(sz);
-    	    }).detach();
+            asio::dispatch(rfb_strand_, [this, sz = dsz]() {
+                this->encoder_->resizedEvent(sz);
+            });
         }
-
 #endif
     }
 
@@ -1025,7 +1031,7 @@ namespace LTSM {
         Application::warning("{}: display: {}", NS_FuncNameV, display);
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendColourMapAwait(int first) {
+    asio::awaitable<void> RFB::ServerEncoder::sendColourMapAwait(int first) const {
         Application::info("{}: first: {}, colour map length: {}", NS_FuncNameV, first, colourMap.size());
 
         StreamBuf sb(6 + colourMap.size() * 6);
@@ -1043,15 +1049,15 @@ namespace LTSM {
                 writeIntBE16(col.b);
         }
 
-        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendBellEventAwait(void) {
+    asio::awaitable<void> RFB::ServerEncoder::sendBellEventAwait(void) const {
         Application::info("{}: process", NS_FuncNameV);
         // RFB: 6.5.3
-        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         co_await stream_->async_send_byte(RFB::SERVER_BELL);
         co_return;
     }
@@ -1081,32 +1087,41 @@ namespace LTSM {
 
         sb.write(buf);
 
-        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
-    void RFB::ServerEncoder::sendContinuousUpdates(bool enable) {
+    asio::awaitable<void> RFB::ServerEncoder::sendContinuousUpdatesAwait(bool enable) const {
         // RFB: 6.5.5
         Application::info("{}: status: {}", NS_FuncNameV, (enable ? "enable" : "disable"));
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::SERVER_CONTINUOUS_UPDATES).sendFlush();
+        co_await stream_->async_send_byte(RFB::SERVER_CONTINUOUS_UPDATES);
         continueUpdatesProcessed = enable;
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb) {
+    asio::awaitable<void> RFB::ServerEncoder::sendFrameBufferUpdateAwait(const FrameBuffer & fb) const {
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
-        std::scoped_lock guard{ sendLock };
+	StreamBuf sb(fb.width() * fb.height() * 8 / 3);
         // RFB: 6.5.1
-        sendInt8(RFB::SERVER_FB_UPDATE);
+        sb.writeInt8(RFB::SERVER_FB_UPDATE);
         // padding
-        sendInt8(0);
-        // send encodings
-        encoder->sendFrameBuffer(this, fb);
-        sendFlush();
-    }
+        sb.writeInt8(0);
 
+        try {
+            // send encodings
+            encoder_->writeFrameBufferTo(this, fb, sb);
+        } catch(const encoding_context_error&) {
+            Application::warning("{}: reinit context: {}", NS_FuncNameV, fb.region().toSize());
+            encoder_->reinitContext(this, fb.region().toSize());
+            encoder_->writeFrameBufferTo(this, fb, sb);
+        }
+
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
+    }
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const {
         if(auto stream = dynamic_cast<AsioTls::AsyncStream*>(stream_.get())) {
@@ -1126,9 +1141,9 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::setEncodingDebug(int v) {
-        if(encoder) {
+        if(encoder_) {
             // FIXME
-            // encoder->setDebug(v);
+            // encoder_->setDebug(v);
         }
     }
 
@@ -1140,9 +1155,9 @@ namespace LTSM {
             Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: {}", NS_FuncNameV, threads);
         }
 
-        if(encoder) {
+        if(encoder_) {
             Application::info("{}: using encoding threads: {}", NS_FuncNameV, threads);
-            encoder->setThreads(threads);
+            encoder_->setThreads(threads);
         }
     }
 
@@ -1168,7 +1183,7 @@ namespace LTSM {
     void RFB::ServerEncoder::serverSelectClientEncoding(void) {
         int compatible = serverSelectCompatibleEncoding(clientEncodings);
 
-        if(encoder && encoder->getType() == compatible) {
+        if(encoder_ && encoder_->getType() == compatible) {
             return;
         }
 
@@ -1182,7 +1197,7 @@ namespace LTSM {
 
         switch(compatible) {
             case RFB::ENCODING_RAW:
-                encoder = std::make_unique<EncodingRaw>();
+                encoder_ = std::make_unique<EncodingRaw>();
                 break;
 
             case RFB::ENCODING_ZLIB: {
@@ -1195,69 +1210,69 @@ namespace LTSM {
                     zlevel = ENCODING_COMPRESS1 - *it + Z_BEST_SPEED;
                 }
 
-                encoder = std::make_unique<EncodingZlib>(zlevel);
+                encoder_ = std::make_unique<EncodingZlib>(zlevel);
                 break;
             }
 
             case RFB::ENCODING_HEXTILE:
-                encoder = std::make_unique<EncodingHexTile>();
+                encoder_ = std::make_unique<EncodingHexTile>();
                 break;
 
             case RFB::ENCODING_CORRE:
-                encoder = std::make_unique<EncodingRRE>(true);
+                encoder_ = std::make_unique<EncodingRRE>(true);
                 break;
 
             case RFB::ENCODING_RRE:
-                encoder = std::make_unique<EncodingRRE>(false);
+                encoder_ = std::make_unique<EncodingRRE>(false);
                 break;
 
             case RFB::ENCODING_TRLE:
-                encoder = std::make_unique<EncodingTRLE>(false);
+                encoder_ = std::make_unique<EncodingTRLE>(false);
                 break;
 
             case RFB::ENCODING_ZRLE:
-                encoder = std::make_unique<EncodingTRLE>(true);
+                encoder_ = std::make_unique<EncodingTRLE>(true);
                 break;
 #ifdef LTSM_ENCODING_FFMPEG
 
             case RFB::ENCODING_LTSM_H264:
             case RFB::ENCODING_LTSM_MPEG4:
-                encoder = std::make_unique<EncodingFFmpeg>(compatible);
+                encoder_ = std::make_unique<EncodingFFmpeg>(compatible);
                 break;
 #endif
             case RFB::ENCODING_LTSM_ZQOI:
-                encoder = std::make_unique<EncodingQOI>(true);
+                encoder_ = std::make_unique<EncodingQOI>(true);
                 break;
 
             case RFB::ENCODING_LTSM_QOI:
-                encoder = std::make_unique<EncodingQOI>(false);
+                encoder_ = std::make_unique<EncodingQOI>(false);
                 break;
 
             case RFB::ENCODING_LTSM_LZ4:
-                encoder = std::make_unique<EncodingLZ4>();
+                encoder_ = std::make_unique<EncodingLZ4>();
                 break;
 
             case RFB::ENCODING_LTSM_TJPG:
-                encoder = std::make_unique<EncodingTJPG>();
+                encoder_ = std::make_unique<EncodingTJPG>();
                 break;
 
             default:
-                encoder = std::make_unique<EncodingRaw>();
+                encoder_ = std::make_unique<EncodingRaw>();
                 break;
         }
 
-        encoderInitEvent(encoder.get());
+        encoderInitEvent(encoder_.get());
     }
 
     void RFB::ServerEncoder::serverSelectEncodings(void) {
         serverSelectClientEncoding();
-        Application::notice("{}: select encoding: {}", NS_FuncNameV, RFB::encodingName(encoder->getType()));
+        Application::notice("{}: select encoding: {}", NS_FuncNameV, RFB::encodingName(encoder_->getType()));
         serverEncodingSelectedEvent();
     }
 
     /* pseudo encodings DesktopSize/Extended */
-    void RFB::ServerEncoder::sendEncodingDesktopResize(const DesktopResizeStatus & status, const DesktopResizeError & error,
-            const XCB::Size & desktopSize) {
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingDesktopResizeAwait(const DesktopResizeStatus & status, const DesktopResizeError & error,
+            const XCB::Size & desktopSize) const {
         int statusCode = desktopResizeStatusCode(status);
         int errorCode = desktopResizeErrorCode(error);
         Application::info("{}: status: {}, error: {}, size: {}",
@@ -1269,40 +1284,43 @@ namespace LTSM {
         }
 
         // send
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::SERVER_FB_UPDATE);
-        // padding
-        sendInt8(0);
-        // number of rects
-        sendIntBE16(1);
-        sendIntBE16(statusCode);
-        sendIntBE16(errorCode);
-        sendIntBE16(desktopSize.width);
-        sendIntBE16(desktopSize.height);
-        sendIntBE32(RFB::ENCODING_EXT_DESKTOP_SIZE);
-        // number of screens
-        sendInt8(1);
-        // padding
-        sendZero(3);
-        // id
-        sendIntBE32(0);
-        // xpos
-        sendIntBE16(0);
-        // ypos
-        sendIntBE16(0);
-        // width
-        sendIntBE16(desktopSize.width);
-        // height
-        sendIntBE16(desktopSize.height);
-        // flags
-        sendIntBE32(0);
-        sendFlush();
+        StreamBuf sb(36);
+        sb.writeInt8(RFB::SERVER_FB_UPDATE).
+            // padding
+            writeInt8(0).
+            // number of rects
+            writeIntBE16(1).
+            writeIntBE16(statusCode).
+            writeIntBE16(errorCode).
+            writeIntBE16(desktopSize.width).
+            writeIntBE16(desktopSize.height).
+            writeIntBE32(RFB::ENCODING_EXT_DESKTOP_SIZE).
+            // number of screens
+            writeInt8(1).
+            // padding
+            writeZero(3).
+            // id
+            writeIntBE32(0).
+            // xpos
+            writeIntBE16(0).
+            // ypos
+            writeIntBE16(0).
+            // width
+            writeIntBE16(desktopSize.width).
+            // height
+            writeIntBE16(desktopSize.height).
+            // flags
+            writeIntBE32(0);
+
+	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) {
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const {
         // priority LTSM cursors
         if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
-            return sendEncodingLtsmCursor(fb, xhot, yhot);
+            co_return co_await sendEncodingLtsmCursorAwait(fb, xhot, yhot);
         }
 
         auto & reg = fb.region();
@@ -1315,27 +1333,27 @@ namespace LTSM {
         const PixelFormat clientFormatAlpha(clientFormat().bitsPerPixel(),
                                             clientFormat().rmask(), clientFormat().gmask(), clientFormat().bmask(), clientAMask);
 
-        std::scoped_lock guard{ sendLock };
+        StreamBuf sb(256);
         // RFB: 6.5.1
-        sendInt8(RFB::SERVER_FB_UPDATE);
-        // padding
-        sendInt8(0);
-        // regions counts
-        sendIntBE16(1);
-        // region size
-        sendIntBE16(xhot);
-        sendIntBE16(yhot);
-        sendIntBE16(reg.width);
-        sendIntBE16(reg.height);
-        // region type
-        sendIntBE32(RFB::ENCODING_RICH_CURSOR);
+        sb.writeInt8(RFB::SERVER_FB_UPDATE).
+            // padding
+            writeInt8(0).
+            // regions counts
+            writeIntBE16(1).
+            // region size
+            writeIntBE16(xhot).
+            writeIntBE16(yhot).
+            writeIntBE16(reg.width).
+            writeIntBE16(reg.height).
+            // region type
+            writeIntBE32(RFB::ENCODING_RICH_CURSOR);
 
         for(int oy = 0; oy < reg.height; ++oy) {
             for(int ox = 0; ox < reg.width; ++ox) {
                 auto pixel = fb.pixel(XCB::Point(ox, oy));
                 auto pixel2 = fb.pixelFormat().convertTo(pixel, clientFormatAlpha);
                 // part1: send pixels buf
-                sendPixelRaw(pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
+                writePixelRaw(sb, pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
                 bitmask.pushBit(fb.pixelFormat().alpha(pixel) == fb.pixelFormat().amax());
             }
 
@@ -1355,87 +1373,98 @@ namespace LTSM {
         }
 
         // part2: send bitmask buf
-        sendData(bitmaskBuf);
-        sendFlush();
+        sb.write(bitmaskBuf);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) {
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const {
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}, hot: {}",
                            NS_FuncNameV, reg, XCB::Point(xhot, yhot));
 
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::SERVER_FB_UPDATE);
-        // padding
-        sendInt8(0);
-        // rects
-        sendIntBE16(1);
-        sendIntBE16(xhot);
-        sendIntBE16(yhot);
-        sendIntBE16(reg.width);
-        sendIntBE16(reg.height);
-        sendIntBE32(ENCODING_LTSM_CURSOR);
+        StreamBuf sb(256);
+        // LTSM proto
+        sb.writeInt8(RFB::SERVER_FB_UPDATE).
+            // padding
+            writeInt8(0).
+            // rects
+            writeIntBE16(1).
+            writeIntBE16(xhot).
+            writeIntBE16(yhot).
+            writeIntBE16(reg.width).
+            writeIntBE16(reg.height).
+            writeIntBE32(ENCODING_LTSM_CURSOR);
         // cursor id
         auto fbSpan = fb.span();
         auto cursorId = Tools::crc32b(fbSpan);
-        sendIntBE32(cursorId);
+        sb.writeIntBE32(cursorId);
 
         // cursor rgba data
         if(std::ranges::none_of(cursorSended, [&cursorId](auto & curid) { return curid == cursorId; })) {
             try {
                 auto zlib = Tools::zlibCompress(fbSpan);
                 // raw size
-                sendIntBE32(fbSpan.size());
-                // compress size
-                sendIntBE32(zlib.size());
-                sendData(zlib);
+                sb.writeIntBE32(fbSpan.size()).
+                    // compress size
+                    writeIntBE32(zlib.size()).
+                    // compress data
+                    write(zlib);
                 cursorSended.push_front(cursorId);
             } catch(const std::exception & err) {
                 Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
-                sendIntBE32(0);
+                sb.writeIntBE32(0);
             }
         } else {
-            sendIntBE32(0);
+            sb.writeIntBE32(0);
         }
 
-        sendFlush();
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendEncodingLtsmSupported(void) {
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmSupportedAwait(void) const {
         Application::info("{}: server supported", NS_FuncNameV);
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::SERVER_FB_UPDATE);
-        // padding
-        sendInt8(0);
-        // rects
-        sendIntBE16(1);
-        sendIntBE16(0);
-        sendIntBE16(0);
-        sendIntBE16(0);
-        sendIntBE16(0);
-        sendIntBE32(ENCODING_LTSM);
-        sendIntBE32(0);
-        sendIntBE32(LTSM::service_version);
-        sendFlush();
+
+        StreamBuf sb(24);
+        sb.writeInt8(RFB::SERVER_FB_UPDATE).
+            // padding
+            writeInt8(0).
+            // rects
+            writeIntBE16(1).
+            writeIntBE16(0).
+            writeIntBE16(0).
+            writeIntBE16(0).
+            writeIntBE16(0).
+            writeIntBE32(ENCODING_LTSM).
+            writeIntBE32(0).
+            writeIntBE32(LTSM::service_version);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
-    void RFB::ServerEncoder::sendEncodingLtsmData(std::span<const uint8_t> buf) {
-        std::scoped_lock guard{ sendLock };
-        sendInt8(RFB::SERVER_FB_UPDATE);
-        // padding
-        sendInt8(0);
-        // rects
-        sendIntBE16(1);
-        sendIntBE16(0);
-        sendIntBE16(0);
-        sendIntBE16(0);
-        sendIntBE16(0);
-        sendIntBE32(ENCODING_LTSM);
-        // raw data
-        sendIntBE32(1);
-        sendIntBE32(buf.size());
-        sendRaw(buf.data(), buf.size());
-        sendFlush();
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmDataAwait(std::span<const uint8_t> buf) const {
+
+        StreamBuf sb(24 + buf.size());
+        sb.writeInt8(RFB::SERVER_FB_UPDATE).
+    	    // padding
+    	    writeInt8(0).
+    	    // rects
+    	    writeIntBE16(1).
+    	    writeIntBE16(0).
+    	    writeIntBE16(0).
+    	    writeIntBE16(0).
+    	    writeIntBE16(0).
+    	    writeIntBE32(ENCODING_LTSM).
+    	    // raw data
+    	    writeIntBE32(1).
+    	    writeIntBE32(buf.size()).
+    	    write(buf);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
     bool RFB::ServerEncoder::isClientLtsmSupported(void) const {
@@ -1447,8 +1476,8 @@ namespace LTSM {
     }
 
     bool RFB::ServerEncoder::isEncoderFFmpeg(void) const {
-        if(encoder) {
-            switch(encoder->getType()) {
+        if(encoder_) {
+            switch(encoder_->getType()) {
                 case RFB::ENCODING_LTSM_H264:
                 case RFB::ENCODING_LTSM_MPEG4:
                     return true;
@@ -1459,30 +1488,28 @@ namespace LTSM {
         return false;
     }
 
-    void RFB::ServerEncoder::sendLtsmChannel(uint8_t channel, std::span<const uint8_t> buf) {
+    asio::awaitable<void> RFB::ServerEncoder::sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t> buf) const {
         if(! clientLtsmSupported) {
-            return;
+            co_return;
         }
 
         Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
         if(buf.empty()) {
             Application::warning("{}: empty data", NS_FuncNameV);
-            return;
+            co_return;
         }
 
         assert(0xFFFF >= buf.size());
+        StreamBuf sb(5 + buf.size());
 
-        const std::scoped_lock guard{sendLock};
-        sendInt8(RFB::PROTOCOL_LTSM);
-
-        // version
-        sendInt8(LtsmProtocolVersion);
-        //channel
-        sendInt8(channel);
-
-        // data
-        sendIntBE16(buf.size());
+        sb.writeInt8(RFB::PROTOCOL_LTSM).
+    	    // version
+    	    writeInt8(LtsmProtocolVersion).
+    	    //channel
+    	    writeInt8(channel).
+    	    // data
+    	    writeIntBE16(buf.size());
 
         if(channelDebug == channel) {
             auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
@@ -1490,16 +1517,24 @@ namespace LTSM {
                            NS_FuncNameV, channel, buf.size(), str);
         }
 
-        sendRaw(buf.data(), buf.size());
-        sendFlush();
+        sb.write(buf);
+
+        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_return;
     }
 
     void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {
-        sendLtsmChannel(channel, buf);
+        asio::co_spawn(rfb_strand_, [this, channel, buf=std::move(buf)]() -> asio::awaitable<void> {
+	    co_await sendLtsmChannelAwait(channel, buf);
+	    co_return;
+	}, asio::detached);
     }
 
     void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::string&& buf) {
-        sendLtsmChannel(channel, { (const uint8_t*) buf.data(), buf.size() });
+        asio::co_spawn(rfb_strand_, [this, channel, buf=std::move(buf)]() -> asio::awaitable<void> {
+    	    co_await sendLtsmChannelAwait(channel, std::span{ (const uint8_t*) buf.data(), buf.size() });
+	    co_return;
+	}, asio::detached);
     }
 
     void RFB::ServerEncoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {
@@ -1547,18 +1582,22 @@ namespace LTSM {
         return std::make_pair(clientAuthName, clientAuthDomain);
     }
 
-    void RFB::ServerEncoder::setEncodingOptions(const std::forward_list<std::string> & opts, uint32_t frameRate) {
-        if(encoder) {
-    	    if(isEncoderFFmpeg()) {
-        	encoder->setFps(frameRate);
+    void RFB::ServerEncoder::setEncodingOptions(std::forward_list<std::string> && opts, uint32_t frameRate) {
+        if(! encoder_) {
+            return;
+        }
+
+        asio::dispatch(rfb_strand_, [this,opts=std::move(opts),frameRate]() {
+            if(isEncoderFFmpeg()) {
+            	encoder_->setFps(frameRate);
         	serverScreenUpdateRequest();
             }
 
             // apply opts: need full update
-            if(encoder->setEncodingOptions(opts)) {
+            if(encoder_->setEncodingOptions(opts)) {
                 serverScreenUpdateRequest();
             }
-        }
+        });
     }
 
     void RFB::ServerEncoder::cursorFailed(uint32_t cursorId) {

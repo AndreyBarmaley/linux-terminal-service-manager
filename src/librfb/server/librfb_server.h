@@ -53,58 +53,36 @@ namespace LTSM {
         std::vector<int> toVector(void) const;
     };
 
-    class BoostContext {
-        const int concurency_ = 1;
-        mutable boost::asio::io_context ioc_;
-        boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
-        boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
-
-      protected:
-        inline boost::asio::io_context & ioc(void) const { return ioc_; }
-        inline size_t concurency(void) const { return concurency_; }
-        inline boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
-        inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }
-        inline boost::asio::strand<boost::asio::any_io_executor> xcb_strand(void) const { return xcb_strand_; }
-
-      public:
-        explicit BoostContext(int concurency)
-            : concurency_{concurency}, ioc_{concurency}, rfb_strand_{ioc_.get_executor()}, xcb_strand_{ioc_.get_executor()} {}
-        ~BoostContext() = default;
-    };
-
     namespace RFB {
         int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
 
         /// ServerEncoder
-        class ServerEncoder : public BoostContext, public ChannelListener, public EncoderStream, public ExtClip {
+        class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip {
 
-            std::forward_list<uint32_t> cursorSended;
+            boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+            boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
+
+            mutable std::forward_list<uint32_t> cursorSended;
             ClientEncodings clientEncodings;
             std::string clientAuthName;
             std::string clientAuthDomain;
 
             std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
-
-//            std::unique_ptr<NetworkStream> socket; /// socket layer
-//            std::unique_ptr<TLS::Stream> tls; /// tls layer
-            std::unique_ptr<EncodingBase> encoder;
+            std::unique_ptr<EncodingBase> encoder_;
 
             PixelFormat clientPf;
             ColorMap colourMap;
-            std::mutex sendLock;
 
+	    // FIXME
             std::atomic<bool> rfbMessages{true};
             std::atomic<bool> fbUpdateProcessing{false};
-
-//            NetworkStream* streamIn = nullptr;
-//            NetworkStream* streamOut = nullptr;
 
             bool clientLtsmSupported = false;
             bool clientLtsmKeyboard = false;
             bool clientVideoSupported = false;
             bool clientTrueColor = true;
             bool clientBigEndian = false;
-            bool continueUpdatesProcessed = false;
+            mutable bool continueUpdatesProcessed = false;
 
           protected:
             friend class EncodingBase;
@@ -116,7 +94,7 @@ namespace LTSM {
             friend class EncodingFFmpeg;
 
             const EncodingBase* getEncoder(void) const {
-                return encoder.get();
+                return encoder_.get();
             }
 
             const ClientEncodings & getClientEncodings(void) const {
@@ -145,7 +123,7 @@ namespace LTSM {
 
             void setEncodingDebug(int v);
             void setEncodingThreads(int v);
-            void setEncodingOptions(const std::forward_list<std::string> &, uint32_t frameRate);
+            void setEncodingOptions(std::forward_list<std::string> &&, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;
             bool isClientLtsmKeyboard(void) const;
@@ -160,13 +138,14 @@ namespace LTSM {
 
             boost::asio::awaitable<bool> authVncInit(const std::string &);
             boost::asio::awaitable<bool> authVenCryptInit(const SecurityInfo &);
-            boost::asio::awaitable<void> sendColourMapAwait(int first);
-            boost::asio::awaitable<void> sendBellEventAwait(void);
+            boost::asio::awaitable<void> sendColourMapAwait(int first) const;
+            boost::asio::awaitable<void> sendBellEventAwait(void) const;
             boost::asio::awaitable<void> sendCutTextEventAwait(std::span<const uint8_t>, bool ext) const;
-            void sendFrameBufferUpdate(const FrameBuffer &);
-            void sendContinuousUpdates(bool enable);
-            void sendUpdateScreen(const XCB::Region &);
-            void sendEncodingLtsmSupported(void);
+            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable) const;
+            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const FrameBuffer &) const;
+            boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &);
+            boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
+
             bool serverSide(void) const override {
                 return true;
             }
@@ -184,8 +163,11 @@ namespace LTSM {
             void cursorFailed(uint32_t);
 
           public:
-            ServerEncoder();
+            ServerEncoder(const boost::asio::any_io_executor&);
             ~ServerEncoder() = default;
+
+            inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }
+            inline boost::asio::strand<boost::asio::any_io_executor> xcb_strand(void) const { return xcb_strand_; }
 
             void assignSocket(int);
 
@@ -203,12 +185,12 @@ namespace LTSM {
 
             void serverSelectEncodings(void);
 
-            void sendEncodingDesktopResize(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &);
-            void sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
-            void sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
+            boost::asio::awaitable<void> sendEncodingDesktopResizeAwait(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &) const;
+            boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const;
+            boost::asio::awaitable<void> sendEncodingLtsmCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const;
+            boost::asio::awaitable<void> sendEncodingLtsmDataAwait(std::span<const uint8_t>) const;
+            boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>) const;
 
-            void sendEncodingLtsmData(std::span<const uint8_t>);
-            void sendLtsmChannel(uint8_t channel, std::span<const uint8_t>);
             void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override final;
             void sendLtsmChannelData(uint8_t channel, std::string&&) override final;
 

@@ -126,23 +126,24 @@ namespace LTSM {
             const AVCodec* codec = nullptr;
 #endif
 
-            std::mutex lockUpdate;
             std::chrono::steady_clock::time_point updatePoint;
 
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
             int fps = 16;
             // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
-            int64_t pts = 0;
+            mutable int64_t pts = 0;
 
           protected:
             void initContext(const XCB::Size &, const PixelFormat &);
 
           public:
             void resizedEvent(const XCB::Size &) override;
-            void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
 
             explicit EncodingFFmpeg(int type = ENCODING_LTSM_H264);
             ~EncodingFFmpeg() = default;
+
+            void reinitContext(const EncoderStream*, const XCB::Size &) final;
 
             const char* getTypeName(void) const override;
             void setFps(uint32_t) override;

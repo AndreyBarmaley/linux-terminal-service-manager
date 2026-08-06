@@ -29,6 +29,8 @@
 #include <atomic>
 #include <string>
 
+#include <boost/asio.hpp>
+
 #include "ltsm_global.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
@@ -54,7 +56,21 @@ namespace LTSM::Connector {
     };
 #endif
 
-    class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
+    class BoostContext {
+        const int concurency_ = 1;
+        boost::asio::io_context ioc_;
+
+      protected:
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline size_t concurency(void) const { return concurency_; }
+        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
+
+      public:
+        explicit BoostContext(int concurency) : concurency_{concurency}, ioc_{concurency} {}
+        ~BoostContext() = default;
+    };
+
+    class DBusProxy : public ApplicationJsonConfig, public BoostContext, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
         std::list<RenderPrimitivePtr> renderPrimitives_;
         std::string connType_;
         std::string remoteAddr_;

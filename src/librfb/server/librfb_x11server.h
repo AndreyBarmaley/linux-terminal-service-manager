@@ -33,6 +33,8 @@
 namespace LTSM {
     namespace RFB {
         class X11Server : protected XCB::RootDisplay, public RFB::ServerEncoder, public XCB::SelectionSource, public XCB::SelectionRecipient {
+            boost::asio::io_context & ioc_;
+
             std::vector<uint8_t> clientClipboard;
 
             XCB::Region clientRegion;
@@ -108,6 +110,7 @@ namespace LTSM {
             boost::asio::awaitable<void> signalsHandler(void);
             boost::asio::awaitable<void> serverUpdateLoop(void);
             boost::asio::awaitable<void> serverUpdateProcess(void);
+            boost::asio::awaitable<void> sendUpdateRichCursorAwait(void);
 
             virtual bool xcbAllowMessages(void) const = 0;
             virtual void xcbDisableMessages(bool) = 0;
@@ -127,10 +130,8 @@ namespace LTSM {
             virtual void serverEncodingsEvent(void) {/* empty */}
             virtual void serverFrameBufferModifyEvent(FrameBuffer &) const {/* empty */}
 
-            void sendUpdateRichCursor(void);
-
           public:
-            X11Server() : signals_{ioc().get_executor()} {}
+            X11Server(boost::asio::io_context & ctx) : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()} {}
             ~X11Server() = default;
 
             int rfbCommunication(void);
