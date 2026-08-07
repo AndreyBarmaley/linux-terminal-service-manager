@@ -24,7 +24,6 @@
 #ifndef _LIBRFB_X11CLI_
 #define _LIBRFB_X11CLI_
 
-#include <mutex>
 #include <vector>
 
 #include "librfb_client.h"
@@ -34,17 +33,11 @@ namespace LTSM {
     namespace RFB {
         class X11Client : public XCB::RootDisplay, public ClientDecoder, public XCB::SelectionSource, public XCB::SelectionRecipient {
 
-            boost::asio::strand<boost::asio::any_io_executor> x11_strand_;
             std::vector<uint8_t> clientClipboard;
-
-            mutable std::mutex clientLock;
-
             uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
           protected:
-            inline const boost::asio::strand<boost::asio::any_io_executor> & x11_strand(void) const { return x11_strand_; }
-
             // selection source
             std::vector<xcb_atom_t> selectionSourceTargets(void) const override;
             bool selectionSourceReady(xcb_atom_t) const override;

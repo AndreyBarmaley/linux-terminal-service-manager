@@ -24,7 +24,6 @@
 #ifndef _LIBRFB_WINCLI_
 #define _LIBRFB_WINCLI_
 
-#include <mutex>
 #include <vector>
 
 #include "librfb_client.h"
@@ -33,17 +32,11 @@ namespace LTSM {
     namespace RFB {
         class WinClient : public ClientDecoder {
 
-            boost::asio::strand<boost::asio::any_io_executor> win_strand_;
             std::vector<uint8_t> clientClipboard;
-
-            mutable std::mutex clientLock;
-
-            mutable uint16_t clipLocalTypes = 0;
+            uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
           protected:
-            inline const boost::asio::strand<boost::asio::any_io_executor> & win_strand(void) const { return win_strand_; }
-
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
             std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;

@@ -1078,7 +1078,9 @@ namespace LTSM {
 
     asio::awaitable<void> RFB::ClientDecoder::recvBellEventAwait(void) {
         Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
-        clientRecvBellEvent();
+        asio::post(xcb_strand_, [this]() {
+            clientRecvBellEvent();
+        });
         co_return;
     }
 
@@ -1095,7 +1097,7 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        auto buf = co_await stream_->async_recv_buffer(std::abs(length));
+        auto buffer = co_await stream_->async_recv_buffer(std::abs(length));
 
         if(0 == length) {
             co_return;
@@ -1105,10 +1107,14 @@ namespace LTSM {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         if(0 < length) {
             Application::debug(DebugType::Rfb, "{}: length: {}", NS_FuncNameV, length);
-            clientRecvCutTextEvent(std::move(buf));
+            asio::post(xcb_strand_, [this, buf=std::move(buffer)]() mutable {
+                clientRecvCutTextEvent(std::move(buf));
+            });
         } else {
             Application::debug(DebugType::Rfb, "{}: length: {}, extclip", NS_FuncNameV, length);
-            recvExtClipboardCapsEvent(std::move(buf));
+            asio::post(xcb_strand_, [this, buf=std::move(buffer)]() mutable {
+                recvExtClipboardCapsEvent(std::move(buf));
+            });
         }
         co_return;
     }

@@ -33,7 +33,7 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
-    RFB::WinClient::WinClient(const boost::asio::any_io_executor& ctx) : ClientDecoder(ctx), win_strand_{ctx} {
+    RFB::WinClient::WinClient(const boost::asio::any_io_executor& ctx) : ClientDecoder(ctx) {
     }
 
     void RFB::WinClient::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
@@ -72,8 +72,6 @@ namespace LTSM {
                             if(waitCb.check())
                                 break;
 
-                            const std::scoped_lock guard{ clientLock };
-
                             if(clientClipboard.size())
                                 return clientClipboard;
                         }
@@ -98,10 +96,10 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
+        // xcb context
         Application::debug(DebugType::WinCli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
-            const std::scoped_lock guard{ clientLock };
             clientClipboard.swap(buf);
         } else {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -110,9 +108,8 @@ namespace LTSM {
     }
 
     void RFB::WinClient::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {
+        // xcb context
         Application::debug(DebugType::WinCli, "{}: data length: {}", NS_FuncNameV, buf.size());
-
-        const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);
 
         //if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))

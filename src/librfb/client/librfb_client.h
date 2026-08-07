@@ -24,7 +24,6 @@
 #ifndef _LIBRFB_CLIENT_
 #define _LIBRFB_CLIENT_
 
-#include <mutex>
 #include <memory>
 
 #include "ltsm_channels.h"
@@ -38,6 +37,7 @@ namespace LTSM {
         class ClientDecoder : public ChannelClient, public DecoderRender, public ExtClip {
 
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
+            boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer incr_update_timer_;
 
             std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
@@ -58,8 +58,6 @@ namespace LTSM {
             friend class DecodingTRLE;
             friend class DecodingZlib;
             friend class DecodingFFmpeg;
-
-            inline const boost::asio::strand<boost::asio::any_io_executor> & rfb_strand(void) const { return rfb_strand_; }
 
             // decoder stream interface
             const PixelFormat & serverFormat(void) const override;
@@ -111,8 +109,12 @@ namespace LTSM {
           public:
             ClientDecoder(const boost::asio::any_io_executor& ctx)
                 : rfb_strand_{ctx}
+                , xcb_strand_{ctx}
                 , incr_update_timer_{rfb_strand_} {
             }
+
+            inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }
+            inline boost::asio::strand<boost::asio::any_io_executor> xcb_strand(void) const { return xcb_strand_; }
 
             void sendCutText(std::vector<uint8_t>&&, bool ext);
 

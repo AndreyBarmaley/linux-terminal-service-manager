@@ -151,6 +151,7 @@ namespace LTSM {
 #endif
 
     void RFB::ExtClip::recvExtClipboardCapsEvent(std::vector<uint8_t> && buf) {
+        // xcb context
         StreamBuf sb(std::move(buf));
 
         if(4 > sb.last()) {

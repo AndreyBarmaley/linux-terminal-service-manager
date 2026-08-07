@@ -1262,7 +1262,7 @@ namespace LTSM {
             }
 
 #ifdef __UNIX__
-            asio::co_spawn(x11_strand(), x11EventsLoop(),
+            asio::co_spawn(xcb_strand(), x11EventsLoop(),
                 asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
             if(isContinueUpdatesSupport()) {
@@ -1509,7 +1509,7 @@ namespace LTSM {
 
     void ClientApp::clientRecvLtsmHandshakeEvent(int flags) {
 #ifdef __UNIX__
-        asio::post(x11_strand(), [this]() {
+        asio::post(xcb_strand(), [this]() {
             if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB))) {
                 // switch to rfb_strand
                 asio::post(rfb_strand(), [this, names=extXkb->getNames(), group=extXkb->getLayoutGroup()]() {
@@ -1656,6 +1656,7 @@ namespace LTSM {
     }
 
     void ClientApp::clientRecvBellEvent(void) {
+        // xcb context
 #ifdef __UNIX__
         bell(75);
 #endif
