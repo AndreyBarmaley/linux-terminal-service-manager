@@ -652,6 +652,9 @@ namespace LTSM {
         channelsShutdown();
         std::this_thread::sleep_for(100ms);
         rfbMessages = false;
+        if(stream_) {
+            stream_->closeSocket();
+        }
     }
 
     asio::awaitable<void> RFB::ServerEncoder::rfbWaitMessage(void) {
