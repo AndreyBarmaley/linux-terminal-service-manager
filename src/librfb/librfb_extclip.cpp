@@ -283,6 +283,7 @@ namespace LTSM {
 
         if(localExtClipboardFlags & ExtClipCaps::OpNotify) {
             const int allowTypes = 0xFFFF & remoteExtClipboardFlags & flags;
+            // FIXME strand
             extClipboardRemoteTypesEvent(allowTypes);
         } else {
             Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
@@ -431,6 +432,7 @@ namespace LTSM {
         sb.writeIntBE32(zip.size());
         sb.write(zip);
 
+        // FIXME strand
         extClipboardSendEvent(std::move(sb.rawbuf()));
     }
 

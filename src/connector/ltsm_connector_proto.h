@@ -115,6 +115,8 @@ namespace LTSM::Connector {
         void loadKeymap(const std::string & file);
         boost::asio::awaitable<void> transferFilesPartial(std::list<TupleFileSize>&&);
 
+        boost::asio::awaitable<void> onLoginSuccessAwait(int newDisplay, uint32_t userUid);
+
       public:
         ConnectorLtsm(const std::filesystem::path & confile, bool debug)
             : DBusProxy(ConnectorType::LTSM, confile, debug), RFB::X11Server(ioc()) {}

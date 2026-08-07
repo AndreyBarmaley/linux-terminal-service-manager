@@ -697,7 +697,7 @@ namespace LTSM {
     RFB::EncodingRet RFB::EncodingZlib::sendRegion(const EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId) const {
 
-	if(st->displaySize() == fb.region().toSize() &&
+	if(st->isDisplaySize(fb.region()) &&
 	    st->serverFormat() == st->clientFormat()) {
     	    auto zip = zlib_->deflateData(fb.span(), Z_SYNC_FLUSH);
     	    return std::make_pair(reg + top, BinaryBuf{std::move(zip)});
@@ -751,7 +751,7 @@ namespace LTSM {
         XCB::Size bsz;
         const size_t blocksz = 256 * 256;
 
-        if(st->displaySize() == fb.region().toSize()) {
+        if(st->isDisplaySize(fb.region())) {
             bsz = 1 < threads ?
                   XCB::Size(fb.width(), fb.height() / threads) :
                   fb.region().toSize();
@@ -889,7 +889,7 @@ namespace LTSM {
         XCB::Size bsz;
         const size_t blocksz = 256 * 256;
 
-        if(st->displaySize() == fb.region().toSize()) {
+        if(st->isDisplaySize(fb.region())) {
             bsz = 1 < threads ?
                   XCB::Size(fb.width(), fb.height() / threads) :
                   fb.region().toSize();
@@ -985,7 +985,7 @@ namespace LTSM {
         XCB::Size bsz;
         const size_t blocksz = 256 * 256;
 
-        if(st->displaySize() == fb.region().toSize()) {
+        if(st->isDisplaySize(fb.region())) {
             bsz = 1 < threads ?
                   XCB::Size(fb.width(), fb.height() / threads) :
                   fb.region().toSize();

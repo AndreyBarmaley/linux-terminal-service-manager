@@ -74,7 +74,6 @@ namespace LTSM {
             ColorMap colourMap;
 
 	    // FIXME
-            std::atomic<bool> rfbMessages{true};
             std::atomic<bool> fbUpdateProcessing{false};
 
             bool clientLtsmSupported = false;
@@ -108,13 +107,6 @@ namespace LTSM {
             virtual void serverScreenUpdateRequest(void /* full update */) = 0;
             virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
-            // network stream interface
-            void sendFlush(void) override;
-            void sendRaw(const void* ptr, size_t len) override;
-            void recvRaw(void* ptr, size_t len) const override;
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-
             // channel listenner interface
             void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
 
@@ -131,7 +123,6 @@ namespace LTSM {
             bool isContinueUpdatesProcessed(void) const;
             bool isEncoderFFmpeg(void) const;
 
-            bool isUpdateProcessed(void) const;
             void waitUpdateProcess(void);
 
             void serverSelectClientEncoding(void);
@@ -140,7 +131,7 @@ namespace LTSM {
             boost::asio::awaitable<bool> authVenCryptInit(const SecurityInfo &);
             boost::asio::awaitable<void> sendColourMapAwait(int first) const;
             boost::asio::awaitable<void> sendBellEventAwait(void) const;
-            boost::asio::awaitable<void> sendCutTextEventAwait(std::span<const uint8_t>, bool ext) const;
+            boost::asio::awaitable<void> sendCutTextEventAwait(std::vector<uint8_t>, bool ext) const;
             boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const FrameBuffer &) const;
             boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &);
@@ -178,8 +169,7 @@ namespace LTSM {
             boost::asio::awaitable<int> serverHandshakeVersion(void);
             boost::asio::awaitable<bool> serverSecurityInit(int protover, const SecurityInfo &);
             boost::asio::awaitable<void> serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
-            bool rfbMessagesRunning(void) const;
-            void rfbMessagesShutdown(void);
+            void socketShutdown(void);
 
             boost::asio::awaitable<void> rfbWaitMessage(void);
 
@@ -217,7 +207,7 @@ namespace LTSM {
             virtual void serverRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
             virtual void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) { /* empty */ }
             virtual void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) { /* empty */ }
-            virtual void serverRecvDesktopSizeEvent(const std::vector<ScreenInfo> &) { /* empty */ }
+            virtual void serverRecvDesktopSizeEvent(std::vector<ScreenInfo>&&) { /* empty */ }
             virtual void serverSendFBUpdateEvent(const XCB::Region &) { /* empty */ }
             virtual void serverEncodingSelectedEvent(void) { /* empty */ }
         };

@@ -37,9 +37,7 @@ namespace LTSM::Connector {
     /* ConnectorLtsm */
     ConnectorLtsm::~ConnectorLtsm() {
         try {
-            rfbMessagesShutdown();
-            xcbDisableMessages(true);
-
+            X11Server::stop();
             if(0 < displayNum()) {
                 busConnectorTerminated(displayNum(), getpid());
                 clientDisconnectedEvent(displayNum());
@@ -64,38 +62,10 @@ namespace LTSM::Connector {
         return rfbCommunication();
     }
 
-    void ConnectorLtsm::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
-        if(display != displayNum()) {
-            return;
-        }
-
-        xcbDisableMessages(true);
-        waitUpdateProcess();
-        Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
-                            userName, userUid);
-        int oldDisplay = displayNum();
-        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
-
-        if(newDisplay < 0) {
-            Application::error("{}: {} failed", NS_FuncNameV, "user session request");
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        if(newDisplay != oldDisplay) {
-            // wait xcb old operations ended
-            std::this_thread::sleep_for(100ms);
-
-            if(! xcbConnect(newDisplay, *this)) {
-                Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
-                throw std::runtime_error(NS_FuncNameS);
-            }
-
-            busShutdownDisplay(oldDisplay);
-        }
-
-        xcbShmInit(userUid);
+    asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(int newDisplay, uint32_t userUid) {
+        co_await xcbShmInit(userUid);
         xcbDisableMessages(false);
-        auto & clientRegion = getClientRegion();
+        const auto clientRegion = getClientRegion();
 
         // fix new session size
         if(xcbDisplay()->size() != clientRegion.toSize()) {
@@ -121,20 +91,53 @@ namespace LTSM::Connector {
         busConnectorConnected(newDisplay, getpid());
         busSetSessionEncodings(newDisplay, getClientEncodings().toVector());
 
-        asio::dispatch(rfb_strand(), [this]() {
-            JsonObjectStream jos;
-            jos.push("cmd", SystemCommand::LoginSuccess);
-            jos.push("action", true);
-            static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
-        });
+        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::LoginSuccess);
+        jos.push("action", true);
+        static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
+
+        co_return;
+    }
+
+    void ConnectorLtsm::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
+        if(display != displayNum()) {
+            return;
+        }
+
+        xcbDisableMessages(true);
+        // FIXME rfb strand?
+        waitUpdateProcess();
+
+        Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
+                            userName, userUid);
+        int oldDisplay = displayNum();
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
+
+        if(newDisplay < 0) {
+            Application::error("{}: {} failed", NS_FuncNameV, "user session request");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        if(newDisplay != oldDisplay) {
+            // wait xcb old operations ended
+            std::this_thread::sleep_for(100ms);
+
+            if(! xcbConnect(newDisplay, *this)) {
+                Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
+                throw std::runtime_error(NS_FuncNameS);
+            }
+
+            busShutdownDisplay(oldDisplay);
+        }
+
+        asio::co_spawn(xcb_strand(), onLoginSuccessAwait(newDisplay, userUid), asio::detached);
     }
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            xcbDisableMessages(true);
-            waitUpdateProcess();
-            rfbMessagesShutdown();
+            X11Server::stop();
         }
     }
 

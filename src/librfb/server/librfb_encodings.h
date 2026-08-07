@@ -38,7 +38,7 @@
 namespace LTSM {
     namespace RFB {
         /// EncoderStream
-        class EncoderStream : public NetworkStream {
+        class EncoderStream {
           public:
             int writeHeader(StreamBuf&, int type, const XCB::Region &) const;
             int writePixel(StreamBuf&, uint32_t pixel) const;
@@ -50,7 +50,7 @@ namespace LTSM {
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
             virtual bool clientIsBigEndian(void) const = 0;
-            virtual XCB::Size displaySize(void) const = 0;
+            virtual bool isDisplaySize(const XCB::Size&) const = 0;
         };
 
         using EncodingRet = std::pair<XCB::Region, BinaryBuf>;

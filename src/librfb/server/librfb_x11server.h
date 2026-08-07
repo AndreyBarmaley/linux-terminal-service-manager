@@ -26,7 +26,7 @@
 
 #include <memory>
 #include <atomic>
-#include <shared_mutex>
+#include <mutex>
 
 #include "librfb_server.h"
 
@@ -44,6 +44,7 @@ namespace LTSM {
             boost::asio::cancellation_signal xcb_cancel_;
             boost::asio::cancellation_signal rfb_cancel_;
             boost::asio::cancellation_signal srv_cancel_;
+            boost::asio::steady_timer timer_update_;
 
             mutable std::mutex serverLock;
             std::chrono::time_point<std::chrono::steady_clock> frameTimePoint;
@@ -57,6 +58,7 @@ namespace LTSM {
             std::atomic<bool> clientUpdateCursor{false};
             std::atomic<bool> fullscreenUpdateReq{false};
 
+            std::once_flag stop_flag_;
             XCB::ShmIdShared shm;
 
             int rfbStartingCode_ = 0;
@@ -64,8 +66,8 @@ namespace LTSM {
             uint16_t clipRemoteTypes = 0;
 
           protected:
-            void stop(void);
             boost::asio::awaitable<void> rfbStart(void);
+            void rfbStop(void);
 
             // root display
             void xcbFixesCursorChangedEvent(void) override;
@@ -86,7 +88,7 @@ namespace LTSM {
             void selectionChangedEvent(void) const override;
 
             // encoder stream
-            XCB::Size displaySize(void) const override;
+            bool isDisplaySize(const XCB::Size&) const override;
 
             // server encoder
             void serverScreenUpdateRequest(void) override;
@@ -101,9 +103,13 @@ namespace LTSM {
             void extClipboardSendEvent(std::vector<uint8_t> &&) override;
 
             XCB::RootDisplay* xcbDisplay(void);
-            const XCB::Region & getClientRegion(void) const;
+            XCB::Region getClientRegion(void) const;
 
-            void xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
+            boost::asio::awaitable<void> xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
+
+            boost::asio::awaitable<XCB::Size> xcbDisplaySize(void) const;
+            boost::asio::awaitable<XCB::Region> xcbDisplayRegion(void) const;
+            boost::asio::awaitable<uint16_t> xcbDisplayDepth(void) const;
 
             boost::asio::awaitable<void> xcbEventsLoop(void);
             boost::asio::awaitable<void> rfbReceiveMessages(void);
@@ -131,10 +137,12 @@ namespace LTSM {
             virtual void serverFrameBufferModifyEvent(FrameBuffer &) const {/* empty */}
 
           public:
-            X11Server(boost::asio::io_context & ctx) : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()} {}
+            X11Server(boost::asio::io_context & ctx)
+                : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()}, timer_update_{ctx.get_executor()} {}
             ~X11Server() = default;
 
             int rfbCommunication(void);
+            void stop(void);
 
             // server encoder events
             void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) override;
@@ -144,7 +152,7 @@ namespace LTSM {
             void serverRecvCutTextEvent(std::vector<uint8_t> &&) override;
             void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) override;
             void serverSendFBUpdateEvent(const XCB::Region &) override;
-            void serverRecvDesktopSizeEvent(const std::vector<RFB::ScreenInfo> &) override;
+            void serverRecvDesktopSizeEvent(std::vector<RFB::ScreenInfo>&&) override;
             void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region & reg) override;
         };
     }
