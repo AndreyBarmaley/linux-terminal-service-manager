@@ -298,7 +298,6 @@ namespace LTSM {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
 
         if(localExtClipboardFlags & ExtClipCaps::OpProvide) {
-            const std::scoped_lock guard{localProvide};
             auto len = sb.readIntBE32();
 
             if(len) {
@@ -369,8 +368,6 @@ namespace LTSM {
             Application::warning("{}: types empty", NS_FuncNameV);
             return;
         }
-
-        const std::scoped_lock guard{localProvide};
 
         // skip types, see recvExtClipboardProvide
         if((localProvideTypes & types) == types) {

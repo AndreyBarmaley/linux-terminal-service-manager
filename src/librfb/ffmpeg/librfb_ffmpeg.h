@@ -24,7 +24,6 @@
 #ifndef _LIBRFB_FFMPEG_
 #define _LIBRFB_FFMPEG_
 
-#include <mutex>
 #include <chrono>
 #include <memory>
 #include <stdexcept>

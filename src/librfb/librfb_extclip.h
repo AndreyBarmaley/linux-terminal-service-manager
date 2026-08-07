@@ -24,7 +24,6 @@
 #ifndef _LIBRFB_EXTCLIP_
 #define _LIBRFB_EXTCLIP_
 
-#include <mutex>
 #include <vector>
 #include <string>
 #include <cinttypes>
