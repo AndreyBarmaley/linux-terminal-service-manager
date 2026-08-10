@@ -32,7 +32,7 @@
 
 namespace LTSM {
     namespace RFB {
-        class X11Server : protected XCB::RootDisplay, public RFB::ServerEncoder, public XCB::SelectionSource, public XCB::SelectionRecipient {
+        class X11Server : public ServerEncoder, public XCB::SelectionSource, public XCB::SelectionRecipient, protected XCB::RootDisplay {
             boost::asio::io_context & ioc_;
 
             std::vector<uint8_t> clientClipboard;

@@ -106,7 +106,7 @@ namespace LTSM::Connector {
         }
 
         xcbDisableMessages(true);
-        // FIXME rfb strand?
+        // FIXME rfb strand? waitUpdateProcessAwait
         waitUpdateProcess();
 
         Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,

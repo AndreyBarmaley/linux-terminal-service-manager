@@ -78,7 +78,7 @@ namespace LTSM {
 
     // ServerEncoder
     RFB::ServerEncoder::ServerEncoder(const boost::asio::any_io_executor& ctx)
-        : rfb_strand_{ctx}, xcb_strand_{ctx} {
+        : rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx} {
         stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
@@ -560,9 +560,18 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::waitUpdateProcess(void) {
-        while(fbUpdateProcessing) {
-            std::this_thread::sleep_for(5ms);
+        while(fbUpdateProcessing_.load(std::memory_order_acquire)) {
+            fbUpdateProcessing_.wait(true, std::memory_order_acquire); 
         }
+    }
+
+    asio::awaitable<void> RFB::ServerEncoder::waitUpdateProcessAwait(void) {
+        while(fbUpdateProcessing_.load(std::memory_order_acquire)) {
+            timer_updates_.expires_after(std::chrono::milliseconds(1));
+            co_await timer_updates_.async_wait(asio::use_awaitable);
+        }
+
+        co_return;
     }
 
     asio::awaitable<void> RFB::ServerEncoder::sendUpdateScreenAwait(const XCB::Region & area) {
@@ -572,7 +581,7 @@ namespace LTSM {
         }
 
         try {
-            fbUpdateProcessing = true;
+            fbUpdateProcessing_ = true;
             co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
             auto reply = serverFrameBuffer(area);
             co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
@@ -584,11 +593,11 @@ namespace LTSM {
         } catch(const xcb_error_busy&) {
             Application::warning("{}: update busy, area: {}", NS_FuncNameV, area);
         } catch(const std::exception & err) {
-            fbUpdateProcessing = false;
+            fbUpdateProcessing_ = false;
             throw err;
         }
 
-        fbUpdateProcessing = false;
+        fbUpdateProcessing_ = false;
         co_return;
     }
 
@@ -597,6 +606,7 @@ namespace LTSM {
         if(stream_) {
             stream_->closeSocket();
         }
+        timer_updates_.cancel();
     }
 
     asio::awaitable<void> RFB::ServerEncoder::rfbWaitMessage(void) {
@@ -677,6 +687,8 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ServerEncoder::recvPixelFormatAwait(void) {
+        co_await waitUpdateProcessAwait();
+
         // RFB: 6.4.1
         auto buf = co_await stream_->async_recv_buffer(19);
         StreamBufRef sb(buf.data(), buf.size());
@@ -739,6 +751,8 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ServerEncoder::recvSetEncodingsAwait(void) {
+        co_await waitUpdateProcessAwait();
+
         // RFB: 6.4.2
         // skip padding
         const auto pad1 = co_await stream_->async_recv_byte();
@@ -961,9 +975,11 @@ namespace LTSM {
             screens.emplace_back(info);
         }
 
-        asio::post(xcb_strand_, [this, screens=std::move(screens)]() mutable {
+        asio::co_spawn(xcb_strand_, [this, screens=std::move(screens)]() mutable -> asio::awaitable<void> {
+            co_await waitUpdateProcessAwait();
             serverRecvDesktopSizeEvent(std::move(screens));
-        });
+            co_return;
+        }, asio::detached);
         co_return;
     }
 
@@ -1181,11 +1197,11 @@ namespace LTSM {
                 break;
 
             case RFB::ENCODING_TRLE:
-                encoder_ = std::make_unique<EncodingTRLE>(false);
+                encoder_ = std::make_unique<EncodingTRLE>();
                 break;
 
             case RFB::ENCODING_ZRLE:
-                encoder_ = std::make_unique<EncodingTRLE>(true);
+                encoder_ = std::make_unique<EncodingZRLE>();
                 break;
 #ifdef LTSM_ENCODING_FFMPEG
 
@@ -1195,11 +1211,11 @@ namespace LTSM {
                 break;
 #endif
             case RFB::ENCODING_LTSM_ZQOI:
-                encoder_ = std::make_unique<EncodingQOI>(true);
+                encoder_ = std::make_unique<EncodingZQOI>();
                 break;
 
             case RFB::ENCODING_LTSM_QOI:
-                encoder_ = std::make_unique<EncodingQOI>(false);
+                encoder_ = std::make_unique<EncodingQOI>();
                 break;
 
             case RFB::ENCODING_LTSM_LZ4:
@@ -1307,7 +1323,7 @@ namespace LTSM {
                 auto pixel = fb.pixel(XCB::Point(ox, oy));
                 auto pixel2 = fb.pixelFormat().convertTo(pixel, clientFormatAlpha);
                 // part1: send pixels buf
-                writePixelRaw(sb, pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
+                writeRawPixel(sb, pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
                 bitmask.pushBit(fb.pixelFormat().alpha(pixel) == fb.pixelFormat().amax());
             }
 

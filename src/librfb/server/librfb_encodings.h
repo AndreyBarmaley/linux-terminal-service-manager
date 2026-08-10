@@ -25,6 +25,7 @@
 #define _LIBRFB_ENCODINGS_
 
 #include <list>
+#include <mutex>
 #include <forward_list>
 
 #include "ltsm_librfb.h"
@@ -42,10 +43,13 @@ namespace LTSM {
           public:
             int writeHeader(StreamBuf&, int type, const XCB::Region &) const;
             int writePixel(StreamBuf&, uint32_t pixel) const;
-	    int writePixelRaw(StreamBuf&, uint32_t pixel, uint8_t bpp, bool be) const;
             int writeCPixel(StreamBuf&, uint32_t pixel) const;
-            int writeRunLength(StreamBuf&, uint32_t length) const;
+
             int writeRawRegionPixels(StreamBuf&, const XCB::Region &, const FrameBuffer &) const;
+            BinaryBuf getRawRegionPixels(const XCB::Region &, const FrameBuffer &) const;
+
+	    static int writeRawPixel(StreamBuf&, uint32_t pixel, uint8_t bpp, bool be);
+            static int writeRunLength(StreamBuf&, uint32_t length);
 
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
@@ -53,7 +57,7 @@ namespace LTSM {
             virtual bool isDisplaySize(const XCB::Size&) const = 0;
         };
 
-        using EncodingRet = std::pair<XCB::Region, BinaryBuf>;
+        using EncodingRet = BinaryBuf;
 
         /// EncodingBase
         class EncodingBase {
@@ -83,7 +87,7 @@ namespace LTSM {
         /// EncodingRaw
         class EncodingRaw : public EncodingBase {
           protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &,
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &,
                     const FrameBuffer &, int jobId) const;
 
           public:
@@ -97,10 +101,10 @@ namespace LTSM {
 
         /// EncodingRRE
         class EncodingRRE : public EncodingBase {
-          protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
-            void sendRects(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
+            void writeRectsTo(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
                            const std::list<XCB::RegionPixel> &) const;
+          protected:
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
@@ -117,13 +121,13 @@ namespace LTSM {
 
         /// EncodingHexTile
         class EncodingHexTile : public EncodingBase {
-          protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
-            void sendRegionForeground(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
+            void writeRegionToForeground(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
                                       const std::list<XCB::RegionPixel> &) const;
-            void sendRegionColored(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
+            void writeRegionToColored(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
                                    const std::list<XCB::RegionPixel> &) const;
-            void sendRegionRaw(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId) const;
+            void writeRegionToRaw(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId) const;
+          protected:
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
@@ -136,29 +140,37 @@ namespace LTSM {
 
         /// EncodingTRLE
         class EncodingTRLE : public EncodingBase {
-            std::unique_ptr<ZLib::DeflateBase> zlib_;
-
-          protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
-            void sendRegionPacked(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, const Tools::StreamBitsPack::Field &,
+            void writeRegionToPacked(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, const Tools::StreamBitsPack::Field &,
                                   const PixelMapPalette &) const;
-            void sendRegionPlain(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelLengthList &) const;
-            void sendRegionPalette(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapPalette &,
+            void writeRegionToPlain(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelLengthList &) const;
+            void writeRegionToPalette(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapPalette &,
                                    const PixelLengthList &) const;
-            void sendRegionRaw(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &) const;
+            void writeRegionToRaw(StreamBuf&, const EncoderStream*, const XCB::Region &, const FrameBuffer &) const;
+          protected:
+            EncodingTRLE(bool zlre) : EncodingBase(zlre ? ENCODING_ZRLE : ENCODING_TRLE) {}
+
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
             const char* getTypeName(void) const override {
-                return isZRLE() ? "ZRLE" : "TRLE";
+                return "TRLE";
             }
 
-            EncodingTRLE(bool zlib = false) : EncodingBase(zlib ? ENCODING_ZRLE : ENCODING_TRLE),
-                zlib_{std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED)} {}
+            EncodingTRLE() : EncodingBase(ENCODING_TRLE) {}
+        };
 
-            bool isZRLE(void) const {
-                return getType() == ENCODING_ZRLE;
+        /// EncodingZRLE
+        class EncodingZRLE : public EncodingTRLE {
+            std::unique_ptr<ZLib::DeflateBase> zlib_;
+
+          public:
+            void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
+            const char* getTypeName(void) const override {
+                return "ZRLE";
             }
+
+            EncodingZRLE() : EncodingTRLE(true), zlib_{std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED)} {}
         };
 
         /// EncodingZlib
@@ -167,7 +179,7 @@ namespace LTSM {
             int zlevel;
 
           protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
@@ -182,7 +194,7 @@ namespace LTSM {
         /// EncodingLZ4
         class EncodingLZ4 : public EncodingBase {
           protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
@@ -199,7 +211,7 @@ namespace LTSM {
             int jpegSamp = TJSAMP_420;
 
           protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
@@ -216,20 +228,31 @@ namespace LTSM {
         /// EncodingQOI
         class EncodingQOI : public EncodingBase {
           protected:
-            EncodingRet sendRegion(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
+            EncodingQOI(bool lz4) : EncodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
             BinaryBuf encodeBGRx(const FrameBuffer &, const XCB::Region &, const PixelFormat &) const;
+
+            virtual EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const;
 
           public:
             void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
             const char* getTypeName(void) const override {
-                return isZQOI() ? "ZQOI" : "QOI";
+                return "QOI";
             }
 
-            EncodingQOI(bool lz4 = false) : EncodingBase(lz4 ? ENCODING_LTSM_ZQOI : ENCODING_LTSM_QOI) {}
+            EncodingQOI() : EncodingBase(ENCODING_LTSM_QOI) {}
+        };
 
-            bool isZQOI(void) const {
-                return getType() == ENCODING_LTSM_ZQOI;
+        /// EncodingZQOI
+        class EncodingZQOI : public EncodingQOI {
+          protected:
+            EncodingRet writeRegionTo(const EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId) const final;
+
+          public:
+            const char* getTypeName(void) const override {
+                return "ZQOI";
             }
+
+            EncodingZQOI() : EncodingQOI(true) {}
         };
     }
 }

@@ -61,6 +61,7 @@ namespace LTSM {
 
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
+            boost::asio::steady_timer timer_updates_;
 
             mutable std::forward_list<uint32_t> cursorSended;
             ClientEncodings clientEncodings;
@@ -74,7 +75,7 @@ namespace LTSM {
             ColorMap colourMap;
 
 	    // FIXME
-            std::atomic<bool> fbUpdateProcessing{false};
+            std::atomic<bool> fbUpdateProcessing_{false};
 
             bool clientLtsmSupported = false;
             bool clientLtsmKeyboard = false;
@@ -124,11 +125,11 @@ namespace LTSM {
             bool isEncoderFFmpeg(void) const;
 
             void waitUpdateProcess(void);
-
             void serverSelectClientEncoding(void);
 
             boost::asio::awaitable<bool> authVncInit(const std::string &);
             boost::asio::awaitable<bool> authVenCryptInit(const SecurityInfo &);
+            boost::asio::awaitable<void> waitUpdateProcessAwait(void);
             boost::asio::awaitable<void> sendColourMapAwait(int first) const;
             boost::asio::awaitable<void> sendBellEventAwait(void) const;
             boost::asio::awaitable<void> sendCutTextEventAwait(std::vector<uint8_t>, bool ext) const;
