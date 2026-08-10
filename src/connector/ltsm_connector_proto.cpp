@@ -36,17 +36,7 @@ using namespace std::chrono_literals;
 namespace LTSM::Connector {
     /* ConnectorLtsm */
     ConnectorLtsm::~ConnectorLtsm() {
-        try {
-            X11Server::stop();
-            if(0 < displayNum()) {
-                busConnectorTerminated(displayNum(), getpid());
-                clientDisconnectedEvent(displayNum());
-                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
-            }
-
-        } catch(const std::exception & err) {
-            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
-        }
+        stop();
     }
 
     int ConnectorLtsm::communication(void) {
@@ -135,11 +125,31 @@ namespace LTSM::Connector {
         asio::co_spawn(xcb_strand(), onLoginSuccessAwait(newDisplay, userUid), asio::detached);
     }
 
+    void ConnectorLtsm::stop(void) noexcept {
+        std::call_once(stop_flag_, [this](){
+            asio::post(ioc(), std::bind(&ConnectorLtsm::asioStop, this));
+        });
+    }
+
+    void ConnectorLtsm::asioStop(void) noexcept {
+        try {
+            if(0 < displayNum()) {
+                busConnectorTerminated(displayNum(), getpid());
+                clientDisconnectedEvent(displayNum());
+                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
+            }
+
+            X11Server::rfbStop();
+            DBusProxy::asioStop();
+        } catch(const std::exception & err) {
+            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
+        }
+    }
+
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            X11Server::stop();
-            DBusProxy::stop();
+            stop();
         }
     }
 

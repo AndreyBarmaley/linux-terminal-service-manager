@@ -605,7 +605,7 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ServerEncoder::socketShutdown(void) {
+    void RFB::ServerEncoder::asioStop(void) {
         channelsShutdown();
         if(stream_) {
             stream_->closeSocket();

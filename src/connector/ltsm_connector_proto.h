@@ -52,7 +52,12 @@ namespace LTSM::Connector {
         bool userSession_{false};
         bool x11NoDamage_{false};
 
+        std::once_flag stop_flag_;
+
       protected:
+        void stop(void) noexcept final;
+        void asioStop(void) noexcept;
+
         // rfb server encoding
         const PixelFormat & serverFormat(void) const override;
         void serverFrameBufferModifyEvent(FrameBuffer &) const override;

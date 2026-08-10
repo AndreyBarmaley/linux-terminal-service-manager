@@ -108,15 +108,9 @@ namespace LTSM {
 	}, asio::detached);
     }
 
-    void RFB::X11Server::stop(void) {
-        std::call_once(stop_flag_, [this](){
-            asio::post(ioc_, std::bind(&X11Server::rfbStop, this));
-        });
-    }
-
     void RFB::X11Server::rfbStop(void) {
         xcbDisableMessages(true);
-        socketShutdown();
+        ServerEncoder::asioStop();
 
         rfb_cancel_.emit(asio::cancellation_type::terminal);
         xcb_cancel_.emit(asio::cancellation_type::terminal);

@@ -76,6 +76,8 @@ namespace LTSM::Connector {
         ConnectorRdp(boost::asio::io_context&, const std::filesystem::path & confile, bool debug);
         ~ConnectorRdp();
 
+        void stop(void);
+
         int communication(void) override;
         bool createX11Session(uint8_t depth);
         void setEncryptionInfo(const std::string &);

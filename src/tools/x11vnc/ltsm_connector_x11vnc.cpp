@@ -155,8 +155,12 @@ namespace LTSM {
             bool success = co_await xcbConnect();
             if(! success) {
                 Application::error("{}: {}", NS_FuncNameV, "xcb connect failed");
-                X11Server::stop();
+                stop();
             }
         }, asio::detached);
+    }
+
+    void Connector::X11VNC::stop(void) noexcept {
+        X11Server::rfbStop();
     }
 }

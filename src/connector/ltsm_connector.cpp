@@ -163,7 +163,7 @@ namespace LTSM::Connector {
         }
     }
 
-    void DBusProxy::stop(void) {
+    void DBusProxy::asioStop(void) {
         timer_idle_session_.cancel();
     }
 

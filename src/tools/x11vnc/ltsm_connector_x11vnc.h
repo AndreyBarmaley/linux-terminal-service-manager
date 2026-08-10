@@ -43,6 +43,8 @@ namespace LTSM {
             std::atomic<bool> xcb_disable_{true};
 
           protected:
+            void stop(void) noexcept final;
+
             // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
             std::forward_list<std::string> serverDisabledEncodings(void) const override;

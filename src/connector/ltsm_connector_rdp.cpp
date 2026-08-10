@@ -287,6 +287,7 @@ namespace LTSM::Connector {
             Application::info("{}: enter event loop", "FreeRdpCallback");
             freerdp_peer* peer = rdp->peer;
             ServerContext* context = rdp->context;
+            ConnectorRdp* conrdp = context->conrdp;
 
             // freerdp client events
             while(true) {
@@ -317,7 +318,7 @@ namespace LTSM::Connector {
             }
 
             peer->Disconnect(peer);
-            DBusProxy::stop();
+            conrdp->stop();
             Application::info("{}: loop shutdown", "FreeRdpCallback");
             return true;
         }
@@ -337,6 +338,10 @@ namespace LTSM::Connector {
         } catch(const std::exception & err) {
             Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
         }
+    }
+
+    void ConnectorRdp::stop(void) {
+        DBusProxy::asioStop();
     }
 
     int ConnectorRdp::communication(void) {

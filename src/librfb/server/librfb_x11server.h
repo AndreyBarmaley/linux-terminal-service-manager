@@ -58,7 +58,6 @@ namespace LTSM {
             std::atomic<bool> clientUpdateCursor{false};
             std::atomic<bool> fullscreenUpdateReq{false};
 
-            std::once_flag stop_flag_;
             XCB::ShmIdShared shm;
 
             int rfbStartingCode_ = 0;
@@ -118,6 +117,9 @@ namespace LTSM {
             boost::asio::awaitable<void> serverUpdateProcess(void);
             boost::asio::awaitable<void> sendUpdateRichCursorAwait(void);
 
+            // server interface
+            virtual void stop(void) noexcept = 0;
+
             virtual bool xcbAllowMessages(void) const = 0;
             virtual void xcbDisableMessages(bool) = 0;
             virtual bool xcbNoDamageOption(void) const = 0;
@@ -140,7 +142,6 @@ namespace LTSM {
                 : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()}, timer_update_{ctx.get_executor()} {}
             ~X11Server() = default;
 
-            void stop(void);
             boost::asio::awaitable<int> rfbCommunicationAwait(void);
 
             // server encoder events

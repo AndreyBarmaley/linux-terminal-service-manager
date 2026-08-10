@@ -171,7 +171,7 @@ namespace LTSM {
             boost::asio::awaitable<int> serverHandshakeVersion(void);
             boost::asio::awaitable<bool> serverSecurityInit(int protover, const SecurityInfo &);
             boost::asio::awaitable<void> serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
-            void socketShutdown(void);
+            void asioStop(void);
 
             boost::asio::awaitable<void> rfbWaitMessage(void);
 

@@ -116,7 +116,7 @@ namespace LTSM::Connector {
     protected:
         inline boost::asio::io_context & ioc(void) { return ioc_; }
 
-        void stop(void);
+        void asioStop(void);
         void setIdleTimeoutSec(uint32_t);
         void idleSessionReset(void);
 
