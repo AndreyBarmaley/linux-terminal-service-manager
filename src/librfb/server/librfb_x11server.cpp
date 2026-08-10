@@ -193,7 +193,7 @@ namespace LTSM {
         try {
             Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
             for(;;) {
-                co_await ServerEncoder::rfbWaitMessage();
+                co_await rfbMessageAwait();
             }
         } catch(const system::system_error& err) {
             if(auto ec = err.code(); ec != asio::error::operation_aborted) {
@@ -338,7 +338,7 @@ namespace LTSM {
         });
 
         // RFB 6.1.1 version
-        int protover = co_await serverHandshakeVersion();
+        int protover = co_await serverHandshakeVersionAwait();
 
         if(protover == 0) {
             rfbStartingCode_ = EXIT_FAILURE;
@@ -348,7 +348,8 @@ namespace LTSM {
         serverHandshakeVersionEvent();
 
         // RFB 6.1.2 security
-        if(bool valid = co_await serverSecurityInit(protover, rfbSecurityInfo()); !valid) {
+        const auto secInfo = rfbSecurityInfo();
+        if(bool valid = co_await serverSecurityInitAwait(protover, secInfo); !valid) {
             rfbStartingCode_ = EXIT_FAILURE;
             co_return;
         }
@@ -359,7 +360,7 @@ namespace LTSM {
         const auto displaySize = co_await xcbDisplaySize();
         const auto displayDepth = co_await xcbDisplayDepth();
 
-        co_await serverClientInit("X11 Remote Desktop", displaySize, displayDepth, serverFormat());
+        co_await serverClientInitAwait("X11 Remote Desktop", displaySize, displayDepth, serverFormat());
         timerNotActivated.cancel();
 
         co_await xcbShmInit();

@@ -237,10 +237,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::serverEncodingsEvent(void) {
         if(isClientLtsmSupported()) {
-            asio::co_spawn(rfb_strand(), [this]() -> asio::awaitable<void> {
-		co_await sendEncodingLtsmSupportedAwait();
-		co_return;
-	    }, asio::detached);
+            asio::co_spawn(rfb_strand(), sendEncodingLtsmSupportedAwait(), asio::detached);
         }
     }
 

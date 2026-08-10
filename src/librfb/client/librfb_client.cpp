@@ -676,8 +676,8 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(bool incr) const {
-        auto csz = clientSize();
-        co_await sendFrameBufferUpdateAwait(XCB::Region{0, 0, csz.width, csz.height}, incr);
+        auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
+        co_await sendFrameBufferUpdateAwait(crt, incr);
         co_return;
     }
 
@@ -1124,8 +1124,8 @@ namespace LTSM {
 
         Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
         continueUpdatesSupport = true;
-
-        co_await sendContinuousUpdatesAwait(false, { XCB::Point(0, 0), clientSize() });
+        auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
+        co_await sendContinuousUpdatesAwait(false, crt);
         co_return;
     }
 
@@ -1152,7 +1152,7 @@ namespace LTSM {
         if(! buf.empty()) {
             assert(0xFFFF >= buf.size());
             asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
-                co_await sendLtsmChannelAwait(channel, {(const uint8_t*) buf.data(), buf.size()});
+                co_await sendLtsmChannelAwait(channel, std::span{(const uint8_t*) buf.data(), buf.size()});
                 co_return;
             }, asio::detached);
         }

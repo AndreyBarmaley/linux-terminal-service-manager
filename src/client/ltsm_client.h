@@ -116,7 +116,7 @@ namespace LTSM {
         //        BinaryBuf clipboardBufLocal;
         //        std::mutex clipboardLock;
 
-        XCB::Size primarySize;
+        XCB::Size primarySize_;
 
         bool ltsmSupport = true;
         bool windowAccel = true;

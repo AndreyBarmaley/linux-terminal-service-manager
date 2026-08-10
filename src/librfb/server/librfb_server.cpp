@@ -90,7 +90,7 @@ namespace LTSM {
         dynamic_cast<AsyncTcpStream&>(*stream_).socket().assign(asio::ip::tcp::v4(), fd);
     }
 
-    asio::awaitable<bool> RFB::ServerEncoder::authVncInit(const std::string & passwdFile) {
+    asio::awaitable<bool> RFB::ServerEncoder::authVncInitAwait(const std::string & passwdFile) {
         std::vector<uint8_t> challenge = Tools::randomBytes(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -131,7 +131,7 @@ namespace LTSM {
         co_return false;
     }
 
-    asio::awaitable<bool> RFB::ServerEncoder::authVenCryptInit(const SecurityInfo & secInfo) {
+    asio::awaitable<bool> RFB::ServerEncoder::authVenCryptInitAwait(const SecurityInfo & secInfo) {
         // VenCrypt version 0.2
         co_await stream_->async_send_byte(0);
         co_await stream_->async_send_byte(2);
@@ -283,7 +283,7 @@ namespace LTSM {
         co_return true;
     }
 
-    asio::awaitable<int> RFB::ServerEncoder::serverHandshakeVersion(void) {
+    asio::awaitable<int> RFB::ServerEncoder::serverHandshakeVersionAwait(void) {
         // RFB 6.1.1 version
         int protover = RFB::VERSION_MAJOR * 10 + RFB::VERSION_MINOR;
         auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
@@ -371,7 +371,7 @@ namespace LTSM {
     }
 #endif
 
-    asio::awaitable<bool> RFB::ServerEncoder::serverSecurityInit(int protover, const SecurityInfo & secInfo) {
+    asio::awaitable<bool> RFB::ServerEncoder::serverSecurityInitAwait(int protover, const SecurityInfo & secInfo) {
         // RFB 6.1.2 security
         if(protover == 33) {
             uint32_t res = 0;
@@ -447,7 +447,7 @@ namespace LTSM {
                     co_return false;
                 }
 
-                if(! co_await authVncInit(secInfo.passwdFile)) {
+                if(! co_await authVncInitAwait(secInfo.passwdFile)) {
                     co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
                     co_await stream_->async_send_be32(0);
                     co_return false;
@@ -455,7 +455,7 @@ namespace LTSM {
 
                 co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
             } else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt) {
-                if(! co_await authVenCryptInit(secInfo)) {
+                if(! co_await authVenCryptInitAwait(secInfo)) {
                     co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
                     co_await stream_->async_send_be32(0);
                     co_return false;
@@ -492,7 +492,7 @@ namespace LTSM {
                         if(jo) {
                             auto tls = jo->getBoolean("continue:tls", false);
 
-                            if(tls && ! co_await authVenCryptInit(secInfo)) {
+                            if(tls && ! co_await authVenCryptInitAwait(secInfo)) {
                                 co_return false;
                             }
                         }
@@ -526,7 +526,7 @@ namespace LTSM {
         co_return true;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::serverClientInit(std::string_view desktopName, const XCB::Size & displaySize, int displayDepth,
+    asio::awaitable<void> RFB::ServerEncoder::serverClientInitAwait(std::string_view desktopName, const XCB::Size & displaySize, int displayDepth,
             const PixelFormat & pf) {
         // RFB 6.3.1 client init
         int clientSharedFlag = co_await stream_->async_recv_byte();
@@ -613,7 +613,7 @@ namespace LTSM {
         timer_updates_.cancel();
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::rfbWaitMessage(void) {
+    asio::awaitable<void> RFB::ServerEncoder::rfbMessageAwait(void) {
 
         co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         int msgType = co_await stream_->async_recv_byte();
@@ -1245,8 +1245,8 @@ namespace LTSM {
     }
 
     /* pseudo encodings DesktopSize/Extended */
-    asio::awaitable<void> RFB::ServerEncoder::sendEncodingDesktopResizeAwait(const DesktopResizeStatus & status, const DesktopResizeError & error,
-            const XCB::Size & desktopSize) const {
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingDesktopResizeAwait(DesktopResizeStatus status, DesktopResizeError error,
+            XCB::Size desktopSize) const {
         int statusCode = desktopResizeStatusCode(status);
         int errorCode = desktopResizeErrorCode(error);
         Application::info("{}: status: {}, error: {}, size: {}",

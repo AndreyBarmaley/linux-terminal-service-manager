@@ -323,10 +323,10 @@ namespace LTSM {
             SDL_DisplayMode mode;
 
             if(0 == SDL_GetDisplayMode(0, 0, & mode)) {
-                primarySize = XCB::Size(mode.w, mode.h);
+                primarySize_ = XCB::Size(mode.w, mode.h);
 
-                if(primarySize.width < primarySize.height) {
-                    std::swap(primarySize.width, primarySize.height);
+                if(primarySize_.width < primarySize_.height) {
+                    std::swap(primarySize_.width, primarySize_.height);
                 }
             }
         }
@@ -612,14 +612,14 @@ namespace LTSM {
                 auto width = std::stoi(view2string(arg), & idx, 0);
                 std::string_view arg2 = string2view(arg.begin() + idx + 1, arg.end());
                 auto height = std::stoi(view2string(arg2), nullptr, 0);
-                primarySize = XCB::Size(width, height);
+                primarySize_ = XCB::Size(width, height);
             } catch(const std::invalid_argument &) {
                 std::cerr << "invalid geometry" << std::endl;
             }
-            if(320 > primarySize.width || 0xFFFF < primarySize.width ||
-                240 > primarySize.height || 0xFFFF < primarySize.height) {
-                Application::warning("{}: invalid geometry: {}x{}", NS_FuncNameV, primarySize.width, primarySize.height);
-                primarySize.reset();
+            if(320 > primarySize_.width || 0xFFFF < primarySize_.width ||
+                240 > primarySize_.height || 0xFFFF < primarySize_.height) {
+                Application::warning("{}: invalid geometry: {}x{}", NS_FuncNameV, primarySize_.width, primarySize_.height);
+                primarySize_.reset();
             }
         } else if(cmd == "--tls-priority" && arg.size()) {
             rfbsec_.tlsPriority.assign(arg.begin(), arg.end());
@@ -976,7 +976,10 @@ namespace LTSM {
         // skip: starting window resized
         if(time.count() > 3) {
             windowSize_ = wsz;
-            co_spawn(rfb_strand(), sendSetDesktopSizeAwait(wsz), asio::detached);
+            co_spawn(rfb_strand(), [this, wsz=windowSize_]() -> asio::awaitable<void> {
+                co_await sendSetDesktopSizeAwait(wsz);
+                co_return;
+            }, asio::detached);
             co_spawn(rfb_strand(), sendFrameBufferUpdateAwait(false), asio::detached);
         }
         co_return;
@@ -1089,7 +1092,8 @@ namespace LTSM {
                 // full update
                 co_await sendFrameBufferUpdateAwait(false);
                 if(contUpdateResume) {
-                    co_await sendContinuousUpdatesAwait(true, {0, 0, wsz.width, wsz.height});
+                    const auto crt = XCB::Region(XCB::Point(0, 0), wsz);
+                    co_await sendContinuousUpdatesAwait(true, crt);
                 }
                 co_return;
             }, asio::detached);
@@ -1121,20 +1125,20 @@ namespace LTSM {
 
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
-                co_await sdlMouseButton(std::move(ev));
+                co_await sdlMouseButton(ev);
                 break;
 
             case SDL_MOUSEWHEEL:
-                co_await sdlMouseWheel(std::move(ev));
+                co_await sdlMouseWheel(ev);
                 break;
 
             case SDL_WINDOWEVENT:
-                co_await sdlWindowEvent(std::move(ev));
+                co_await sdlWindowEvent(ev);
                 break;
 
             case SDL_KEYDOWN:
             case SDL_KEYUP:
-                co_await sdlKeyboardEvent(std::move(ev));
+                co_await sdlKeyboardEvent(ev);
                 break;
 
             case SDL_DROPFILE:
@@ -1145,11 +1149,11 @@ namespace LTSM {
                 break;
 
             case SDL_DROPCOMPLETE:
-                co_await sdlDropCompleteEvent(std::move(ev));
+                co_await sdlDropCompleteEvent(ev);
                 break;
 
             case SDL_USEREVENT:
-                co_await sdlUserEvent(std::move(ev));
+                co_await sdlUserEvent(ev);
                 break;
 
             case SDL_QUIT:
@@ -1176,7 +1180,10 @@ namespace LTSM {
         bool contUpdateResume = false;
 
         if(isContinueUpdatesProcessed()) {
-            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(false, XCB::Region{0, 0, windowSize_.width, windowSize_.height}), asio::detached);
+            asio::co_spawn(rfb_strand(), [this, crt=XCB::Region(XCB::Point(0, 0), windowSize_)]() -> asio::awaitable<void> {
+                co_await sendContinuousUpdatesAwait(false, crt);
+                co_return;
+            }, asio::detached);
             contUpdateResume = true;
         }
 
@@ -1210,16 +1217,19 @@ namespace LTSM {
                 serverExtDesktopSizeNego = true;
 
                 Application::debug(DebugType::App, "{}: nego part, primary: {}, window: {}",
-                            NS_FuncNameV, primarySize, windowSize_);
+                            NS_FuncNameV, primarySize_, windowSize_);
 
-                if(! primarySize.isEmpty() && primarySize != windowSize_) {
-                    asio::co_spawn(rfb_strand(), sendSetDesktopSizeAwait(primarySize), asio::detached);
+                if(! primarySize_.isEmpty() && primarySize_ != windowSize_) {
+                    asio::co_spawn(rfb_strand(), [this, psz=primarySize_]() -> asio::awaitable<void> {
+                        co_await sendSetDesktopSizeAwait(primarySize_);
+                        co_return;
+                    }, asio::detached);
                 }
             } else {
                 // server runtime
-                if(windowFullScreen() && primarySize != nsz) {
+                if(windowFullScreen() && primarySize_ != nsz) {
                     Application::warning("{}: fullscreen mode, server request resize: {}, current primary: {}",
-                                         NS_FuncNameV, nsz, primarySize);
+                                         NS_FuncNameV, nsz, primarySize_);
                 }
 
                 pushEventWindowResize(nsz);
@@ -1233,7 +1243,7 @@ namespace LTSM {
             if(err) {
                 Application::error("{}: status: {}, error code: {}", NS_FuncNameV, status, err);
                 //if(! nsz.isEmpty())
-                //    primarySize.reset();
+                //    primarySize_.reset();
             }
         }
     }
@@ -1266,7 +1276,10 @@ namespace LTSM {
                 asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
             if(isContinueUpdatesSupport()) {
-                asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, { XCB::Point(0, 0), clientSize() }), asio::detached);
+                asio::co_spawn(rfb_strand(), [this, crt=XCB::Region(XCB::Point(0, 0), clientSize())]() -> asio::awaitable<void> {
+                    co_await sendContinuousUpdatesAwait(true, crt);
+                    co_return;
+                }, asio::detached);
             }
         }
     }
@@ -1645,8 +1658,11 @@ namespace LTSM {
 
     void ClientApp::systemLoginSuccess(const JsonObject & jo) {
         if(jo.getBoolean("action", false)) {
-            if(! primarySize.isEmpty() && primarySize != windowSize_) {
-                asio::co_spawn(rfb_strand(), sendSetDesktopSizeAwait(primarySize), asio::detached);
+            if(! primarySize_.isEmpty() && primarySize_ != windowSize_) {
+                asio::co_spawn(rfb_strand(), [this, psz=primarySize_]() -> asio::awaitable<void> {
+                    co_await sendSetDesktopSizeAwait(psz);
+                    co_return;
+                }, asio::detached);
             }
         } else {
             auto error = jo.getString("error");
