@@ -139,6 +139,7 @@ namespace LTSM::Connector {
         if(display == displayNum()) {
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
             X11Server::stop();
+            DBusProxy::stop();
         }
     }
 
@@ -213,10 +214,6 @@ namespace LTSM::Connector {
     void ConnectorLtsm::serverEncodingSelectedEvent(void) {
         setEncodingThreads(config().getInteger("vnc:encoding:threads", 2));
         setEncodingDebug(config().getInteger("vnc:encoding:debug", 0));
-    }
-
-    void ConnectorLtsm::serverMainLoopEvent(void) {
-        checkIdleTimeout();
     }
 
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz) {

@@ -131,7 +131,6 @@ namespace LTSM {
             virtual void serverHandshakeVersionEvent(void) {/* empty */}
             virtual void serverSecurityInitEvent(void) {/* empty */}
             virtual void serverConnectedEvent(void) {/* empty */}
-            virtual void serverMainLoopEvent(void) {/* empty */}
             virtual void serverDisplayResizedEvent(const XCB::Size &) {/* empty */}
             virtual void serverEncodingsEvent(void) {/* empty */}
             virtual void serverFrameBufferModifyEvent(FrameBuffer &) const {/* empty */}

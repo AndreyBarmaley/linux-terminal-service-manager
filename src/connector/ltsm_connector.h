@@ -58,20 +58,24 @@ namespace LTSM::Connector {
 
     class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
         boost::asio::io_context& ioc_;
+        boost::asio::steady_timer timer_idle_session_;
+
         std::list<RenderPrimitivePtr> renderPrimitives_;
         std::string connType_;
         std::string remoteAddr_;
 
         std::atomic<int> xcbDisplayNum_{0};
         std::atomic<bool> xcbDisable_{true};
+        std::atomic<bool> idleSessionActive_{false};
+
+        uint32_t idleTimeoutSec_{0};
 
 #ifdef LTSM_WITH_AUDIT
         std::unique_ptr<AuditConnector> auditLog_;
 #endif
-        std::chrono::time_point<std::chrono::steady_clock> idleSessionTp_;
-        uint32_t idleTimeoutSec_ = 0;
-
       private:
+        void checkIdleTimeoutCb(const boost::system::error_code &);
+
         // dbus virtual signals
         void onLoginFailure(const int32_t & display, const std::string & msg) override {}
 
@@ -112,6 +116,7 @@ namespace LTSM::Connector {
     protected:
         inline boost::asio::io_context & ioc(void) { return ioc_; }
 
+        void stop(void);
         void setIdleTimeoutSec(uint32_t);
         void idleSessionReset(void);
 
@@ -142,8 +147,6 @@ namespace LTSM::Connector {
         std::string checkFileOption(const std::string &) const;
         const std::string & connectorType(void) const;
         const std::string & remoteAddress(void) const;
-
-        void checkIdleTimeout(void);
     };
 
     /* Connector::startService */

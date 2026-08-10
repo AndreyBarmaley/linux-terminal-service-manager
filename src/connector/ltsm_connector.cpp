@@ -110,7 +110,7 @@ namespace LTSM::Connector {
 #else
         ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
-        ioc_{ctx}
+        ioc_{ctx}, timer_idle_session_{ctx}
     {
         remoteAddr_.assign("local");
 
@@ -154,10 +154,17 @@ namespace LTSM::Connector {
     }
 
     DBusProxy::~DBusProxy() {
+        try {
 #ifdef LTSM_WITH_AUDIT
-        auditLog_->auditRemoteDisconnected(remoteAddr_);
+            auditLog_->auditRemoteDisconnected(remoteAddr_);
 #endif
-        unregisterProxy();
+            unregisterProxy();
+        } catch(const std::exception&) {
+        }
+    }
+
+    void DBusProxy::stop(void) noexcept {
+        timer_idle_session_.cancel();
     }
 
     const std::string & DBusProxy::remoteAddress(void) const {
@@ -278,21 +285,32 @@ namespace LTSM::Connector {
         }
     }
 
-    void DBusProxy::checkIdleTimeout(void) {
-        if(idleTimeoutSec_ &&
-           idleTimeoutSec_ < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - idleSessionTp_).count()) {
+    void DBusProxy::checkIdleTimeoutCb(const boost::system::error_code & ec) {
+        if(ec) {
+            return;
+        }
+
+        if(idleSessionActive_) {
             busSessionIdleTimeout(displayNum());
             idleSessionReset();
         }
+
+        timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
+        timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
     }
 
     void DBusProxy::idleSessionReset(void) {
-        idleSessionTp_ = std::chrono::steady_clock::now();
+        idleSessionActive_ = false;
     }
 
     void DBusProxy::setIdleTimeoutSec(uint32_t sec) {
+        timer_idle_session_.cancel();
+
         idleTimeoutSec_ = sec;
-        idleSessionTp_ = std::chrono::steady_clock::now();
+        idleSessionActive_ = false;
+
+        timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
+        timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
     }
 
     /* Connector::startService */

@@ -236,7 +236,6 @@ namespace LTSM {
 
     asio::awaitable<void> RFB::X11Server::serverUpdateProcess(void) {
         co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
-        serverMainLoopEvent();
 
         // check timepoint frame
         if(auto frameRate = frameRateOption()) {

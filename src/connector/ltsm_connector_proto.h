@@ -98,7 +98,6 @@ namespace LTSM::Connector {
         void serverEncodingSelectedEvent(void) override;
         void serverSecurityInitEvent(void) override;
         void serverConnectedEvent(void) override;
-        void serverMainLoopEvent(void) override;
         void serverDisplayResizedEvent(const XCB::Size &) override;
         void serverEncodingsEvent(void) override;
 
