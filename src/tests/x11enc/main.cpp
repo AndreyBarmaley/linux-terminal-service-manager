@@ -70,25 +70,8 @@ class FakeStream : public RFB::EncoderStream {
     bool clientIsBigEndian(void) const override {
         return false;
     }
-    XCB::Size displaySize(void) const override {
-        return {0, 0};
-    }
-
-    // NetworkStream interface
-    void sendRaw(const void* ptr, size_t len) override {
-        write += len;
-    }
-
-  private:
-    // NetworkStream interface
-    bool hasInput(void) const override {
-        throw std::runtime_error("unsupported");
-    }
-    size_t hasData(void) const override {
-        throw std::runtime_error("unsupported");
-    }
-    void recvRaw(void* ptr, size_t len) const override {
-        throw std::runtime_error("unsupported");
+    bool isDisplaySize(const XCB::Size& sz) const override {
+        return true;
     }
 };
 
@@ -110,7 +93,8 @@ struct EncodingTime {
         auto tp = std::chrono::steady_clock::now();
 
         const FrameBuffer fb(p, reg, stream->serverFormat());
-        enc->sendFrameBuffer(stream.get(), fb);
+        StreamBuf sb(1024 * 1024);
+        enc->writeFrameBufferTo(stream.get(), fb, sb);
 
         auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
         workms += dt.count();
@@ -204,9 +188,9 @@ class EncodingTest : public Application {
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingHexTile>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
 #endif
             // RFB::ENCODING_TRLE
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_ZRLE
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingZRLE>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
 #ifdef LTSM_WITH_FFMPEG
             // RFB::ENCODING_LTSM_H264
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
@@ -218,9 +202,9 @@ class EncodingTest : public Application {
             // RFB::ENCODING_LTSM_TJPG
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTJPG>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_QOI
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_ZQOI
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingZQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
         } else {
             for(const auto & name : encodings) {
                 // test preffered encodings
@@ -238,11 +222,11 @@ class EncodingTest : public Application {
                         break;
 
                     case RFB::ENCODING_TRLE:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
                     case RFB::ENCODING_ZRLE:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingZRLE>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
 #ifdef LTSM_WITH_FFMPEG
@@ -259,11 +243,11 @@ class EncodingTest : public Application {
                         break;
 
                     case RFB::ENCODING_LTSM_ZQOI:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingZQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
                     case RFB::ENCODING_LTSM_QOI:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
                     case RFB::ENCODING_LTSM_TJPG:
