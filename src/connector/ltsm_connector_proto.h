@@ -25,9 +25,6 @@
 #define _LTSM_CONNECTOR_PROTO_
 
 #include <list>
-#include <array>
-#include <memory>
-#include <atomic>
 #include <exception>
 #include <unordered_map>
 
@@ -42,11 +39,11 @@ namespace LTSM::Connector {
     using TupleFileSize = sdbus::Struct<std::string, uint32_t>;
 
     class ConnectorLtsm : public DBusProxy, public RFB::X11Server {
+        boost::asio::strand<boost::asio::any_io_executor> transfer_strand_;
+
         PixelFormat serverPf_;
         std::unordered_map<uint32_t, int> keymap_;
-
         std::list<TupleFileSize> transferPlanned_;
-        std::mutex lockTransfer_;
 
         uint32_t frameRate_{0};
         bool userSession_{false};
@@ -117,13 +114,14 @@ namespace LTSM::Connector {
 
       protected:
         void loadKeymap(const std::string & file);
-        boost::asio::awaitable<void> transferFilesPartial(std::list<TupleFileSize>&&);
 
+        boost::asio::awaitable<void> systemTransferFilesAwait(JsonObject jo);
+        boost::asio::awaitable<void> transferFilesPartial(std::list<TupleFileSize>&&);
         boost::asio::awaitable<void> onLoginSuccessAwait(int newDisplay, uint32_t userUid);
+        boost::asio::awaitable<void> onTransferAllowAwait(std::string filepath, std::string tmpfile, std::string dstdir);
 
       public:
-        ConnectorLtsm(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug)
-            : DBusProxy(ctx, ConnectorType::LTSM, confile, debug), RFB::X11Server(ctx) {}
+        ConnectorLtsm(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug);
         ~ConnectorLtsm();
 
         int communication(void) override;

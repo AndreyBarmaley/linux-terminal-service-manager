@@ -35,6 +35,11 @@ using namespace std::chrono_literals;
 
 namespace LTSM::Connector {
     /* ConnectorLtsm */
+    ConnectorLtsm::ConnectorLtsm(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug)
+        : DBusProxy(ctx, ConnectorType::LTSM, confile, debug)
+        , RFB::X11Server(ctx)
+        , transfer_strand_{ctx.get_executor()} {}
+
     ConnectorLtsm::~ConnectorLtsm() {
         stop();
     }
@@ -423,79 +428,84 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::systemTransferFiles(const JsonObject & jo) {
-        if(isUserSession()) {
-            auto fa = jo.getArray("files");
+        if(! isUserSession()) {
+            Application::error("{}: not user session", NS_FuncNameV);
+            return;
+        }
 
-            if(! fa) {
-                Application::error("{}: incorrect format message", NS_FuncNameV);
-                return;
+        asio::co_spawn(transfer_strand_, systemTransferFilesAwait(jo), asio::detached);
+    }
+
+    asio::awaitable<void> ConnectorLtsm::systemTransferFilesAwait(JsonObject jo) {
+        auto fa = jo.getArray("files");
+        if(! fa) {
+            Application::error("{}: incorrect format message", NS_FuncNameV);
+            co_return;
+        }
+
+        Application::debug(DebugType::App, "{}: files count: {}", NS_FuncNameV, fa->size());
+
+        // check transfer disabled
+        if(config().getBoolean("transfer:file:disabled", false)) {
+            Application::error("{}: administrative disable", NS_FuncNameV);
+            busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
+                          NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+            co_return;
+        }
+
+        size_t fmax = 0;
+        size_t prettyMb = 0;
+
+        if(config().hasKey("transfer:file:max")) {
+            fmax = config().getInteger("transfer:file:max");
+            prettyMb = fmax / (1024 * 1024);
+        }
+
+        for(int it = 0; it < fa->size(); ++it) {
+            auto jo2 = fa->getObject(it);
+
+            if(! jo2) {
+                continue;
             }
 
-            Application::debug(DebugType::App, "{}: files count: {}", NS_FuncNameV, fa->size());
+            std::string fname = jo2->getString("file");
+            size_t fsize = jo2->getInteger("size");
 
-            // check transfer disabled
-            if(config().getBoolean("transfer:file:disabled", false)) {
-                Application::error("{}: administrative disable", NS_FuncNameV);
-                busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
+            if(std::ranges::any_of(transferPlanned_, [&](auto & st) { return fname == std::get<0>(st); })) {
+                Application::warning("{}: found planned and skipped, file: {}", NS_FuncNameV, fname);
+                continue;
+            }
+
+            // check max size
+            if(fmax && fsize > fmax) {
+                Application::warning("{}: file size exceeds and skipped, file: {}", NS_FuncNameV, fname);
+                busSendNotify(displayNum(), "Transfer Skipped",
+                              fmt::format("the file size exceeds, the allowed limit: {}M, file: {}", prettyMb, fname),
                               NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
-                return;
+                continue;
             }
 
-            size_t fmax = 0;
-            size_t prettyMb = 0;
+            // add planned transfer
+            transferPlanned_.emplace_back(std::move(fname), fsize);
+        }
 
-            if(config().hasKey("transfer:file:max")) {
-                fmax = config().getInteger("transfer:file:max");
-                prettyMb = fmax / (1024 * 1024);
-            }
+        size_t freeChannels = countFreeChannels();
 
-            for(int it = 0; it < fa->size(); ++it) {
-                auto jo2 = fa->getObject(it);
-
-                if(! jo2) {
-                    continue;
-                }
-
-                std::string fname = jo2->getString("file");
-                size_t fsize = jo2->getInteger("size");
-
-                if(std::ranges::any_of(transferPlanned_, [&](auto & st) { return fname == std::get<0>(st); })) {
-                    Application::warning("{}: found planned and skipped, file: {}", NS_FuncNameV, fname);
-                    continue;
-                }
-
-                // check max size
-                if(fmax && fsize > fmax) {
-                    Application::warning("{}: file size exceeds and skipped, file: {}", NS_FuncNameV, fname);
-                    busSendNotify(displayNum(), "Transfer Skipped",
-                                  fmt::format("the file size exceeds, the allowed limit: {}M, file: {}", prettyMb, fname),
-                                  NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
-                    continue;
-                }
-
-                // add planned transfer
-                std::scoped_lock<std::mutex> guard{lockTransfer_};
-                transferPlanned_.emplace_back(std::move(fname), fsize);
-            }
-
-            size_t freeChannels = countFreeChannels();
-
-            if(transferPlanned_.empty()) {
-                Application::warning("{}: file list empty", NS_FuncNameV);
-            } else if(! freeChannels) {
-                Application::warning("{}: no free channels", NS_FuncNameV);
+        if(transferPlanned_.empty()) {
+            Application::warning("{}: file list empty", NS_FuncNameV);
+        } else if(! freeChannels) {
+            Application::warning("{}: no free channels", NS_FuncNameV);
+        } else {
+            if(transferPlanned_.size() <= freeChannels) {
+                // send request to manager
+                busTransferFilesRequest(displayNum(), {transferPlanned_.begin(), transferPlanned_.end() });
             } else {
-                std::scoped_lock<std::mutex> guard{lockTransfer_};
-
-                if(transferPlanned_.size() <= freeChannels) {
-                    // send request to manager
-                    busTransferFilesRequest(displayNum(), {transferPlanned_.begin(), transferPlanned_.end() });
-                } else {
-                    // transfer background
-                    asio::co_spawn(ioc(), transferFilesPartial(std::move(transferPlanned_)), asio::detached);
-                }
+                // transfer background
+                co_await transferFilesPartial(std::move(transferPlanned_));
             }
         }
+
+        co_return;
     }
 
     asio::awaitable<void> ConnectorLtsm::transferFilesPartial(std::list<TupleFileSize>&& files) {
@@ -543,29 +553,33 @@ namespace LTSM::Connector {
         Application::debug(DebugType::App, "{}: display: {}", NS_FuncNameV, display);
 
         if(display == displayNum()) {
-            std::scoped_lock<std::mutex> guard{lockTransfer_};
-            auto it = std::ranges::find_if(transferPlanned_, [&](auto & st) {
-                return filepath == std::get<0>(st);
-            });
-
-            if(it == transferPlanned_.end()) {
-                Application::error("{}: transfer not found, file: {}", NS_FuncNameV, filepath);
-                return;
-            }
-
-            // transfer not canceled
-            if(! dstdir.empty() && ! tmpfile.empty()) {
-                // create file transfer channel
-                createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
-                              Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
-                              Channel::Opts{Channel::Speed::Slow, 0});
-                auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
-                busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile);
-            }
-
-            // remove planned
-            transferPlanned_.erase(it);
+            asio::co_spawn(transfer_strand_, onTransferAllowAwait(filepath, tmpfile, dstdir), asio::detached);
         }
+    }
+
+    asio::awaitable<void> ConnectorLtsm::onTransferAllowAwait(std::string filepath, std::string tmpfile, std::string dstdir) {
+        auto it = std::ranges::find_if(transferPlanned_, [&](auto & st) {
+            return filepath == std::get<0>(st);
+        });
+
+        if(it == transferPlanned_.end()) {
+            Application::error("{}: transfer not found, file: {}", NS_FuncNameV, filepath);
+            co_return;
+        }
+
+        // transfer not canceled
+        if(! dstdir.empty() && ! tmpfile.empty()) {
+            // create file transfer channel
+            createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
+                          Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
+                          Channel::Opts{Channel::Speed::Slow, 0});
+            auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
+            busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile);
+        }
+
+        // remove planned
+        transferPlanned_.erase(it);
+        co_return;
     }
 
     void ConnectorLtsm::onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
