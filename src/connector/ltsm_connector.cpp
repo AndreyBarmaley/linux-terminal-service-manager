@@ -163,7 +163,7 @@ namespace LTSM::Connector {
         }
     }
 
-    void DBusProxy::stop(void) noexcept {
+    void DBusProxy::stop(void) {
         timer_idle_session_.cancel();
     }
 
@@ -309,8 +309,10 @@ namespace LTSM::Connector {
         idleTimeoutSec_ = sec;
         idleSessionActive_ = false;
 
-        timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
-        timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
+        if(sec) {
+            timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
+            timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
+        }
     }
 
     /* Connector::startService */
