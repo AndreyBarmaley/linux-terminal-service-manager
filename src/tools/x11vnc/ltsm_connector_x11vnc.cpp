@@ -27,25 +27,26 @@
 #include "ltsm_connector_x11vnc.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
-    Connector::X11VNC::X11VNC(const JsonObject & jo) {
-        _config = & jo;
-        _remoteaddr.assign("local");
+    Connector::X11VNC::X11VNC(asio::io_context & ctx, const JsonObject & jo) : RFB::X11Server(ctx), ioc_{ctx} {
+        config_ = & jo;
+        remoteaddr_.assign("local");
 
         if(auto env = std::getenv("REMOTE_ADDR")) {
-            _remoteaddr.assign(env);
+            remoteaddr_.assign(env);
         }
 
         loadKeymap();
     }
 
     bool Connector::X11VNC::loadKeymap(void) {
-        if(! _config->hasKey("keymapfile")) {
+        if(! config_->hasKey("keymapfile")) {
             return false;
         }
 
-        auto jc = JsonContentFile(_config->getString("keymapfile"));
+        auto jc = JsonContentFile(config_->getString("keymapfile"));
 
         if(! jc.isObject()) {
             Application::error("{}: invalid keymap file", NS_FuncNameV);
@@ -56,41 +57,41 @@ namespace LTSM {
 
         for(const auto & skey : jo.keys()) {
             try {
-                keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
+                keymap_.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
             } catch(const std::exception &) {
             }
         }
 
-        return keymap.size();
+        return keymap_.size();
     }
 
     bool Connector::X11VNC::rfbClipboardEnable(void) const {
-        return _config->getBoolean("ClipBoard");
+        return config_->getBoolean("ClipBoard");
     }
 
     bool Connector::X11VNC::rfbDesktopResizeEnabled(void) const {
-        return _config->getBoolean("DesktopResized");
+        return config_->getBoolean("DesktopResized");
     }
 
     bool Connector::X11VNC::xcbNoDamageOption(void) const {
-        return _config->getBoolean("nodamage", false);
+        return config_->getBoolean("nodamage", false);
     }
 
     bool Connector::X11VNC::xcbAllowMessages(void) const {
-        return ! _xcbDisable;
+        return ! xcb_disable_;
     }
 
     void Connector::X11VNC::xcbDisableMessages(bool f) {
-        _xcbDisable = f;
+        xcb_disable_ = f;
     }
 
     int Connector::X11VNC::rfbUserKeycode(uint32_t keysym) const {
-        auto it = keymap.find(keysym);
-        return it != keymap.end() ? it->second : 0;
+        auto it = keymap_.find(keysym);
+        return it != keymap_.end() ? it->second : 0;
     }
 
     const PixelFormat & Connector::X11VNC::serverFormat(void) const {
-        return _pf;
+        return pf_;
     }
 
     std::forward_list<std::string> Connector::X11VNC::serverDisabledEncodings(void) const {
@@ -99,10 +100,10 @@ namespace LTSM {
 
     RFB::SecurityInfo Connector::X11VNC::rfbSecurityInfo(void) const {
         RFB::SecurityInfo secInfo;
-        secInfo.authNone = _config->getBoolean("noauth", false);
-        secInfo.authVnc = _config->hasKey("passwdfile");
-        secInfo.passwdFile = _config->getString("passwdfile");
-        secInfo.authVenCrypt = ! _config->getBoolean("notls", false);
+        secInfo.authNone = config_->getBoolean("noauth", false);
+        secInfo.authVnc = config_->hasKey("passwdfile");
+        secInfo.passwdFile = config_->getString("passwdfile");
+        secInfo.authVenCrypt = ! config_->getBoolean("notls", false);
         secInfo.tlsPriority = "NORMAL:+ANON-ECDH:+ANON-DH";
         secInfo.tlsAnonMode = true;
         secInfo.tlsDebug = 0;
@@ -116,19 +117,19 @@ namespace LTSM {
         return secInfo;
     }
 
-    bool Connector::X11VNC::xcbConnect(void) {
+    asio::awaitable<bool> Connector::X11VNC::xcbConnect(void) {
         // FIXM XAUTH
-        std::string xauthFile = _config->getString("authfile");
+        std::string xauthFile = config_->getString("authfile");
         Application::debug(DebugType::App, "{}: xauthfile: `{}'", NS_FuncNameV, xauthFile);
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        size_t screen = _config->getInteger("display", 0);
+        size_t screen = config_->getInteger("display", 0);
 
         try {
             xcbDisplay()->displayReconnect(screen);
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            return false;
+            co_return false;
         }
 
         Application::info("{}: display: {}, size: {}, depth: {}",
@@ -139,19 +140,23 @@ namespace LTSM {
 
         if(! visual) {
             Application::error("{}: xcb visual empty", NS_FuncNameV);
-            return false;
+            co_return false;
         }
 
-        xcbShmInit();
+        co_await xcbShmInit();
+
         // init server format
-        _pf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
-        return true;
+        pf_ = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        co_return true;
     }
 
     void Connector::X11VNC::serverHandshakeVersionEvent(void) {
-        if(! xcbConnect()) {
-            Application::error("{}: {}", NS_FuncNameV, "xcb connect failed");
-            throw rfb_error(NS_FuncNameS);
-        }
+        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> {
+            bool success = co_await xcbConnect();
+            if(! success) {
+                Application::error("{}: {}", NS_FuncNameV, "xcb connect failed");
+                X11Server::stop();
+            }
+        }, asio::detached);
     }
 }

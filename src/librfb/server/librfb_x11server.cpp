@@ -392,15 +392,11 @@ namespace LTSM {
     }
 
     /* Connector::X11Server */
-    int RFB::X11Server::rfbCommunication(void) {
+    asio::awaitable<int> RFB::X11Server::rfbCommunicationAwait(void) {
         serverSelectEncodings();
-
         rfbStartingCode_ = EXIT_SUCCESS;
-
-        asio::co_spawn(ioc_, rfbStart(), asio::detached);
-        ioc_.run();
-
-        return rfbStartingCode_;
+        co_await rfbStart();
+        co_return rfbStartingCode_;
     }
 
     void RFB::X11Server::serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) {

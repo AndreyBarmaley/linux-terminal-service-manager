@@ -118,8 +118,8 @@ namespace LTSM::Connector {
         boost::asio::awaitable<void> onLoginSuccessAwait(int newDisplay, uint32_t userUid);
 
       public:
-        ConnectorLtsm(const std::filesystem::path & confile, bool debug)
-            : DBusProxy(ConnectorType::LTSM, confile, debug), RFB::X11Server(ioc()) {}
+        ConnectorLtsm(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug)
+            : DBusProxy(ctx, ConnectorType::LTSM, confile, debug), RFB::X11Server(ctx) {}
         ~ConnectorLtsm();
 
         int communication(void) override;

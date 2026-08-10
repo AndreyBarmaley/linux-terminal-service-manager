@@ -21,8 +21,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#include <signal.h>
-
 #include <thread>
 #include <chrono>
 
@@ -34,6 +32,8 @@
 #include "ltsm_global.h"
 #include "ltsm_x11vnc.h"
 #include "ltsm_connector_x11vnc.h"
+
+using namespace boost;
 
 namespace LTSM {
     //
@@ -156,61 +156,39 @@ namespace LTSM {
         }
     }
 
-    int X11Vnc::startSocket(int port) const {
-        int fd = TCPSocket::listen(port);
-
-        if(fd < 0) {
-            return -1;
-        }
-
+    asio::awaitable<void> X11Vnc::startSocket(uint16_t port) {
+        asio::ip::tcp::acceptor acceptor(ioc_, {asio::ip::tcp::v4(), port});
         Application::info("listen inet port: {}", port);
-        signal(SIGCHLD, SIG_IGN);
 
-        while(int sock = TCPSocket::accept(fd)) {
-            if(0 > sock) {
-                return -1;
-            }
-
-            // child
-            if(0 == fork()) {
-                if(configGetBoolean("syslog")) {
-                    Application::setDebugLevel(DebugLevel::Quiet);
-                }
-
-                close(fd);
-                int res = EXIT_FAILURE;
-
+        while (true) {
+            asio::ip::tcp::socket sock = co_await acceptor.async_accept(asio::use_awaitable);
+            asio::co_spawn(ioc_, [this, sock=std::move(sock)]() mutable -> asio::awaitable<void> {
                 try {
-                    auto connector = std::make_unique<Connector::X11VNC>(config());
-                    connector->assignSocket(sock);
-                    res = connector->rfbCommunication();
+                    auto conn = std::make_unique<Connector::X11VNC>(ioc_, config());
+                    conn->assignSocket(std::move(sock));
+                    co_await conn->rfbCommunicationAwait();
                 } catch(const std::exception & err) {
                     Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 }
-
-                close(sock);
-                // exit child
-                return res;
-            }
-
-            close(sock);
+                co_return;
+            }, asio::detached);
         }
 
-        close(fd);
-        return 0;
+        co_return;
     }
 
-    int X11Vnc::startInetd(void) const {
-        int res = EXIT_FAILURE;
+    asio::awaitable<void> X11Vnc::startInetd(void) {
+        const int fd = dup(STDIN_FILENO);
 
         try {
-            auto connector = std::make_unique<Connector::X11VNC>(config());
-            res = connector->rfbCommunication();
+            auto conn = std::make_unique<Connector::X11VNC>(ioc_, config());
+            conn->assignSocketFd(fd);
+            co_await conn->rfbCommunicationAwait();
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
-        return res;
+        co_return;
     }
 
     int X11Vnc::start(void) {
@@ -220,8 +198,15 @@ namespace LTSM {
             return 0;
         }
 
-        return configGetBoolean("inetd") ?
-               startInetd() : startSocket(configGetInteger("port"));
+        if(bool inetMode = configGetBoolean("inetd")) {
+            asio::co_spawn(ioc_, startInetd(), asio::detached);
+        } else {
+            const uint16_t port = configGetInteger("port");
+            asio::co_spawn(ioc_, startSocket(port), asio::detached);
+        }
+
+        ioc_.run();
+        return EXIT_SUCCESS;
     }
 }
 

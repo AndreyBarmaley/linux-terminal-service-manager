@@ -141,8 +141,8 @@ namespace LTSM {
                 : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()}, timer_update_{ctx.get_executor()} {}
             ~X11Server() = default;
 
-            int rfbCommunication(void);
             void stop(void);
+            boost::asio::awaitable<int> rfbCommunicationAwait(void);
 
             // server encoder events
             void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) override;

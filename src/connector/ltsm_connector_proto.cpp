@@ -58,8 +58,9 @@ namespace LTSM::Connector {
         Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
 
         x11NoDamage_ = config().getBoolean("vnc:xcb:nodamage", false);
+        asio::co_spawn(DBusProxy::ioc(), rfbCommunicationAwait(), asio::detached);
 
-        return rfbCommunication();
+        return 0;
     }
 
     asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(int newDisplay, uint32_t userUid) {

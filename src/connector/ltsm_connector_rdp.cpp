@@ -325,7 +325,8 @@ namespace LTSM::Connector {
         }
     };
 
-    ConnectorRdp::ConnectorRdp(const std::filesystem::path & confile, bool debug) : DBusProxy(ConnectorType::RDP, confile, debug) {
+    ConnectorRdp::ConnectorRdp(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug)
+            : DBusProxy(ctx, ConnectorType::RDP, confile, debug) {
     }
 
     ConnectorRdp::~ConnectorRdp() {

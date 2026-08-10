@@ -82,7 +82,11 @@ namespace LTSM {
         stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
-    void RFB::ServerEncoder::assignSocket(int fd) {
+    void RFB::ServerEncoder::assignSocket(asio::ip::tcp::socket&& sock) {
+        dynamic_cast<AsyncTcpStream&>(*stream_).socket() = std::move(sock);
+    }
+
+    void RFB::ServerEncoder::assignSocketFd(int fd) {
         dynamic_cast<AsyncTcpStream&>(*stream_).socket().assign(asio::ip::tcp::v4(), fd);
     }
 

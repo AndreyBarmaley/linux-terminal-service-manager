@@ -24,13 +24,17 @@
 #ifndef _LTSM_X11VNC_
 #define _LTSM_X11VNC_
 
+#include <boost/asio.hpp>
 #include "ltsm_application.h"
-#define LTSM_X11VNC_VERSION 20220920
+
+#define LTSM_X11VNC_VERSION 20260810
 
 namespace LTSM {
     class X11Vnc : public ApplicationJsonConfig {
-        int startInetd(void) const;
-        int startSocket(int port) const;
+        boost::asio::io_context ioc_;
+
+        boost::asio::awaitable<void> startInetd(void);
+        boost::asio::awaitable<void> startSocket(uint16_t port);
 
       public:
         X11Vnc(int argc, const char** argv);

@@ -25,7 +25,6 @@
 #define _LTSM_CONNECTOR_X11VNC_
 
 #include <unordered_map>
-#include <memory>
 #include <atomic>
 
 #include "librfb_x11server.h"
@@ -34,15 +33,14 @@ namespace LTSM {
     namespace Connector {
         /* Connector::VNC */
         class X11VNC : public RFB::X11Server {
-            std::unordered_map<uint32_t, int> keymap;
+            boost::asio::io_context& ioc_;
+            std::unordered_map<uint32_t, int> keymap_;
 
-            const JsonObject* _config = nullptr;
-            std::string _remoteaddr;
+            const JsonObject* config_ = nullptr;
+            std::string remoteaddr_;
 
-            PixelFormat _pf;
-
-            std::atomic<int> _display{0};
-            std::atomic<bool> _xcbDisable{true};
+            PixelFormat pf_;
+            std::atomic<bool> xcb_disable_{true};
 
           protected:
             // rfb server encoding
@@ -63,11 +61,12 @@ namespace LTSM {
                 return 16;
             }
 
-            bool xcbConnect(void);
+            boost::asio::awaitable<bool> xcbConnect(void);
+
             bool loadKeymap(void);
 
           public:
-            X11VNC(const JsonObject & jo);
+            X11VNC(boost::asio::io_context &, const JsonObject & jo);
         };
     }
 }

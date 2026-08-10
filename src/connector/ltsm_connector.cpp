@@ -103,13 +103,14 @@ namespace LTSM::Connector {
 #endif
 
     /* DBusProxy */
-    DBusProxy::DBusProxy(const ConnectorType & type, const std::filesystem::path & confile, bool debug)
-        : ApplicationJsonConfig("ltsm_connector", confile), BoostContext(1),
+    DBusProxy::DBusProxy(boost::asio::io_context& ctx, const ConnectorType & type, const std::filesystem::path & confile, bool debug)
+        : ApplicationJsonConfig("ltsm_connector", confile),
 #ifdef SDBUS_2_0_API
-        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
+        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
-        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
+        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
+        ioc_{ctx}
     {
         remoteAddr_.assign("local");
 
@@ -263,7 +264,7 @@ namespace LTSM::Connector {
             Application::debug(DebugType::Dbus, "{}: display: {}",
                                NS_FuncNameV, display);
 
-            asio::dispatch(ioc(), [this, display]() {
+            asio::dispatch(ioc_, [this, display]() {
                 this->busConnectorAlive(display);
             });
         }
@@ -321,22 +322,24 @@ namespace LTSM::Connector {
         const int fd = dup(STDIN_FILENO);
         std::unique_ptr<DBusProxy> connector;
 
+        boost::asio::io_context ioc;
+
 #ifdef LTSM_WITH_RDP
 
         // protocol up
         if(type == "auto") {
             if(int first = autoDetectType(fd); first == 0x03) {
-                connector = std::make_unique<ConnectorRdp>(confile, debug);
+                connector = std::make_unique<ConnectorRdp>(ioc, confile, debug);
             }
         } else if(type == "rdp") {
-            connector = std::make_unique<ConnectorRdp>(confile, debug);
+            connector = std::make_unique<ConnectorRdp>(ioc, confile, debug);
         }
 
 #endif
 
         if(! connector) {
-            auto conn = std::make_unique<ConnectorLtsm>(confile, debug);
-            conn->assignSocket(fd);
+            auto conn = std::make_unique<ConnectorLtsm>(ioc, confile, debug);
+            conn->assignSocketFd(fd);
             connector = std::move(conn);
         }
 
@@ -345,6 +348,7 @@ namespace LTSM::Connector {
         sd_notify(0, "READY=1");
 #endif
         int res = connector->communication();
+        ioc.run();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");

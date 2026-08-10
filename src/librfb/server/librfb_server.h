@@ -161,7 +161,8 @@ namespace LTSM {
             inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }
             inline boost::asio::strand<boost::asio::any_io_executor> xcb_strand(void) const { return xcb_strand_; }
 
-            void assignSocket(int);
+            void assignSocketFd(int);
+            void assignSocket(boost::asio::ip::tcp::socket&&);
 
             // EncoderStream interface
             const PixelFormat & clientFormat(void) const override;
