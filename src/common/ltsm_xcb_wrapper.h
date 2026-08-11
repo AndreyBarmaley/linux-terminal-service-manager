@@ -750,7 +750,7 @@ namespace LTSM {
 
             bool rootDamageAddRegion(const Region &);
             bool rootDamageAddRegions(const xcb_rectangle_t*, size_t);
-            bool rootDamageSubtrack(const Region &);
+            bool rootDamageSubtrack(const Region &) const;
 
             GenericEvent pollEvent(void);
             Size updateGeometrySize(void) const;

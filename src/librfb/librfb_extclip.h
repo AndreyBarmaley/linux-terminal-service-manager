@@ -28,7 +28,7 @@
 #include <string>
 #include <cinttypes>
 
-#include "ltsm_sockets.h"
+#include <boost/asio.hpp>
 
 #ifdef __UNIX__
 #include "ltsm_xcb_wrapper.h"
@@ -68,6 +68,8 @@ namespace LTSM {
         uint32_t fileSize = 0;
     };
 
+    using clipboard_buf = std::vector<uint8_t>;
+
     namespace RFB {
         class ServerEncoder;
 
@@ -92,29 +94,29 @@ namespace LTSM {
             uint32_t localProvideTypes = 0;
 
           protected:
-            void recvExtClipboardCapsContinue(uint32_t flags, StreamBuf && sb);
-            void recvExtClipboardRequest(uint32_t flags);
-            void recvExtClipboardPeek(void);
-            void recvExtClipboardNotify(uint32_t flags);
-            void recvExtClipboardProvide(StreamBuf && sb);
+            void recvExtClipboardCapsContinue(uint32_t flags, const StreamBufRef & sb);
+            boost::asio::awaitable<void> recvExtClipboardRequestAwait(uint32_t flags);
+            boost::asio::awaitable<void> recvExtClipboardPeekAwait(void) const;
+            boost::asio::awaitable<void> recvExtClipboardNotifyAwait(uint32_t flags);
+            boost::asio::awaitable<void> recvExtClipboardProvideAwait(const StreamBufRef &);
 
-            void sendExtClipboardRequest(uint16_t types);
-            void sendExtClipboardPeek(void);
-            void sendExtClipboardNotify(uint16_t types);
-            void sendExtClipboardProvide(uint16_t types);
+            boost::asio::awaitable<void> sendExtClipboardRequestAwait(uint16_t types);
+            boost::asio::awaitable<void> sendExtClipboardPeekAwait(void) const;
+            boost::asio::awaitable<void> sendExtClipboardNotifyAwait(uint16_t types) const;
+            boost::asio::awaitable<void> sendExtClipboardProvideAwait(uint16_t types);
 
             virtual uint16_t extClipboardLocalTypes(void) const = 0;
-            virtual std::vector<uint8_t> extClipboardLocalData(uint16_t type) const = 0;
-            virtual void extClipboardRemoteTypesEvent(uint16_t type) = 0;
-            virtual void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) = 0;
-            virtual void extClipboardSendEvent(std::vector<uint8_t> &&) = 0;
+            virtual boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) = 0;
+            virtual boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) = 0;
+            virtual boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) = 0;
+            virtual boost::asio::awaitable<void> extClipboardSendAwait(std::span<const uint8_t>) const = 0;
 
           public:
             ExtClip() = default;
             virtual ~ExtClip() = default;
 
-            void sendExtClipboardCapsEvent(void);
-            void recvExtClipboardCapsEvent(std::vector<uint8_t> &&);
+            boost::asio::awaitable<void> sendExtClipboardCapsAwait(void);
+            boost::asio::awaitable<void> recvExtClipboardCapsAwait(std::span<const uint8_t>);
 
             void setExtClipboardRemoteCaps(int);
             int extClipboardRemoteCaps(void) const;

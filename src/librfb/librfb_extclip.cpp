@@ -28,6 +28,7 @@
 
 #include "ltsm_application.h"
 #include "ltsm_streambuf.h"
+#include "ltsm_zlib.h"
 #include "ltsm_tools.h"
 #include "ltsm_librfb.h"
 #include "librfb_extclip.h"
@@ -35,6 +36,8 @@
 #ifdef __UNIX__
 //#include "librfb_server.h"
 #endif
+
+using namespace boost;
 
 namespace LTSM {
 #ifdef __UNIX__
@@ -150,9 +153,9 @@ namespace LTSM {
     }
 #endif
 
-    void RFB::ExtClip::recvExtClipboardCapsEvent(std::vector<uint8_t> && buf) {
+    asio::awaitable<void> RFB::ExtClip::recvExtClipboardCapsAwait(std::span<const uint8_t> buf) {
         // xcb context
-        StreamBuf sb(std::move(buf));
+        StreamBufRef sb(buf.data(), buf.size());
 
         if(4 > sb.last()) {
             Application::error("{}: invalid format, failed `{}'", NS_FuncNameV, "length");
@@ -170,36 +173,42 @@ namespace LTSM {
                 throw rfb_error(NS_FuncNameS);
             }
 
-            recvExtClipboardCapsContinue(flags, std::move(sb));
+            recvExtClipboardCapsContinue(flags, sb);
         } else {
             const uint32_t allop = ExtClipCaps::OpRequest | ExtClipCaps::OpPeek | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide;
             auto opCount = std::popcount(flags & allop);
 
             if(1 != opCount) {
                 Application::warning("{}: ext clipboard invalid flags: {:#010x}", NS_FuncNameV, flags);
-                return;
+                co_return;
             }
 
             switch(flags & allop) {
                 case ExtClipCaps::OpRequest:
-                    return recvExtClipboardRequest(flags);
+                    co_await recvExtClipboardRequestAwait(flags);
+                    break;
 
                 case ExtClipCaps::OpPeek:
-                    return recvExtClipboardPeek();
+                    co_await recvExtClipboardPeekAwait();
+                    break;
 
                 case ExtClipCaps::OpNotify:
-                    return recvExtClipboardNotify(flags);
+                    co_await recvExtClipboardNotifyAwait(flags);
+                    break;
 
                 case ExtClipCaps::OpProvide:
-                    return recvExtClipboardProvide(std::move(sb));
+                    co_await recvExtClipboardProvideAwait(sb);
+                    break;
 
                 default:
                     break;
             }
         }
+
+        co_return;
     }
 
-    void RFB::ExtClip::recvExtClipboardCapsContinue(uint32_t flags, StreamBuf && sb) {
+    void RFB::ExtClip::recvExtClipboardCapsContinue(uint32_t flags, const StreamBufRef & sb) {
         Application::debug(DebugType::Clip, "{}: flags: {:#010x}, data length: {}", NS_FuncNameV, flags, sb.last());
 
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
@@ -247,35 +256,37 @@ namespace LTSM {
         remoteExtClipboardFlags = flags & (~ExtClipCaps::OpCaps);
     }
 
-    void RFB::ExtClip::recvExtClipboardRequest(uint32_t flags) {
+    asio::awaitable<void> RFB::ExtClip::recvExtClipboardRequestAwait(uint32_t flags) {
         Application::debug(DebugType::Clip, "{}: flags: {:#010x}", NS_FuncNameV, flags);
         // The recipient should respond with a PROVIDE message with the clipboard data for the formats indicated in flags.
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
 
         if(localExtClipboardFlags & ExtClipCaps::OpRequest) {
             const int allowTypes = 0xFFFF & localExtClipboardFlags & flags;
-            sendExtClipboardProvide(allowTypes);
-        } else {
-            Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
-            throw rfb_error(NS_FuncNameS);
+            co_await sendExtClipboardProvideAwait(allowTypes);
+            co_return;
         }
+
+        Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
+        throw rfb_error(NS_FuncNameS);
     }
 
-    void RFB::ExtClip::recvExtClipboardPeek(void) {
+    asio::awaitable<void> RFB::ExtClip::recvExtClipboardPeekAwait(void) const {
         Application::debug(DebugType::Clip, "{}", NS_FuncNameV);
         // The recipient should send a new notify message indicating which formats are available.
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
 
         if(localExtClipboardFlags & ExtClipCaps::OpPeek) {
             const int allowTypes = 0xFFFF & localExtClipboardFlags;
-            sendExtClipboardNotify(allowTypes & extClipboardLocalTypes());
-        } else {
-            Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
-            throw rfb_error(NS_FuncNameS);
+            co_await sendExtClipboardNotifyAwait(allowTypes & extClipboardLocalTypes());
+            co_return;
         }
+
+        Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
+        throw rfb_error(NS_FuncNameS);
     }
 
-    void RFB::ExtClip::recvExtClipboardNotify(uint32_t flags) {
+    asio::awaitable<void> RFB::ExtClip::recvExtClipboardNotifyAwait(uint32_t flags) {
         Application::debug(DebugType::Clip, "{}: flags: {:#010x}", NS_FuncNameV, flags);
 
         // This message indicates which formats are available on the remote side
@@ -284,15 +295,15 @@ namespace LTSM {
 
         if(localExtClipboardFlags & ExtClipCaps::OpNotify) {
             const int allowTypes = 0xFFFF & remoteExtClipboardFlags & flags;
-            // FIXME strand
-            extClipboardRemoteTypesEvent(allowTypes);
-        } else {
-            Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
-            throw rfb_error(NS_FuncNameS);
+            co_await extClipboardRemoteTypesAwait(allowTypes);
+            co_return;
         }
+
+        Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
+        throw rfb_error(NS_FuncNameS);
     }
 
-    void RFB::ExtClip::recvExtClipboardProvide(StreamBuf && sb) {
+    asio::awaitable<void> RFB::ExtClip::recvExtClipboardProvideAwait(const StreamBufRef & sb) {
         Application::debug(DebugType::Clip, "{}, data length: {}", NS_FuncNameV, sb.last());
         // This message includes the actual clipboard data and should be sent whenever the clipboard changes and the data for each format.
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
@@ -310,20 +321,21 @@ namespace LTSM {
                         auto len = sbr.readIntBE32();
                         auto raw = sbr.read(len);
 
-                        extClipboardRemoteDataEvent(type, std::move(raw));
+                        co_await extClipboardRemoteDataAwait(type, std::move(raw));
                         localProvideTypes &= ~type;
                     }
                 }
             } else {
                 Application::warning("{}: zlib empty", NS_FuncNameV);
             }
-        } else {
-            Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
-            throw rfb_error(NS_FuncNameS);
+            co_return;
         }
+
+        Application::error("{}: ext clipboard unsupport op: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
+        throw rfb_error(NS_FuncNameS);
     }
 
-    void RFB::ExtClip::sendExtClipboardCapsEvent(void) {
+    asio::awaitable<void> RFB::ExtClip::sendExtClipboardCapsAwait(void) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: server flags: {:#010x}", NS_FuncNameV, localExtClipboardFlags);
 
@@ -357,22 +369,23 @@ namespace LTSM {
             sb.writeIntBE32(localExtClipTypeFilesSz);
         }
 
-        extClipboardSendEvent(std::move(sb.rawbuf()));
+        co_await extClipboardSendAwait(sb.rawbuf());
+        co_return;
     }
 
-    void RFB::ExtClip::sendExtClipboardRequest(uint16_t types) {
+    asio::awaitable<void> RFB::ExtClip::sendExtClipboardRequestAwait(uint16_t types) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: types: {:#06x}", NS_FuncNameV, types);
 
         if(! types) {
             Application::warning("{}: types empty", NS_FuncNameV);
-            return;
+            co_return;
         }
 
         // skip types, see recvExtClipboardProvide
         if((localProvideTypes & types) == types) {
             Application::warning("{}: also provided, types: {:#06x}", NS_FuncNameV, types);
-            return;
+            co_return;
         }
 
         const int allowTypes = remoteExtClipboardFlags & types;
@@ -380,22 +393,26 @@ namespace LTSM {
         StreamBuf sb;
         sb.writeIntBE32(ExtClipCaps::OpRequest | allowTypes);
 
-        extClipboardSendEvent(std::move(sb.rawbuf()));
+        // fix await
+        co_await extClipboardSendAwait(sb.rawbuf());
 
         // The recipient should respond with a provide messages
         localProvideTypes |= allowTypes;
+        co_return;
     }
 
-    void RFB::ExtClip::sendExtClipboardPeek(void) {
+    asio::awaitable<void> RFB::ExtClip::sendExtClipboardPeekAwait(void) const {
         Application::debug(DebugType::Clip, "{}", NS_FuncNameV);
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         StreamBuf sb;
         sb.writeIntBE32(ExtClipCaps::OpPeek);
 
-        extClipboardSendEvent(std::move(sb.rawbuf()));
+        // fix await
+        co_await extClipboardSendAwait(sb.rawbuf());
+        co_return;
     }
 
-    void RFB::ExtClip::sendExtClipboardNotify(uint16_t types) {
+    asio::awaitable<void> RFB::ExtClip::sendExtClipboardNotifyAwait(uint16_t types) const {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: types: {:#06x}", NS_FuncNameV, types);
 
@@ -404,10 +421,12 @@ namespace LTSM {
         StreamBuf sb;
         sb.writeIntBE32(ExtClipCaps::OpNotify | allowTypes);
 
-        extClipboardSendEvent(std::move(sb.rawbuf()));
+        // fix await
+        co_await extClipboardSendAwait(sb.rawbuf());
+        co_return;
     }
 
-    void RFB::ExtClip::sendExtClipboardProvide(uint16_t types) {
+    asio::awaitable<void> RFB::ExtClip::sendExtClipboardProvideAwait(uint16_t types) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         Application::debug(DebugType::Clip, "{}: types: {:#06x}", NS_FuncNameV, types);
 
@@ -417,8 +436,7 @@ namespace LTSM {
                 ExtClipCaps::TypeText, ExtClipCaps::TypeRtf, ExtClipCaps::TypeHtml, ExtClipCaps::TypeDib, ExtClipCaps::TypeFiles
             }) {
             if(types & type) {
-                auto buf = extClipboardLocalData(type);
-
+                auto buf = co_await extClipboardLocalDataAwait(type);
                 sb.writeIntBE32(buf.size());
                 sb.write(buf);
             }
@@ -430,8 +448,8 @@ namespace LTSM {
         sb.writeIntBE32(zip.size());
         sb.write(zip);
 
-        // FIXME strand
-        extClipboardSendEvent(std::move(sb.rawbuf()));
+        co_await extClipboardSendAwait(sb.rawbuf());
+        co_return;
     }
 
     int RFB::ExtClip::extClipboardLocalCaps(void) const {

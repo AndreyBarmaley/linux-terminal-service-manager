@@ -195,17 +195,20 @@ namespace LTSM {
         return 0;
     }
 
-    std::vector<uint8_t> Vnc2Image::extClipboardLocalData(uint16_t type) const {
-        return {};
+    boost::asio::awaitable<clipboard_buf> Vnc2Image::extClipboardLocalDataAwait(uint16_t type) {
+        co_return clipboard_buf{};
     }
 
-    void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type) {
+    boost::asio::awaitable<void> Vnc2Image::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
+        co_return;
     }
 
-    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
+    boost::asio::awaitable<void> Vnc2Image::extClipboardRemoteTypesAwait(uint16_t type) {
+        co_return;
     }
 
-    void Vnc2Image::extClipboardSendEvent(std::vector<uint8_t> &&) {
+    asio::awaitable<void> Vnc2Image::extClipboardSendAwait(std::span<const uint8_t>) const {
+        co_return;
     }
 }
 

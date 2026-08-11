@@ -24,7 +24,6 @@
 #include <cmath>
 #include <string>
 #include <chrono>
-#include <thread>
 #include <cstring>
 #include <fstream>
 #include <algorithm>
@@ -482,10 +481,10 @@ namespace LTSM {
                         Application::info("{}: kerberos auth: {}, remote: {}", NS_FuncNameV, "success", remoteName);
 
                         if(auto pos = remoteName.find("@"); pos != std::string::npos) {
-                            clientAuthName = remoteName.substr(0, pos);
-                            clientAuthDomain = remoteName.substr(pos + 1);
+                            clientAuthName_ = remoteName.substr(0, pos);
+                            clientAuthDomain_ = remoteName.substr(pos + 1);
                         } else {
-                            clientAuthName = remoteName;
+                            clientAuthName_ = remoteName;
                         }
 
                         // check json info
@@ -578,7 +577,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendUpdateScreenAwait(const XCB::Region & area) {
+    asio::awaitable<void> RFB::ServerEncoder::sendUpdateScreenAwait(const XCB::Region & area) const {
         if(! encoder_) {
             Application::warning("{}: encoder null", NS_FuncNameV);
             co_return;
@@ -841,7 +840,7 @@ namespace LTSM {
                                      ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
 
             ExtClip::remoteExtClipTypeTextSz = 20 * 1024 * 1024;
-            sendExtClipboardCapsEvent();
+            co_await sendExtClipboardCapsAwait();
         }
 
         serverRecvSetEncodingsEvent(recvEncodings);
@@ -929,9 +928,8 @@ namespace LTSM {
 
             auto buffer = co_await stream_->async_recv_buffer(std::abs(length));
 
-            asio::post(xcb_strand_, [this, buf=std::move(buffer)]() mutable {
-                recvExtClipboardCapsEvent(std::move(buf));
-            });
+            co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
+            co_await recvExtClipboardCapsAwait(buffer);
         }
 
         co_return;
@@ -1034,7 +1032,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendCutTextEventAwait(std::vector<uint8_t> buf, bool ext) const {
+    asio::awaitable<void> RFB::ServerEncoder::sendCutTextAwait(std::span<const uint8_t> buf, bool ext) const {
         StreamBuf sb(8 + buf.size());
 
         // RFB: 6.5.4
@@ -1560,7 +1558,7 @@ namespace LTSM {
     }
 
     std::pair<std::string, std::string> RFB::ServerEncoder::authInfo(void) const {
-        return std::make_pair(clientAuthName, clientAuthDomain);
+        return std::make_pair(clientAuthName_, clientAuthDomain_);
     }
 
     void RFB::ServerEncoder::setEncodingOptions(std::forward_list<std::string> && opts, uint32_t frameRate) {

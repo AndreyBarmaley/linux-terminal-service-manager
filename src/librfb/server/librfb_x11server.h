@@ -35,7 +35,7 @@ namespace LTSM {
         class X11Server : public ServerEncoder, public XCB::SelectionSource, public XCB::SelectionRecipient, protected XCB::RootDisplay {
             boost::asio::io_context & ioc_;
 
-            std::vector<uint8_t> clientClipboard;
+            std::vector<uint8_t> clientClipboard_;
 
             XCB::Region clientRegion;
             XCB::Region damageRegion;
@@ -45,6 +45,7 @@ namespace LTSM {
             boost::asio::cancellation_signal rfb_cancel_;
             boost::asio::cancellation_signal srv_cancel_;
             boost::asio::steady_timer timer_update_;
+            boost::asio::steady_timer clipboard_ready_;
 
             mutable std::mutex serverLock;
             std::chrono::time_point<std::chrono::steady_clock> frameTimePoint;
@@ -96,10 +97,11 @@ namespace LTSM {
             
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
-            std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
-            void extClipboardRemoteTypesEvent(uint16_t type) override;
-            void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
-            void extClipboardSendEvent(std::vector<uint8_t> &&) override;
+            boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
+            boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
+            boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) override;
+            boost::asio::awaitable<void> extClipboardSendAwait(std::span<const uint8_t>) const override;
+            boost::asio::awaitable<bool> extClipboardSourceReadyAwait(xcb_atom_t atom);
 
             XCB::RootDisplay* xcbDisplay(void);
             XCB::Region getClientRegion(void) const;
@@ -139,7 +141,8 @@ namespace LTSM {
 
           public:
             X11Server(boost::asio::io_context & ctx)
-                : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()}, timer_update_{ctx.get_executor()} {}
+                : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()},
+                    timer_update_{ctx.get_executor()}, clipboard_ready_{ctx.get_executor()} {}
             ~X11Server() = default;
 
             boost::asio::awaitable<int> rfbCommunicationAwait(void);
@@ -151,7 +154,7 @@ namespace LTSM {
             void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
             void serverRecvCutTextEvent(std::vector<uint8_t> &&) override;
             void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) override;
-            void serverSendFBUpdateEvent(const XCB::Region &) override;
+            void serverSendFBUpdateEvent(const XCB::Region &) const override;
             void serverRecvDesktopSizeEvent(std::vector<RFB::ScreenInfo>&&) override;
             void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region & reg) override;
         };

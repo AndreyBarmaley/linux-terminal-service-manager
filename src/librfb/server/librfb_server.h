@@ -65,8 +65,8 @@ namespace LTSM {
 
             mutable std::forward_list<uint32_t> cursorSended;
             ClientEncodings clientEncodings;
-            std::string clientAuthName;
-            std::string clientAuthDomain;
+            std::string clientAuthName_;
+            std::string clientAuthDomain_;
 
             std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
             std::unique_ptr<EncodingBase> encoder_;
@@ -75,7 +75,7 @@ namespace LTSM {
             ColorMap colourMap;
 
 	    // FIXME
-            std::atomic<bool> fbUpdateProcessing_{false};
+            mutable std::atomic<bool> fbUpdateProcessing_{false};
 
             bool clientLtsmSupported = false;
             bool clientLtsmKeyboard = false;
@@ -132,10 +132,10 @@ namespace LTSM {
             boost::asio::awaitable<void> waitUpdateProcessAwait(void);
             boost::asio::awaitable<void> sendColourMapAwait(int first) const;
             boost::asio::awaitable<void> sendBellEventAwait(void) const;
-            boost::asio::awaitable<void> sendCutTextEventAwait(std::vector<uint8_t>, bool ext) const;
+            boost::asio::awaitable<void> sendCutTextAwait(std::span<const uint8_t>, bool ext) const;
             boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const FrameBuffer &) const;
-            boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &);
+            boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &) const;
             boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
             boost::asio::awaitable<void> sendEncodingDesktopResizeAwait(DesktopResizeStatus, DesktopResizeError, XCB::Size) const;
             boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const;
@@ -208,7 +208,7 @@ namespace LTSM {
             virtual void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) { /* empty */ }
             virtual void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) { /* empty */ }
             virtual void serverRecvDesktopSizeEvent(std::vector<ScreenInfo>&&) { /* empty */ }
-            virtual void serverSendFBUpdateEvent(const XCB::Region &) { /* empty */ }
+            virtual void serverSendFBUpdateEvent(const XCB::Region &) const { /* empty */ }
             virtual void serverEncodingSelectedEvent(void) { /* empty */ }
         };
     }

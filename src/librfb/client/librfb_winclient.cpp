@@ -22,7 +22,6 @@
  **********************************************************************/
 
 #include <chrono>
-#include <thread>
 
 #include "ltsm_application.h"
 #include "ltsm_tools.h"
@@ -31,21 +30,23 @@
 #include "librfb_winclient.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
-    RFB::WinClient::WinClient(const boost::asio::any_io_executor& ctx) : ClientDecoder(ctx) {
+    RFB::WinClient::WinClient(const asio::any_io_executor& ctx) : ClientDecoder(ctx) {
     }
 
-    void RFB::WinClient::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
-        Application::debug(DebugType::WinCli, "{}, length: {}", NS_FuncNameV, buf.size());
-        sendCutText(std::move(buf), true);
+    asio::awaitable<void> RFB::WinClient::extClipboardSendAwait(std::span<const uint8_t> buf) const {
+        Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
+        co_await sendCutTextAwait(buf, true);
+        co_return;
     }
 
     uint16_t RFB::WinClient::extClipboardLocalTypes(void) const {
         return clipLocalTypes;
     }
 
-    std::vector<uint8_t> RFB::WinClient::extClipboardLocalData(uint16_t type) const {
+    asio::awaitable<clipboard_buf> RFB::WinClient::extClipboardLocalDataAwait(uint16_t type) {
         if(0 == extClipboardLocalCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
@@ -59,52 +60,39 @@ namespace LTSM {
                 {
                     for(const auto & atom: ExtClip::typesToX11Atoms(type, *this))
                     {
-                        ptr->clientClipboard.clear();
-                        copy->convertSelection(atom, *this);
-
-                        // wait data from selectionReceiveData
-                        Tools::Timeout waitCb(100ms);
-
-                        while(true)
-                        {
-                            std::this_thread::sleep_for(3ms);
-
-                            if(waitCb.check())
-                                break;
-
-                            if(clientClipboard.size())
-                                return clientClipboard;
-                        }
+                        // see X11Client::extClipboardLocalDataAwait
                     }
                 }
         */
-        return {};
+        co_return clipboard_buf{};
     }
 
-    void RFB::WinClient::extClipboardRemoteTypesEvent(uint16_t types) {
+    asio::awaitable<void> RFB::WinClient::extClipboardRemoteTypesAwait(uint16_t types) {
         Application::debug(DebugType::WinCli, "{}, types: {:#06x}", NS_FuncNameV, types);
 
-        if(extClipboardRemoteCaps()) {
-            clipRemoteTypes = types;
-
-            //if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))
-            //        paste->setSelectionOwner(*this);
-        } else {
+        if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
+
+        clipRemoteTypes = types;
+
+        //if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))
+        //        paste->setSelectionOwner(*this);
+        co_return;
     }
 
-    void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
+    asio::awaitable<void> RFB::WinClient::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
         // xcb context
         Application::debug(DebugType::WinCli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
-        if(extClipboardRemoteCaps()) {
-            clientClipboard.swap(buf);
-        } else {
+        if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
+
+        clientClipboard.swap(buf);
+        co_return;
     }
 
     void RFB::WinClient::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {

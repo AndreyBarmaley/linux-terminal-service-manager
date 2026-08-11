@@ -39,6 +39,8 @@
 
 #include "SDL.h"
 
+using namespace boost;
+
 namespace LTSM {
     // AsioDecoderStream
     void RFB::AsioDecoderStream::recvRaw(void* ptr, size_t len) const {
@@ -63,25 +65,25 @@ namespace LTSM {
     uint16_t RFB::DecoderStream::recvIntLE16(void) const {
         uint16_t v;
         recvRaw(& v, 2);
-        return boost::endian::little_to_native(v);
+        return endian::little_to_native(v);
     }
 
     uint32_t RFB::DecoderStream::recvIntLE32(void) const {
         uint32_t v;
         recvRaw(& v, 4);
-        return boost::endian::little_to_native(v);
+        return endian::little_to_native(v);
     }
 
     uint16_t RFB::DecoderStream::recvIntBE16(void) const {
         uint16_t v;
         recvRaw(& v, 2);
-        return boost::endian::big_to_native(v);
+        return endian::big_to_native(v);
     }
 
     uint32_t RFB::DecoderStream::recvIntBE32(void) const {
         uint32_t v;
         recvRaw(& v, 4);
-        return boost::endian::big_to_native(v);
+        return endian::big_to_native(v);
     }
 
     uint32_t RFB::DecoderStream::recvPixel(const PixelFormat & clientPf) const {

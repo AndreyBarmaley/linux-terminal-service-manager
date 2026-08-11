@@ -25,7 +25,6 @@
 
 #include <tuple>
 #include <chrono>
-#include <thread>
 
 #include "ltsm_application.h"
 #include "ltsm_sdl_wrapper.h"
@@ -118,6 +117,7 @@ namespace LTSM {
 
         signals_.cancel();
         timer_update_.cancel();
+        clipboard_ready_.cancel();
     }
 
     asio::awaitable<void> RFB::X11Server::signalsHandler(void) {
@@ -330,8 +330,8 @@ namespace LTSM {
 
     asio::awaitable<void> RFB::X11Server::rfbStart(void) {
         // vnc session not activated trigger
-        boost::asio::steady_timer timerNotActivated(ioc_, 30s);
-        timerNotActivated.async_wait([this](const boost::system::error_code & ec) {
+        asio::steady_timer timerNotActivated(ioc_, 30s);
+        timerNotActivated.async_wait([this](const system::error_code & ec) {
             if(!ec) {
                 this->stop();
             }
@@ -485,99 +485,96 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::extClipboardSendEvent(std::vector<uint8_t>&& buf) {
-        asio::co_spawn(rfb_strand(), sendCutTextEventAwait(std::move(buf), true), asio::detached);
+    asio::awaitable<void> RFB::X11Server::extClipboardSendAwait(std::span<const uint8_t> buf) const {
+        co_await sendCutTextAwait(buf, true);
+        co_return;
     }
 
     uint16_t RFB::X11Server::extClipboardLocalTypes(void) const {
         return clipLocalTypes;
     }
 
-    std::vector<uint8_t> RFB::X11Server::extClipboardLocalData(uint16_t type) const {
-        // FIXME xcb context
-        // switch to x11 context
-        if(! xcb_strand().running_in_this_thread()) {
-            using binary_buf = std::vector<uint8_t>;
-            std::promise<binary_buf> prom;
-            auto ret = prom.get_future();
-            asio::post(xcb_strand(), [this, type, promise=std::move(prom)]() mutable {
-                promise.set_value(extClipboardLocalData(type));
-            });
-            return ret.get();
-        }
+    asio::awaitable<clipboard_buf> RFB::X11Server::extClipboardLocalDataAwait(uint16_t type) {
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
 
         if(0 == extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
 
-        auto ptr = const_cast<RFB::X11Server*>(this);
-
-        if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
+        if(auto copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY))) {
             for(const auto & atom : ExtClip::typesToX11Atoms(type, *this)) {
-                ptr->clientClipboard.clear();
-                copy->convertSelection(atom, *this);
+                clientClipboard_.clear();
+                clipboard_ready_.expires_after(3000ms);
 
-                // FIXME
-                // wait data from selectionReceiveData
-                Tools::Timeout waitCb(100ms);
+                // this is an initiator. we launch from the background.
+                asio::post(xcb_strand(), [this,copy,atom]() {
+                    copy->convertSelection(atom, *this);
+                });
 
-                while(true) {
-                    std::this_thread::sleep_for(3ms);
-
-                    if(waitCb.check()) {
-                        break;
+                // wait clipboard
+                try {
+                    co_await clipboard_ready_.async_wait(asio::use_awaitable);
+                } catch(const system::system_error& err) {
+                    // clipboard_ready_.cancel() -> data ready
+                    if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                        Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                        co_return clipboard_buf{};
                     }
+                }
 
-                    if(clientClipboard.size()) {
-                        return clientClipboard;
-                    }
+                if(clientClipboard_.size()) {
+                    co_return clientClipboard_;
                 }
             }
         }
 
-        return {};
+        co_return clipboard_buf{};
     }
 
-    void RFB::X11Server::extClipboardRemoteTypesEvent(uint16_t types) {
-        // FIXME xcb context
-        if(! xcb_strand().running_in_this_thread()) {
-            asio::post(xcb_strand(), [this, types]() {
-                extClipboardRemoteTypesEvent(types);
-            });
-            return;
-        }
+    asio::awaitable<void> RFB::X11Server::extClipboardRemoteTypesAwait(uint16_t types) {
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
 
-        if(extClipboardRemoteCaps()) {
-            clipRemoteTypes = types;
-
-            if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
-                paste->setSelectionOwner(*this);
-            }
-        } else {
+        if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
+
+        clipRemoteTypes = types;
+
+        if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
+            paste->setSelectionOwner(*this);
+        }
+    
+        co_return;
     }
 
-    void RFB::X11Server::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
-        // FIXME xcb context
-        if(extClipboardRemoteCaps()) {
-            clientClipboard.swap(buf);
-        } else {
+    asio::awaitable<void> RFB::X11Server::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+
+        if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
         }
+
+        clientClipboard_.swap(buf);
+        clipboard_ready_.cancel();
+
+        co_return;
     }
 
     void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
-        // FIXME xcb context
-        if(auto ptr = const_cast<RFB::X11Server*>(this)) {
-            if(extClipboardRemoteCaps()) {
-                ptr->clientClipboard.swap(buf);
-            } else {
-                asio::co_spawn(rfb_strand(), sendCutTextEventAwait(std::move(buf), false), asio::detached);
+        if(extClipboardRemoteCaps()) {
+            // FIXME xcb context
+            if(auto ptr = const_cast<RFB::X11Server*>(this)) {
+                ptr->clientClipboard_.swap(buf);
+                ptr->clipboard_ready_.cancel();
             }
+        } else {
+            asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
+                co_await sendCutTextAwait(buf, false /* ext mode */);
+                co_return;
+            }, asio::detached);
         }
     }
 
@@ -590,15 +587,13 @@ namespace LTSM {
                 clipLocalTypes |= ExtClip::x11AtomToType(atom);
             });
 
-            if(auto owner = const_cast<X11Server*>(this)) {
-                owner->sendExtClipboardNotify(clipLocalTypes);
-            }
+            // FIXME await
+            // co_await sendExtClipboardNotifyAwait(clipLocalTypes);
         } else {
-            auto ptr = const_cast<RFB::X11Server*>(this);
-
-            if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
+            if(auto copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
-                    if(std::ranges::any_of(beg, end, [&](auto & trgt) { return atom == trgt; })) {
+                    const bool found = std::ranges::any_of(beg, end, [&](auto & trgt) { return atom == trgt; });
+                    if(found) {
                         return copy->convertSelection(atom, *this);
                     }
                 }
@@ -618,6 +613,29 @@ namespace LTSM {
                                         clipRemoteTypes : ExtClipCaps::TypeText, *this);
     }
 
+    asio::awaitable<bool> RFB::X11Server::extClipboardSourceReadyAwait(xcb_atom_t atom) {
+        uint16_t requestType = ExtClip::x11AtomToType(atom);
+
+        clientClipboard_.clear();
+        clipboard_ready_.expires_after(3000ms);
+
+        // this is an initiator. we launch from the background.
+        asio::co_spawn(xcb_strand(), sendExtClipboardRequestAwait(requestType), asio::detached);
+
+        // wait clipboard
+        try {
+            co_await clipboard_ready_.async_wait(asio::use_awaitable);
+        } catch(const system::system_error& err) {
+            // clipboard_ready_.cancel() -> data ready
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                co_return false;
+            }
+        }
+
+        co_return true;
+    }
+
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
         // FIXME xcb context
         auto targets = selectionSourceTargets();
@@ -627,29 +645,12 @@ namespace LTSM {
         }
 
         if(extClipboardRemoteCaps()) {
-            uint16_t requestType = ExtClip::x11AtomToType(atom);
-            auto ptr = const_cast<RFB::X11Server*>(this);
-
-            ptr->clientClipboard.clear();
-            ptr->sendExtClipboardRequest(requestType);
-
-            // wait data from extClipboardRemoteDataEvent
-            Tools::Timeout waitCb(3000ms);
-
-            while(true) {
-                std::this_thread::sleep_for(3ms);
-
-                if(waitCb.check()) {
-                    break;
-                }
-
-                if(clientClipboard.size()) {
-                    return true;
-                }
-            }
+            // FIXME const
+            // auto ptr = const_cast<RFB::X11Server*>(this);
+            // co_await extClipboardSourceReadyAwait(atom);
         } else {
             // basic mode
-            return clientClipboard.size();
+            return clientClipboard_.size();
         }
 
         return false;
@@ -663,7 +664,7 @@ namespace LTSM {
             return 0;
         }
 
-        return clientClipboard.size();
+        return clientClipboard_.size();
     }
 
     std::vector<uint8_t> RFB::X11Server::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
@@ -673,8 +674,8 @@ namespace LTSM {
             return {};
         }
         // FIXME xcb context
-        if(offset + length <= clientClipboard.size()) {
-            auto beg = clientClipboard.begin() + offset;
+        if(offset + length <= clientClipboard_.size()) {
+            auto beg = clientClipboard_.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
         } else {
             Application::error("{}: invalid length: {}, offset: {}", NS_FuncNameV, length, offset);
@@ -686,7 +687,8 @@ namespace LTSM {
     void RFB::X11Server::serverRecvCutTextEvent(std::vector<uint8_t> && buf) {
         // xcb_strand context
         if(rfbClipboardEnable()) {
-            clientClipboard.swap(buf);
+            clientClipboard_.swap(buf);
+            clipboard_ready_.cancel();
 
             if(xcbAllowMessages()) {
                 if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
@@ -782,7 +784,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Server::serverSendFBUpdateEvent(const XCB::Region & reg) {
+    void RFB::X11Server::serverSendFBUpdateEvent(const XCB::Region & reg) const {
         if(! xcbNoDamageOption()) {
             XCB::RootDisplay::rootDamageSubtrack(reg);
         }

@@ -27,6 +27,11 @@
 #include <filesystem>
 #include <forward_list>
 
+#ifdef __WIN32__
+#include <winsock2.h>
+#include <windows.h>
+#endif
+
 #ifdef __UNIX__
 #include "pcsclite.h"
 #endif

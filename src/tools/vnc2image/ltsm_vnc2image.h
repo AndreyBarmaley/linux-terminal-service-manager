@@ -66,10 +66,10 @@ namespace LTSM {
         XCB::Size clientSize(void) const override;
 
         uint16_t extClipboardLocalTypes(void) const override;
-        std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
-        void extClipboardRemoteTypesEvent(uint16_t type) override;
-        void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
-        void extClipboardSendEvent(std::vector<uint8_t> &&) override;
+        boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
+        boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
+        boost::asio::awaitable<void> extClipboardSendAwait(std::span<const uint8_t>) const override;
+        boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t type) override;
         void decoderInitEvent(RFB::DecodingBase*) override;
 
         int startSocket(std::string_view host, int port) const;

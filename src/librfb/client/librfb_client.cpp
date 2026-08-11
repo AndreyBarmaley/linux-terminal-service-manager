@@ -59,7 +59,7 @@ namespace LTSM {
         co_await asio::async_connect(tcp_stream->socket(), endpoints, asio::use_awaitable);
         // set no delay
         if(no_delay) {
-            boost::asio::ip::tcp::no_delay option(true);
+            asio::ip::tcp::no_delay option(true);
             tcp_stream->socket().set_option(option);
         }
         stream_ = std::move(tcp_stream);
@@ -196,11 +196,11 @@ namespace LTSM {
             uint32_t recvLength(void) const {
                 uint32_t val;
                 sock_.sync_recv_buf(&val, sizeof(val));
-                return boost::endian::big_to_native(val);
+                return endian::big_to_native(val);
             }
 
             void sendLength(uint32_t val) {
-                val = boost::endian::native_to_big(val);
+                val = endian::native_to_big(val);
                 sock_.sync_recv_buf(&val, sizeof(val));
             }
 
@@ -698,7 +698,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, const XCB::Region & reg) {
+    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, const XCB::Region & reg) const {
         Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
                            (enable ? "enable" : "disable"), reg);
 
@@ -717,7 +717,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendSetDesktopSizeAwait(const XCB::Size & wsz) {
+    asio::awaitable<void> RFB::ClientDecoder::sendSetDesktopSizeAwait(const XCB::Size & wsz) const {
         Application::info("{}: size: {}", NS_FuncNameV, wsz);
 
         StreamBuf sb(24);
@@ -743,7 +743,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) {
+    asio::awaitable<void> RFB::ClientDecoder::sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const {
         Application::debug(DebugType::Rfb, "{}: keysym: {:#010x}, pressed: {}", NS_FuncNameV, keysym, (int) pressed);
 
         // support: ENCODING_LTSM_KEYB
@@ -768,7 +768,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) {
+    asio::awaitable<void> RFB::ClientDecoder::sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const {
         Application::debug(DebugType::Rfb, "{}: pointer: {}, buttons: {:#04x}", NS_FuncNameV, XCB::Point(posx, posy), buttons);
 
         StreamBuf sb(6);
@@ -783,7 +783,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendCutTextEventAwait(std::span<const uint8_t> buf, bool ext) {
+    asio::awaitable<void> RFB::ClientDecoder::sendCutTextAwait(std::span<const uint8_t> buf, bool ext) const {
         StreamBuf sb(8);
 
         sb.writeInt8(RFB::CLIENT_CUT_TEXT).
@@ -812,7 +812,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t> buf) {
+    asio::awaitable<void> RFB::ClientDecoder::sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t> buf) const {
         Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
         StreamBuf sb(5);
@@ -1112,9 +1112,8 @@ namespace LTSM {
             });
         } else {
             Application::debug(DebugType::Rfb, "{}: length: {}, extclip", NS_FuncNameV, length);
-            asio::post(xcb_strand_, [this, buf=std::move(buffer)]() mutable {
-                recvExtClipboardCapsEvent(std::move(buf));
-            });
+            co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
+            co_await recvExtClipboardCapsAwait(buffer);
         }
         co_return;
     }
@@ -1127,15 +1126,6 @@ namespace LTSM {
         auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
         co_await sendContinuousUpdatesAwait(false, crt);
         co_return;
-    }
-
-    void RFB::ClientDecoder::sendCutText(std::vector<uint8_t>&& buf, bool ext) {
-        if(! buf.empty()) {
-            asio::co_spawn(rfb_strand_, [this, ext, buf = std::move(buf)]() -> asio::awaitable<void> {
-                co_await sendCutTextEventAwait(buf, ext);
-                co_return;
-            }, asio::detached);
-        }
     }
 
     void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {

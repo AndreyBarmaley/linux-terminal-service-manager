@@ -3171,7 +3171,7 @@ namespace LTSM {
         return false;
     }
 
-    bool XCB::RootDisplay::rootDamageSubtrack(const Region & reg) {
+    bool XCB::RootDisplay::rootDamageSubtrack(const Region & reg) const {
         if(_modWinDamage && _modWinDamage->subtrackRegion(reg)) {
             xcb_flush(_conn.get());
             return true;

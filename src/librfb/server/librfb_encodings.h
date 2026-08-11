@@ -28,8 +28,8 @@
 #include <mutex>
 #include <forward_list>
 
+#include "ltsm_zlib.h"
 #include "ltsm_librfb.h"
-#include "ltsm_sockets.h"
 #include "ltsm_streambuf.h"
 #include "ltsm_parallels_jobs.h"
 
