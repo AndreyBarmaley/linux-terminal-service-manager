@@ -1212,7 +1212,7 @@ namespace LTSM {
 #endif
 
                 default: {
-                    Application::error("{}: {}", NS_FuncNameV, "unknown decoding");
+                    Application::error("{}: {}: {:08x}", NS_FuncNameV, "unknown decoding", static_cast<uint32_t>(type));
                     throw rfb_error(NS_FuncNameS);
                 }
             }
