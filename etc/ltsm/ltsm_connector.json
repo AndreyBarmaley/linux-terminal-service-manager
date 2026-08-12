@@ -1,7 +1,4 @@
 {
-    "vnc:encoding:debug": 0,
-    "vnc:encoding:threads": 4,
-    "vnc:encoding:blacklist": [ "zlib" ],
     "vnc:gnutls:disable": false,
     "vnc:gnutls:debug": 3,
     "vnc:gnutls:anonmode": true,
@@ -32,6 +29,10 @@
     "#rdp:keymap:file": "/etc/ltsm/keymap_rdp.json",
 
     "#session:timeout": 5000,
+
+    "encoding:debug": 0,
+    "encoding:blacklist": [ "zlib" ],
+    "encoding:threads": 4,
 
     "transfer:file:disabled": false,
     "transfer:file:max": 100000000,

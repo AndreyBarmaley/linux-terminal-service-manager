@@ -35,16 +35,16 @@ using namespace std::chrono_literals;
 
 namespace LTSM::Connector {
     /* ConnectorLtsm */
-    ConnectorLtsm::ConnectorLtsm(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug)
-        : DBusProxy(ctx, ConnectorType::LTSM, confile, debug)
-        , RFB::X11Server(ctx)
-        , transfer_strand_{ctx.get_executor()} {}
+    ConnectorLtsm::ConnectorLtsm(const std::filesystem::path & confile, bool debug)
+        : DBusProxy(ConnectorType::LTSM, confile, debug)
+        , RFB::X11Server(ioc())
+        , transfer_strand_{get_executor()} {}
 
     ConnectorLtsm::~ConnectorLtsm() {
         stop();
     }
 
-    int ConnectorLtsm::communication(void) {
+    int ConnectorLtsm::start(void) {
         if(0 >= busGetServiceVersion()) {
             Application::error("{}: bus service failure", NS_FuncNameV);
             return EXIT_FAILURE;
@@ -55,7 +55,55 @@ namespace LTSM::Connector {
         x11NoDamage_ = config().getBoolean("vnc:xcb:nodamage", false);
         asio::co_spawn(DBusProxy::ioc(), rfbCommunicationAwait(), asio::detached);
 
+        BoostContext::run();
         return 0;
+    }
+
+    void ConnectorLtsm::stop(void) noexcept {
+        std::call_once(stop_flag_, [this](){
+            asio::post(ioc(), std::bind(&ConnectorLtsm::asioStop, this));
+        });
+    }
+
+    void ConnectorLtsm::asioStop(void) noexcept {
+        try {
+            if(0 < displayNum()) {
+                busConnectorTerminated(displayNum(), getpid());
+                clientDisconnectedEvent(displayNum());
+                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
+            }
+
+            X11Server::rfbStop();
+            DBusProxy::asioStop();
+        } catch(const std::exception & err) {
+            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
+        }
+    }
+
+    uint16_t ConnectorLtsm::encodingThreads(void) const {
+        return concurency();
+    }
+
+    std::future<BinaryBuf> ConnectorLtsm::postEncoderJob(RFB::PostEncoderJobCb && func, XCB::Region reg) const {
+        std::promise<BinaryBuf> prom;
+        auto ret = prom.get_future();
+        if(1 < concurency()) {
+            // job background
+            boost::asio::post(const_cast<ConnectorLtsm&>(*this).ioc(), [this, promise=std::move(prom), job=std::move(func), reg]() mutable {
+                try {
+                    promise.set_value(job(reg));
+                } catch(const std::exception&) {
+                    promise.set_exception_at_thread_exit(std::current_exception());
+                }
+            });
+        } else {
+            try {
+                prom.set_value(func(reg));
+            } catch(const std::exception&) {
+                prom.set_exception_at_thread_exit(std::current_exception());
+            }
+        }
+        return ret;
     }
 
     asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(int newDisplay, uint32_t userUid) {
@@ -130,27 +178,6 @@ namespace LTSM::Connector {
         asio::co_spawn(xcb_strand(), onLoginSuccessAwait(newDisplay, userUid), asio::detached);
     }
 
-    void ConnectorLtsm::stop(void) noexcept {
-        std::call_once(stop_flag_, [this](){
-            asio::post(ioc(), std::bind(&ConnectorLtsm::asioStop, this));
-        });
-    }
-
-    void ConnectorLtsm::asioStop(void) noexcept {
-        try {
-            if(0 < displayNum()) {
-                busConnectorTerminated(displayNum(), getpid());
-                clientDisconnectedEvent(displayNum());
-                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
-            }
-
-            X11Server::rfbStop();
-            DBusProxy::asioStop();
-        } catch(const std::exception & err) {
-            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
-        }
-    }
-
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
@@ -223,12 +250,12 @@ namespace LTSM::Connector {
     }
 
     std::forward_list<std::string> ConnectorLtsm::serverDisabledEncodings(void) const {
-        return config().getStdListForward<std::string>("vnc:encoding:blacklist");
+        return config().getStdListForward<std::string>("encoding:blacklist");
     }
 
     void ConnectorLtsm::serverEncodingSelectedEvent(void) {
-        setEncodingThreads(config().getInteger("vnc:encoding:threads", 2));
-        setEncodingDebug(config().getInteger("vnc:encoding:debug", 0));
+        // FIXME remove
+        setEncodingDebug(config().getInteger("encoding:debug", 0));
     }
 
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz) {

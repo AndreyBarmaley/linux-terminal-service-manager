@@ -95,6 +95,9 @@ namespace LTSM {
         Application(Application &) = delete;
         Application & operator= (const Application &) = delete;
 
+        Application(Application &&) = default;
+        Application & operator= (Application &&) = default;
+
         static Logger logger(const DebugType & type = DebugType::Default);
 
         template<typename... Args>

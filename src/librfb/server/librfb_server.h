@@ -115,7 +115,6 @@ namespace LTSM {
             std::string serverEncryptionInfo(void) const;
 
             void setEncodingDebug(int v);
-            void setEncodingThreads(int v);
             void setEncodingOptions(std::forward_list<std::string> &&, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;

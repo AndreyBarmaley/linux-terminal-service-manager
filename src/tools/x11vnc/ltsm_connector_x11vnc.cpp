@@ -163,4 +163,19 @@ namespace LTSM {
     void Connector::X11VNC::stop(void) noexcept {
         X11Server::rfbStop();
     }
+
+    uint16_t Connector::X11VNC::encodingThreads(void) const {
+        return 1;
+    }
+
+    std::future<BinaryBuf> Connector::X11VNC::postEncoderJob(RFB::PostEncoderJobCb && func, XCB::Region reg) const {
+        std::promise<BinaryBuf> prom;
+        auto ret = prom.get_future();
+        try {
+            prom.set_value(func(reg));
+        } catch(const std::exception&) {
+            prom.set_exception_at_thread_exit(std::current_exception());
+        }
+        return ret;
+    }
 }

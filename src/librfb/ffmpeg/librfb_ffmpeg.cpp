@@ -233,7 +233,9 @@ namespace LTSM {
                 break;
         }
 
-        avcctx->thread_count = threads;
+        if(threads) {
+            avcctx->thread_count = threads;
+        }
         avcctx->pix_fmt = ffmpegFormat();
         avcctx->width = csz.width;
         avcctx->height = csz.height;
@@ -284,6 +286,7 @@ namespace LTSM {
     }
 
     void RFB::EncodingFFmpeg::reinitContext(const EncoderStream* st, const XCB::Size & fsz) {
+        threads = st->encodingThreads();
         initContext(fsz, st->serverFormat());
     }
 

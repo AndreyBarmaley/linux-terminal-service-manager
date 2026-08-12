@@ -131,6 +131,7 @@ namespace LTSM {
             int fps = 16;
             // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
             mutable int64_t pts = 0;
+            uint16_t threads = 0;
 
           protected:
             void initContext(const XCB::Size &, const PixelFormat &);

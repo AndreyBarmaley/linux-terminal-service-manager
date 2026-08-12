@@ -102,15 +102,34 @@ namespace LTSM::Connector {
     }
 #endif
 
+    BoostContext::BoostContext(uint16_t concurency)
+        : concurency_{std::min(static_cast<uint16_t>(std::thread::hardware_concurrency()), concurency)}, ioc_{concurency_} {
+    }
+
+    void BoostContext::run() {
+        if(1 < concurency()) {
+            Application::info("{}: use threads: {}", NS_FuncNameV, concurency());
+            boost::asio::thread_pool thread_pool{concurency()};
+
+            for(auto it = 0; it < concurency(); ++it) {
+                asio::post(thread_pool, [this](){ ioc_.run(); });
+            }
+
+            thread_pool.join();
+        } else {
+            ioc_.run();
+        }
+    }
+
     /* DBusProxy */
-    DBusProxy::DBusProxy(boost::asio::io_context& ctx, const ConnectorType & type, const std::filesystem::path & confile, bool debug)
-        : ApplicationJsonConfig("ltsm_connector", confile),
+    DBusProxy::DBusProxy(const ConnectorType & type, const std::filesystem::path & confile, bool debug)
+        : ApplicationJsonConfig("ltsm_connector", confile), BoostContext(config().getInteger("encoding:threads", 2)),
 #ifdef SDBUS_2_0_API
         ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
         ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
-        ioc_{ctx}, timer_idle_session_{ctx}
+        timer_idle_session_{ioc()}
     {
         remoteAddr_.assign("local");
 
@@ -271,7 +290,7 @@ namespace LTSM::Connector {
             Application::debug(DebugType::Dbus, "{}: display: {}",
                                NS_FuncNameV, display);
 
-            asio::dispatch(ioc_, [this, display]() {
+            asio::dispatch(ioc(), [this, display]() {
                 this->busConnectorAlive(display);
             });
         }
@@ -342,23 +361,21 @@ namespace LTSM::Connector {
         const int fd = dup(STDIN_FILENO);
         std::unique_ptr<DBusProxy> connector;
 
-        boost::asio::io_context ioc;
-
 #ifdef LTSM_WITH_RDP
 
         // protocol up
         if(type == "auto") {
             if(int first = autoDetectType(fd); first == 0x03) {
-                connector = std::make_unique<ConnectorRdp>(ioc, confile, debug);
+                connector = std::make_unique<ConnectorRdp>(confile, debug);
             }
         } else if(type == "rdp") {
-            connector = std::make_unique<ConnectorRdp>(ioc, confile, debug);
+            connector = std::make_unique<ConnectorRdp>(confile, debug);
         }
 
 #endif
 
         if(! connector) {
-            auto conn = std::make_unique<ConnectorLtsm>(ioc, confile, debug);
+            auto conn = std::make_unique<ConnectorLtsm>(confile, debug);
             conn->assignSocketFd(fd);
             connector = std::move(conn);
         }
@@ -367,8 +384,7 @@ namespace LTSM::Connector {
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");
 #endif
-        int res = connector->communication();
-        ioc.run();
+        int res = connector->start();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");

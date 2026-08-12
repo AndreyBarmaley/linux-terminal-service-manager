@@ -121,10 +121,13 @@ namespace LTSM::Connector {
         boost::asio::awaitable<void> onTransferAllowAwait(std::string filepath, std::string tmpfile, std::string dstdir);
 
       public:
-        ConnectorLtsm(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug);
+        ConnectorLtsm(const std::filesystem::path & confile, bool debug);
         ~ConnectorLtsm();
 
-        int communication(void) override;
+        int start(void) final;
+
+        uint16_t encodingThreads(void) const override;
+        std::future<BinaryBuf> postEncoderJob(RFB::PostEncoderJobCb &&, XCB::Region) const override;
     };
 }
 

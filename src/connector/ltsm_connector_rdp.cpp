@@ -324,8 +324,8 @@ namespace LTSM::Connector {
         }
     };
 
-    ConnectorRdp::ConnectorRdp(boost::asio::io_context& ctx, const std::filesystem::path & confile, bool debug)
-            : DBusProxy(ctx, ConnectorType::RDP, confile, debug) {
+    ConnectorRdp::ConnectorRdp(const std::filesystem::path & confile, bool debug)
+            : DBusProxy(ConnectorType::RDP, confile, debug) {
     }
 
     ConnectorRdp::~ConnectorRdp() {
@@ -340,11 +340,16 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorRdp::stop(void) {
-        DBusProxy::asioStop();
+    void ConnectorRdp::stop(void) noexcept {
+        std::call_once(stop_flag_, [this](){
+            try {
+                DBusProxy::asioStop();
+            } catch(const std::exception&) {
+            }
+        });
     }
 
-    int ConnectorRdp::communication(void) {
+    int ConnectorRdp::start(void) {
         if(0 >= busGetServiceVersion()) {
             Application::error("{}: failed", "bus service");
             return EXIT_FAILURE;
@@ -396,6 +401,8 @@ namespace LTSM::Connector {
             // wait
             std::this_thread::sleep_for(1ms);
         }
+
+        // BoostContext::run();
 
         proxyShutdown();
         freeRdp->stopEventLoop();

@@ -56,8 +56,23 @@ namespace LTSM::Connector {
     };
 #endif
 
-    class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
-        boost::asio::io_context& ioc_;
+    class BoostContext {
+        const uint16_t concurency_ = 1;
+        boost::asio::io_context ioc_;
+        
+      protected:
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline uint16_t concurency(void) const { return concurency_; }
+        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
+
+      public:
+        explicit BoostContext(uint16_t concurency);
+        ~BoostContext() = default;
+
+        void run(void);
+    };
+
+    class DBusProxy : public ApplicationJsonConfig, public BoostContext, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
         boost::asio::steady_timer timer_idle_session_;
 
         std::list<RenderPrimitivePtr> renderPrimitives_;
@@ -114,8 +129,6 @@ namespace LTSM::Connector {
         void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
 
     protected:
-        inline boost::asio::io_context & ioc(void) { return ioc_; }
-
         void asioStop(void);
         void setIdleTimeoutSec(uint32_t);
         void idleSessionReset(void);
@@ -139,10 +152,10 @@ namespace LTSM::Connector {
         bool xcbAllowMessages(void) const;
 
       public:
-        DBusProxy(boost::asio::io_context&, const ConnectorType &, const std::filesystem::path & confile, bool debug);
+        DBusProxy(const ConnectorType &, const std::filesystem::path & confile, bool debug);
         virtual ~DBusProxy();
 
-        virtual int communication(void) = 0;
+        virtual int start(void) = 0;
 
         std::string checkFileOption(const std::string &) const;
         const std::string & connectorType(void) const;

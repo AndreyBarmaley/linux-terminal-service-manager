@@ -69,6 +69,9 @@ namespace LTSM {
 
           public:
             X11VNC(boost::asio::io_context &, const JsonObject & jo);
+
+            uint16_t encodingThreads(void) const override;
+            std::future<BinaryBuf> postEncoderJob(RFB::PostEncoderJobCb &&, XCB::Region reg) const override;
         };
     }
 }

@@ -24,6 +24,7 @@
 #ifndef _LTSM_CONNECTOR_RDP_
 #define _LTSM_CONNECTOR_RDP_
 
+#include <mutex>
 #include <exception>
 
 #include "ltsm_sockets.h"
@@ -45,6 +46,8 @@ namespace LTSM::Connector {
         std::unique_ptr<FreeRdpCallback> freeRdp;
         PixelFormat serverFormat;
         XCB::Region damageRegion;
+
+        std::once_flag stop_flag_;
 
       protected:
         // dbus virtual signals
@@ -73,12 +76,12 @@ namespace LTSM::Connector {
         void channelsFree(void);
 
       public:
-        ConnectorRdp(boost::asio::io_context&, const std::filesystem::path & confile, bool debug);
+        ConnectorRdp(const std::filesystem::path & confile, bool debug);
         ~ConnectorRdp();
 
-        void stop(void);
+        void stop(void) noexcept;
+        int start(void) final;
 
-        int communication(void) override;
         bool createX11Session(uint8_t depth);
         void setEncryptionInfo(const std::string &);
         void setAutoLogin(const std::string &, const std::string &);

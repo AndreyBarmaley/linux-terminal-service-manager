@@ -1119,20 +1119,6 @@ namespace LTSM {
         }
     }
 
-    void RFB::ServerEncoder::setEncodingThreads(int threads) {
-        if(threads < 1) {
-            threads = 1;
-        } else if(std::thread::hardware_concurrency() < threads) {
-            threads = std::thread::hardware_concurrency();
-            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: {}", NS_FuncNameV, threads);
-        }
-
-        if(encoder_) {
-            Application::info("{}: using encoding threads: {}", NS_FuncNameV, threads);
-            encoder_->setThreads(threads);
-        }
-    }
-
     int RFB::serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings) {
         // server priority
         std::initializer_list<int> encs = {
