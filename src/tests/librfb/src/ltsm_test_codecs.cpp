@@ -41,15 +41,26 @@ class TestEncoderStream : public RFB::EncoderStream {
         return false;
     }
 
+    uint16_t encodingThreads(void) const override {
+        return 1;
+    }
+
+    std::future<BinaryBuf> postEncoderJob(RFB::PostEncoderJobCb && func, XCB::Region reg) const override {
+        std::promise<BinaryBuf> promise;
+        auto ret = promise.get_future();
+        promise.set_value(func(reg));
+        return ret;
+    }
+
     bool isDisplaySize(const XCB::Size& sz) const override {
         return xsz_ == sz;
     }
 };
 
 class TestDecoderStream: public RFB::DecoderStream {
-    StreamBuf & sb_;
+    StreamBufRef & sb_;
   public:
-    TestDecoderStream(StreamBuf & sb) : sb_{sb} {}
+    TestDecoderStream(StreamBufRef & sb) : sb_{sb} {}
 
     void recvRaw(void* ptr, size_t len) const override {
         sb_.readTo(ptr, len);
@@ -170,8 +181,6 @@ TYPED_TEST(CodecTypedTest1, LoopbackEncodeDecode) {
     auto encoder = std::make_unique<EncoderT>();
     auto decoder = std::make_unique<DecoderT>();
 
-    encoder->setThreads(1);
-
     TestFrameBuffer srcFb(this->displaySize, this->pixelFormat);
     FrameBuffer dstFb(this->displaySize, this->pixelFormat);
 
@@ -179,18 +188,17 @@ TYPED_TEST(CodecTypedTest1, LoopbackEncodeDecode) {
     ASSERT_EQ(dstFb.height(), srcFb.height());
     ASSERT_EQ(dstFb.pixelFormat(), srcFb.pixelFormat());
 
-    StreamBuf sb(1024 * 1024);
-
     TestEncoderStream encoderStream(this->displaySize, this->pixelFormat);
     TestDecoderRender testDecoder(dstFb);
 
     // encoder process
-    ASSERT_NO_THROW(encoder->writeFrameBufferTo(&encoderStream, srcFb, sb));
+    RFB::FrameBufferPackets packets;
+    ASSERT_NO_THROW(packets = encoder-> getFrameBufferPackets(&encoderStream, srcFb));
 
-    // unpack header(count16,region16,type32,length32,data)
-    const int count = sb.readIntBE16();
-    ASSERT_EQ(count, 1);
+    ASSERT_EQ(packets.size(), 1);
+    StreamBufRef sb(packets.back().data(), packets.back().size());
 
+    // unpack header(region16,type32,length32,data)
     const int16_t rx = sb.readIntBE16();
     const int16_t ry = sb.readIntBE16();
     const uint16_t rw = sb.readIntBE16();
@@ -237,8 +245,6 @@ TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
     auto encoder = std::make_unique<EncoderT>();
     auto decoder = std::make_unique<DecoderT>();
 
-    encoder->setThreads(1);
-
     TestFrameBuffer srcFb(this->displaySize, this->pixelFormat);
     FrameBuffer dstFb(this->displaySize, this->pixelFormat);
 
@@ -246,19 +252,19 @@ TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
     ASSERT_EQ(dstFb.height(), srcFb.height());
     ASSERT_EQ(dstFb.pixelFormat(), srcFb.pixelFormat());
 
-    StreamBuf sb(1024 * 1024);
-
     TestEncoderStream encoderStream(this->displaySize, this->pixelFormat);
     TestDecoderRender testDecoder(dstFb);
 
     // encoder process
-    ASSERT_NO_THROW(encoder->writeFrameBufferTo(&encoderStream, srcFb, sb));
+    RFB::FrameBufferPackets packets;
+    ASSERT_NO_THROW(packets = encoder-> getFrameBufferPackets(&encoderStream, srcFb));
 
-    // unpack header(count16,region16,type32,data)
-    const int count = sb.readIntBE16();
-    ASSERT_TRUE(0 < count);
+    ASSERT_TRUE(! packets.empty());
 
-    for(int it = 0; it < count; ++it) {
+    for(auto& buf: packets) {
+        StreamBufRef sb(buf.data(), buf.size());
+
+        // unpack header(region16,type32,data)
         const int16_t rx = sb.readIntBE16();
         const int16_t ry = sb.readIntBE16();
         const uint16_t rw = sb.readIntBE16();
@@ -272,10 +278,10 @@ TYPED_TEST(CodecTypedTest2, LoopbackEncodeDecode) {
 
         // decoder process
         ASSERT_NO_THROW(decoder->updateRegionStream(TestDecoderStream(sb), testDecoder, dstreg));
-    }
 
-    // no data
-    ASSERT_FALSE(sb.last());
+        // no data
+        ASSERT_FALSE(sb.last());
+    }
 
     // testing
     EXPECT_TRUE(std::ranges::equal(dstFb.span(), srcFb.span()));
@@ -300,8 +306,6 @@ TYPED_TEST(CodecTypedTest3, LoopbackEncodeDecode) {
     auto encoder = std::make_unique<EncoderT>();
     auto decoder = std::make_unique<DecoderT>();
 
-    encoder->setThreads(1);
-
     TestFrameBuffer srcFb(this->displaySize, this->pixelFormat);
     FrameBuffer dstFb(this->displaySize, this->pixelFormat);
 
@@ -309,20 +313,19 @@ TYPED_TEST(CodecTypedTest3, LoopbackEncodeDecode) {
     ASSERT_EQ(dstFb.height(), srcFb.height());
     ASSERT_EQ(dstFb.pixelFormat(), srcFb.pixelFormat());
 
-    StreamBuf sb(1024 * 1024);
-
     TestEncoderStream encoderStream(this->displaySize, this->pixelFormat);
     TestDecoderRender testDecoder(dstFb);
 
     encoder->reinitContext(&encoderStream, this->displaySize);
 
     // encoder process
-    ASSERT_NO_THROW(encoder->writeFrameBufferTo(&encoderStream, srcFb, sb));
+    RFB::FrameBufferPackets packets;
+    ASSERT_NO_THROW(packets = encoder-> getFrameBufferPackets(&encoderStream, srcFb));
 
-    // unpack header(count16,region16,type32,length32,data)
-    const int count = sb.readIntBE16();
-    ASSERT_EQ(count, 1);
+    ASSERT_EQ(packets.size(), 1);
+    StreamBufRef sb(packets.back().data(), packets.back().size());
 
+    // unpack header(region16,type32,length32,data)
     const int16_t rx = sb.readIntBE16();
     const int16_t ry = sb.readIntBE16();
     const uint16_t rw = sb.readIntBE16();

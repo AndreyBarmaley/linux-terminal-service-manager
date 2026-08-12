@@ -28,6 +28,8 @@
 #include <fstream>
 #include <algorithm>
 
+#include <boost/endian.hpp>
+
 #include "ltsm_zlib.h"
 #include "librfb_server.h"
 #include "ltsm_application.h"
@@ -1075,23 +1077,30 @@ namespace LTSM {
     asio::awaitable<void> RFB::ServerEncoder::sendFrameBufferUpdateAwait(const FrameBuffer & fb) const {
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
-	StreamBuf sb(fb.width() * fb.height() * 8 / 3);
-        // RFB: 6.5.1
-        sb.writeInt8(RFB::SERVER_FB_UPDATE);
-        // padding
-        sb.writeInt8(0);
+
+        // add header
+        FrameBufferPackets packets;
 
         try {
-            // send encodings
-            encoder_->writeFrameBufferTo(this, fb, sb);
+            packets.splice(packets.end(), encoder_->getFrameBufferPackets(this, fb));
         } catch(const encoding_context_error&) {
             Application::warning("{}: reinit context: {}", NS_FuncNameV, fb.region().toSize());
             encoder_->reinitContext(this, fb.region().toSize());
-            encoder_->writeFrameBufferTo(this, fb, sb);
+            packets.splice(packets.end(), encoder_->getFrameBufferPackets(this, fb));
         }
 
+        BinaryBuf header(4, 0);
+        // RFB: 6.5.1
+        header[0] = RFB::SERVER_FB_UPDATE;
+        // padding
+        header[1] = 0;
+        // regions: be16
+        endian::store_big_u16(std::addressof(header[2]), packets.size());
+        // added header
+        packets.emplace_front(std::move(header));
+
         co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        co_await stream_->async_send_sequence(packets.begin(), packets.end());
         co_return;
     }
 
@@ -1110,13 +1119,6 @@ namespace LTSM {
 
     bool RFB::ServerEncoder::isClientSupportedEncoding(int enc) const {
         return clientEncodings.isPresent(enc);
-    }
-
-    void RFB::ServerEncoder::setEncodingDebug(int v) {
-        if(encoder_) {
-            // FIXME
-            // encoder_->setDebug(v);
-        }
     }
 
     int RFB::serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings) {
@@ -1138,7 +1140,7 @@ namespace LTSM {
         return clientEncodings.findPriorityFrom(encs);
     }
 
-    void RFB::ServerEncoder::serverSelectClientEncoding(void) {
+    void RFB::ServerEncoder::serverSelectEncodings(void) {
         int compatible = serverSelectCompatibleEncoding(clientEncodings);
 
         if(encoder_ && encoder_->getType() == compatible) {
@@ -1220,12 +1222,7 @@ namespace LTSM {
         }
 
         encoderInitEvent(encoder_.get());
-    }
-
-    void RFB::ServerEncoder::serverSelectEncodings(void) {
-        serverSelectClientEncoding();
         Application::notice("{}: select encoding: {}", NS_FuncNameV, RFB::encodingName(encoder_->getType()));
-        serverEncodingSelectedEvent();
     }
 
     /* pseudo encodings DesktopSize/Extended */
@@ -1291,7 +1288,9 @@ namespace LTSM {
         const PixelFormat clientFormatAlpha(clientFormat().bitsPerPixel(),
                                             clientFormat().rmask(), clientFormat().gmask(), clientFormat().bmask(), clientAMask);
 
-        StreamBuf sb(256);
+        // StreamBuf
+        RFB::EncodePacket sb(256);
+
         // RFB: 6.5.1
         sb.writeInt8(RFB::SERVER_FB_UPDATE).
             // padding
@@ -1311,7 +1310,7 @@ namespace LTSM {
                 auto pixel = fb.pixel(XCB::Point(ox, oy));
                 auto pixel2 = fb.pixelFormat().convertTo(pixel, clientFormatAlpha);
                 // part1: send pixels buf
-                writeRawPixel(sb, pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
+                sb.writeRawPixel(pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
                 bitmask.pushBit(fb.pixelFormat().alpha(pixel) == fb.pixelFormat().amax());
             }
 

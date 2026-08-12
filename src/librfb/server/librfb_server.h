@@ -114,7 +114,6 @@ namespace LTSM {
             //
             std::string serverEncryptionInfo(void) const;
 
-            void setEncodingDebug(int v);
             void setEncodingOptions(std::forward_list<std::string> &&, uint32_t frameRate);
 
             bool isClientLtsmSupported(void) const;
@@ -124,7 +123,6 @@ namespace LTSM {
             bool isEncoderFFmpeg(void) const;
 
             void waitUpdateProcess(void);
-            void serverSelectClientEncoding(void);
 
             boost::asio::awaitable<bool> authVncInitAwait(const std::string &);
             boost::asio::awaitable<bool> authVenCryptInitAwait(const SecurityInfo &);
@@ -208,7 +206,6 @@ namespace LTSM {
             virtual void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) { /* empty */ }
             virtual void serverRecvDesktopSizeEvent(std::vector<ScreenInfo>&&) { /* empty */ }
             virtual void serverSendFBUpdateEvent(const XCB::Region &) const { /* empty */ }
-            virtual void serverEncodingSelectedEvent(void) { /* empty */ }
         };
     }
 }

@@ -290,7 +290,7 @@ namespace LTSM {
         initContext(fsz, st->serverFormat());
     }
 
-    void RFB::EncodingFFmpeg::writeFrameBufferTo(const EncoderStream* st, const FrameBuffer & fb, StreamBuf& sb) const {
+    RFB::FrameBufferPackets RFB::EncodingFFmpeg::getFrameBufferPackets(const EncoderStream*, const FrameBuffer& fb) const {
 
         if(! avcctx) {
             throw encoding_context_error(NS_FuncNameS);
@@ -310,6 +310,8 @@ namespace LTSM {
             throw ffmpeg_error(NS_FuncNameS);
         }
 
+        FrameBufferPackets packets;
+
         while(ret >= 0) {
             ret = avcodec_receive_packet(avcctx.get(), packet.get());
             if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
@@ -320,14 +322,17 @@ namespace LTSM {
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
-            sb.writeIntBE16(1);
-            st->writeHeader(sb, getType(), fb.region());
-
-            // send region
-            sb.writeIntBE32(packet->size);
             Application::trace(DebugType::Enc, "{}: packet size: {}", NS_FuncNameV, packet->size);
-            sb.write(std::span{packet->data, static_cast<size_t>(packet->size)});
+            
+            EncodePacket sb(packet->size, true /* type v2 */);
+            sb.writeHeader(getType(), fb.region());
+            sb.writeData(std::span{packet->data, static_cast<size_t>(packet->size)});
+            sb.writeDataSize(packet->size);
+
+            packets.emplace_back(std::move(sb.rawbuf()));
         }
+
+        return packets;
     }
 
 #endif

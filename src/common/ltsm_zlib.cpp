@@ -179,6 +179,10 @@ namespace LTSM::ZLib {
         }
     }
 
+    size_t DeflateBase::deflateBound(size_t len) const {
+        return ::deflateBound(const_cast<z_stream*>(& zs), len);
+    }
+
     std::vector<uint8_t> DeflateBase::deflateData(const void* buf, size_t len, int flushPolicy) {
 
         if(len == 0) {
@@ -191,7 +195,7 @@ namespace LTSM::ZLib {
         zs.avail_in = static_cast<uInt>(len);
 
         std::vector<uint8_t> res;
-        res.resize(deflateBound(& zs, len));
+        res.resize(deflateBound(len));
 
         zs.next_out = res.data();
         zs.avail_out = static_cast<uInt>(res.size());

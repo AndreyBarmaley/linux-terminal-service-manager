@@ -97,7 +97,6 @@ namespace LTSM::Connector {
         void onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug) override;
 
         void serverHandshakeVersionEvent(void) override;
-        void serverEncodingSelectedEvent(void) override;
         void serverSecurityInitEvent(void) override;
         void serverConnectedEvent(void) override;
         void serverDisplayResizedEvent(const XCB::Size &) override;

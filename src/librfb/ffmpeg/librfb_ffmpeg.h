@@ -138,7 +138,7 @@ namespace LTSM {
 
           public:
             void resizedEvent(const XCB::Size &) override;
-            void writeFrameBufferTo(const EncoderStream*, const FrameBuffer&, StreamBuf&) const override;
+            FrameBufferPackets getFrameBufferPackets(const EncoderStream*, const FrameBuffer&) const override;
 
             explicit EncodingFFmpeg(int type = ENCODING_LTSM_H264);
             ~EncodingFFmpeg() = default;

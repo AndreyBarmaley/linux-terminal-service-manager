@@ -253,11 +253,6 @@ namespace LTSM::Connector {
         return config().getStdListForward<std::string>("encoding:blacklist");
     }
 
-    void ConnectorLtsm::serverEncodingSelectedEvent(void) {
-        // FIXME remove
-        setEncodingDebug(config().getInteger("encoding:debug", 0));
-    }
-
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz) {
         busDisplayResized(displayNum(), sz.width, sz.height);
     }

@@ -32,6 +32,8 @@ public:
     MOCK_METHOD(boost::asio::awaitable<void>, async_send_buf, (const boost::asio::const_buffer& buf), (const, override));
     MOCK_METHOD(boost::asio::awaitable<void>, async_send_buffers, 
                 (std::initializer_list<boost::asio::const_buffer> list), (const, override));
+    MOCK_METHOD(boost::asio::awaitable<void>, async_send_buffers, 
+                (std::vector<boost::asio::const_buffer>&& buffers), (const, override));
 };
 
 class AsyncSocketTest : public ::testing::Test {

@@ -183,12 +183,24 @@ class AsyncSocketBase {
     // SEND
     virtual boost::asio::awaitable<void> async_send_buf(const boost::asio::const_buffer& buf) const = 0;
     virtual boost::asio::awaitable<void> async_send_buffers(std::initializer_list<boost::asio::const_buffer>) const = 0;
+    virtual boost::asio::awaitable<void> async_send_buffers(std::vector<boost::asio::const_buffer>&&) const = 0;
 
     // async_send_values(val1, val2, ... valX)
     template <typename... Values>
     [[nodiscard]] boost::asio::awaitable<void> async_send_values(const Values&... vals) const {
         auto list = {value_to_const_buffer(vals)...};
         co_await async_send_buffers(list);
+    }
+
+    template <typename Iterator>
+    [[nodiscard]] boost::asio::awaitable<void> async_send_sequence(Iterator beg, Iterator end) const {
+        std::vector<boost::asio::const_buffer> buffers;
+    
+        for (auto it = beg; it != end; ++it) {
+            buffers.push_back(value_to_const_buffer(*it));
+        }
+    
+        co_await async_send_buffers(std::move(buffers));
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) const {
@@ -261,6 +273,11 @@ class AsyncSocket : public AsyncSocketBase {
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_buf(const boost::asio::const_buffer& buf) const final {
         co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), buf, boost::asio::transfer_all(), boost::asio::use_awaitable);
+    }
+
+    [[nodiscard]] boost::asio::awaitable<void> async_send_buffers(
+        std::vector<boost::asio::const_buffer>&& buffers) const final {
+        co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), std::move(buffers), boost::asio::transfer_all(), boost::asio::use_awaitable);
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_buffers(
