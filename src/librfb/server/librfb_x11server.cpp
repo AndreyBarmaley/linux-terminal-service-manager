@@ -233,7 +233,7 @@ namespace LTSM {
 
         // check timepoint frame
         if(auto frameRate = frameRateOption()) {
-            int delayTimeout = 1000 / frameRate;
+            std::chrono::microseconds frameDuration(1000000 / frameRate);
 
             if(isEncoderFFmpeg()) {
                 // ffmpeg encoding: fixed fps
@@ -242,24 +242,26 @@ namespace LTSM {
                 // no damage: fixed fps
             } else if(! damageRegion.isEmpty()) {
                 // damage present - 16 fps
-                delayTimeout = 65;
+                frameDuration = std::chrono::microseconds(62500);
             }
 
-            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
-            int last = delayTimeout - static_cast<int>(dt.count());
-            Application::debug(DebugType::X11Srv, "{}: sleep ms: {}", NS_FuncNameV, last);
+            auto delayDuration = (frameTimePoint + frameDuration) - std::chrono::steady_clock::now();
+            if(0 < delayDuration.count()) {
+                Application::debug(DebugType::X11Srv, "{}: sleep delay: {}ms",
+                    NS_FuncNameV, std::chrono::duration_cast<std::chrono::milliseconds>(delayDuration).count());
 
-            // large timepoint
-            if(30 < last) {
-                timer_update_.expires_after(30ms);
-                co_await timer_update_.async_wait(asio::use_awaitable);
-                co_return;
-            }
+                // large duration (max 33 fps)
+                if(30ms < delayDuration) {
+                    timer_update_.expires_after(30ms);
+                    co_await timer_update_.async_wait(asio::use_awaitable);
+                    co_return;
+                }
 
-            // small timepoint
-            if(0 < last) {
-                timer_update_.expires_after(std::chrono::milliseconds(last));
+                // small timepoint
+                timer_update_.expires_after(delayDuration);
                 co_await timer_update_.async_wait(asio::use_awaitable);
+            } else {
+                Application::warning("{}: frame duration overload", NS_FuncNameV);
             }
         }
 
