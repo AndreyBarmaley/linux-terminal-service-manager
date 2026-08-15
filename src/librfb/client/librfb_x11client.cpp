@@ -47,7 +47,7 @@ namespace LTSM {
     }
 
     uint16_t RFB::X11Client::extClipboardLocalTypes(void) const {
-        return clipLocalTypes;
+        return clipLocalTypes_;
     }
 
     asio::awaitable<clipboard_buf> RFB::X11Client::extClipboardLocalDataAwait(uint16_t type) {
@@ -97,7 +97,7 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        clipRemoteTypes = types;
+        clipRemoteTypes_ = types;
         if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE))) {
             paste->setSelectionOwner(*this);
         }
@@ -138,17 +138,17 @@ namespace LTSM {
     }
 
     void RFB::X11Client::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) {
+        // xcb context
         Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
-        clipLocalTypes = 0;
+        clipLocalTypes_ = 0;
 
         if(extClipboardRemoteCaps()) {
             // calc types
             std::for_each(beg, end, [&](auto & atom) {
-                clipLocalTypes |= ExtClip::x11AtomToType(atom);
+                clipLocalTypes_ |= ExtClip::x11AtomToType(atom);
             });
 
-            // FIXME await
-            // co_await sendExtClipboardNotifyAwait(clipLocalTypes);
+            asio::co_spawn(xcb_strand(), sendExtClipboardNotifyAwait(clipLocalTypes_), asio::detached);
         } else {
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
@@ -173,10 +173,12 @@ namespace LTSM {
     std::vector<xcb_atom_t> RFB::X11Client::selectionSourceTargets(void) const {
         Application::debug(DebugType::X11Cli, "{}", NS_FuncNameV);
         return ExtClip::typesToX11Atoms(extClipboardRemoteCaps() ?
-                                        clipRemoteTypes : ExtClipCaps::TypeText, *this);
+                                        clipRemoteTypes_ : ExtClipCaps::TypeText, *this);
     }
 
     asio::awaitable<bool> RFB::X11Client::extClipboardSourceReadyAwait(xcb_atom_t atom) {
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+
         uint16_t requestType = ExtClip::x11AtomToType(atom);
         clientClipboard_.clear();
 

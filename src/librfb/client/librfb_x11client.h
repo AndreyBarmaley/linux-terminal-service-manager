@@ -36,8 +36,8 @@ namespace LTSM {
             boost::asio::steady_timer clipboard_ready_;
 
             std::vector<uint8_t> clientClipboard_;
-            uint16_t clipLocalTypes = 0;
-            uint16_t clipRemoteTypes = 0;
+            uint16_t clipLocalTypes_ = 0;
+            uint16_t clipRemoteTypes_ = 0;
 
           protected:
             // selection source

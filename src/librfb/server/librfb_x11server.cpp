@@ -155,9 +155,9 @@ namespace LTSM {
         try {
             for(;;) {
                 if(auto err = XCB::RootDisplay::hasError()) {
-                    Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
+                    Application::error("{}: xcb error, code: {}, display: {}", NS_FuncNameV, err, displayNum_);
                     stop();
-                    throw system::system_error(asio::error::operation_aborted);
+                    co_return;
                 }
 
                 co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
@@ -586,8 +586,8 @@ namespace LTSM {
     }
 
     void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
+        // xcb context
         if(extClipboardRemoteCaps()) {
-            // FIXME xcb context
             if(auto ptr = const_cast<RFB::X11Server*>(this)) {
                 ptr->clientClipboard_.swap(buf);
                 ptr->clipboard_ready_.cancel();
@@ -601,6 +601,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) {
+        // xcb context
         clipLocalTypes_ = 0;
 
         if(extClipboardRemoteCaps()) {
@@ -609,8 +610,7 @@ namespace LTSM {
                 clipLocalTypes_ |= ExtClip::x11AtomToType(atom);
             });
 
-            // FIXME await
-            // co_await sendExtClipboardNotifyAwait(clipLocalTypes_);
+            asio::co_spawn(xcb_strand(), sendExtClipboardNotifyAwait(clipLocalTypes_), asio::detached);
         } else {
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
@@ -659,9 +659,9 @@ namespace LTSM {
     }
 
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
-        // FIXME xcb context
-        auto targets = selectionSourceTargets();
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
 
+        auto targets = selectionSourceTargets();
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
             return false;
         }
@@ -679,7 +679,7 @@ namespace LTSM {
     }
 
     size_t RFB::X11Server::selectionSourceSize(xcb_atom_t atom) const {
-        // FIXME xcb context
+        // xcb context
         auto targets = selectionSourceTargets();
 
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
@@ -690,12 +690,13 @@ namespace LTSM {
     }
 
     std::vector<uint8_t> RFB::X11Server::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
+        // xcb context
         auto targets = selectionSourceTargets();
 
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
             return {};
         }
-        // FIXME xcb context
+
         if(offset + length <= clientClipboard_.size()) {
             auto beg = clientClipboard_.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
@@ -707,7 +708,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::serverRecvCutTextEvent(std::vector<uint8_t> && buf) {
-        // xcb_strand context
+        // xcb context
         if(rfbClipboardEnable()) {
             clientClipboard_.swap(buf);
             clipboard_ready_.cancel();
@@ -721,7 +722,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::serverRecvFBUpdateEvent(bool incremental, const XCB::Region & reg) {
-        // rfb_strand context
+        // rfb context
         if(! xcbAllowMessages()) {
             fullscreenUpdateReq_ = true;
             return;

@@ -62,6 +62,7 @@ namespace LTSM {
 
             XCB::ShmIdShared shm;
 
+            int displayNum_ = 0;
             int rfbStartingCode_ = 0;
             uint16_t clipLocalTypes_ = 0;
             uint16_t clipRemoteTypes_ = 0;
