@@ -73,6 +73,7 @@ namespace LTSM::Connector {
 
         void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) override;
         void serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
+        void serverScreenUpdateRequest(const XCB::Region&) override;
 
         // dbus virtual signals
         void onLoginSuccess(const int32_t & display, const std::string & userName,
@@ -81,8 +82,6 @@ namespace LTSM::Connector {
         void onSendBellSignal(const int32_t & display) override;
 
         // connector
-        void serverScreenUpdateRequest(const XCB::Region &) override;
-
         void onLoginFailure(const int32_t & display, const std::string & msg) override;
         void onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
                              const std::string & server, const std::string & smode, const std::string & speed) override;

@@ -37,37 +37,39 @@ namespace LTSM {
 
             std::vector<uint8_t> clientClipboard_;
 
-            XCB::Region clientRegion;
-            XCB::Region damageRegion;
-
             boost::asio::signal_set signals_;
             boost::asio::cancellation_signal xcb_cancel_;
             boost::asio::cancellation_signal rfb_cancel_;
             boost::asio::cancellation_signal srv_cancel_;
-            boost::asio::steady_timer timer_update_;
+            boost::asio::steady_timer force_update_;
             boost::asio::steady_timer clipboard_ready_;
 
-            mutable std::mutex serverLock;
-            std::chrono::time_point<std::chrono::steady_clock> frameTimePoint;
+            std::chrono::time_point<std::chrono::steady_clock> frameTimePoint_;
+
+            std::atomic<xcb_rectangle_t> serverRegion_;
+            std::atomic<xcb_rectangle_t> damageRegion_;
+            std::atomic<xcb_rectangle_t> clientRegion_;
 
             std::atomic<int> pressedMask{0};
             std::atomic<int> randrSequence{0};
             std::atomic<int> sendUpdateFPS{0};
 
-            std::atomic<bool> displayResizeNegotiation{false};
-            std::atomic<bool> displayResizeProcessed{false};
-            std::atomic<bool> clientUpdateCursor{false};
-            std::atomic<bool> fullscreenUpdateReq{false};
+            std::atomic<bool> displayResizeNegotiation_{false};
+            std::atomic<bool> displayResizeProcessed_{false};
+            std::atomic<bool> clientUpdateCursor_{false};
+            std::atomic<bool> fullscreenUpdateReq_{false};
+            std::atomic<bool> fpsMinAction_{false};
 
             XCB::ShmIdShared shm;
 
             int rfbStartingCode_ = 0;
-            uint16_t clipLocalTypes = 0;
-            uint16_t clipRemoteTypes = 0;
+            uint16_t clipLocalTypes_ = 0;
+            uint16_t clipRemoteTypes_ = 0;
 
           protected:
             boost::asio::awaitable<void> rfbStart(void);
             void rfbStop(void);
+            void minFpsHandler(const boost::system::error_code&);
 
             // root display
             void xcbFixesCursorChangedEvent(void) override;
@@ -109,7 +111,6 @@ namespace LTSM {
             boost::asio::awaitable<void> xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
 
             boost::asio::awaitable<XCB::Size> xcbDisplaySize(void) const;
-            boost::asio::awaitable<XCB::Region> xcbDisplayRegion(void) const;
             boost::asio::awaitable<uint16_t> xcbDisplayDepth(void) const;
 
             boost::asio::awaitable<void> xcbEventsLoop(void);
@@ -142,7 +143,7 @@ namespace LTSM {
           public:
             X11Server(boost::asio::io_context & ctx)
                 : RFB::ServerEncoder(ctx.get_executor()), ioc_{ctx}, signals_{ctx.get_executor()},
-                    timer_update_{ctx.get_executor()}, clipboard_ready_{ctx.get_executor()} {}
+                    force_update_{ctx.get_executor()}, clipboard_ready_{ctx.get_executor()} {}
             ~X11Server() = default;
 
             boost::asio::awaitable<int> rfbCommunicationAwait(void);

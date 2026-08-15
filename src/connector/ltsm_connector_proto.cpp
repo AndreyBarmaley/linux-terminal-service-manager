@@ -122,9 +122,7 @@ namespace LTSM::Connector {
             }
         } else {
             // full update
-            if(! x11NoDamage_) {
-                X11Server::serverScreenUpdateRequest();
-            }
+            X11Server::serverScreenUpdateRequest();
         }
 
         auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
@@ -142,6 +140,10 @@ namespace LTSM::Connector {
         static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
 
         co_return;
+    }
+
+    void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region& reg) {
+        X11Server::serverScreenUpdateRequest(reg);
     }
 
     void ConnectorLtsm::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
@@ -335,12 +337,6 @@ namespace LTSM::Connector {
 
     bool ConnectorLtsm::xcbAllowMessages(void) const {
         return DBusProxy::xcbAllowMessages();
-    }
-
-    void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region & reg) {
-        if(xcbAllowMessages() && ! x11NoDamage_) {
-            X11Server::serverScreenUpdateRequest(reg);
-        }
     }
 
     uint32_t ConnectorLtsm::frameRateOption(void) const {

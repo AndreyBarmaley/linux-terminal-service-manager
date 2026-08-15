@@ -822,7 +822,7 @@ namespace LTSM {
             }
         }
 
-        clientEncodings.setPriority(recvEncodings);
+        clientEncodings_.setPriority(recvEncodings);
 
         if(continueUpdates) {
             co_await sendContinuousUpdatesAwait(true);
@@ -1118,10 +1118,10 @@ namespace LTSM {
     }
 
     bool RFB::ServerEncoder::isClientSupportedEncoding(int enc) const {
-        return clientEncodings.isPresent(enc);
+        return clientEncodings_.isPresent(enc);
     }
 
-    int RFB::serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings) {
+    int RFB::serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings_) {
         // server priority
         std::initializer_list<int> encs = {
 #ifdef LTSM_ENCODING_FFMPEG
@@ -1137,11 +1137,11 @@ namespace LTSM {
             RFB::ENCODING_CORRE, RFB::ENCODING_RRE, RFB::ENCODING_RAW
         };
 
-        return clientEncodings.findPriorityFrom(encs);
+        return clientEncodings_.findPriorityFrom(encs);
     }
 
     void RFB::ServerEncoder::serverSelectEncodings(void) {
-        int compatible = serverSelectCompatibleEncoding(clientEncodings);
+        int compatible = serverSelectCompatibleEncoding(clientEncodings_);
 
         if(encoder_ && encoder_->getType() == compatible) {
             return;
@@ -1360,7 +1360,7 @@ namespace LTSM {
         sb.writeIntBE32(cursorId);
 
         // cursor rgba data
-        if(std::ranges::none_of(cursorSended, [&cursorId](auto & curid) { return curid == cursorId; })) {
+        if(std::ranges::none_of(cursorSended_, [&cursorId](auto & curid) { return curid == cursorId; })) {
             try {
                 auto zlib = Tools::zlibCompress(fbSpan);
                 // raw size
@@ -1369,7 +1369,7 @@ namespace LTSM {
                     writeIntBE32(zlib.size()).
                     // compress data
                     write(zlib);
-                cursorSended.push_front(cursorId);
+                cursorSended_.push_front(cursorId);
             } catch(const std::exception & err) {
                 Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
                 sb.writeIntBE32(0);
@@ -1566,6 +1566,6 @@ namespace LTSM {
 
     void RFB::ServerEncoder::cursorFailed(uint32_t cursorId) {
         Application::info("{}: cursorId: {:#010x}", NS_FuncNameV, cursorId);
-        cursorSended.remove(cursorId);
+        cursorSended_.remove(cursorId);
     }
 }

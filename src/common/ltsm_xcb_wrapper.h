@@ -68,6 +68,10 @@ namespace LTSM {
     namespace XCB {
         using ConnectionShared = std::shared_ptr<xcb_connection_t>;
 
+        struct Rectangle : Region {
+            Rectangle(const xcb_rectangle_t & rt) : Region(rt.x, rt.y, rt.width, rt.height) {}
+        };
+
         struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)> {
             explicit GenericError(xcb_generic_error_t* err = nullptr)
                 : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>(err, std::free) {}

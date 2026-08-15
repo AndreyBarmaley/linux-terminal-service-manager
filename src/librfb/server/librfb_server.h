@@ -63,8 +63,8 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer timer_updates_;
 
-            mutable std::forward_list<uint32_t> cursorSended;
-            ClientEncodings clientEncodings;
+            mutable std::forward_list<uint32_t> cursorSended_;
+            ClientEncodings clientEncodings_;
             std::string clientAuthName_;
             std::string clientAuthDomain_;
 
@@ -98,7 +98,7 @@ namespace LTSM {
             }
 
             const ClientEncodings & getClientEncodings(void) const {
-                return clientEncodings;
+                return clientEncodings_;
             }
 
             // ServerEncoder
