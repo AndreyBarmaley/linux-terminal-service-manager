@@ -227,14 +227,22 @@ namespace LTSM::DisplaySession {
         default_height_ = configGetInteger("default:height", 1024);
         default_depth_ = configGetInteger("default:depth", 24);
 
-        if(default_depth_ == 32) {
+        switch(default_depth_) {
+            case 32:
             // xorg supported: 30, 24, 16, 15, 8
             default_depth_ = 30;
-        }
+            break;
 
-        if(default_depth_ != 15 && default_depth_ != 16 && default_depth_ != 30) {
+            case 30:
+            case 24:
+            case 16:
+            case 15:
+            break;
+
+            default:
+            Application::warning("{}: {} failed: {}", NS_FuncNameV, "default:depth", default_depth_);
             default_depth_ = 24;
-            Application::warning("{}: {} failed, used {}", NS_FuncNameV, "default:depth", default_depth_);
+            break;
         }
 
         std::string xorgBin;
