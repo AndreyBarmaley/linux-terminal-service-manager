@@ -119,7 +119,7 @@ namespace LTSM {
             boost::asio::awaitable<void> signalsHandler(void);
             boost::asio::awaitable<void> serverUpdateLoop(void);
             boost::asio::awaitable<void> serverUpdateProcess(void);
-            boost::asio::awaitable<void> sendUpdateRichCursorAwait(void);
+            boost::asio::awaitable<void> sendUpdateCursorAwait(void);
 
             // server interface
             virtual void stop(void) noexcept = 0;

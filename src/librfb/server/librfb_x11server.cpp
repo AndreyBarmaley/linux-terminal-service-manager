@@ -149,17 +149,23 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Server::xcbEventsLoop(void) {
-        auto ex = co_await asio::this_coro::executor;
-        asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
-
         try {
+            auto ex = co_await asio::this_coro::executor;
+
             for(;;) {
+                if(! xcbAllowMessages()) {
+                    asio::steady_timer xcb_check{ex, 50ms};
+                    co_await xcb_check.async_wait(asio::use_awaitable);
+                    continue;
+                }
+
                 if(auto err = XCB::RootDisplay::hasError()) {
                     Application::error("{}: xcb error, code: {}, display: {}", NS_FuncNameV, err, displayNum_);
                     stop();
                     co_return;
                 }
 
+                asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
                 co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
 
                 while(auto ev = XCB::RootDisplay::pollEvent()) {
@@ -178,6 +184,8 @@ namespace LTSM {
                         }
                     }
                 }
+
+                sd.release();
             }
         } catch(const system::system_error& err) {
             if(auto ec = err.code(); ec != asio::error::operation_aborted) {
@@ -189,7 +197,6 @@ namespace LTSM {
             stop();
         }
 
-        sd.release();
         co_return;
     }
 
@@ -297,7 +304,7 @@ namespace LTSM {
         co_await sendUpdateScreenAwait(damageRect);
 
         if(clientUpdateCursor_) {
-            co_await sendUpdateRichCursorAwait();
+            co_await sendUpdateCursorAwait();
             clientUpdateCursor_ = false;
         }
 
@@ -659,7 +666,7 @@ namespace LTSM {
     }
 
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        // xcb context
 
         auto targets = selectionSourceTargets();
         if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
@@ -782,26 +789,31 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> RFB::X11Server::sendUpdateRichCursorAwait(void) {
+    asio::awaitable<void> RFB::X11Server::sendUpdateCursorAwait(void) {
         co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
         if(auto fixes = static_cast<const XCB::ModuleWindowFixes*>(XCB::RootDisplay::getExtensionConst(XCB::Module::WINFIXES))) {
             XCB::CursorImage replyCursor = fixes->getCursorImage();
             const auto & reply = replyCursor.reply();
 
-            if(auto ptr = replyCursor.data()) {
-                size_t argbSize = reply->width * reply->height;
-                size_t dataSize = replyCursor.size();
+            if(auto ptr = reinterpret_cast<uint8_t*>(replyCursor.data())) {
+                const size_t argbSize = reply->width * reply->height;
+                const size_t dataSize = replyCursor.size();
 
                 Application::debug(X11Srv, "{}: data lenth: {}", NS_FuncNameV, dataSize);
 
                 if(dataSize == argbSize) {
                     auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
+                    // priority LTSM cursors
+                    if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
+                        co_await sendEncodingLtsmCursorAwait(cursorRegion, std::span{ptr, dataSize * sizeof(uint32_t)});
+                    } else {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-                    auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, BGRA32);
+                        auto cursorFB = FrameBuffer(ptr, cursorRegion, BGRA32);
 #else
-                    auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
+                        auto cursorFB = FrameBuffer(ptr, cursorRegion, ARGB32);
 #endif
-                    co_await sendEncodingRichCursorAwait(cursorFB, reply->xhot, reply->yhot);
+                        co_await sendEncodingRichCursorAwait(cursorFB, reply->xhot, reply->yhot);
+                    }
                 } else {
                     Application::warning("{}: size mismatch, data: {}, argb: {}", NS_FuncNameV, dataSize, argbSize);
                 }

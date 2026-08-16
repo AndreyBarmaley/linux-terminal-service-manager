@@ -1273,11 +1273,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ServerEncoder::sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const {
-        // priority LTSM cursors
-        if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
-            co_return co_await sendEncodingLtsmCursorAwait(fb, xhot, yhot);
-        }
-
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}, hot: {}",
                            NS_FuncNameV, reg, XCB::Point(xhot, yhot));
@@ -1337,10 +1332,8 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const {
-        auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: {}, hot: {}",
-                           NS_FuncNameV, reg, XCB::Point(xhot, yhot));
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmCursorAwait(const XCB::Region & cur, std::span<const uint8_t> pixels) const {
+        Application::debug(DebugType::Rfb, "{}: size: {}, hot: {}", NS_FuncNameV, cur.toSize(), cur.topLeft());
 
         StreamBuf sb(256);
         // LTSM proto
@@ -1349,22 +1342,21 @@ namespace LTSM {
             writeInt8(0).
             // rects
             writeIntBE16(1).
-            writeIntBE16(xhot).
-            writeIntBE16(yhot).
-            writeIntBE16(reg.width).
-            writeIntBE16(reg.height).
+            writeIntBE16(cur.x).
+            writeIntBE16(cur.y).
+            writeIntBE16(cur.width).
+            writeIntBE16(cur.height).
             writeIntBE32(ENCODING_LTSM_CURSOR);
         // cursor id
-        auto fbSpan = fb.span();
-        auto cursorId = Tools::crc32b(fbSpan);
+        auto cursorId = Tools::crc32b(pixels);
         sb.writeIntBE32(cursorId);
 
         // cursor rgba data
         if(std::ranges::none_of(cursorSended_, [&cursorId](auto & curid) { return curid == cursorId; })) {
             try {
-                auto zlib = Tools::zlibCompress(fbSpan);
+                auto zlib = Tools::zlibCompress(pixels);
                 // raw size
-                sb.writeIntBE32(fbSpan.size()).
+                sb.writeIntBE32(pixels.size()).
                     // compress size
                     writeIntBE32(zlib.size()).
                     // compress data
