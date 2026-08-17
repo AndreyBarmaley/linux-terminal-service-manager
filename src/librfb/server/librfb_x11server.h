@@ -28,6 +28,8 @@
 #include <atomic>
 #include <mutex>
 
+#include <boost/lockfree/stack.hpp>
+
 #include "librfb_server.h"
 
 namespace LTSM {
@@ -44,10 +46,10 @@ namespace LTSM {
             boost::asio::steady_timer force_update_;
             boost::asio::steady_timer clipboard_ready_;
 
+	    boost::lockfree::stack<xcb_rectangle_t, boost::lockfree::capacity<32>> damagePool_;
             std::chrono::time_point<std::chrono::steady_clock> frameTimePoint_;
 
             std::atomic<xcb_rectangle_t> serverRegion_;
-            std::atomic<xcb_rectangle_t> damageRegion_;
             std::atomic<xcb_rectangle_t> clientRegion_;
 
             std::atomic<int> pressedMask{0};
@@ -64,6 +66,7 @@ namespace LTSM {
 
             int displayNum_ = 0;
             int rfbStartingCode_ = 0;
+	    const uint32_t fpsMax_ = 22;
             uint16_t clipLocalTypes_ = 0;
             uint16_t clipRemoteTypes_ = 0;
 
@@ -108,6 +111,7 @@ namespace LTSM {
 
             XCB::RootDisplay* xcbDisplay(void);
             XCB::Region getClientRegion(void) const;
+            XCB::Region joinAllDamages(void);
 
             boost::asio::awaitable<void> xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
 

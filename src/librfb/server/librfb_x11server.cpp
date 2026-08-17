@@ -51,11 +51,16 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
-        asio::dispatch(rfb_strand(), [this, rt, level]() {
-            auto drt = XCB::Rectangle(damageRegion_.load());
-            drt.join(rt.x, rt.y, rt.width, rt.height);
-            damageRegion_.store(xcb_rectangle_t{drt.x, drt.y, drt.width, drt.height});
+        damagePool_.push(rt);
+    }
+
+    XCB::Region RFB::X11Server::joinAllDamages(void) {
+        XCB::Region res;
+        // get all damages
+        damagePool_.consume_all([&res](auto& rt) {
+            res.join(rt.x, rt.y, rt.width, rt.height);
         });
+        return res;
     }
 
     void RFB::X11Server::xcbDisplayConnectedEvent(void) {
@@ -94,11 +99,11 @@ namespace LTSM {
                 auto status = randrSequence == notify.sequence ?
                           RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
 
-	        co_await asio::post(rfb_strand(), asio::use_awaitable);
+                co_await asio::post(rfb_strand(), asio::use_awaitable);
 
                 if(status == RFB::DesktopResizeStatus::ServerRuntime) {
-            	    co_await sendEncodingDesktopResizeAwait(status, RFB::DesktopResizeError::NoError, wsz);
-            	    displayResizeEvent(wsz);
+                    co_await sendEncodingDesktopResizeAwait(status, RFB::DesktopResizeError::NoError, wsz);
+                    displayResizeEvent(wsz);
                 } else if(displayResizeNegotiation_) {
                     // clientSide
                     co_await sendEncodingDesktopResizeAwait(status, RFB::DesktopResizeError::NoError, wsz);
@@ -238,10 +243,22 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Server::serverUpdateProcess(void) {
+        if(!fullscreenUpdateReq_ && (isEncoderFFmpeg() || xcbNoDamageOption())) {
+            fullscreenUpdateReq_ = true;
+        }
+
+        auto ex = co_await asio::this_coro::executor;
+        XCB::Region clientRect = XCB::Rectangle(clientRegion_.load());
+
+        if(displayResizeProcessed_ ||
+            displayResizeNegotiation_ || clientRect.isEmpty()) {
+                // perhaps next time...
+                asio::steady_timer timer_update{ex, 50ms};
+                co_await timer_update.async_wait(asio::use_awaitable);
+                co_return;
+        }
 
         if(! fpsMinAction_) {
-            auto ex = co_await asio::this_coro::executor;
-
             // video and nodamage strong calc fps from fpsMin
             if(isEncoderFFmpeg() || xcbNoDamageOption()) {
                 asio::steady_timer timer_update{ex, 1ms};
@@ -250,8 +267,7 @@ namespace LTSM {
             }
 
             // max fps: wait timeout
-            const uint32_t fpsMax = 20;
-            const std::chrono::microseconds frameDuration(1000000 / fpsMax);
+            const std::chrono::microseconds frameDuration(1000000 / fpsMax_);
             const auto delayDuration = (frameTimePoint_ + frameDuration) - std::chrono::steady_clock::now();
 
             if(0 < delayDuration.count()) {
@@ -259,8 +275,10 @@ namespace LTSM {
                 co_await timer_update.async_wait(asio::use_awaitable);
             }
 
-            // damage empty: continue iteration
-            if(auto damageRect = XCB::Rectangle(damageRegion_.load()); damageRect.isEmpty()) {
+            // continue iteration
+            const bool notUpdateNeed = !fullscreenUpdateReq_ && damagePool_.empty();
+            if(notUpdateNeed) {
+                // perhaps next time...
                 co_return;
             }
         }
@@ -272,40 +290,34 @@ namespace LTSM {
 
         frameTimePoint_ = std::move(now);
         fpsMinAction_ = false;
-        XCB::Region damageRect = XCB::Rectangle(damageRegion_.exchange(xcb_rectangle_t{}));
-        XCB::Region clientRect = XCB::Rectangle(clientRegion_.load());
-
-        if(isEncoderFFmpeg() || xcbNoDamageOption()) {
-            fullscreenUpdateReq_ = true;
-        }
-
-        // check update
-        const bool notUpdateNeed = !fullscreenUpdateReq_ && damageRect.isEmpty();
-        if(notUpdateNeed || ! xcbAllowMessages() || displayResizeProcessed_ ||
-              displayResizeNegotiation_ || clientRect.isEmpty()) {
-            // perhaps next time...
-            co_return;
-        }
 
         const auto serverRect = XCB::Rectangle(serverRegion_.load());
+        XCB::Region damageRect;
 
         if(fullscreenUpdateReq_) {
             damageRect = serverRect;
             fullscreenUpdateReq_ = false;
         } else {
+            damageRect = joinAllDamages();
             // fix out of screen
             damageRect = serverRect.intersected(damageRect.align(4));
+
+            if(damageRect.isEmpty()) {
+                co_return;
+            }
         }
 
         if(clientRect != serverRect) {
             damageRect = clientRect.intersected(damageRect);
         }
 
-        co_await sendUpdateScreenAwait(damageRect);
+        if(xcbAllowMessages()) {
+            co_await sendUpdateScreenAwait(damageRect);
 
-        if(clientUpdateCursor_) {
-            asio::co_spawn(xcb_strand(), sendUpdateCursorAwait(), asio::detached);
-            clientUpdateCursor_ = false;
+            if(clientUpdateCursor_) {
+                asio::co_spawn(xcb_strand(), sendUpdateCursorAwait(), asio::detached);
+                clientUpdateCursor_ = false;
+            }
         }
 
         co_return;
