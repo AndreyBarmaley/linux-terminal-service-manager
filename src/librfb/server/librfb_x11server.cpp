@@ -57,7 +57,7 @@ namespace LTSM {
     XCB::Region RFB::X11Server::joinAllDamages(void) {
         XCB::Region res;
         // get all damages
-        damagePool_.consume_all([&res](const auto& rt) {
+        damagePool_.consume_all([&res](auto& rt) {
             res.join(rt.x, rt.y, rt.width, rt.height);
         });
         return res;
@@ -156,6 +156,7 @@ namespace LTSM {
     asio::awaitable<void> RFB::X11Server::xcbEventsLoop(void) {
         try {
             auto ex = co_await asio::this_coro::executor;
+            asio::posix::stream_descriptor sd{ex};
 
             for(;;) {
                 if(! xcbAllowMessages()) {
@@ -170,7 +171,7 @@ namespace LTSM {
                     co_return;
                 }
 
-                asio::posix::stream_descriptor sd{ex, XCB::RootDisplay::getFd()};
+                sd.assign(XCB::RootDisplay::getFd());
                 co_await sd.async_wait(asio::posix::stream_descriptor::wait_read, asio::use_awaitable);
 
                 while(auto ev = XCB::RootDisplay::pollEvent()) {
@@ -279,6 +280,8 @@ namespace LTSM {
             const bool notUpdateNeed = !fullscreenUpdateReq_ && damagePool_.empty();
             if(notUpdateNeed) {
                 // perhaps next time...
+                asio::steady_timer timer_update{ex, 10ms};
+                co_await timer_update.async_wait(asio::use_awaitable);
                 co_return;
             }
         }
@@ -292,13 +295,12 @@ namespace LTSM {
         fpsMinAction_ = false;
 
         const auto serverRect = XCB::Rectangle(serverRegion_.load());
-        XCB::Region damageRect;
+        XCB::Region damageRect = joinAllDamages();
 
         if(fullscreenUpdateReq_) {
             damageRect = serverRect;
             fullscreenUpdateReq_ = false;
         } else {
-            damageRect = joinAllDamages();
             // fix out of screen
             damageRect = serverRect.intersected(damageRect.align(4));
 
