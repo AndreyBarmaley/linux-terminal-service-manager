@@ -97,7 +97,6 @@ namespace LTSM {
 
             virtual FrameBufferPackets getFrameBufferPackets(const EncoderStream*, const FrameBuffer&) const = 0;
 
-            virtual void reinitContext(const EncoderStream*, const XCB::Size &) { /* empty */ }
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
             virtual bool setEncodingOptions(const std::forward_list<std::string> &) {
                 return false;

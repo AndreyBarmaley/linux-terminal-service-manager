@@ -38,7 +38,6 @@ void signalHandler(int sig) {
 
 class FakeStream : public RFB::EncoderStream {
     PixelFormat pf;
-    size_t write = 0;
     size_t threads = 1;
     boost::asio::thread_pool thread_pool;
 
@@ -57,10 +56,6 @@ class FakeStream : public RFB::EncoderStream {
         }
 
         pf = PixelFormat(xcb->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
-    }
-
-    const size_t & writeBytes(void) const {
-        return write;
     }
 
     uint16_t encodingThreads(void) const override {
@@ -107,12 +102,16 @@ struct EncodingTime {
 
     size_t iteration = 0;
     size_t workms = 0;
+    size_t write = 0;
 
     void encodeTime(uint8_t* p, const XCB::Region & reg) {
-        auto tp = std::chrono::steady_clock::now();
 
         const FrameBuffer fb(p, reg, stream->serverFormat());
-        [[maybe_unused]] auto packets = enc->getFrameBufferPackets(stream.get(), fb);
+
+        auto tp = std::chrono::steady_clock::now();
+        for(auto& pkt: enc->getFrameBufferPackets(stream.get(), fb)) {
+            write += pkt.size();
+        }
 
         auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
         workms += dt.count();
@@ -131,7 +130,7 @@ struct EncodingTime {
             std::cout << "(" << id << ")";
         }
 
-        std::cout << ": - iteration: " << iteration << ", time: " << workms / iteration << " ms" << ", bandwith: " << stream->writeBytes() / iteration << " bytes" << std::endl;
+        std::cout << ": - iteration: " << iteration << ", time: " << workms / iteration << " ms" << ", bandwith: " << write / iteration << " bytes" << std::endl;
     }
 };
 

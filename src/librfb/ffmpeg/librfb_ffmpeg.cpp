@@ -285,17 +285,18 @@ namespace LTSM {
         Application::info("{}: {}, size: {}", NS_FuncNameV, RFB::encodingName(getType()), csz);
     }
 
-    void RFB::EncodingFFmpeg::reinitContext(const EncoderStream* st, const XCB::Size & fsz) {
-        threads = st->encodingThreads();
-        initContext(fsz, st->serverFormat());
-    }
+    RFB::FrameBufferPackets RFB::EncodingFFmpeg::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
 
-    RFB::FrameBufferPackets RFB::EncodingFFmpeg::getFrameBufferPackets(const EncoderStream*, const FrameBuffer& fb) const {
-
-        if(! avcctx) {
-            throw encoding_context_error(NS_FuncNameS);
-        } else if(fb.width() != avcctx->width || fb.height() != avcctx->height) {
-            throw encoding_context_error(NS_FuncNameS);
+        if(! avcctx ||
+            (fb.width() != avcctx->width || fb.height() != avcctx->height)) {
+            if(auto own = const_cast<EncodingFFmpeg*>(this)) {
+                own->threads = st->encodingThreads();
+                own->initContext(fb.region().toSize(), st->serverFormat());
+            }
+            if(fb.width() != avcctx->width || fb.height() != avcctx->height) {
+                Application::error("{}: context failed, fb sz: {}", NS_FuncNameV, fb.region().toSize());
+                throw ffmpeg_error(NS_FuncNameS);
+            }
         }
 
         const uint8_t* data[1] = { fb.pitchData(0) };

@@ -143,8 +143,6 @@ namespace LTSM {
             explicit EncodingFFmpeg(int type = ENCODING_LTSM_H264);
             ~EncodingFFmpeg() = default;
 
-            void reinitContext(const EncoderStream*, const XCB::Size &) final;
-
             const char* getTypeName(void) const override;
             void setFps(uint32_t) override;
         };

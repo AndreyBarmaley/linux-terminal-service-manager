@@ -1078,17 +1078,9 @@ namespace LTSM {
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
 
+        auto packets = encoder_->getFrameBufferPackets(this, fb);
+
         // add header
-        FrameBufferPackets packets;
-
-        try {
-            packets.splice(packets.end(), encoder_->getFrameBufferPackets(this, fb));
-        } catch(const encoding_context_error&) {
-            Application::warning("{}: reinit context: {}", NS_FuncNameV, fb.region().toSize());
-            encoder_->reinitContext(this, fb.region().toSize());
-            packets.splice(packets.end(), encoder_->getFrameBufferPackets(this, fb));
-        }
-
         BinaryBuf header(4, 0);
         // RFB: 6.5.1
         header[0] = RFB::SERVER_FB_UPDATE;

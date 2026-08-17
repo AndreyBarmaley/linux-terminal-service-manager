@@ -316,8 +316,6 @@ TYPED_TEST(CodecTypedTest3, LoopbackEncodeDecode) {
     TestEncoderStream encoderStream(this->displaySize, this->pixelFormat);
     TestDecoderRender testDecoder(dstFb);
 
-    encoder->reinitContext(&encoderStream, this->displaySize);
-
     // encoder process
     RFB::FrameBufferPackets packets;
     ASSERT_NO_THROW(packets = encoder-> getFrameBufferPackets(&encoderStream, srcFb));
