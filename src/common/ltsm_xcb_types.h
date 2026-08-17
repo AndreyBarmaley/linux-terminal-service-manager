@@ -147,8 +147,8 @@ namespace LTSM {
             static bool intersects(const Region &, const Region &);
             static bool intersection(const Region &, const Region &, Region* res);
 
-            std::list<Region> divideBlocks(const Size &) const;
-            std::list<Region> divideCounts(uint16_t cols, uint16_t rows) const;
+            std::vector<Region> divideBlocks(const Size &) const;
+            std::vector<Region> divideCounts(uint16_t cols, uint16_t rows) const;
         };
 
         inline Region operator+ (const Region & reg, const Point & pt) {

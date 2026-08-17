@@ -201,16 +201,25 @@ namespace LTSM {
             return ! res->isEmpty();
         }
 
-        std::list<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const {
+        std::vector<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const {
             uint16_t bw = width <= cols ? 1 : width / cols;
             uint16_t bh = height <= rows ? 1 : height / rows;
             return divideBlocks(Size(bw, bh));
         }
 
-        std::list<Region> Region::divideBlocks(const Size & sz) const {
-            std::list<Region> res;
+        std::vector<Region> Region::divideBlocks(const Size & sz) const {
+            if(toSize() == sz) {
+                return { *this };
+            }
+
+            std::vector<Region> res;
             int cw = sz.width > width ? width : sz.width;
             int ch = sz.height > height ? height : sz.height;
+
+            // integer divide with roud up
+            int count_w = (width + cw - 1) / cw;
+            int count_h = (height + ch - 1) / ch;
+            res.reserve(count_w * count_h);
 
             for(uint16_t yy = 0; yy < height; yy += ch) {
                 for(uint16_t xx = 0; xx < width; xx += cw) {
