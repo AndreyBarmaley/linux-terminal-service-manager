@@ -304,7 +304,7 @@ namespace LTSM {
         co_await sendUpdateScreenAwait(damageRect);
 
         if(clientUpdateCursor_) {
-            co_await sendUpdateCursorAwait();
+            asio::co_spawn(xcb_strand(), sendUpdateCursorAwait(), asio::detached);
             clientUpdateCursor_ = false;
         }
 
@@ -514,9 +514,11 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> RFB::X11Server::extClipboardSendAwait(std::span<const uint8_t> buf) const {
-        co_await sendCutTextAwait(buf, true);
-        co_return;
+    void RFB::X11Server::extClipboardSendBuf(std::vector<uint8_t>&& buf) const {
+        asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
+            co_await sendCutTextAwait(buf, true);
+            co_return;
+        }, asio::detached);
     }
 
     uint16_t RFB::X11Server::extClipboardLocalTypes(void) const {
@@ -617,7 +619,7 @@ namespace LTSM {
                 clipLocalTypes_ |= ExtClip::x11AtomToType(atom);
             });
 
-            asio::co_spawn(xcb_strand(), sendExtClipboardNotifyAwait(clipLocalTypes_), asio::detached);
+            asio::dispatch(xcb_strand(), std::bind(&X11Server::sendExtClipboardNotify, this, clipLocalTypes_));
         } else {
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
@@ -649,7 +651,7 @@ namespace LTSM {
         clipboard_ready_.expires_after(3000ms);
 
         // this is an initiator. we launch from the background.
-        asio::co_spawn(xcb_strand(), sendExtClipboardRequestAwait(requestType), asio::detached);
+        asio::post(xcb_strand(), std::bind(&X11Server::sendExtClipboardRequest, this, requestType));
 
         // wait clipboard
         try {

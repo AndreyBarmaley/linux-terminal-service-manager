@@ -207,8 +207,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> Vnc2Image::extClipboardSendAwait(std::span<const uint8_t>) const {
-        co_return;
+    void Vnc2Image::extClipboardSendBuf(std::vector<uint8_t>&&) const {
     }
 }
 

@@ -129,10 +129,10 @@ TEST(XCBRegionTest, DivisionMethods) {
     Region r(0, 0, 100, 100);
     Size blockSize(50, 50);
 
-    std::list<Region> blocks = r.divideBlocks(blockSize);
+    auto> blocks = r.divideBlocks(blockSize);
     EXPECT_FALSE(blocks.empty());
 
-    std::list<Region> counts = r.divideCounts(2, 2);
+    auto counts = r.divideCounts(2, 2);
     EXPECT_FALSE(counts.empty());
 }
 

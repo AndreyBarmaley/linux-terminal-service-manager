@@ -36,10 +36,12 @@ namespace LTSM {
     RFB::WinClient::WinClient(const asio::any_io_executor& ctx) : ClientDecoder(ctx) {
     }
 
-    asio::awaitable<void> RFB::WinClient::extClipboardSendAwait(std::span<const uint8_t> buf) const {
+    void RFB::WinClient::extClipboardSendBuf(std::vector<uint8_t>&& buf) const {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        co_await sendCutTextAwait(buf, true);
-        co_return;
+        asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
+            co_await sendCutTextAwait(buf, true);
+            co_return;
+        }, asio::detached);
     }
 
     uint16_t RFB::WinClient::extClipboardLocalTypes(void) const {

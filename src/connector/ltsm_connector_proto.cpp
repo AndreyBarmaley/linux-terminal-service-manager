@@ -416,7 +416,7 @@ namespace LTSM::Connector {
 
         if(cursorId) {
             Application::debug(DebugType::App, "{}: cursor id: {:#010x}", NS_FuncNameV, cursorId);
-            cursorFailed(cursorId);
+            cursorRequest(cursorId);
         }
     }
 

@@ -1093,7 +1093,7 @@ namespace LTSM {
                 co_await sendFrameBufferUpdateAwait(false);
                 if(contUpdateResume) {
                     const auto crt = XCB::Region(XCB::Point(0, 0), wsz);
-                    co_await sendContinuousUpdatesAwait(true, crt);
+                    asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, std::move(crt)), asio::detached);
                 }
                 co_return;
             }, asio::detached);
@@ -1180,10 +1180,8 @@ namespace LTSM {
         bool contUpdateResume = false;
 
         if(isContinueUpdatesProcessed()) {
-            asio::co_spawn(rfb_strand(), [this, crt=XCB::Region(XCB::Point(0, 0), windowSize_)]() -> asio::awaitable<void> {
-                co_await sendContinuousUpdatesAwait(false, crt);
-                co_return;
-            }, asio::detached);
+            const auto crt = XCB::Region(XCB::Point(0, 0), windowSize_);
+            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(false, std::move(crt)), asio::detached);
             contUpdateResume = true;
         }
 
@@ -1276,10 +1274,8 @@ namespace LTSM {
                 asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
             if(isContinueUpdatesSupport()) {
-                asio::co_spawn(rfb_strand(), [this, crt=XCB::Region(XCB::Point(0, 0), clientSize())]() -> asio::awaitable<void> {
-                    co_await sendContinuousUpdatesAwait(true, crt);
-                    co_return;
-                }, asio::detached);
+                const auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
+                asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, std::move(crt)), asio::detached);
             }
         }
     }
@@ -1506,10 +1502,9 @@ namespace LTSM {
             auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
 
             if(! curs) {
+                Application::warning("{}: cursor broken, id: {:#010x}", NS_FuncNameV, cursorId);
                 Application::warning("{}: {} failed, error: {}", NS_FuncNameV,
                                      "SDL_CreateColorCursor", SDL_GetError());
-
-                Application::warning("{}: send cursor failed, id: {:#010x}", NS_FuncNameV, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }

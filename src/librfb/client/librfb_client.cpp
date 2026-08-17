@@ -698,7 +698,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, const XCB::Region & reg) const {
+    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, XCB::Region reg) const {
         Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
                            (enable ? "enable" : "disable"), reg);
 
@@ -1124,7 +1124,7 @@ namespace LTSM {
         Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
         continueUpdatesSupport = true;
         auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
-        co_await sendContinuousUpdatesAwait(false, crt);
+        asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(false, std::move(crt)), asio::detached);
         co_return;
     }
 

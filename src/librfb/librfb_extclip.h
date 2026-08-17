@@ -100,22 +100,22 @@ namespace LTSM {
             boost::asio::awaitable<void> recvExtClipboardNotifyAwait(uint32_t flags);
             boost::asio::awaitable<void> recvExtClipboardProvideAwait(const StreamBufRef &);
 
-            boost::asio::awaitable<void> sendExtClipboardRequestAwait(uint16_t types);
-            boost::asio::awaitable<void> sendExtClipboardPeekAwait(void) const;
-            boost::asio::awaitable<void> sendExtClipboardNotifyAwait(uint16_t types) const;
+            void sendExtClipboardRequest(uint16_t types);
+            void sendExtClipboardPeek(void) const;
+            void sendExtClipboardNotify(uint16_t types) const;
             boost::asio::awaitable<void> sendExtClipboardProvideAwait(uint16_t types);
 
             virtual uint16_t extClipboardLocalTypes(void) const = 0;
             virtual boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) = 0;
             virtual boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) = 0;
             virtual boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) = 0;
-            virtual boost::asio::awaitable<void> extClipboardSendAwait(std::span<const uint8_t>) const = 0;
+            virtual void extClipboardSendBuf(std::vector<uint8_t>&&) const = 0;
 
           public:
             ExtClip() = default;
             virtual ~ExtClip() = default;
 
-            boost::asio::awaitable<void> sendExtClipboardCapsAwait(void);
+            void sendExtClipboardCaps(void);
             boost::asio::awaitable<void> recvExtClipboardCapsAwait(std::span<const uint8_t>);
 
             void setExtClipboardRemoteCaps(int);

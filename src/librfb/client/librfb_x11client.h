@@ -56,8 +56,8 @@ namespace LTSM {
             boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
             boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
             boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) override;
-            boost::asio::awaitable<void> extClipboardSendAwait(std::span<const uint8_t>) const override;
             boost::asio::awaitable<bool> extClipboardSourceReadyAwait(xcb_atom_t atom);
+            void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
 
             void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
 

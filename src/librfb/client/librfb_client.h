@@ -73,9 +73,12 @@ namespace LTSM {
             boost::asio::awaitable<void> sendEncodingsAwait(const std::list<int> &) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
-            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, const XCB::Region &) const;
+            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, XCB::Region) const;
             boost::asio::awaitable<void> sendSetDesktopSizeAwait(const XCB::Size &) const;
             boost::asio::awaitable<void> sendCutTextAwait(std::span<const uint8_t>, bool ext) const;
+            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const;
+            boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const;
+            // fixme asio::job
             boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>) const;
 
             boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
@@ -103,8 +106,6 @@ namespace LTSM {
             boost::asio::awaitable<void> rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay = false);
             boost::asio::awaitable<bool> rfbHandshakeAwait(const SecurityInfo &);
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
-            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const;
-            boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const;
 
           public:
             ClientDecoder(const boost::asio::any_io_executor& ctx)

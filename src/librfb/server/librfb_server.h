@@ -32,6 +32,7 @@
 #include "librfb_extclip.h"
 #include "librfb_encodings.h"
 #include "ltsm_xcb_wrapper.h"
+#include "ltsm_async_mutex.h"
 #include "ltsm_async_socket.h"
 
 namespace LTSM {
@@ -62,6 +63,7 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer timer_updates_;
+            mutable async_mutex send_lock_;
 
             mutable std::forward_list<uint32_t> cursorSended_;
             ClientEncodings clientEncodings_;
@@ -133,10 +135,11 @@ namespace LTSM {
             boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable) const;
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const FrameBuffer &) const;
             boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &) const;
-            boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
             boost::asio::awaitable<void> sendEncodingDesktopResizeAwait(DesktopResizeStatus, DesktopResizeError, XCB::Size) const;
             boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const;
             boost::asio::awaitable<void> sendEncodingLtsmCursorAwait(const XCB::Region & cur, std::span<const uint8_t> pixels) const;
+            // fixme asio::job
+            boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
             boost::asio::awaitable<void> sendEncodingLtsmDataAwait(std::span<const uint8_t>) const;
             boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>) const;
 
@@ -159,7 +162,7 @@ namespace LTSM {
             boost::asio::awaitable<bool> serverSecurityInitAwait(int protover, const SecurityInfo &);
             boost::asio::awaitable<void> serverClientInitAwait(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
 
-            void cursorFailed(uint32_t);
+            void cursorRequest(uint32_t);
 
           public:
             ServerEncoder(const boost::asio::any_io_executor&);

@@ -40,10 +40,12 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> RFB::X11Client::extClipboardSendAwait(std::span<const uint8_t> buf) const {
+    void RFB::X11Client::extClipboardSendBuf(std::vector<uint8_t>&& buf) const {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        co_await sendCutTextAwait(buf, true);
-        co_return;
+        asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
+            co_await sendCutTextAwait(buf, true);
+            co_return;
+        }, asio::detached);
     }
 
     uint16_t RFB::X11Client::extClipboardLocalTypes(void) const {
@@ -148,7 +150,7 @@ namespace LTSM {
                 clipLocalTypes_ |= ExtClip::x11AtomToType(atom);
             });
 
-            asio::co_spawn(xcb_strand(), sendExtClipboardNotifyAwait(clipLocalTypes_), asio::detached);
+            asio::dispatch(xcb_strand(), std::bind(&X11Client::sendExtClipboardNotify, this, clipLocalTypes_));
         } else {
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
@@ -182,7 +184,7 @@ namespace LTSM {
         uint16_t requestType = ExtClip::x11AtomToType(atom);
         clientClipboard_.clear();
 
-        co_await sendExtClipboardRequestAwait(requestType);
+        asio::post(xcb_strand(), std::bind(&X11Client::sendExtClipboardRequest, this, requestType));
         clipboard_ready_.expires_after(3000ms);
 
         try {
