@@ -1138,7 +1138,7 @@ namespace LTSM {
 
     RFB::EncodingRet RFB::EncodingQOI::writeRegionTo(const EncoderStream* st, const XCB::Point & top, const FrameBuffer & fb, XCB::Region reg) const {
 
-        EncodePacket sb(reg.width * reg.height * 8 / 3, true /* type v2 */);
+        EncodePacket sb(reg.width * reg.height * 4 / 3, true /* type v2 */);
         writeEncodeBGRx(fb, reg, st->clientFormat(), sb);
         sb.writeHeader(getType(), reg + top);
         sb.writeDataSize();
@@ -1258,7 +1258,7 @@ namespace LTSM {
     /// EncodingQOI
     RFB::EncodingRet RFB::EncodingZQOI::writeRegionTo(const EncoderStream* st, const XCB::Point & top, const FrameBuffer & fb, XCB::Region reg) const {
 
-        EncodePacket bb(reg.width * reg.height * 8 / 3);
+        EncodePacket bb(reg.width * reg.height * 4 / 3);
         writeEncodeBGRx(fb, reg, st->clientFormat(), bb);
 
         size_t lz4Len = LZ4_compressBound(bb.last());
