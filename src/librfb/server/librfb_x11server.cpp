@@ -166,7 +166,7 @@ namespace LTSM {
                 }
 
                 if(auto err = XCB::RootDisplay::hasError()) {
-                    Application::error("{}: xcb error, code: {}, display: {}", NS_FuncNameV, err, displayNum_);
+                    Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
                     stop();
                     co_return;
                 }

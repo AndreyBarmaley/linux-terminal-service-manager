@@ -64,7 +64,6 @@ namespace LTSM {
 
             XCB::ShmIdShared shm;
 
-            int displayNum_ = 0;
             int rfbStartingCode_ = 0;
 	    const uint32_t fpsMax_ = 22;
             uint16_t clipLocalTypes_ = 0;
