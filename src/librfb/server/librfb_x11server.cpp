@@ -818,17 +818,18 @@ namespace LTSM {
                 Application::debug(X11Srv, "{}: data lenth: {}", NS_FuncNameV, dataSize);
 
                 if(dataSize == argbSize) {
-                    auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
+                    const auto cursorHot = XCB::Point(reply->xhot, reply->yhot);
+                    const auto cursorSize = XCB::Size(reply->width, reply->height);
                     // priority LTSM cursors
                     if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
-                        co_await sendEncodingLtsmCursorAwait(cursorRegion, std::span{ptr, dataSize * sizeof(uint32_t)});
+                        co_await sendEncodingLtsmCursorAwait(cursorHot, cursorSize, std::span{ptr, dataSize * sizeof(uint32_t)});
                     } else {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-                        auto cursorFB = FrameBuffer(ptr, cursorRegion, BGRA32);
+                        auto cursorFB = FrameBuffer(ptr, XCB::Region(cursorSize), BGRA32);
 #else
-                        auto cursorFB = FrameBuffer(ptr, cursorRegion, ARGB32);
+                        auto cursorFB = FrameBuffer(ptr, XCB::Region(cursorSize), ARGB32);
 #endif
-                        co_await sendEncodingRichCursorAwait(cursorFB, reply->xhot, reply->yhot);
+                        co_await sendEncodingRichCursorAwait(cursorFB, cursorHot);
                     }
                 } else {
                     Application::warning("{}: size mismatch, data: {}, argb: {}", NS_FuncNameV, dataSize, argbSize);

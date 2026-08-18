@@ -114,6 +114,7 @@ namespace LTSM {
             Region() = default;
             ~Region() = default;
 
+            explicit Region(const Size & sz) : Point(0, 0), Size(sz) {}
             Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 

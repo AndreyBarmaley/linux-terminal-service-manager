@@ -59,6 +59,10 @@ namespace LTSM {
             friend class DecodingZlib;
             friend class DecodingFFmpeg;
 
+            bool serverBigEndian(void) const {
+                return server_big_endian_;
+            }
+
             // decoder stream interface
             const PixelFormat & serverFormat(void) const override;
 
@@ -139,8 +143,8 @@ namespace LTSM {
             virtual void clientRecvSetColorMapEvent(const std::vector<Color> &) { /* empty */ }
             virtual void clientRecvBellEvent(void) { /* empty */ }
             virtual void clientRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
-            virtual void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
-            virtual void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) { /* empty */ }
+            virtual void clientRecvRichCursorEvent(const XCB::Point&, const XCB::Size&, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
+            virtual void clientRecvLtsmCursorEvent(const XCB::Point&, const XCB::Size&, uint32_t cursorId, std::vector<uint8_t> && pixels) { /* empty */ }
             virtual void displayResizeEvent(const XCB::Size &);
             //
             virtual bool clientLtsmSupported(void) const {

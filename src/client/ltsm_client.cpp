@@ -1402,7 +1402,7 @@ namespace LTSM {
         return audioEncoding;
     }
 
-    void ClientApp::clientRecvRichCursorEvent(const XCB::Region & reg,
+    void ClientApp::clientRecvRichCursorEvent(const XCB::Point & hot, const XCB::Size & cursz,
                                             std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {
         uint32_t key = Tools::crc32b(pixels);
         auto it = cursors.find(key);
@@ -1418,11 +1418,11 @@ namespace LTSM {
             }
 
             // pixels data as client format
-            Application::debug(DebugType::App, "{}: create cursor, crc32b: {}, size: {}, sdl format: {}",
-                               NS_FuncNameV, key, reg.toSize(), SDL_GetPixelFormatName(sdlFormat));
+            Application::info("{}: create cursor id: {}, size: {}, hot: {}, sdl format: {}, pixels: {}",
+                               NS_FuncNameV, key, cursz, hot, SDL_GetPixelFormatName(sdlFormat), pixels.size());
 
-            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
-                      reg.height, clientPf.bitsPerPixel(), reg.width * clientPf.bytePerPixel(),
+            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), cursz.width,
+                      cursz.height, clientPf.bitsPerPixel(), cursz.width * clientPf.bytePerPixel(),
                       sdlFormat);
 
             if(! sf) {
@@ -1434,7 +1434,7 @@ namespace LTSM {
             auto pair = cursors.emplace(key, ColorCursor{ .pixels = std::move(pixels) });
             it = pair.first;
             (*it).second.surface.reset(sf);
-            auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
+            auto curs = SDL_CreateColorCursor(sf, hot.x, hot.y);
 
             if(! curs) {
                 auto & pixels = (*it).second.pixels;
@@ -1453,7 +1453,8 @@ namespace LTSM {
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void ClientApp::clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) {
+    void ClientApp::clientRecvLtsmCursorEvent(const XCB::Point & hot, const XCB::Size & cursz,
+                uint32_t cursorId, std::vector<uint8_t> && pixels) {
         auto it = cursors.find(cursorId);
 
         if(cursors.end() == it) {
@@ -1463,16 +1464,12 @@ namespace LTSM {
                 return;
             }
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            auto cursorFmt = BGRA32;
-#else
-            auto cursorFmt = ARGB32;
-#endif
+            const auto cursorFmt = serverBigEndian() ? ARGB32 : BGRA32;
             auto sdlFormat = SDL_MasksToPixelFormatEnum(cursorFmt.bitsPerPixel(),
                              cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
 
-            if(pixels.size() < static_cast<size_t>(reg.width) * reg.height * 4) {
-                Application::error("{}: invalid pixels, length: {}, id: {:#010x}", NS_FuncNameV, pixels.size(), cursorId);
+            if(pixels.size() < static_cast<size_t>(cursz.width) * cursz.height * sizeof(uint32_t) /* RGBA */) {
+                Application::error("{}: invalid pixels length: {}, size: {}, id: {:#010x}", NS_FuncNameV, pixels.size(), cursz, cursorId);
                 return;
             }
 
@@ -1483,11 +1480,11 @@ namespace LTSM {
             }
 
             // pixels data as client format
-            Application::debug(DebugType::App, "{}: create cursor, crc32b: {}, size: {}, sdl format: {}",
-                               NS_FuncNameV, cursorId, reg.toSize(), SDL_GetPixelFormatName(sdlFormat));
+            Application::info("{}: create cursor id: {}, size: {}, hot: {}, sdl format: {}, pixels: {}",
+                               NS_FuncNameV, cursorId, cursz, hot, SDL_GetPixelFormatName(sdlFormat), pixels.size());
 
-            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
-                      reg.height, clientPf.bitsPerPixel(), reg.width * cursorFmt.bytePerPixel(),
+            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), cursz.width,
+                      cursz.height, clientPf.bitsPerPixel(), cursz.width * cursorFmt.bytePerPixel(),
                       sdlFormat);
 
             if(! sf) {
@@ -1499,7 +1496,7 @@ namespace LTSM {
             auto pair = cursors.emplace(cursorId, ColorCursor{ .pixels = std::move(pixels) });
             it = pair.first;
             (*it).second.surface.reset(sf);
-            auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
+            auto curs = SDL_CreateColorCursor(sf, hot.x, hot.y);
 
             if(! curs) {
                 Application::warning("{}: cursor broken, id: {:#010x}", NS_FuncNameV, cursorId);

@@ -136,8 +136,8 @@ namespace LTSM {
             boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const FrameBuffer &) const;
             boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &) const;
             boost::asio::awaitable<void> sendEncodingDesktopResizeAwait(DesktopResizeStatus, DesktopResizeError, XCB::Size) const;
-            boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const;
-            boost::asio::awaitable<void> sendEncodingLtsmCursorAwait(const XCB::Region & cur, std::span<const uint8_t> pixels) const;
+            boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, const XCB::Point &) const;
+            boost::asio::awaitable<void> sendEncodingLtsmCursorAwait(const XCB::Point &, const XCB::Size &, std::span<const uint8_t> pixels) const;
             // fixme asio::job
             boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
             boost::asio::awaitable<void> sendEncodingLtsmDataAwait(std::span<const uint8_t>) const;

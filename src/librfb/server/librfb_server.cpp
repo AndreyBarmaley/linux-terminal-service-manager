@@ -1278,10 +1278,10 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendEncodingRichCursorAwait(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) const {
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingRichCursorAwait(const FrameBuffer & fb, const XCB::Point & hot) const {
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "{}: region: {}, hot: {}",
-                           NS_FuncNameV, reg, XCB::Point(xhot, yhot));
+                           NS_FuncNameV, reg, hot);
 
         Tools::StreamBitsPack bitmask;
 
@@ -1299,8 +1299,8 @@ namespace LTSM {
             // regions counts
             writeIntBE16(1).
             // region size
-            writeIntBE16(xhot).
-            writeIntBE16(yhot).
+            writeIntBE16(hot.x).
+            writeIntBE16(hot.y).
             writeIntBE16(reg.width).
             writeIntBE16(reg.height).
             // region type
@@ -1340,8 +1340,8 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmCursorAwait(const XCB::Region & cur, std::span<const uint8_t> pixels) const {
-        Application::debug(DebugType::Rfb, "{}: size: {}, hot: {}", NS_FuncNameV, cur.toSize(), cur.topLeft());
+    asio::awaitable<void> RFB::ServerEncoder::sendEncodingLtsmCursorAwait(const XCB::Point & hot, const XCB::Size & cur, std::span<const uint8_t> pixels) const {
+        Application::debug(DebugType::Rfb, "{}: size: {}, hot: {}", NS_FuncNameV, cur, hot);
 
         StreamBuf sb(256);
         // LTSM proto
@@ -1350,8 +1350,8 @@ namespace LTSM {
             writeInt8(0).
             // rects
             writeIntBE16(1).
-            writeIntBE16(cur.x).
-            writeIntBE16(cur.y).
+            writeIntBE16(hot.x).
+            writeIntBE16(hot.y).
             writeIntBE16(cur.width).
             writeIntBE16(cur.height).
             writeIntBE32(ENCODING_LTSM_CURSOR);

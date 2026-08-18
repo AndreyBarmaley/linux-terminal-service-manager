@@ -182,9 +182,9 @@ namespace LTSM {
         void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
         //void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
-        void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
+        void clientRecvRichCursorEvent(const XCB::Point&, const XCB::Size&, std::vector<uint8_t> && pixels,
                                        std::vector<uint8_t> && mask) override;
-        void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
+        void clientRecvLtsmCursorEvent(const XCB::Point&, const XCB::Size&, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
         void clientRecvBellEvent(void) override;
 
 #ifdef __UNIX__

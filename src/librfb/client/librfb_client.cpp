@@ -997,7 +997,7 @@ namespace LTSM {
             }
         }
 
-        clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
+        clientRecvLtsmCursorEvent(reg.topLeft(), reg.toSize(), cursorId, std::move(buf));
         co_return;
     }
 
@@ -1013,7 +1013,7 @@ namespace LTSM {
 
         Application::trace(DebugType::Rfb, "{}: bufsz: {}, masksz: {}", NS_FuncNameV, buf.size(), mask.size());
 
-        clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
+        clientRecvRichCursorEvent(reg.topLeft(), reg.toSize(), std::move(buf), std::move(mask));
         co_return;
     }
 
