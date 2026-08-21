@@ -36,8 +36,7 @@
 #include <boost/process/environment.hpp>
 #endif
 
-#include <boost/process/v2.hpp>
-#include <boost/asio/stream_file.hpp>
+//#include <boost/process/v2.hpp>
 #include <boost/asio/experimental/awaitable_operators.hpp>
 
 #include "ltsm_zlib.h"
@@ -50,6 +49,7 @@ using namespace std::chrono_literals;
 using namespace boost;
 
 namespace LTSM::DisplaySession {
+/*
     namespace bp2 = boost::process::v2;
 
     template<typename... Args>
@@ -65,7 +65,7 @@ namespace LTSM::DisplaySession {
                 
         SessionProcessV2(SessionProcessV2 &&) noexcept = default;
         SessionProcessV2 & operator=(SessionProcessV2 &&) noexcept = default;
-                
+
         SessionProcessV2(const asio::any_io_executor& ex, const std::string & cmd, const Args&... args)
             : filename_(std::filesystem::path(cmd).filename()) {
             pipe_out_.emplace(ex);
@@ -169,7 +169,7 @@ namespace LTSM::DisplaySession {
             return const_cast<bp2::process &>(*proc_).running();
         }
     };
-
+*/
     asio::awaitable<void> waitSocketConnectAwait(std::filesystem::path file) {
         if(std::filesystem::is_socket(file)) {
             co_return;
@@ -205,6 +205,7 @@ namespace LTSM::DisplaySession {
         throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
     }
 
+/*
     template<typename Buffer>
     asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
         auto ex = co_await asio::this_coro::executor;
@@ -215,6 +216,35 @@ namespace LTSM::DisplaySession {
 
         try {
             co_await asio::async_read(stream_file, buffer, asio::use_awaitable);
+        } catch (const system::system_error& err) {
+            if (err.code() != asio::error::eof) {
+                throw;
+            }
+        }
+
+        co_return content;
+    }
+*/
+
+    template<typename Buffer>
+    asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
+        auto ex = co_await asio::this_coro::executor;
+
+        int fd = open(file.c_str(), O_RDONLY | O_NONBLOCK);
+        if(fd < 0) {
+            if(errno == ENOENT) {
+                throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory), file.string());
+            }
+            throw std::system_error(errno,  std::generic_category(),  file.string());
+        }
+
+        asio::posix::stream_descriptor sd{ex, fd};
+
+        Buffer content;
+        auto buffer = asio::dynamic_buffer(content);
+
+        try {
+            co_await asio::async_read(sd, buffer, asio::use_awaitable);
         } catch (const system::system_error& err) {
             if (err.code() != asio::error::eof) {
                 throw;
@@ -705,16 +735,16 @@ namespace LTSM::DisplaySession {
         }
     }
 
-    void DBusAdaptor::stop(void) {
+    void DBusAdaptor::stop(void) noexcept {
         std::call_once(stop_flag_, [this]() {
             try {
                 stopContexts();
-            } catch(const sts::exception&) {
+            } catch(const std::exception&) {
             }
         });
     }
 
-    void DBusAdaptor::stopContexts(void) noexcept {
+    void DBusAdaptor::stopContexts(void) {
         dbus_conn_->leaveEventLoop();
 
         signals_cancel_.emit(asio::cancellation_type::terminal);

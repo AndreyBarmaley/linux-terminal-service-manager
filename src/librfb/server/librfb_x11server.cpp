@@ -57,7 +57,7 @@ namespace LTSM {
     XCB::Region RFB::X11Server::joinAllDamages(void) {
         XCB::Region res;
         // get all damages
-        damagePool_.consume_all([&res](auto& rt) {
+        damagePool_.consume_all([&res](const auto& rt) {
             res.join(rt.x, rt.y, rt.width, rt.height);
         });
         return res;
