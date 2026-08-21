@@ -25,12 +25,12 @@
 #define _LTSM_DISPLAY_SESSION_
 
 #include <list>
-#include <mutex>
 #include <chrono>
-#include <atomic>
+#include <thread>
 #include <memory>
 #include <vector>
 #include <utility>
+#include <optional>
 #include <filesystem>
 
 #include <boost/asio.hpp>
@@ -46,7 +46,7 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
 
-#define LTSM_SESSION_DISPLAY_VERSION 20260210
+#define LTSM_SESSION_DISPLAY_VERSION 20260821
 
 namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
@@ -66,7 +66,19 @@ namespace LTSM::DisplaySession {
         bp::child proc_;
         bp::ipstream proc_out_, proc_err_;
 
-      protected:
+
+      public:
+        SessionProcess() = default;
+        SessionProcess(SessionProcess &&) noexcept = default;
+        SessionProcess & operator=(SessionProcess &&) noexcept = default;
+
+        SessionProcess(const std::string & cmd, const Args&... args)
+            : filename_(std::filesystem::path(cmd).filename()) {
+            proc_ = bp::child(cmd, args..., bp::std_in < bp::null, bp::std_out > proc_out_, bp::std_err > proc_err_);
+        }
+
+        ~SessionProcess() = default;
+
         void waitAndLogging(void) noexcept {
             try {
                 std::string str_out{std::istreambuf_iterator<char>(proc_out_),
@@ -100,22 +112,6 @@ namespace LTSM::DisplaySession {
             }
         }
 
-      public:
-        SessionProcess() = default;
-        SessionProcess(SessionProcess &&) noexcept = default;
-        SessionProcess & operator=(SessionProcess &&) noexcept = default;
-
-        SessionProcess(const std::string & cmd, const Args&... args)
-            : filename_(std::filesystem::path(cmd).filename()) {
-            proc_ = bp::child(cmd, args..., bp::std_in < bp::null, bp::std_out > proc_out_, bp::std_err > proc_err_);
-        }
-
-        ~SessionProcess() {
-            if(! filename_.empty()) {
-                waitAndLogging();
-            }
-        }
-
         int pid(void) const {
             return proc_.id();
         }
@@ -125,35 +121,38 @@ namespace LTSM::DisplaySession {
         }
 
         bool isRunning(void) const {
-            return const_cast<bp::child&>(proc_).running();
+            return const_cast<bp::child &>(proc_).running();
         }
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
-    class X11Session : public ApplicationJsonConfig {
-        std::string dbus_address_;
-
-        std::string_view xauth_file_;
-        const XCB::AuthCookie mcookie_;
-
+    struct X11Display {
         int default_width_ = 0;
         int default_height_ = 0;
         int default_depth_ = 0;
         int display_num_ = -1;
 
+        std::string xauth_file_;
+        XCB::AuthCookie mcookie_;
+
+        SessionProcess<ArgsList> ps_xorg_;
+
+    };
+
+    struct X11SessionBase {
+        std::string dbus_address_;
+        SessionProcess<ArgsList, bp::environment> ps_sess_;
+    };
+
+    int startDisplaySession(int displayNum, const char* xauthFile, bool debug);
+
+    class X11Session : public ApplicationJsonConfig, protected X11Display, protected X11SessionBase {
       protected:
         DBusConnectionPtr dbus_conn_;
 
-        SessionProcess<ArgsList> ps_xorg_;
-        SessionProcess<ArgsList, bp::environment> ps_sess_;
-
-      protected:
-        bool startX11Display(void);
-        bool startX11Session(void);
-
       public:
-        X11Session(int displayNum, const char* xauthFile, bool debug);
+        X11Session(ApplicationJsonConfig&&, X11Display&&, X11SessionBase&&, bool debug);
 
         int displayNum(void) const {
             return display_num_;
@@ -166,24 +165,31 @@ namespace LTSM::DisplaySession {
         }
     };
 
-    class DBusAdaptor : public X11Session, public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
-        const std::chrono::system_clock::time_point started_;
+    class DBusAdaptor : public X11Session, public sdbus::AdaptorInterfaces<Session::Display_adaptor>, public std::enable_shared_from_this<DBusAdaptor> {
         const std::chrono::milliseconds dur_childs_{350};
+        const std::chrono::system_clock::time_point started_;
 
-        boost::asio::io_context ioc_;
-        boost::asio::signal_set signals_;
-        boost::asio::steady_timer timer_childs_;
+        boost::asio::cancellation_signal signals_cancel_;
+        boost::asio::cancellation_signal childs_cancel_;
+        boost::asio::strand<boost::asio::any_io_executor> childs_strand_;
 
-        std::mutex lock_childs_;
         std::list<bp::child> childs_;
 
-        void timerChildsAliveCheck(const boost::system::error_code &);
+        std::thread sdbus_job_;
+        std::once_flag stop_flag_;
+
+      protected:
+        boost::asio::awaitable<void> childsAliveChecker(void);
+        boost::asio::awaitable<void> signalsHandler(void);
 
         void stop(void) noexcept;
+        void stopContexts(void);
 
       public:
-        DBusAdaptor(int displayNum, const char* xauthFile, bool debug);
+        DBusAdaptor(const boost::asio::any_io_executor&, ApplicationJsonConfig&&, X11Display&&, X11SessionBase&&, bool debug);
         virtual ~DBusAdaptor();
+
+        boost::asio::awaitable<void> start(void);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
@@ -200,7 +206,6 @@ namespace LTSM::DisplaySession {
         void notifyWarning(const std::string& summary, const std::string& body) override;
         void notifyError(const std::string& summary, const std::string& body) override;
 
-        int start(void);
     };
 }
 
