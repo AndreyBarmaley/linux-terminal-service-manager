@@ -483,6 +483,8 @@ namespace LTSM::DisplaySession {
         auto socket_path = Tools::x11UnixPath(res.display_num_);
 
         co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
+        Application::info("{}: display: {}, pid: {}, socket: {}", NS_FuncNameV, displayNum, res.ps_xorg_.pid(), socket_path);
+
         co_return res;
     }
 
@@ -493,7 +495,13 @@ namespace LTSM::DisplaySession {
             std::string res;
 
             co_await waitFileTimeoutAwait(dbusPath, std::chrono::milliseconds(deadline_ms));
-            co_return co_await readFileAwait<std::string>(dbusPath);
+            auto dbusAddress = co_await readFileAwait<std::string>(dbusPath);
+            // remove endl
+            dbusAddress.erase(
+                std::find_if(dbusAddress.rbegin(), dbusAddress.rend(), [](auto ch) {
+                    return std::isprint(ch);
+                }).base(), dbusAddress.end());
+            co_return dbusAddress;
         }
 
         Application::error("{}: env not found: {}", NS_FuncNameV, "XDG_RUNTIME_DIR");
@@ -549,6 +557,8 @@ namespace LTSM::DisplaySession {
         const uint32_t deadline_ms = json.configGetInteger("xvfb:timeout", 3500);
         res.dbus_address_ = co_await waitSessionDbusAddressAwait(displayNum, deadline_ms);
 
+        Application::info("{}: display: {}, pid: {}, dbus address: `{}'", NS_FuncNameV, displayNum, res.ps_sess_.pid(), res.dbus_address_);
+
         co_return res;
     }
 
@@ -582,7 +592,6 @@ namespace LTSM::DisplaySession {
 
     DBusAdaptor::~DBusAdaptor() {
         unregisterAdaptor();
-        stop();
     }
 
     int32_t DBusAdaptor::getVersion(void) {
@@ -736,9 +745,9 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::stop(void) noexcept {
-        std::call_once(stop_flag_, [this]() {
+        std::call_once(stop_flag_, [self=shared_from_this()]() {
             try {
-                stopContexts();
+                self->stopContexts();
             } catch(const std::exception&) {
             }
         });
