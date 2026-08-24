@@ -108,7 +108,7 @@ namespace LTSM {
             }
 
             boost::asio::awaitable<void> rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay = false);
-            boost::asio::awaitable<bool> rfbHandshakeAwait(const SecurityInfo &);
+            boost::asio::awaitable<void> rfbHandshakeAwait(const SecurityInfo &);
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
 
           public:

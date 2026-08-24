@@ -278,7 +278,7 @@ namespace LTSM {
 
 #endif
 
-    asio::awaitable<bool> RFB::ClientDecoder::rfbHandshakeAwait(const SecurityInfo & sec) {
+    asio::awaitable<void> RFB::ClientDecoder::rfbHandshakeAwait(const SecurityInfo & sec) {
         co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
@@ -287,14 +287,14 @@ namespace LTSM {
 
         if(magick.empty()) {
             Application::error("{}: handshake failure", NS_FuncNameV);
-            co_return false;
+            throw rfb_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::Rfb, "{}: handshake version: {}", NS_FuncNameV, magick.substr(0, magick.size() - 1));
 
         if(magick != version) {
             Application::error("{}: handshake failure", NS_FuncNameV);
-            co_return false;
+            throw rfb_error(NS_FuncNameS);
         }
 
         // 12 bytes
@@ -308,7 +308,7 @@ namespace LTSM {
             auto len = co_await stream_->async_recv_be32();
             auto err = co_await stream_->async_recv_string(len);
             Application::error("{}: receive error: {}", NS_FuncNameV, err);
-            co_return false;
+            throw rfb_error(NS_FuncNameS);
         }
 
         auto security = co_await stream_->async_recv_buffer(counts);
@@ -331,7 +331,7 @@ namespace LTSM {
             const bool authInit = co_await authGssApiInitAwait(sec);
 
             if(! authInit) {
-                co_return false;
+                throw rfb_error(NS_FuncNameS);
             }
         } else
 #endif
@@ -342,7 +342,7 @@ namespace LTSM {
             const bool authInit = co_await authVenCryptInitAwait(sec);
 
             if(! authInit) {
-                co_return false;
+                throw rfb_error(NS_FuncNameS);
             }
         } else if(sec.authVnc &&
             std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_VNC; })) {
@@ -350,7 +350,7 @@ namespace LTSM {
 
             if(password.empty()) {
                 Application::error("{}: security vnc: password empty", NS_FuncNameV);
-                co_return false;
+                throw rfb_error(NS_FuncNameS);
             }
 
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "vncauth");
@@ -363,7 +363,7 @@ namespace LTSM {
             co_await stream_->async_send_byte(RFB::SECURITY_TYPE_NONE);
         } else {
             Application::error("{}: security vnc: not supported", NS_FuncNameV);
-            co_return false;
+            throw rfb_error(NS_FuncNameS);
         }
 
         const auto secReply = co_await stream_->async_recv_be32();
@@ -373,7 +373,7 @@ namespace LTSM {
             auto len = co_await stream_->async_recv_be32();
             auto err = co_await stream_->async_recv_string(len);
             Application::error("{}: receive error: {}", NS_FuncNameV, err);
-            co_return false;
+            throw rfb_error(NS_FuncNameS);
         }
 
         bool shared = false;
@@ -417,12 +417,12 @@ namespace LTSM {
 
             default:
                 Application::error("{}: unknown pixel format, bpp: {}, depth: {}", NS_FuncNameV, bpp, depth);
-                co_return false;
+                throw rfb_error(NS_FuncNameS);
         }
 
         if(! server_true_color_ || server_pf_.rmax() == 0 || server_pf_.gmax() == 0 || server_pf_.bmax() == 0) {
             Application::error("{}: unsupported pixel format", NS_FuncNameV);
-            co_return false;
+            throw rfb_error(NS_FuncNameS);
         }
 
         clientRecvPixelFormatEvent(server_pf_, XCB::Size(fbWidth, fbHeight));
@@ -431,7 +431,7 @@ namespace LTSM {
         auto nameDesktop = co_await stream_->async_recv_string(nameLen);
 
         Application::debug(DebugType::Rfb, "{}: server desktop name: {}", NS_FuncNameV, nameDesktop);
-        co_return true;
+        co_return;
     }
 
     bool RFB::ClientDecoder::isContinueUpdatesSupport(void) const {

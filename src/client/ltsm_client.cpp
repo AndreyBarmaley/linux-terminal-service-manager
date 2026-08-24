@@ -826,15 +826,16 @@ namespace LTSM {
 
             // rfb handshake
             try {
-                bool handshake = co_await rfbHandshakeAwait(rfbsec_);
-                if(! handshake) {
-                    co_return;
-                }
+                co_await rfbHandshakeAwait(rfbsec_);
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "rfbHandshakeAwait", ec.message(), ec.value());
                     asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 }
+                co_return;
+            } catch(const std::exception& err) {
+                Application::error("{}: exception: {}", "start", err.what());
+                asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 co_return;
             }
 

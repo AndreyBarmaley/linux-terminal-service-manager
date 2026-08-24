@@ -99,23 +99,9 @@ namespace LTSM {
             rfbsec.passwdFile = password;
             rfbsec.tlsAnonMode = true;
 
-            bool handshake = false;
-
             try {
-                handshake = co_await rfbHandshakeAwait(rfbsec);
-            } catch(const system::system_error& err) {
-                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                    Application::error("{}: system error: {}, code: {}", "rfbHandshakeAwait", ec.message(), ec.value());
-                }
-                co_return;
-            }
-
-            if(! handshake) {
-                co_return;
-            }
-
-            try {
-                co_await asio::co_spawn(ioc(), rfbMessagesLoopAwait(), asio::use_awaitable);
+                co_await rfbHandshakeAwait(rfbsec);
+                co_await rfbMessagesLoopAwait();
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
