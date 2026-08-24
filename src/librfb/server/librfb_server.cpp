@@ -607,6 +607,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::asioStop(void) {
+        Application::info("{}: !!!", NS_FuncNameV);
         channelsShutdown();
         if(stream_) {
             stream_->closeSocket();

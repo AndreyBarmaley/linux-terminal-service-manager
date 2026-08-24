@@ -140,7 +140,7 @@ namespace LTSM {
             virtual int rfbUserKeycode(uint32_t) const = 0;
 
             // x11 server events
-            virtual void serverHandshakeVersionEvent(void) {/* empty */}
+            virtual boost::asio::awaitable<void> connectorHandshakeVersionAwait(void) { co_return; }
             virtual void serverSecurityInitEvent(void) {/* empty */}
             virtual void serverConnectedEvent(void) {/* empty */}
             virtual void serverDisplayResizedEvent(const XCB::Size &) {/* empty */}

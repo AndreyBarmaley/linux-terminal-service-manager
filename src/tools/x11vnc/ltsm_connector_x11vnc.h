@@ -58,7 +58,8 @@ namespace LTSM {
             RFB::SecurityInfo rfbSecurityInfo(void) const override;
             int rfbUserKeycode(uint32_t) const override;
 
-            void serverHandshakeVersionEvent(void) override;
+            boost::asio::awaitable<void> connectorHandshakeVersionAwait(void) override;
+
             uint32_t frameRateOption(void) const override {
                 return 16;
             }

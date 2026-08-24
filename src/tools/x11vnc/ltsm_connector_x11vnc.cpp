@@ -150,14 +150,12 @@ namespace LTSM {
         co_return true;
     }
 
-    void Connector::X11VNC::serverHandshakeVersionEvent(void) {
-        asio::co_spawn(ioc_, [this]() -> asio::awaitable<void> {
-            bool success = co_await xcbConnect();
-            if(! success) {
-                Application::error("{}: {}", NS_FuncNameV, "xcb connect failed");
-                stop();
-            }
-        }, asio::detached);
+    asio::awaitable<void> Connector::X11VNC::connectorHandshakeVersionAwait(void) {
+        bool success = co_await xcbConnect();
+        if(! success) {
+            Application::error("{}: {}", NS_FuncNameV, "xcb connect failed");
+            stop();
+        }
     }
 
     void Connector::X11VNC::stop(void) noexcept {

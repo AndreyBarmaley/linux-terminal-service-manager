@@ -61,7 +61,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::stop(void) noexcept {
         std::call_once(stop_flag_, [this](){
-            asio::post(ioc(), std::bind(&ConnectorLtsm::asioStop, this));
+            asioStop();
         });
     }
 
@@ -106,8 +106,27 @@ namespace LTSM::Connector {
         return ret;
     }
 
-    asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(int newDisplay, uint32_t userUid) {
+    asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(std::string userName, uint32_t userUid) {
+        xcbDisableMessages(true);
+        co_await waitUpdateProcessAwait();
+
+        int oldDisplay = displayNum();
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
+
+        if(newDisplay < 0) {
+            Application::error("{}: {} failed", NS_FuncNameV, "busStartUserSession");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        if(newDisplay != oldDisplay) {
+            busShutdownDisplay(oldDisplay);
+            auto xauthFile = busDisplayAuthFile(newDisplay);
+
+            co_await xcbConnectAwait(newDisplay, xauthFile, *this);
+        }
+
         co_await xcbShmInit(userUid);
+
         xcbDisableMessages(false);
         const auto clientRegion = getClientRegion();
 
@@ -151,39 +170,25 @@ namespace LTSM::Connector {
             return;
         }
 
-        xcbDisableMessages(true);
-        // FIXME rfb strand? waitUpdateProcessAwait
-        waitUpdateProcess();
-
         Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
                             userName, userUid);
-        int oldDisplay = displayNum();
-        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
 
-        if(newDisplay < 0) {
-            Application::error("{}: {} failed", NS_FuncNameV, "user session request");
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        if(newDisplay != oldDisplay) {
-            // wait xcb old operations ended
-            std::this_thread::sleep_for(100ms);
-
-            if(! xcbConnect(newDisplay, *this)) {
-                Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
-                throw std::runtime_error(NS_FuncNameS);
+        asio::co_spawn(xcb_strand(), onLoginSuccessAwait(userName, userUid), [this](std::exception_ptr ptr){
+            if(ptr) {
+                try {
+                    std::rethrow_exception(ptr); 
+                } catch (const std::exception& err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    asio::post(ioc(), std::bind(&ConnectorLtsm::stop, this));
+                }
             }
-
-            busShutdownDisplay(oldDisplay);
-        }
-
-        asio::co_spawn(xcb_strand(), onLoginSuccessAwait(newDisplay, userUid), asio::detached);
+        });
     }
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            stop();
+            asio::post(ioc(), std::bind(&ConnectorLtsm::stop, this));
         }
     }
 
@@ -218,7 +223,7 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::serverHandshakeVersionEvent(void) {
+    asio::awaitable<void> ConnectorLtsm::connectorHandshakeVersionAwait(void) {
         // Xvfb: session request
         int screen = busStartLoginSession(getpid(), 24, remoteAddress(), "ltsm");
 
@@ -228,12 +233,9 @@ namespace LTSM::Connector {
         }
 
         Application::info("{}: login session request success, display: {}", NS_FuncNameV, screen);
+        auto xauthFile = busDisplayAuthFile(screen);
 
-        if(! xcbConnect(screen, *this)) {
-            Application::error("{}: xcb connect: failed", NS_FuncNameV);
-            throw proto_error(NS_FuncNameS);
-        }
-
+        co_await xcbConnectAwait(screen, xauthFile, *this);
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual) {
@@ -249,6 +251,8 @@ namespace LTSM::Connector {
         if(config().hasKey("vnc:keymap:file")) {
             loadKeymap(config().getString("vnc:keymap:file"));
         }
+
+        co_return;
     }
 
     std::forward_list<std::string> ConnectorLtsm::serverDisabledEncodings(void) const {

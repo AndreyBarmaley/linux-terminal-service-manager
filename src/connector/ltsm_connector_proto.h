@@ -95,7 +95,7 @@ namespace LTSM::Connector {
                                const std::string & server) override;
         void onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug) override;
 
-        void serverHandshakeVersionEvent(void) override;
+        boost::asio::awaitable<void> connectorHandshakeVersionAwait(void) override;
         void serverSecurityInitEvent(void) override;
         void serverConnectedEvent(void) override;
         void serverDisplayResizedEvent(const XCB::Size &) override;
@@ -115,7 +115,7 @@ namespace LTSM::Connector {
 
         boost::asio::awaitable<void> systemTransferFilesAwait(JsonObject jo);
         boost::asio::awaitable<void> transferFilesPartial(std::list<TupleFileSize>&&);
-        boost::asio::awaitable<void> onLoginSuccessAwait(int newDisplay, uint32_t userUid);
+        boost::asio::awaitable<void> onLoginSuccessAwait(std::string userName, uint32_t userUid);
         boost::asio::awaitable<void> onTransferAllowAwait(std::string filepath, std::string tmpfile, std::string dstdir);
 
       public:

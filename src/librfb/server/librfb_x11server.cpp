@@ -117,6 +117,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::rfbStop(void) {
+        Application::info("{}: !!!", NS_FuncNameV);
         xcbDisableMessages(true);
         ServerEncoder::asioStop();
 
@@ -317,7 +318,7 @@ namespace LTSM {
             co_await sendUpdateScreenAwait(damageRect);
 
             if(clientUpdateCursor_) {
-                asio::co_spawn(xcb_strand(), sendUpdateCursorAwait(), asio::detached);
+                co_await sendUpdateCursorAwait();
                 clientUpdateCursor_ = false;
             }
         }
@@ -368,7 +369,7 @@ namespace LTSM {
             co_return;
         }
 
-        serverHandshakeVersionEvent();
+        co_await connectorHandshakeVersionAwait();
 
         // RFB 6.1.2 security
         const auto secInfo = rfbSecurityInfo();

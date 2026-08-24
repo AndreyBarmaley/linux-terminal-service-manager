@@ -151,6 +151,8 @@ namespace LTSM::Connector {
         void xcbDisableMessages(bool f);
         bool xcbAllowMessages(void) const;
 
+        boost::asio::awaitable<void> xcbConnectAwait(int screen, const std::string & xauthFile, XCB::RootDisplay &);
+
       public:
         DBusProxy(const ConnectorType &, const std::filesystem::path & confile, bool debug);
         virtual ~DBusProxy();

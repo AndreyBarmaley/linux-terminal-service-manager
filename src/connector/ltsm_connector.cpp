@@ -39,6 +39,8 @@
 #include <systemd/sd-daemon.h>
 #endif
 
+#include <boost/asio/experimental/awaitable_operators.hpp>
+
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_connector.h"
@@ -210,8 +212,8 @@ namespace LTSM::Connector {
         if(! waitSocket) {
             Application::error("{}: checkUnixSocket failed, `{}'", NS_FuncNameV, socketPath);
             return false;
-        }
-
+         }
+ 
         try {
             xcbDisplay.displayReconnect(screen);
         } catch(const std::exception & err) {
@@ -221,6 +223,56 @@ namespace LTSM::Connector {
 
         xcbDisplayNum_ = screen;
         return true;
+    }
+
+    asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
+        if(std::filesystem::is_socket(file)) {
+            co_return;
+        }
+
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_pause{ex};
+
+        while(! std::filesystem::is_socket(file)) {
+            tm_pause.expires_after(100ms);
+            co_await tm_pause.async_wait(asio::use_awaitable);
+        }
+
+        asio::local::stream_protocol::socket sock{ex};
+        co_await sock.async_connect(asio::local::stream_protocol::endpoint{file.string()}, asio::use_awaitable);
+
+        co_return;
+    }
+
+    asio::awaitable<void> waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_deadline{ex, deadline_ms};
+
+        using namespace asio::experimental::awaitable_operators;
+        auto results = co_await (waitSocketConnectAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
+
+        if(results.index() == 0) {
+            tm_deadline.cancel();
+            co_return;
+        }
+
+        Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+        throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
+    }
+
+    asio::awaitable<void> DBusProxy::xcbConnectAwait(int screen, const std::string & xauthFile, XCB::RootDisplay & xcbDisplay) {
+        Application::info("{}: display: {}, xauthfile: {}", NS_FuncNameV, screen, xauthFile);
+
+        const uint32_t deadline_ms = configGetInteger("session:timeout", 5000);
+        auto socket_path = Tools::x11UnixPath(screen);
+
+        co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
+        setenv("XAUTHORITY", xauthFile.c_str(), 1);
+
+        xcbDisplay.displayReconnect(screen);
+
+        xcbDisplayNum_ = screen;
+        co_return;
     }
 
     int DBusProxy::displayNum(void) const {
@@ -379,7 +431,6 @@ namespace LTSM::Connector {
             conn->assignSocketFd(fd);
             connector = std::move(conn);
         }
-
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");

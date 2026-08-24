@@ -170,7 +170,7 @@ namespace LTSM::DisplaySession {
         }
     };
 */
-    asio::awaitable<void> waitSocketConnectAwait(std::filesystem::path file) {
+    asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
         if(std::filesystem::is_socket(file)) {
             co_return;
         }
@@ -189,7 +189,7 @@ namespace LTSM::DisplaySession {
         co_return;
     }
 
-    asio::awaitable<void> waitSocketTimeoutAwait(std::filesystem::path file, std::chrono::milliseconds deadline_ms) {
+    asio::awaitable<void> waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
         auto ex = co_await asio::this_coro::executor;
         asio::steady_timer tm_deadline{ex, deadline_ms};
 
