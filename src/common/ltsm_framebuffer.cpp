@@ -49,14 +49,25 @@ extern "C" {
 
 namespace LTSM {
     PixelFormat::PixelFormat(uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) : bitsPixel(bpp), bytePixel(bpp >> 3) {
-        redShift = std::countr_zero(rmask);
-        greenShift = std::countr_zero(gmask);
-        blueShift = std::countr_zero(bmask);
-        alphaShift = std::countr_zero(amask);
-        redMax = rmask >> redShift;
-        greenMax = gmask >> greenShift;
-        blueMax = bmask >> blueShift;
-        alphaMax = amask >> alphaShift;
+        if(rmask) {
+            redShift = std::countr_zero(rmask);
+            redMax = rmask >> redShift;
+        }
+
+        if(gmask) {
+            greenMax = gmask >> greenShift;
+            greenShift = std::countr_zero(gmask);
+        }
+
+        if(bmask) {
+            blueShift = std::countr_zero(bmask);
+            blueMax = bmask >> blueShift;
+        }
+
+        if(amask) {
+            alphaShift = std::countr_zero(amask);
+            alphaMax = amask >> alphaShift;
+        }
     }
 
     PixelFormat::PixelFormat(uint8_t bpp, uint16_t rmax, uint16_t gmax, uint16_t bmax, uint16_t amax,
