@@ -152,7 +152,7 @@ namespace LTSM::DisplaySession {
         DBusConnectionPtr dbus_conn_;
 
       public:
-        X11Session(ApplicationJsonConfig&&, X11Display&&, X11SessionBase&&, bool debug);
+        X11Session(ApplicationJsonConfig &&, X11Display &&, X11SessionBase &&, bool debug);
 
         int displayNum(void) const {
             return display_num_;
@@ -186,7 +186,7 @@ namespace LTSM::DisplaySession {
         void stopContexts(void);
 
       public:
-        DBusAdaptor(const boost::asio::any_io_executor&, ApplicationJsonConfig&&, X11Display&&, X11SessionBase&&, bool debug);
+        DBusAdaptor(const boost::asio::any_io_executor &, ApplicationJsonConfig &&, X11Display &&, X11SessionBase &&, bool debug);
         virtual ~DBusAdaptor();
 
         boost::asio::awaitable<void> start(void);

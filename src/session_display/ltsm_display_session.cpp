@@ -49,127 +49,127 @@ using namespace std::chrono_literals;
 using namespace boost;
 
 namespace LTSM::DisplaySession {
-/*
-    namespace bp2 = boost::process::v2;
+    /*
+        namespace bp2 = boost::process::v2;
 
-    template<typename... Args>
-    class SessionProcessV2 {
-        std::string filename_;
-                
-        std::optional<bp2::process> proc_;
-        std::optional<asio::readable_pipe> pipe_out_;
-        std::optional<asio::readable_pipe> pipe_err_;
-                
-      public:
-        SessionProcessV2() = default;
-                
-        SessionProcessV2(SessionProcessV2 &&) noexcept = default;
-        SessionProcessV2 & operator=(SessionProcessV2 &&) noexcept = default;
+        template<typename... Args>
+        class SessionProcessV2 {
+            std::string filename_;
 
-        SessionProcessV2(const asio::any_io_executor& ex, const std::string & cmd, const Args&... args)
-            : filename_(std::filesystem::path(cmd).filename()) {
-            pipe_out_.emplace(ex);
-            pipe_err_.emplace(ex);
+            std::optional<bp2::process> proc_;
+            std::optional<asio::readable_pipe> pipe_out_;
+            std::optional<asio::readable_pipe> pipe_err_;
 
-            std::vector<std::string> process_args = { args... };
-            bp2::process_stdio redirect{ .in = nullptr,  .out = *pipe_out_,  .err = *pipe_err_ };
+          public:
+            SessionProcessV2() = default;
 
-            auto exe_path = bp2::environment::find_executable(cmd);
+            SessionProcessV2(SessionProcessV2 &&) noexcept = default;
+            SessionProcessV2 & operator=(SessionProcessV2 &&) noexcept = default;
 
-            if(exe_path.empty()) {
-                exe_path = cmd;
-            }
-            
-            proc_.emplace(ex, exe_path, process_args, std::move(redirect));
-        }
-        
-        ~SessionProcessV2() = default;
+            SessionProcessV2(const asio::any_io_executor& ex, const std::string & cmd, const Args&... args)
+                : filename_(std::filesystem::path(cmd).filename()) {
+                pipe_out_.emplace(ex);
+                pipe_err_.emplace(ex);
 
-        asio::awaitable<void> waitAndLogging(void) noexcept {
-            try {
-                if(! proc_ || ! pipe_out_ || ! pipe_err_) {
-                    co_return;
+                std::vector<std::string> process_args = { args... };
+                bp2::process_stdio redirect{ .in = nullptr,  .out = *pipe_out_,  .err = *pipe_err_ };
+
+                auto exe_path = bp2::environment::find_executable(cmd);
+
+                if(exe_path.empty()) {
+                    exe_path = cmd;
                 }
-                    
-                std::string str_out;
-                std::string str_err;
-                
-                auto buffer_out = asio::dynamic_buffer(str_out);
-                auto buffer_err = asio::dynamic_buffer(str_err);
 
-                auto read_stdout = [&]() -> asio::awaitable<void> {
-                    try {
-                        co_await asio::async_read(*pipe_out_, buffer_out, asio::use_awaitable);
-                    } catch(const system::system_error& err) {
-                        if(err.code() != asio::error::eof) {
-                            throw;
+                proc_.emplace(ex, exe_path, process_args, std::move(redirect));
+            }
+
+            ~SessionProcessV2() = default;
+
+            asio::awaitable<void> waitAndLogging(void) noexcept {
+                try {
+                    if(! proc_ || ! pipe_out_ || ! pipe_err_) {
+                        co_return;
+                    }
+
+                    std::string str_out;
+                    std::string str_err;
+
+                    auto buffer_out = asio::dynamic_buffer(str_out);
+                    auto buffer_err = asio::dynamic_buffer(str_err);
+
+                    auto read_stdout = [&]() -> asio::awaitable<void> {
+                        try {
+                            co_await asio::async_read(*pipe_out_, buffer_out, asio::use_awaitable);
+                        } catch(const system::system_error& err) {
+                            if(err.code() != asio::error::eof) {
+                                throw;
+                            }
                         }
-                    }
-                    co_return;
-                };
+                        co_return;
+                    };
 
-                auto read_stderr = [&]() -> asio::awaitable<void> {
-                    try {
-                        co_await asio::async_read(*pipe_err_, buffer_err, asio::use_awaitable);
-                    } catch(const system::system_error& err) {
-                        if(err.code() != asio::error::eof) {
-                            throw;
+                    auto read_stderr = [&]() -> asio::awaitable<void> {
+                        try {
+                            co_await asio::async_read(*pipe_err_, buffer_err, asio::use_awaitable);
+                        } catch(const system::system_error& err) {
+                            if(err.code() != asio::error::eof) {
+                                throw;
+                            }
                         }
+                        co_return;
+                    };
+
+                    auto wait_proc = [&]() -> asio::awaitable<void> {
+                        auto [ec, exit_code] = co_await proc_->async_wait(asio::use_awaitable);
+                        if(ec) {
+                            throw system::system_error(ec);
+                        }
+                        co_return;
+                    };
+
+                    using namespace asio::experimental::awaitable_operators;
+                    co_await (read_stdout() && read_stderr() && wait_proc());
+
+                    auto log_dir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
+
+                    if(auto home = getenv("HOME")) {
+                        log_dir = std::filesystem::path{home} / ".ltsm" / "log";
                     }
-                    co_return;
-                };
 
-                auto wait_proc = [&]() -> asio::awaitable<void> {
-                    auto [ec, exit_code] = co_await proc_->async_wait(asio::use_awaitable);
-                    if(ec) {
-                        throw system::system_error(ec);
+                    if(! std::filesystem::is_directory(log_dir)) {
+                        std::filesystem::create_directories(log_dir);
                     }
-                    co_return;
-                };
 
-                using namespace asio::experimental::awaitable_operators;
-                co_await (read_stdout() && read_stderr() && wait_proc());
+                    auto log_file_out = log_dir / filename_;
+                    log_file_out.replace_extension(".out");
+                    std::ofstream(log_file_out) << str_out;
 
-                auto log_dir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
+                    auto log_file_err = log_dir / filename_;
+                    log_file_err.replace_extension(".err");
+                    std::ofstream(log_file_err) << str_err;
 
-                if(auto home = getenv("HOME")) {
-                    log_dir = std::filesystem::path{home} / ".ltsm" / "log";
+                } catch(const std::exception & err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 }
-                    
-                if(! std::filesystem::is_directory(log_dir)) {
-                    std::filesystem::create_directories(log_dir);
-                }
-
-                auto log_file_out = log_dir / filename_;
-                log_file_out.replace_extension(".out");
-                std::ofstream(log_file_out) << str_out;
-
-                auto log_file_err = log_dir / filename_;
-                log_file_err.replace_extension(".err");
-                std::ofstream(log_file_err) << str_err;
-
-            } catch(const std::exception & err) {
-                Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            }
-        }
-            
-        int pid(void) const {
-            return proc_ ? proc_->id() : -1;
-        }
-
-        bool isValid(void) const {
-            return proc_.has_value();
-        }
-
-        bool isRunning(void) const {
-            if(! proc_) {
-                return false;
             }
 
-            return const_cast<bp2::process &>(*proc_).running();
-        }
-    };
-*/
+            int pid(void) const {
+                return proc_ ? proc_->id() : -1;
+            }
+
+            bool isValid(void) const {
+                return proc_.has_value();
+            }
+
+            bool isRunning(void) const {
+                if(! proc_) {
+                    return false;
+                }
+
+                return const_cast<bp2::process &>(*proc_).running();
+            }
+        };
+    */
     asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
         if(std::filesystem::is_socket(file)) {
             co_return;
@@ -194,47 +194,49 @@ namespace LTSM::DisplaySession {
         asio::steady_timer tm_deadline{ex, deadline_ms};
 
         using namespace asio::experimental::awaitable_operators;
-        auto results = co_await (waitSocketConnectAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
+        auto results = co_await(waitSocketConnectAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
 
         if(results.index() == 0) {
             tm_deadline.cancel();
             co_return;
         }
-        
+
         Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
         throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
     }
 
-/*
-    template<typename Buffer>
-    asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
-        auto ex = co_await asio::this_coro::executor;
-        asio::stream_file stream_file{ex, file.string(), asio::stream_file::read_only};
+    /*
+        template<typename Buffer>
+        asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
+            auto ex = co_await asio::this_coro::executor;
+            asio::stream_file stream_file{ex, file.string(), asio::stream_file::read_only};
 
-        Buffer content;
-        auto buffer = asio::dynamic_buffer(content);
+            Buffer content;
+            auto buffer = asio::dynamic_buffer(content);
 
-        try {
-            co_await asio::async_read(stream_file, buffer, asio::use_awaitable);
-        } catch (const system::system_error& err) {
-            if (err.code() != asio::error::eof) {
-                throw;
+            try {
+                co_await asio::async_read(stream_file, buffer, asio::use_awaitable);
+            } catch (const system::system_error& err) {
+                if (err.code() != asio::error::eof) {
+                    throw;
+                }
             }
-        }
 
-        co_return content;
-    }
-*/
+            co_return content;
+        }
+    */
 
     template<typename Buffer>
     asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
         auto ex = co_await asio::this_coro::executor;
 
         int fd = open(file.c_str(), O_RDONLY | O_NONBLOCK);
+
         if(fd < 0) {
             if(errno == ENOENT) {
                 throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory), file.string());
             }
+
             throw std::system_error(errno,  std::generic_category(),  file.string());
         }
 
@@ -245,8 +247,8 @@ namespace LTSM::DisplaySession {
 
         try {
             co_await asio::async_read(sd, buffer, asio::use_awaitable);
-        } catch (const system::system_error& err) {
-            if (err.code() != asio::error::eof) {
+        } catch(const system::system_error& err) {
+            if(err.code() != asio::error::eof) {
                 throw;
             }
         }
@@ -263,7 +265,7 @@ namespace LTSM::DisplaySession {
         asio::steady_timer tm_pause{ex};
 
         while(! std::filesystem::is_regular_file(file) ||
-            0 == std::filesystem::file_size(file)) {
+              0 == std::filesystem::file_size(file)) {
             tm_pause.expires_after(100ms);
             co_await tm_pause.async_wait(asio::use_awaitable);
         }
@@ -276,13 +278,13 @@ namespace LTSM::DisplaySession {
         asio::steady_timer tm_deadline{ex, deadline_ms};
 
         using namespace asio::experimental::awaitable_operators;
-        auto results = co_await (waitFileAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
+        auto results = co_await(waitFileAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
 
         if(results.index() == 0) {
             tm_deadline.cancel();
             co_return;
         }
-        
+
         Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
         throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
     }
@@ -387,27 +389,27 @@ namespace LTSM::DisplaySession {
         res.xauth_file_ = xauthFile;
         res.display_num_ = displayNum;
         res.mcookie_ = co_await readXauthFileAwait(xauthFile, displayNum);
-    
+
         res.default_width_ = json.configGetInteger("default:width", 1280);
         res.default_height_ = json.configGetInteger("default:height", 1024);
         res.default_depth_ = json.configGetInteger("default:depth", 24);
 
         switch(res.default_depth_) {
             case 32:
-            // xorg supported: 30, 24, 16, 15, 8
-            res.default_depth_ = 30;
-            break;
+                // xorg supported: 30, 24, 16, 15, 8
+                res.default_depth_ = 30;
+                break;
 
             case 30:
             case 24:
             case 16:
             case 15:
-            break;
+                break;
 
             default:
-            Application::warning("{}: {} failed: {}", NS_FuncNameV, "default:depth", res.default_depth_);
-            res.default_depth_ = 24;
-            break;
+                Application::warning("{}: {} failed: {}", NS_FuncNameV, "default:depth", res.default_depth_);
+                res.default_depth_ = 24;
+                break;
         }
 
         std::string xorgBin;
@@ -498,9 +500,9 @@ namespace LTSM::DisplaySession {
             auto dbusAddress = co_await readFileAwait<std::string>(dbusPath);
             // remove endl
             dbusAddress.erase(
-                std::find_if(dbusAddress.rbegin(), dbusAddress.rend(), [](auto ch) {
-                    return std::isprint(ch);
-                }).base(), dbusAddress.end());
+            std::find_if(dbusAddress.rbegin(), dbusAddress.rend(), [](auto ch) {
+                return std::isprint(ch);
+            }).base(), dbusAddress.end());
             co_return dbusAddress;
         }
 
@@ -566,6 +568,7 @@ namespace LTSM::DisplaySession {
         : ApplicationJsonConfig(std::move(config)), X11Display(std::move(xorg)), X11SessionBase(std::move(sess)) {
 
         Application::setDebugTarget(DebugTarget::Syslog, "ltsm_session_display");
+
         if(debug) {
             Application::setDebugLevel(DebugLevel::Debug);
         }
@@ -587,7 +590,7 @@ namespace LTSM::DisplaySession {
 #else
           AdaptorInterfaces(*dbus_conn_, dbus_session_display_path),
 #endif
-          started_(std::chrono::system_clock::now()), childs_strand_{ex} {
+          started_(std::chrono::system_clock::now()), childs_strand_ {ex} {
         registerAdaptor();
     }
 
@@ -635,7 +638,7 @@ namespace LTSM::DisplaySession {
             bp::child proc(cmd, args, envs);
             auto pid = proc.id();
 
-            asio::post(childs_strand_, [this, child=std::move(proc)]() mutable {
+            asio::post(childs_strand_, [this, child = std::move(proc)]() mutable {
                 childs_.emplace_back(std::move(child));
             });
             return pid;
@@ -746,10 +749,10 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::stop(void) noexcept {
-        std::call_once(stop_flag_, [self=shared_from_this()]() {
+        std::call_once(stop_flag_, [self = shared_from_this()]() {
             try {
                 self->stopContexts();
-            } catch(const std::exception&) {
+            } catch(const std::exception &) {
             }
         });
     }
@@ -771,7 +774,7 @@ namespace LTSM::DisplaySession {
         ps_xorg_.waitAndLogging();
         ps_sess_.waitAndLogging();
 
-        for(auto & ps: childs_) {
+        for(auto & ps : childs_) {
             if(ps.valid() && ps.running()) {
                 kill(ps.id(), SIGTERM);
                 ps.wait();
@@ -794,6 +797,7 @@ namespace LTSM::DisplaySession {
         try {
             for(;;) {
                 int signal = co_await signals.async_wait(asio::use_awaitable);
+
                 if(signal == SIGTERM || signal == SIGINT) {
                     asio::post(ex, std::bind(&DBusAdaptor::stop, this));
                     co_return;
@@ -815,8 +819,8 @@ namespace LTSM::DisplaySession {
         asio::co_spawn(ex, signalsHandler(), asio::bind_cancellation_slot(signals_cancel_.slot(), asio::detached));
         asio::co_spawn(ex, childsAliveChecker(), asio::bind_cancellation_slot(childs_cancel_.slot(), asio::detached));
 
-        sdbus_job_ = std::thread([self=shared_from_this()]() {
-           try {
+        sdbus_job_ = std::thread([self = shared_from_this()]() {
+            try {
                 self->dbus_conn_->enterEventLoop();
             } catch(const sdbus::Error& err) {
                 Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
@@ -836,7 +840,7 @@ namespace LTSM::DisplaySession {
             auto ex = co_await asio::this_coro::executor;
             auto ptr = std::make_shared<DBusAdaptor>(ex, std::move(json), std::move(starter), std::move(session), debug);
 
-            asio::co_spawn(ex, [adaptor=std::move(ptr)]() -> asio::awaitable<void> {
+            asio::co_spawn(ex, [adaptor = std::move(ptr)]() -> asio::awaitable<void> {
                 co_await adaptor->start();
                 co_return;
             }, asio::detached);
