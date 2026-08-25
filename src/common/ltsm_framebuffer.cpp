@@ -55,8 +55,8 @@ namespace LTSM {
         }
 
         if(gmask) {
-            greenMax = gmask >> greenShift;
             greenShift = std::countr_zero(gmask);
+            greenMax = gmask >> greenShift;
         }
 
         if(bmask) {
