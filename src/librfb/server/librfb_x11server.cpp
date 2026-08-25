@@ -117,7 +117,6 @@ namespace LTSM {
     }
 
     void RFB::X11Server::rfbStop(void) {
-        Application::info("{}: !!!", NS_FuncNameV);
         xcbDisableMessages(true);
         ServerEncoder::asioStop();
 
