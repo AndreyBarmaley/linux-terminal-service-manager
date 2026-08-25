@@ -565,8 +565,9 @@ namespace LTSM::DisplaySession {
     X11Session::X11Session(ApplicationJsonConfig&& config, X11Display&& xorg, X11SessionBase&& sess, bool debug)
         : ApplicationJsonConfig(std::move(config)), X11Display(std::move(xorg)), X11SessionBase(std::move(sess)) {
 
+        Application::setDebugTarget(DebugTarget::Syslog, "ltsm_session_display");
         if(debug) {
-            setDebugLevel(DebugLevel::Debug);
+            Application::setDebugLevel(DebugLevel::Debug);
         }
 
         setenv("DBUS_SESSION_BUS_ADDRESS", dbus_address_.c_str(), 1);
