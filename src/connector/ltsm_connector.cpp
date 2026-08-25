@@ -447,6 +447,12 @@ namespace LTSM::Connector {
 
 using namespace LTSM;
 
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_connector.log";
+}
+#endif
+
 int main(int argc, const char** argv) {
     try {
         return Connector::startService(argc, argv);

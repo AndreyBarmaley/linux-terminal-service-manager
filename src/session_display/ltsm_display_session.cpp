@@ -50,7 +50,7 @@ using namespace boost;
 
 namespace LTSM::DisplaySession {
     /*
-        namespace bp2 = boost::process::v2;
+        namespace bp2 = process::v2;
 
         template<typename... Args>
         class SessionProcessV2 {
@@ -583,14 +583,14 @@ namespace LTSM::DisplaySession {
     }
 
     // DBusAdaptor
-    DBusAdaptor::DBusAdaptor(const boost::asio::any_io_executor& ex, ApplicationJsonConfig&& config, X11Display&& xorg, X11SessionBase&& sess, bool debug)
+    DBusAdaptor::DBusAdaptor(asio::io_context& ioc, ApplicationJsonConfig&& config, X11Display&& xorg, X11SessionBase&& sess, bool debug)
         : X11Session(std::move(config), std::move(xorg), std::move(sess), debug),
 #ifdef SDBUS_2_0_API
           AdaptorInterfaces(*dbus_conn_, sdbus::ObjectPath {dbus_session_display_path}),
 #else
           AdaptorInterfaces(*dbus_conn_, dbus_session_display_path),
 #endif
-          started_(std::chrono::system_clock::now()), childs_strand_ {ex} {
+          started_(std::chrono::system_clock::now()), ioc_ {ioc}, childs_strand_ {asio::make_strand(ioc)} {
         registerAdaptor();
     }
 
@@ -604,7 +604,9 @@ namespace LTSM::DisplaySession {
 
     void DBusAdaptor::serviceShutdown(void) {
         Application::debug(DebugType::Dbus, "{}: pid: {}", NS_FuncNameV, getpid());
-        stop();
+        asio::post(ioc_, [self = shared_from_this()]() {
+            self->stop();
+        });
     }
 
     void DBusAdaptor::setDebug(const std::string & level) {
@@ -728,14 +730,18 @@ namespace LTSM::DisplaySession {
                 // xorg stopped
                 if(ps_xorg_.isValid() && ! ps_xorg_.isRunning()) {
                     Application::warning("{}: {} exited, pid: {}, session shutdown", NS_FuncNameV, "xorg", ps_xorg_.pid());
-                    asio::post(ex, std::bind(&DBusAdaptor::stop, this));
+                    asio::post(ioc_, [self = shared_from_this()]() {
+                        self->stop();
+                    });
                     co_return;
                 }
 
                 // session stopped
                 if(ps_sess_.isValid() && ! ps_sess_.isRunning()) {
                     Application::warning("{}: {} exited, pid: {}, session shutdown", NS_FuncNameV, "session", ps_sess_.pid());
-                    asio::post(ex, std::bind(&DBusAdaptor::stop, this));
+                    asio::post(ioc_, [self = shared_from_this()]() {
+                        self->stop();
+                    });
                     co_return;
                 }
 
@@ -749,9 +755,9 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::stop(void) noexcept {
-        std::call_once(stop_flag_, [self = shared_from_this()]() {
+        std::call_once(stop_flag_, [this]() {
             try {
-                self->stopContexts();
+                stopContexts();
             } catch(const std::exception &) {
             }
         });
@@ -791,15 +797,16 @@ namespace LTSM::DisplaySession {
     }
 
     asio::awaitable<void> DBusAdaptor::signalsHandler(void) {
-        auto ex = co_await asio::this_coro::executor;
-        asio::signal_set signals{ex, SIGTERM, SIGINT};
+        asio::signal_set signals{ioc_, SIGTERM, SIGINT};
 
         try {
             for(;;) {
                 int signal = co_await signals.async_wait(asio::use_awaitable);
 
                 if(signal == SIGTERM || signal == SIGINT) {
-                    asio::post(ex, std::bind(&DBusAdaptor::stop, this));
+                    asio::post(ioc_, [self = shared_from_this()]() {
+                        self->stop();
+                    });
                     co_return;
                 }
             }
@@ -815,21 +822,31 @@ namespace LTSM::DisplaySession {
                           getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
 
         auto ex = co_await asio::this_coro::executor;
+        auto self = shared_from_this();
 
-        asio::co_spawn(ex, signalsHandler(), asio::bind_cancellation_slot(signals_cancel_.slot(), asio::detached));
-        asio::co_spawn(ex, childsAliveChecker(), asio::bind_cancellation_slot(childs_cancel_.slot(), asio::detached));
+        asio::co_spawn(ex, [self]() -> asio::awaitable<void> {
+            co_await self->signalsHandler();
+            co_return;
+        }, asio::bind_cancellation_slot(signals_cancel_.slot(), asio::detached));
 
-        sdbus_job_ = std::thread([self = shared_from_this()]() {
+        asio::co_spawn(ex, [self]() -> asio::awaitable<void> {
+            co_await self->childsAliveChecker();
+            co_return;
+        }, asio::bind_cancellation_slot(childs_cancel_.slot(), asio::detached));
+
+        sdbus_job_ = std::thread([this, self]() {
             try {
-                self->dbus_conn_->enterEventLoop();
+                dbus_conn_->enterEventLoop();
             } catch(const sdbus::Error& err) {
                 Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
-                self->stop();
+                asio::post(ioc_, [self = shared_from_this()]() {
+                    self->stop();
+                });
             }
         });
     }
 
-    asio::awaitable<void> startDisplaySessionAwait(int displayNum, const char* xauthFile, bool debug) {
+    asio::awaitable<void> startDisplaySessionAwait(asio::io_context& ioc, int displayNum, const char* xauthFile, bool debug) {
         try {
             auto json = ApplicationJsonConfig("ltsm_session_display");
             auto starter = co_await startDisplayAwait(json, displayNum, xauthFile);
@@ -837,13 +854,8 @@ namespace LTSM::DisplaySession {
             clearSessionDbusAddress(displayNum);
             auto session = co_await startSessionAwait(json, displayNum);
 
-            auto ex = co_await asio::this_coro::executor;
-            auto ptr = std::make_shared<DBusAdaptor>(ex, std::move(json), std::move(starter), std::move(session), debug);
-
-            asio::co_spawn(ex, [adaptor = std::move(ptr)]() -> asio::awaitable<void> {
-                co_await adaptor->start();
-                co_return;
-            }, asio::detached);
+            auto adaptor = std::make_shared<DBusAdaptor>(ioc, std::move(json), std::move(starter), std::move(session), debug);
+            co_await adaptor->start();
 
         } catch(const std::exception& err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -852,13 +864,19 @@ namespace LTSM::DisplaySession {
 
     int startDisplaySession(int displayNum, const char* xauthFile, bool debug) {
         asio::io_context ioc;
-        asio::co_spawn(ioc, startDisplaySessionAwait(displayNum, xauthFile, debug), asio::detached);
+        asio::co_spawn(ioc, startDisplaySessionAwait(ioc, displayNum, xauthFile, debug), asio::detached);
         ioc.run();
         return EXIT_SUCCESS;
     }
 }
 
 using namespace LTSM;
+
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_display.log";
+}
+#endif
 
 int main(int argc, char** argv) {
     const char* displayAddr = nullptr;

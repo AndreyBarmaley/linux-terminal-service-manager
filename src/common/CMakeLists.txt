@@ -13,6 +13,13 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     target_link_options(${CUR_TARGET} PRIVATE --coverage)
 endif()
 
+if(LTSM_BUILD_SANITIZE)
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+    target_compile_options(${CUR_TARGET} PRIVATE -fsanitize=address)
+    target_link_options(${CUR_TARGET} PRIVATE -fsanitize=address)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_SANITIZE)
+endif()
+
 target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)
 
 find_package(spdlog CONFIG REQUIRED)

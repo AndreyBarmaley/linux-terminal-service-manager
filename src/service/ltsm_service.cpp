@@ -3180,6 +3180,12 @@ namespace LTSM::Manager {
     }
 }
 
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_service.log";
+}
+#endif
+
 int main(int argc, const char** argv) {
     int res = 0;
 

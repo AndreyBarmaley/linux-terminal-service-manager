@@ -1687,6 +1687,12 @@ namespace LTSM {
 
 using namespace LTSM;
 
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_client.log";
+}
+#endif
+
 int main(int argc, char** argv)
 {
 #ifdef __WIN32__

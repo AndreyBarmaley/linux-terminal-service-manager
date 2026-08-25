@@ -66,7 +66,6 @@ namespace LTSM::DisplaySession {
         bp::child proc_;
         bp::ipstream proc_out_, proc_err_;
 
-
       public:
         SessionProcess() = default;
         SessionProcess(SessionProcess &&) noexcept = default;
@@ -169,9 +168,10 @@ namespace LTSM::DisplaySession {
         const std::chrono::milliseconds dur_childs_{350};
         const std::chrono::system_clock::time_point started_;
 
+        boost::asio::io_context & ioc_;
         boost::asio::cancellation_signal signals_cancel_;
         boost::asio::cancellation_signal childs_cancel_;
-        boost::asio::strand<boost::asio::any_io_executor> childs_strand_;
+        boost::asio::strand<boost::asio::io_context::executor_type> childs_strand_;
 
         std::list<bp::child> childs_;
 
@@ -186,7 +186,7 @@ namespace LTSM::DisplaySession {
         void stopContexts(void);
 
       public:
-        DBusAdaptor(const boost::asio::any_io_executor &, ApplicationJsonConfig &&, X11Display &&, X11SessionBase &&, bool debug);
+        DBusAdaptor(boost::asio::io_context &, ApplicationJsonConfig &&, X11Display &&, X11SessionBase &&, bool debug);
         virtual ~DBusAdaptor();
 
         boost::asio::awaitable<void> start(void);
