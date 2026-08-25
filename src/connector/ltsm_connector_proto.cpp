@@ -89,7 +89,7 @@ namespace LTSM::Connector {
         auto ret = prom.get_future();
         if(1 < concurency()) {
             // job background
-            boost::asio::post(const_cast<ConnectorLtsm&>(*this).ioc(), [this, promise=std::move(prom), job=std::move(func), reg]() mutable {
+            boost::asio::post(const_cast<ConnectorLtsm&>(*this).ioc(), [promise=std::move(prom), job=std::move(func), reg]() mutable {
                 try {
                     promise.set_value(job(reg));
                 } catch(const std::exception&) {

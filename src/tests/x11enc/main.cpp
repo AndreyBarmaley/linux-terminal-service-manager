@@ -58,6 +58,8 @@ class FakeStream : public RFB::EncoderStream {
         pf = PixelFormat(xcb->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
     }
 
+    virtual ~FakeStream() = default;
+
     uint16_t encodingThreads(void) const override {
         return threads;
     }
@@ -67,7 +69,7 @@ class FakeStream : public RFB::EncoderStream {
         auto ret = prom.get_future();
         if(1 < threads) {
             // job background
-            boost::asio::post(const_cast<FakeStream&>(*this).thread_pool.get_executor(), [this, promise=std::move(prom), job=std::move(func), reg]() mutable {
+            boost::asio::post(const_cast<FakeStream&>(*this).thread_pool.get_executor(), [promise=std::move(prom), job=std::move(func), reg]() mutable {
                 promise.set_value(job(reg));
             });
         } else {

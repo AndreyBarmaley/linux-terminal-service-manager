@@ -69,9 +69,6 @@ namespace LTSM {
             uint16_t clipLocalTypes_ = 0;
             uint16_t clipRemoteTypes_ = 0;
 
-            std::chrono::time_point<std::chrono::steady_clock> damage_tp_;
-            bool damage_is_{false};
-
           protected:
             boost::asio::awaitable<void> rfbStart(void);
             void rfbStop(void);

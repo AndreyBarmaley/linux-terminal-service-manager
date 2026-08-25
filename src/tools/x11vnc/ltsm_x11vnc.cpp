@@ -198,7 +198,7 @@ namespace LTSM {
             return 0;
         }
 
-        if(bool inetMode = configGetBoolean("inetd")) {
+        if(configGetBoolean("inetd")) {
             asio::co_spawn(ioc_, startInetd(), asio::detached);
         } else {
             const uint16_t port = configGetInteger("port");

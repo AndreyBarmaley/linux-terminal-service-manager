@@ -129,7 +129,7 @@ TEST(XCBRegionTest, DivisionMethods) {
     Region r(0, 0, 100, 100);
     Size blockSize(50, 50);
 
-    auto> blocks = r.divideBlocks(blockSize);
+    auto blocks = r.divideBlocks(blockSize);
     EXPECT_FALSE(blocks.empty());
 
     auto counts = r.divideCounts(2, 2);

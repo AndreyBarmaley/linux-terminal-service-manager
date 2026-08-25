@@ -33,7 +33,7 @@ namespace LTSM {
     namespace Connector {
         /* Connector::VNC */
         class X11VNC : public RFB::X11Server {
-            boost::asio::io_context& ioc_;
+            [[maybe_unused]] boost::asio::io_context& ioc_;
             std::unordered_map<uint32_t, int> keymap_;
 
             const JsonObject* config_ = nullptr;
