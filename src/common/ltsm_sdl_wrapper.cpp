@@ -127,7 +127,11 @@ namespace LTSM {
         SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND);
 
         if(window_sz_ == render_sz_) {
+#if SDL_VERSION_ATLEAST(2, 24, 0)
             SDL_ResetHint(SDL_HINT_RENDER_SCALE_QUALITY);
+#else
+            SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, nullptr);
+#endif
         } else {
             SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
         }
