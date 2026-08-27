@@ -28,7 +28,7 @@
 #include <atomic>
 #include <mutex>
 
-#include <boost/lockfree/stack.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 
 #include "librfb_server.h"
 
@@ -46,7 +46,7 @@ namespace LTSM {
             boost::asio::steady_timer force_update_;
             boost::asio::steady_timer clipboard_ready_;
 
-	    boost::lockfree::stack<xcb_rectangle_t, boost::lockfree::capacity<32>> damagePool_;
+	    boost::lockfree::spsc_queue<xcb_rectangle_t, boost::lockfree::capacity<32>> damagePool_;
             std::chrono::time_point<std::chrono::steady_clock> frameTimePoint_;
 
             std::atomic<xcb_rectangle_t> serverRegion_;

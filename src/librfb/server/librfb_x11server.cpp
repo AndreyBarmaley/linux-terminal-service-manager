@@ -51,7 +51,16 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
-        damagePool_.push(rt);
+        if(damagePool_.write_available()) {
+            damagePool_.push(rt);
+        } else {
+            Application::warning("{}: damage pool is full, shrinking...", NS_FuncNameV);
+            XCB::Region res;
+            damagePool_.consume_all([&res](const auto& rt) {
+                res.join(rt.x, rt.y, rt.width, rt.height);
+            });
+            damagePool_.push(xcb_rectangle_t{res.x, res.y, res.width, res.height});
+        }
     }
 
     XCB::Region RFB::X11Server::joinAllDamages(void) {
