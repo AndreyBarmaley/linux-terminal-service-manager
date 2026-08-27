@@ -48,7 +48,7 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
 
-#define LTSM_SESSION_DISPLAY_VERSION 20260821
+#define LTSM_SESSION_DISPLAY_VERSION 20260827
 namespace bp = boost::process::v2;
 
 namespace LTSM::DisplaySession {

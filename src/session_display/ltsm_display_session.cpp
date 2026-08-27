@@ -106,27 +106,6 @@ namespace LTSM::DisplaySession {
         throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
     }
 
-    /*
-        template<typename Buffer>
-        asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
-            auto ex = co_await asio::this_coro::executor;
-            asio::stream_file stream_file{ex, file.string(), asio::stream_file::read_only};
-
-            Buffer content;
-            auto buffer = asio::dynamic_buffer(content);
-
-            try {
-                co_await asio::async_read(stream_file, buffer, asio::use_awaitable);
-            } catch (const system::system_error& err) {
-                if (err.code() != asio::error::eof) {
-                    throw;
-                }
-            }
-
-            co_return content;
-        }
-    */
-
     template<typename Buffer>
     asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
         auto ex = co_await asio::this_coro::executor;
@@ -388,7 +367,8 @@ namespace LTSM::DisplaySession {
         auto socket_path = Tools::x11UnixPath(res.display_num_);
 
         co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
-        Application::info("{}: display: {}, pid: {}, socket: {}", NS_FuncNameV, displayNum, res.ps_xorg_->id(), socket_path);
+        Application::info("{}: cmd: {}, pid: {}, display: {}, socket: {}",
+                NS_FuncNameV, xorgBin, res.ps_xorg_->id(), displayNum, socket_path);
 
         co_return res;
     }
@@ -468,7 +448,8 @@ namespace LTSM::DisplaySession {
         const uint32_t deadline_ms = json.configGetInteger("xvfb:timeout", 3500);
         res.dbus_address_ = co_await waitSessionDbusAddressAwait(displayNum, deadline_ms);
 
-        Application::info("{}: display: {}, pid: {}, dbus address: `{}'", NS_FuncNameV, displayNum, res.ps_sess_->id(), res.dbus_address_);
+        Application::info("{}: cmd: {}, pid: {}, display: {}, dbus address: `{}'",
+                NS_FuncNameV, sessionBin, res.ps_sess_->id(), displayNum, res.dbus_address_);
 
         co_return res;
     }
@@ -551,9 +532,11 @@ namespace LTSM::DisplaySession {
         try {
             auto proc = bp::popen(ioc_, cmd, args, bp::process_environment{p_envs});
             auto pid = proc.id();
+
+            Application::debug(DebugType::Dbus, "{}: running cmd: {}, pid: {}", NS_FuncNameV, cmd, pid);
             child_pids_.insert(pid);
 
-            asio::co_spawn(ioc_, [self=shared_from_this(),proc=std::move(proc),pid]() mutable -> asio::awaitable<void> {
+            asio::co_spawn(ioc_, [self=shared_from_this(),proc=std::move(proc),cmd,pid]() mutable -> asio::awaitable<void> {
                 StdoutBuf res;
 
                 try {
@@ -568,6 +551,8 @@ namespace LTSM::DisplaySession {
                 }
 
                 int exit_code = co_await proc.async_wait(asio::use_awaitable);
+                Application::debug(DebugType::Dbus, "{}: {} exited, pid: {}, code: {}", "WaitProcess", cmd, proc.id(), exit_code);
+
                 self->child_pids_.erase(pid);
                 self->emitRunSessionCommandAsyncComplete(pid, true, exit_code, std::move(res));
 
@@ -599,6 +584,8 @@ namespace LTSM::DisplaySession {
 
         try {
             auto proc = bp::popen(ioc_, cmd, args, bp::process_environment{p_envs});
+
+            Application::debug(DebugType::Dbus, "{}: running cmd: {}, pid: {}", NS_FuncNameV, cmd, proc.id());
             StdoutBuf res;
 
             system::error_code ec;
@@ -609,6 +596,8 @@ namespace LTSM::DisplaySession {
             }
         
             int exit_code = proc.wait();
+            Application::debug(DebugType::Dbus, "{}: {} exited, pid: {}, code: {}", "WaitProcess", cmd, proc.id(), exit_code);
+
             return StatusStdout{exit_code, std::move(res)};
 
         } catch(const std::exception & err) {
@@ -625,7 +614,7 @@ namespace LTSM::DisplaySession {
 
     void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
         Application::debug(DebugType::Dbus, "{}: layout: {}", NS_FuncNameV, layout);
-        runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
+        [[maybe_unused]] auto stdout = runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
     }
 
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
@@ -700,10 +689,25 @@ namespace LTSM::DisplaySession {
         Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
                           getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
 
-        auto ex = co_await asio::this_coro::executor;
         auto self = shared_from_this();
 
-        asio::co_spawn(ex, [self]() -> asio::awaitable<void> {
+        asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
+            auto& proc = self->ps_xorg_;
+            co_await proc->async_wait(asio::use_awaitable);
+            Application::info("{}: {} exited, pid: {}, service shutdown...", "WaitProcess", "xorg", proc->id());
+            self->stop();
+            co_return;
+        }, asio::detached);
+
+        asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
+            auto& proc = self->ps_sess_;
+            co_await proc->async_wait(asio::use_awaitable);
+            Application::info("{}: {} exited, pid: {}, service shutdown...", "WaitProcess", "session", proc->id());
+            self->stop();
+            co_return;
+        }, asio::detached);
+
+        asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
             co_await self->signalsHandler();
             co_return;
         }, asio::bind_cancellation_slot(signals_cancel_.slot(), asio::detached));
@@ -716,6 +720,8 @@ namespace LTSM::DisplaySession {
                 self->stop();
             }
         });
+
+        co_return;
     }
 
     asio::awaitable<void> startDisplaySessionAwait(asio::io_context& ioc, int displayNum, const char* xauthFile, bool debug) {
@@ -724,23 +730,9 @@ namespace LTSM::DisplaySession {
             auto starter = co_await startDisplayAwait(json, displayNum, xauthFile);
 
             clearSessionDbusAddress(displayNum);
+
             auto session = co_await startSessionAwait(json, displayNum);
-
             auto adaptor = std::make_shared<DBusAdaptor>(ioc, std::move(json), std::move(starter), std::move(session), debug);
-
-            asio::co_spawn(ioc, [proc=starter.ps_xorg_, adaptor]() -> asio::awaitable<void> {
-                co_await proc->async_wait(asio::use_awaitable);
-                Application::warning("{}: {} exited, pid: {}, session shutdown...", "WaitProcess", "xorg", proc->id());
-                adaptor->stop();
-                co_return;
-            }, asio::detached);
-
-            asio::co_spawn(ioc, [proc=session.ps_sess_, adaptor]() -> asio::awaitable<void> {
-                co_await proc->async_wait(asio::use_awaitable);
-                Application::warning("{}: {} exited, pid: {}, session shutdown...", "WaitProcess", "session", proc->id());
-                adaptor->stop();
-                co_return;
-            }, asio::detached);
 
             co_await adaptor->start();
 
