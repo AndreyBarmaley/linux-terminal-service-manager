@@ -30,6 +30,7 @@
 #include <filesystem>
 #include <string_view>
 #include <forward_list>
+#include <unordered_set>
 
 #include <boost/asio.hpp>
 
@@ -379,7 +380,7 @@ namespace LTSM::Manager {
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::list<pid_t> childs_;
+        std::unordered_set<int> child_pids_;
         std::atomic<bool> loginsDisable = false;
 
 #ifdef LTSM_WITH_AUDIT

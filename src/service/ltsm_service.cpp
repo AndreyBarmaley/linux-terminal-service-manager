@@ -41,7 +41,6 @@
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
-#include <unordered_set>
 
 #ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
@@ -1094,13 +1093,13 @@ namespace LTSM::Manager {
         timer_ended_.cancel();
         timer_alive_.cancel();
 
-        for(const auto & pid: childs_) {
+        for(const auto & pid: child_pids_) {
             kill(pid, SIGTERM);
         }
-        for(const auto & pid: childs_) {
+        for(const auto & pid: child_pids_) {
             waitpid(pid, nullptr, 0);
         }
-        childs_.clear();
+        child_pids_.clear();
 
         inotifyWatchStop();
         work_guard_.reset();
@@ -1234,7 +1233,7 @@ namespace LTSM::Manager {
             return;
         }
 
-        std::erase_if(childs_, [this](auto & pid)
+        std::erase_if(child_pids_, [this](auto & pid)
         {
             int status;
             int ret = waitpid(pid, &status, WNOHANG);
@@ -1585,9 +1584,9 @@ namespace LTSM::Manager {
         auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
 
         if(sess) {
-            // registered xvfb job
+            // registered DisplaySession job
             asio::post(childs_guard_, [this, pid = sess->pid1](){
-                childs_.emplace_back(pid);
+                child_pids_.emplace(pid);
             });
         } else {
             return -1;
@@ -1671,9 +1670,9 @@ namespace LTSM::Manager {
                 std::move(loginSess->environments), std::move(loginSess->options));
 
         if(newSess) {
-            // registered xvfb job
+            // registered DisplaySession job
             asio::post(childs_guard_, [this, pid = newSess->pid1](){
-                childs_.emplace_back(pid);
+                child_pids_.emplace(pid);
             });
         } else {        
             return -1;
