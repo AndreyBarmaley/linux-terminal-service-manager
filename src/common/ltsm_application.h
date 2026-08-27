@@ -103,7 +103,11 @@ namespace LTSM {
         template<typename... Args>
         static void error(std::string_view fmt, Args&& ... args) noexcept {
             try {
+#if SPDLOG_VERSION <= 10500
+                spdlog::error(fmt, args...);
+#else
                 spdlog::error(fmt::runtime(fmt), args...);
+#endif
             } catch(...) {
             }
         }
@@ -111,7 +115,11 @@ namespace LTSM {
         template<typename... Args>
         static void warning(std::string_view fmt, Args&& ... args) noexcept {
             try {
+#if SPDLOG_VERSION <= 10500
+                spdlog::warn(fmt, args...);
+#else
                 spdlog::warn(fmt::runtime(fmt), args...);
+#endif
             } catch(...) {
             }
         }
@@ -120,7 +128,11 @@ namespace LTSM {
         static void info(std::string_view fmt, Args&& ... args) noexcept {
             if(isDebugLevel(DebugLevel::Info)) {
                 try {
+#if SPDLOG_VERSION <= 10500
+                    spdlog::info(fmt, args...);
+#else
                     spdlog::info(fmt::runtime(fmt), args...);
+#endif
                 } catch(...) {
                 }
             }
@@ -128,7 +140,11 @@ namespace LTSM {
 
         template<typename... Args>
         static void notice(std::string_view fmt, Args&& ... args) {
+#if SPDLOG_VERSION <= 10500
+            spdlog::warn(fmt, args...);
+#else
             spdlog::warn(fmt::runtime(fmt), args...);
+#endif
         }
 
         template<typename... Args>
@@ -136,7 +152,11 @@ namespace LTSM {
             if(isDebugLevel(DebugLevel::Debug) && isDebugTypes(type)) {
                 try {
                     if(auto log = logger(type)) {
+#if SPDLOG_VERSION <= 10500
+                        log->debug(fmt, args...);
+#else
                         log->debug(fmt::runtime(fmt), args...);
+#endif
                     }
                 } catch(...) {
                 }
@@ -148,13 +168,17 @@ namespace LTSM {
             if(isDebugLevel(DebugLevel::Trace) && isDebugTypes(type)) {
                 try {
                     if(auto log = logger(type)) {
+#if SPDLOG_VERSION <= 10500
+                        log->debug(fmt, args...);
+#else
                         log->debug(fmt::runtime(fmt), args...);
+#endif
                     }
                 } catch(...) {
                 }
             }
         }
-        
+
         static void setDebugTarget(const DebugTarget &, std::string_view = "");
         static void setDebugTarget(std::string_view target, std::string_view = "");
         static bool isDebugTarget(const DebugTarget &);
