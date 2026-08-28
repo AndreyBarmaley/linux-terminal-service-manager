@@ -363,8 +363,9 @@ namespace LTSM::Connector {
 
         if(idleSessionActive_) {
             busSessionIdleTimeout(displayNum());
-            idleSessionReset();
         }
+
+        idleSessionActive_ = true;
 
         timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
         timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
@@ -378,7 +379,7 @@ namespace LTSM::Connector {
         timer_idle_session_.cancel();
 
         idleTimeoutSec_ = sec;
-        idleSessionActive_ = false;
+        idleSessionActive_ = true;
 
         if(sec) {
             timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
