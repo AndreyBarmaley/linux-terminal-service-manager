@@ -40,7 +40,7 @@ namespace LTSM::Connector {
         explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected ProxySocket {
+    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected InetStream {
         std::atomic<bool> loopShutdownFlag{false};
         std::atomic<bool> updatePartFlag{true};
         std::unique_ptr<FreeRdpCallback> freeRdp;
