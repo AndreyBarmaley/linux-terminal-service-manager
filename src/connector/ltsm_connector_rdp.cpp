@@ -910,6 +910,10 @@ namespace LTSM::Connector {
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
     }
 
+    inline const char* fmt_cstr(const char* str) {
+        return str ? str : "(null)";
+    }
+
     BOOL ConnectorRdp::cbServerActivate(freerdp_peer* peer) {
         Application::info("{}: peer:{}", NS_FuncNameV, fmt::ptr(peer));
         auto context = static_cast<ServerContext*>(peer->context);
@@ -920,8 +924,8 @@ namespace LTSM::Connector {
             Application::info("peer settings: {}: {:#010x}", "RdpVersion", peer->settings->RdpVersion);
             Application::info("peer settings: {}: {:#06x}", "OsMajorType", peer->settings->OsMajorType);
             Application::info("peer settings: {}: {:#06x}", "OsMinorType", peer->settings->OsMinorType);
-            Application::info("peer settings: {}: {}", "Username", peer->settings->Username);
-            Application::info("peer settings: {}: {}", "Domain", peer->settings->Domain);
+            Application::info("peer settings: {}: {}", "Username", fmt_cstr(peer->settings->Username));
+            Application::info("peer settings: {}: {}", "Domain", fmt_cstr(peer->settings->Domain));
             Application::info("peer settings: {}: {}", "DesktopWidth", peer->settings->DesktopWidth);
             Application::info("peer settings: {}: {}", "DesktopHeight", peer->settings->DesktopHeight);
             Application::info("peer settings: {}: {}", "DesktopColorDepth", peer->settings->ColorDepth);
@@ -951,7 +955,7 @@ namespace LTSM::Connector {
             Application::info("peer settings: {}: {}", "RdpSecurity", (peer->settings->RdpSecurity ? "true" : "false"));
             Application::info("peer settings: {}: {}", "SoundBeepsEnabled", (peer->settings->SoundBeepsEnabled ? "true" : "false"));
             Application::info("peer settings: {}: {}", "AuthenticationLevel", peer->settings->AuthenticationLevel);
-            Application::info("peer settings: {}: {}", "AllowedTlsCiphers", peer->settings->AllowedTlsCiphers);
+            Application::info("peer settings: {}: {}", "AllowedTlsCiphers", fmt_cstr(peer->settings->AllowedTlsCiphers));
             Application::info("peer settings: {}: {}", "TlsSecLevel", peer->settings->TlsSecLevel);
             Application::info("peer settings: {}: {}", "EncryptionMethods", peer->settings->EncryptionMethods);
             Application::info("peer settings: {}: {}", "EncryptionLevel", peer->settings->EncryptionLevel);
