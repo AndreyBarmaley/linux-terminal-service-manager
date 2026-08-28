@@ -356,11 +356,11 @@ namespace LTSM::Connector {
         }
 
         auto home = LTSM::Connector::homeRuntime();
-        Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
+        Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
 
         // create FreeRdpCallback
         Application::info("{}: {}", NS_FuncNameV, "create freerdp context");
-        freeRdp = std::make_unique<FreeRdpCallback>(InetStream::fd(), _remoteaddr, config(), this);
+        freeRdp = std::make_unique<FreeRdpCallback>(InetStream::fd(), remoteAddress(), config(), this);
         auto freeRdpThread = std::thread(&FreeRdpCallback::enterEventLoop, freeRdp.get());
         damageRegion.assign(0, 0, 0, 0);
         // rdp session not activated trigger
@@ -396,12 +396,8 @@ namespace LTSM::Connector {
             std::this_thread::sleep_for(1ms);
         }
 
-<<<<<<< HEAD
         // BoostContext::run();
 
-        proxyShutdown();
-=======
->>>>>>> 71b0ba9 (remove ProxySocket)
         freeRdp->stopEventLoop();
         channelsFree();
         timerNotActivated->stop();
