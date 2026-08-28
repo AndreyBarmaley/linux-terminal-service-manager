@@ -228,33 +228,6 @@ namespace LTSM {
         InetStream();
     };
 
-    /// @brief: proxy socket: stdin/stdout to local socket
-    class ProxySocket : protected InetStream {
-      protected:
-        std::atomic<bool> loopTransmission{false};
-        std::thread loopThread;
-        int bridgeSock = -1;
-        int clientSock = -1;
-        std::filesystem::path socketPath;
-
-      protected:
-        bool transmitDataIteration(void);
-
-      public:
-        ProxySocket() = default;
-        ~ProxySocket();
-
-        int proxyClientSocket(void) const;
-#ifdef __UNIX__
-        bool proxyInitUnixSockets(const std::filesystem::path &);
-#endif
-        bool proxyRunning(void) const;
-
-        void proxyStartEventLoop(void);
-        void proxyStopEventLoop(void);
-        void proxyShutdown(void);
-    };
-
     namespace TCPSocket {
         int connect(const std::string & ipaddr, uint16_t port);
         std::string resolvHostname(const std::string & hostname);

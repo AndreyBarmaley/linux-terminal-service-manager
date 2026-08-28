@@ -140,7 +140,7 @@ namespace LTSM::Connector {
         ServerContext* context;
         std::atomic<HANDLE> stopEvent;
 
-        FreeRdpCallback(int fd, const std::string & remoteaddr, const JsonObject & config,
+        FreeRdpCallback(int clientFd, const std::string & remoteaddr, const JsonObject & config,
                         ConnectorRdp* connector) : peer(nullptr), context(nullptr) {
             Application::info("freerdp version usage: {}, winpr: {}", FREERDP_VERSION_FULL, WINPR_VERSION_FULL);
             winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
@@ -172,7 +172,7 @@ namespace LTSM::Connector {
                 WLog_SetLogLevel(log, type);
             }
 
-            peer = freerdp_peer_new(fd);
+            peer = freerdp_peer_new(clientFd);
             peer->local = TRUE;
             std::copy_n(remoteaddr.begin(), std::min(sizeof(peer->hostname), remoteaddr.size()), peer->hostname);
             stopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -347,17 +347,11 @@ namespace LTSM::Connector {
         }
 
         auto home = LTSM::Connector::homeRuntime();
-        const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
-
-        if(! proxyInitUnixSockets(socketFile)) {
-            return EXIT_FAILURE;
-        }
-
         Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
-        proxyStartEventLoop();
+
         // create FreeRdpCallback
         Application::info("{}: {}", NS_FuncNameV, "create freerdp context");
-        freeRdp = std::make_unique<FreeRdpCallback>(proxyClientSocket(), _remoteaddr, config(), this);
+        freeRdp = std::make_unique<FreeRdpCallback>(InetStream::fd(), _remoteaddr, config(), this);
         auto freeRdpThread = std::thread([ptr = freeRdp.get()] { FreeRdpCallback::enterEventLoop(ptr); });
         damageRegion.assign(0, 0, 0, 0);
         // rdp session not activated trigger
@@ -372,7 +366,7 @@ namespace LTSM::Connector {
 
         // all ok
         while(! loopShutdownFlag) {
-            if(freeRdp->isShutdown() || ! proxyRunning()) {
+            if(freeRdp->isShutdown()) {
                 loopShutdownFlag = true;
             }
 
@@ -393,7 +387,6 @@ namespace LTSM::Connector {
             std::this_thread::sleep_for(1ms);
         }
 
-        proxyShutdown();
         freeRdp->stopEventLoop();
         channelsFree();
         timerNotActivated->stop();
