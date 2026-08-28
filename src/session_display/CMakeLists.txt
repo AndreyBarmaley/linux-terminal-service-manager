@@ -7,7 +7,6 @@ target_compile_options(${CUR_TARGET} PUBLIC "-Wno-narrowing")
 # pkg_search_module(URING REQUIRED liburing)
 # target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_ASIO_HAS_IO_URING)
 
-find_package(Boost REQUIRED)
 target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_PROCESS_USE_STD_FS)
 
 if(Boost_VERSION VERSION_GREATER "1.85.0")
