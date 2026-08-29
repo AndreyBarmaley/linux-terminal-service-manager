@@ -2054,8 +2054,8 @@ namespace LTSM {
         }
     }
 
-    int XCB::Connector::getFd(void) {
-        return xcb_get_file_descriptor(_conn.get());
+    int XCB::Connector::getFd(void) const {
+        return _conn ? xcb_get_file_descriptor(_conn.get()) : -1;
     }
 
     const char* XCB::Connector::errorString(int err) {
