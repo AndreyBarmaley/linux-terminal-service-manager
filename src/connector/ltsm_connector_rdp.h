@@ -41,7 +41,6 @@ namespace LTSM::Connector {
     };
 
     class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected InetStream {
-        std::atomic<bool> updatePartFlag{true};
         std::unique_ptr<FreeRdpCallback> freeRdp;
         PixelFormat serverFormat;
         XCB::Region damageRegion;
@@ -63,7 +62,7 @@ namespace LTSM::Connector {
         void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
         void xcbXkbGroupChangedEvent(int) override;
 
-        bool updateEvent(const XCB::Region &);
+        bool updateRegionEvent(const XCB::Region &);
         bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
         bool updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
         void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
@@ -80,9 +79,9 @@ namespace LTSM::Connector {
         void stop(void) noexcept;
         int start(void) final;
 
-        bool xcbEventLoopAsync(bool nodamage);
-
         bool createX11Session(uint8_t depth);
+        bool updateDisplayEvent(bool nodamage);
+
         void setEncryptionInfo(const std::string &);
         void setAutoLogin(const std::string &, const std::string &);
 

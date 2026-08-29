@@ -337,8 +337,12 @@ namespace LTSM::Connector {
                         break;
                     }
 
-                    // xcb processing
-                    if(! connector->xcbEventLoopAsync(nodamage)) {
+                    // processing xcb events
+                    while(auto ev = connector->pollEvent()) {
+                    }
+
+                    if(! connector->updateDisplayEvent(nodamage)) {
+                        Application::error("{}: update failed", NS_FuncNameV);
                         break;
                     }
                 }
@@ -422,6 +426,29 @@ namespace LTSM::Connector {
         return EXIT_SUCCESS;
     }
 
+    bool ConnectorRdp::updateDisplayEvent(bool nodamage) {
+        if(nodamage) {
+            damageRegion = RootDisplay::region();
+        } else if(! damageRegion.isEmpty()) {
+            // fix out of screen
+            damageRegion = RootDisplay::region().intersected(damageRegion.align(4));
+        }
+
+        ServerContext* context = freeRdp->context;
+
+        if(! damageRegion.isEmpty() && context->activated) {
+            if(! updateRegionEvent(damageRegion)) {
+                Application::error("{}: update failed", NS_FuncNameV);
+                return false;
+            }
+
+            rootDamageSubtrack(damageRegion);
+            damageRegion.reset();
+        }
+
+        return true;
+    }
+
     void ConnectorRdp::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
         damageRegion.join(rt.x, rt.y, rt.width, rt.height);
     }
@@ -433,41 +460,6 @@ namespace LTSM::Connector {
     }
 
     void ConnectorRdp::xcbXkbGroupChangedEvent(int) {
-    }
-
-    bool ConnectorRdp::xcbEventLoopAsync(bool nodamage) {
-        // processing xcb events
-        while(auto ev = XCB::RootDisplay::pollEvent()) {
-            if(auto err = XCB::RootDisplay::hasError()) {
-                Application::error("{}: xcb error, code: {}", NS_FuncNameV, err);
-                return false;
-            }
-        }
-
-        if(nodamage) {
-            damageRegion = XCB::RootDisplay::region();
-        } else if(! damageRegion.isEmpty()) {
-            // fix out of screen
-            damageRegion = XCB::RootDisplay::region().intersected(damageRegion.align(4));
-        }
-
-        if(! damageRegion.isEmpty() && freeRdp->context && freeRdp->context->activated) {
-            updatePartFlag = true;
-
-            try {
-                if(updateEvent(damageRegion)) {
-                    XCB::RootDisplay::rootDamageSubtrack(damageRegion);
-                    damageRegion.reset();
-                }
-            } catch(const std::exception & err) {
-                Application::error("{}: xcb exception: {}", NS_FuncNameV, err.what());
-                return false;
-            }
-
-            updatePartFlag = false;
-        }
-
-        return true;
     }
 
     void ConnectorRdp::setEncryptionInfo(const std::string & info) {
@@ -519,13 +511,6 @@ namespace LTSM::Connector {
         // disable xcb messages processing
         xcbDisableMessages(true);
         freeRdp->xcbDisconnected();
-
-        // wait client update canceled, 1000ms, 10 ms pause
-        if(updatePartFlag) {
-            Tools::waitCallable<std::chrono::milliseconds>(1000, 100, [this]() {
-                return ! this->updatePartFlag;
-            });
-        }
 
         Application::notice("{}: display: {}, username: {}", NS_FuncNameV, display, userName);
         int oldDisplay = displayNum();
@@ -610,17 +595,22 @@ namespace LTSM::Connector {
         }
     }
 
-    bool ConnectorRdp::updateEvent(const XCB::Region & reg) {
-        //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
-        // reply info dump
-        Application::debug(DebugType::App, "{}: request size: {}, reply length: {}, bits per pixel: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}",
+    bool ConnectorRdp::updateRegionEvent(const XCB::Region & reg) {
+        try {
+            //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
+            auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
+            // reply info dump
+            Application::debug(DebugType::App, "{}: request size: {}, reply length: {}, bits per pixel: {}, red: {:#010x}, green: {:#010x}, blue: {:#010x}",
                            NS_FuncNameV, reg.toSize(), reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
-        FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
-        // apply render primitives
-        renderPrimitivesToFB(frameBuffer);
-        return 24 == reply->bitsPerPixel() || 32 == reply->bitsPerPixel() ?
+            FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
+            // apply render primitives
+            renderPrimitivesToFB(frameBuffer);
+            return 24 == reply->bitsPerPixel() || 32 == reply->bitsPerPixel() ?
                updateBitmapPlanar(reg, reply) : updateBitmapInterleaved(reg, reply);
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        }
+        return false;
     }
 
     bool ConnectorRdp::updateBitmapPlanar(const XCB::Region & reg, const XCB::PixmapInfoReply & reply) {
