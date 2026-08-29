@@ -173,7 +173,7 @@ namespace LTSM::Connector {
             peer = freerdp_peer_new(clientFd);
             peer->local = TRUE;
             std::copy_n(remoteaddr.begin(), std::min(sizeof(peer->hostname), remoteaddr.size()), peer->hostname);
-            stopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+            stopEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
             // init context
             peer->ContextSize = sizeof(ServerContext);
             peer->ContextNew = (psPeerContextNew) ServerContextNew;
@@ -302,7 +302,7 @@ namespace LTSM::Connector {
                 CloseHandle(xcbEvent);
             }
 
-            xcbEvent = CreateFileDescriptorEventA(NULL, TRUE, FALSE, connector->getFd(), WINPR_FD_READ);
+            xcbEvent = CreateFileDescriptorEventA(nullptr, TRUE, FALSE, connector->getFd(), WINPR_FD_READ);
         }
 
         bool enterEventLoop(bool nodamage) {
@@ -444,19 +444,23 @@ namespace LTSM::Connector {
     bool ConnectorRdp::updateDisplayEvent(bool nodamage) {
         if(nodamage) {
             damageRegion_ = RootDisplay::region();
-        } else if(! damageRegion_.isEmpty()) {
+        } else if(damageRegion_.isEmpty()) {
+            return true;
+        } else {
             // fix out of screen
             damageRegion_ = RootDisplay::region().intersected(damageRegion_.align(4));
         }
 
-        if(! damageRegion_.isEmpty() && rdpEvents_->isActivated()) {
-            if(! updateRegionEvent(damageRegion_)) {
-                Application::error("{}: update failed", NS_FuncNameV);
-                return false;
-            }
+        if(rdpEvents_->isActivated()) {
+            bool success = updateRegionEvent(damageRegion_);
 
             rootDamageSubtrack(damageRegion_);
             damageRegion_.reset();
+
+            if(! success) {
+                Application::error("{}: update failed", NS_FuncNameV);
+                return false;
+            }
         }
 
         return true;
@@ -686,7 +690,7 @@ namespace LTSM::Connector {
             st.cbScanWidth = subreg.width * reply->bytePerPixel();
             st.cbUncompressedSize = subreg.height * subreg.width * reply->bytePerPixel();
             st.bitmapDataStream = freerdp_bitmap_compress_planar(context->planar, reply->data() + offset,
-                pixelFormat, subreg.width, subreg.height, scanLineBytes, NULL, & st.bitmapLength);
+                pixelFormat, subreg.width, subreg.height, scanLineBytes, nullptr, & st.bitmapLength);
             st.cbCompMainBodySize = st.bitmapLength;
 
             if(rdpEvents_->peer->settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz) {
@@ -813,7 +817,7 @@ namespace LTSM::Connector {
             st.cbUncompressedSize = subreg.height * subreg.width * reply->bytePerPixel();
 
             if(! interleaved_compress(context->interleaved, data.get(), & st.bitmapLength, st.width, st.height,
-                                      reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, reply->bitsPerPixel())) {
+                                      reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, nullptr, reply->bitsPerPixel())) {
                 Application::error("{}: {} failed", NS_FuncNameV, "interleaved_compress");
                 throw rdp_error(NS_FuncNameS);
             }
