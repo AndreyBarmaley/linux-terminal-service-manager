@@ -136,9 +136,11 @@ namespace LTSM::Connector {
 
     // FreeRdp
     struct FreeRdpCallback {
-        freerdp_peer* peer;
-        ServerContext* context;
-        std::atomic<HANDLE> stopEvent;
+        freerdp_peer* peer = nullptr;
+        ServerContext* context = nullptr;
+        HANDLE stopEvent = nullptr;
+        HANDLE xcbEvent = nullptr;
+        std::mutex xcbLock;
 
         FreeRdpCallback(int clientFd, const std::string & remoteaddr, const JsonObject & config,
                         ConnectorRdp* connector) : peer(nullptr), context(nullptr) {
@@ -256,12 +258,16 @@ namespace LTSM::Connector {
             peer->update->SuppressOutput = ConnectorRdp::cbServerSuppressOutput;
 
             if(1 != peer->Initialize(peer)) {
-                Application::error("{}: failed", "peer->Initialize");
+                Application::error("{}: {} failed", NS_FuncNameV, "Peer::Initialize");
                 throw rdp_error(NS_FuncNameS);
             }
         }
 
         ~FreeRdpCallback() {
+            if(xcbEvent) {
+                CloseHandle(xcbEvent);
+            }
+
             if(stopEvent) {
                 CloseHandle(stopEvent);
             }
@@ -274,27 +280,40 @@ namespace LTSM::Connector {
 
         void stopEventLoop(void) {
             if(stopEvent) {
-                Application::info("{}: stop event", "FreeRdpCallback");
+                Application::info("{}: stop event", NS_FuncNameV);
                 SetEvent(stopEvent);
             }
         }
 
-        bool isShutdown(void) const {
-            return ! stopEvent;
+        void xcbDisconnected(void) {
+            const std::scoped_lock guard{xcbLock};
+
+            if(xcbEvent) {
+                CloseHandle(xcbEvent);
+                xcbEvent = nullptr;
+            }
         }
 
-        static bool enterEventLoop(FreeRdpCallback* rdp) {
-            Application::info("{}: enter event loop", "FreeRdpCallback");
-            freerdp_peer* peer = rdp->peer;
-            ServerContext* context = rdp->context;
-            ConnectorRdp* conrdp = context->conrdp;
+        void xcbConnected(void) {
+            const std::scoped_lock guard{xcbLock};
+            const ConnectorRdp* connector = context->conrdp;
+
+            if(xcbEvent) {
+                CloseHandle(xcbEvent);
+            }
+
+            xcbEvent = CreateFileDescriptorEventA(NULL, TRUE, FALSE, connector->getFd(), WINPR_FD_READ);
+        }
+
+        bool enterEventLoop(bool nodamage) {
+            Application::info("{}: enter event loop", NS_FuncNameV);
+            ConnectorRdp* connector = context->conrdp;
+
+            using TimePointSeconds = Tools::TimePoint<std::chrono::seconds>;
+            auto timerNotActivated = std::make_unique<TimePointSeconds>(30s);
 
             // freerdp client events
             while(true) {
-                if(rdp->isShutdown()) {
-                    break;
-                }
-
                 if(peer->CheckFileDescriptor(peer) != TRUE) {
                     break;
                 }
@@ -303,29 +322,61 @@ namespace LTSM::Connector {
                     break;
                 }
 
-                if(WaitForSingleObject(rdp->stopEvent, 1) == WAIT_OBJECT_0) {
+                if(! stopEvent ||
+                   WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) {
                     break;
+                }
+
+                if(connector->xcbAllowMessages() && xcbEvent &&
+                   WaitForSingleObject(xcbEvent, 0) == WAIT_OBJECT_0) {
+                    const std::scoped_lock guard{xcbLock};
+
+                    if(auto err = connector->hasError()) {
+                        connector->xcbDisableMessages(true);
+                        Application::error("{}: xcb error: {}", NS_FuncNameV, err);
+                        break;
+                    }
+
+                    // xcb processing
+                    if(! connector->xcbEventLoopAsync(nodamage)) {
+                        break;
+                    }
+                }
+
+                if(timerNotActivated && timerNotActivated->check()) {
+                    timerNotActivated.reset();
+
+                    if(! context->activated) {
+                        Application::error("{}: timeout trigger: {}", NS_FuncNameV, "not activated");
+                        break;
+                    }
                 }
 
                 // wait
                 std::this_thread::sleep_for(1ms);
             }
 
-            if(rdp->stopEvent) {
+            if(stopEvent) {
                 // for shutdown flag
-                CloseHandle(rdp->stopEvent);
-                rdp->stopEvent = nullptr;
+                CloseHandle(stopEvent);
+                stopEvent = nullptr;
+            }
+
+            if(xcbEvent) {
+                CloseHandle(xcbEvent);
+                xcbEvent = nullptr;
             }
 
             peer->Disconnect(peer);
-            conrdp->stop();
-            Application::info("{}: loop shutdown", "FreeRdpCallback");
+            connector->stop();
+
+            Application::info("{}: event loop shutdown", NS_FuncNameV);
             return true;
         }
     };
 
     ConnectorRdp::ConnectorRdp(const std::filesystem::path & confile, bool debug)
-            : DBusProxy(ConnectorType::RDP, confile, debug) {
+        : DBusProxy(ConnectorType::RDP, confile, debug) {
     }
 
     ConnectorRdp::~ConnectorRdp() {
@@ -341,10 +392,10 @@ namespace LTSM::Connector {
     }
 
     void ConnectorRdp::stop(void) noexcept {
-        std::call_once(stop_flag_, [this](){
+        std::call_once(stop_flag_, [this]() {
             try {
                 DBusProxy::asioStop();
-            } catch(const std::exception&) {
+            } catch(const std::exception &) {
             }
         });
     }
@@ -361,51 +412,13 @@ namespace LTSM::Connector {
         // create FreeRdpCallback
         Application::info("{}: {}", NS_FuncNameV, "create freerdp context");
         freeRdp = std::make_unique<FreeRdpCallback>(InetStream::fd(), remoteAddress(), config(), this);
-        auto freeRdpThread = std::thread(&FreeRdpCallback::enterEventLoop, freeRdp.get());
         damageRegion.assign(0, 0, 0, 0);
-        // rdp session not activated trigger
-        auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]() {
-            if(this->freeRdp && this->freeRdp->context && ! this->freeRdp->context->activated) {
-                Application::error("session timeout trigger: {}", "not activated");
-                this->loopShutdownFlag = true;
-            }
-        });
 
         bool nodamage = config().getBoolean("rdp:xcb:nodamage", false);
-
-        // all ok
-        while(! loopShutdownFlag) {
-            if(freeRdp->isShutdown()) {
-                loopShutdownFlag = true;
-            }
-
-            if(xcbAllowMessages()) {
-                if(auto err = XCB::RootDisplay::hasError()) {
-                    xcbDisableMessages(true);
-                    Application::error("xcb display error connection: {}", err);
-                    break;
-                }
-
-                // xcb processing
-                if(! xcbEventLoopAsync(nodamage)) {
-                    loopShutdownFlag = true;
-                }
-            }
-
-            // wait
-            std::this_thread::sleep_for(1ms);
-        }
-
+        freeRdp->enterEventLoop(nodamage);
         // BoostContext::run();
 
-        freeRdp->stopEventLoop();
         channelsFree();
-        timerNotActivated->stop();
-
-        if(freeRdpThread.joinable()) {
-            freeRdpThread.join();
-        }
-
         return EXIT_SUCCESS;
     }
 
@@ -447,7 +460,7 @@ namespace LTSM::Connector {
                     damageRegion.reset();
                 }
             } catch(const std::exception & err) {
-                Application::error("xcb exception: {}", err.what());
+                Application::error("{}: xcb exception: {}", NS_FuncNameV, err.what());
                 return false;
             }
 
@@ -474,6 +487,7 @@ namespace LTSM::Connector {
         }
 
         Application::debug(DebugType::App, "login session request success, display: {}", screen);
+        freeRdp->xcbDisconnected();
 
         if(! xcbConnect(screen, *this)) {
             Application::error("{}", "xcb connect failed");
@@ -491,7 +505,8 @@ namespace LTSM::Connector {
         // init server format
         serverFormat = PixelFormat(XCB::RootDisplay::bitsPerPixel(),
                                    visual->red_mask, visual->green_mask, visual->blue_mask, 0);
-
+        freeRdp->xcbConnected();
+        // FIXME sleep
         std::this_thread::sleep_for(50ms);
         return true;
     }
@@ -503,6 +518,7 @@ namespace LTSM::Connector {
 
         // disable xcb messages processing
         xcbDisableMessages(true);
+        freeRdp->xcbDisconnected();
 
         // wait client update canceled, 1000ms, 10 ms pause
         if(updatePartFlag) {
@@ -511,7 +527,7 @@ namespace LTSM::Connector {
             });
         }
 
-        Application::notice("{}: dbus signal, display: {}, username: {}", NS_FuncNameV, display, userName);
+        Application::notice("{}: display: {}, username: {}", NS_FuncNameV, display, userName);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
 
@@ -533,7 +549,9 @@ namespace LTSM::Connector {
         }
 
         // update context
+        freeRdp->xcbConnected();
         xcbDisableMessages(false);
+
         // fix new session size
         auto wsz = XCB::RootDisplay::size();
 
@@ -542,9 +560,9 @@ namespace LTSM::Connector {
                                  freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
 
             if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth,
-                                                    freeRdp->peer->settings->DesktopHeight))) {
+                    freeRdp->peer->settings->DesktopHeight))) {
                 wsz = XCB::RootDisplay::size();
-                Application::info("change session size: {}, display: {}", wsz, displayNum());
+                Application::info("{}: change session size: {}, display: {}", NS_FuncNameV, wsz, displayNum());
             }
         } else {
             // full update
@@ -552,16 +570,13 @@ namespace LTSM::Connector {
         }
 
         busConnectorConnected(newDisplay, getpid());
-
-        Application::info("dbus signal: login success, display: {}, username: {}", displayNum(), userName);
     }
 
     void ConnectorRdp::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
-            freeRdp->stopEventLoop();
+            Application::info("{}: dbus signal shutdown, display: {}", NS_FuncNameV, display);
             xcbDisableMessages(true);
-            loopShutdownFlag = true;
-            Application::info("dbus signal: shutdown connector, display: {}", display);
+            freeRdp->stopEventLoop();
         }
     }
 
@@ -580,7 +595,7 @@ namespace LTSM::Connector {
 
     // client events
     void ConnectorRdp::disconnectedEvent(void) {
-        Application::warning("RDP disconnected, display: {}", displayNum());
+        Application::warning("{}: display: {}", NS_FuncNameV, displayNum());
     }
 
     void ConnectorRdp::desktopResizeEvent(freerdp_peer & peer, uint16_t width, uint16_t height) {
@@ -642,7 +657,7 @@ namespace LTSM::Connector {
         }
 
         Application::debug(DebugType::App, "{}: area: {}, bits per pixel: {}, scanline: {}",
-                NS_FuncNameV, reg, reply->bitsPerPixel(), scanLineBytes);
+                           NS_FuncNameV, reg, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -668,7 +683,7 @@ namespace LTSM::Connector {
             st.cbScanWidth = subreg.width * reply->bytePerPixel();
             st.cbUncompressedSize = subreg.height * subreg.width * reply->bytePerPixel();
             st.bitmapDataStream = freerdp_bitmap_compress_planar(context->planar, reply->data() + offset,
-                                  pixelFormat, subreg.width, subreg.height, scanLineBytes, NULL, & st.bitmapLength);
+                pixelFormat, subreg.width, subreg.height, scanLineBytes, NULL, & st.bitmapLength);
             st.cbCompMainBodySize = st.bitmapLength;
 
             if(freeRdp->peer->settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz) {
@@ -769,7 +784,7 @@ namespace LTSM::Connector {
         }
 
         Application::debug(DebugType::App, "{}: area: {}, bits per pixel: {}, scanline: {}",
-                NS_FuncNameV, reg, reply->bitsPerPixel(), scanLineBytes);
+                           NS_FuncNameV, reg, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -1060,7 +1075,7 @@ namespace LTSM::Connector {
                 // winpr: input
                 auto vkcode = GetVirtualKeyCodeFromVirtualScanCode(code, 4);
                 auto keycode = GetKeycodeFromVirtualKeyCode((flags & KBD_FLAGS_EXTENDED ? vkcode | KBDEXT : vkcode),
-                               KEYCODE_TYPE_EVDEV);
+                    KEYCODE_TYPE_EVDEV);
                 test->screenInputKeycode(keycode, flags & KBD_FLAGS_DOWN);
             }
         }

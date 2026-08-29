@@ -41,7 +41,6 @@ namespace LTSM::Connector {
     };
 
     class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected InetStream {
-        std::atomic<bool> loopShutdownFlag{false};
         std::atomic<bool> updatePartFlag{true};
         std::unique_ptr<FreeRdpCallback> freeRdp;
         PixelFormat serverFormat;
@@ -70,7 +69,6 @@ namespace LTSM::Connector {
         void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
         void disconnectedEvent(void);
 
-        bool xcbEventLoopAsync(bool nodamage);
 
         bool channelsInit(void);
         void channelsFree(void);
@@ -81,6 +79,8 @@ namespace LTSM::Connector {
 
         void stop(void) noexcept;
         int start(void) final;
+
+        bool xcbEventLoopAsync(bool nodamage);
 
         bool createX11Session(uint8_t depth);
         void setEncryptionInfo(const std::string &);

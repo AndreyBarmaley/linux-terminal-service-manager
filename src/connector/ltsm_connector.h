@@ -148,8 +148,6 @@ namespace LTSM::Connector {
 
         int displayNum(void) const;
         bool xcbConnect(int screen, XCB::RootDisplay &);
-        void xcbDisableMessages(bool f);
-        bool xcbAllowMessages(void) const;
 
         boost::asio::awaitable<void> xcbConnectAwait(int screen, const std::string & xauthFile, XCB::RootDisplay &);
 
@@ -158,6 +156,8 @@ namespace LTSM::Connector {
         virtual ~DBusProxy();
 
         virtual int start(void) = 0;
+        void xcbDisableMessages(bool f);
+        bool xcbAllowMessages(void) const;
 
         std::string checkFileOption(const std::string &) const;
         const std::string & connectorType(void) const;
