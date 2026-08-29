@@ -298,11 +298,11 @@ namespace LTSM {
 
         // Timeout
         template<typename TimeType = std::chrono::milliseconds>
-        struct Timeout {
+        struct TimePoint {
             std::chrono::steady_clock::time_point tp;
             TimeType dt;
 
-            explicit Timeout(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val) {
+            explicit TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val) {
             }
 
             bool check(void) {
@@ -314,95 +314,6 @@ namespace LTSM {
                 }
 
                 return false;
-            }
-        };
-
-        // BaseTimer
-        class BaseTimer {
-          protected:
-            std::thread thread;
-            std::atomic<bool> processed{false};
-
-          public:
-            BaseTimer() = default;
-            virtual ~BaseTimer() {
-                stop(true);
-            }
-
-            std::thread::id getId(void) const {
-                return thread.get_id();
-            }
-
-            void stop(bool wait = false) {
-                processed = false;
-
-                if(wait && thread.joinable()) {
-                    thread.join();
-                }
-            }
-
-            // usage:
-            // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, repeat, [=](){ func(param1, param2, param3); });
-            // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, repeat, func, param1, param2, param3);
-            //
-            template <class TimeType = std::chrono::milliseconds, class Func>
-            static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func && call) {
-                auto ptr = std::make_unique<BaseTimer>();
-                ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::forward<Func>(call)]() {
-                    timer->processed = true;
-                    auto start = std::chrono::steady_clock::now();
-
-                    while(timer->processed) {
-                        std::this_thread::sleep_for(TimeType(1));
-                        auto cur = std::chrono::steady_clock::now();
-
-                        if(TimeType(delay) <= cur - start) {
-                            if(! timer->processed) {
-                                break;
-                            }
-
-                            call();
-
-                            if(repeat) {
-                                start = std::chrono::steady_clock::now();
-                            } else {
-                                timer->processed = false;
-                            }
-                        }
-                    }
-                });
-
-                return ptr;
-            }
-
-            template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
-            static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func && call, Args && ... args) {
-                auto ptr = std::make_unique<BaseTimer>();
-                ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
-                call = std::forward<Func>(call), args = std::make_tuple(std::forward<Args>(args)...)]() {
-                    timer->processed = true;
-                    auto start = std::chrono::steady_clock::now();
-
-                    while(timer->processed) {
-                        std::this_thread::sleep_for(TimeType(1));
-
-                        if(TimeType(delay) <= std::chrono::steady_clock::now() - start) {
-                            if(! timer->processed) {
-                                break;
-                            }
-
-                            std::apply(call, args);
-
-                            if(repeat) {
-                                start = std::chrono::steady_clock::now();
-                            } else {
-                                timer->processed = false;
-                            }
-                        }
-                    }
-                });
-
-                return ptr;
             }
         };
 
@@ -425,26 +336,6 @@ namespace LTSM {
 
             return false;
         }
-
-        template<typename TimeType = std::chrono::milliseconds>
-        struct TimePoint {
-            std::chrono::steady_clock::time_point tp;
-            TimeType dt;
-
-            explicit TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val) {
-            }
-
-            bool check(void) {
-                auto now = std::chrono::steady_clock::now();
-
-                if(dt < now - tp) {
-                    tp = now;
-                    return true;
-                }
-
-                return false;
-            }
-        };
     }
 
 #ifdef LTSM_WITH_OPENSSL
