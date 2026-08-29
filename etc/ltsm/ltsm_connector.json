@@ -29,6 +29,7 @@
     "#rdp:keymap:file": "/etc/ltsm/keymap_rdp.json",
 
     "#session:timeout": 5000,
+    "frame:rate": 16,
 
     "encoding:debug": 0,
     "encoding:blacklist": [ "zlib" ],
