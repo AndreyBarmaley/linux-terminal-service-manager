@@ -45,7 +45,7 @@ namespace LTSM::Connector {
         std::unordered_map<uint32_t, int> keymap_;
         std::list<TupleFileSize> transferPlanned_;
 
-        uint32_t frameRate_{0};
+        uint32_t frameRate_{16};
         bool userSession_{false};
         bool x11NoDamage_{false};
 

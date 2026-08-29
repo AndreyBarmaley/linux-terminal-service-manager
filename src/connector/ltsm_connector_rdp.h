@@ -34,18 +34,18 @@
 #include "freerdp/listener.h"
 
 namespace LTSM::Connector {
-    struct FreeRdpCallback;
+    struct FreeRdpEvents;
 
     struct rdp_error : public std::runtime_error {
         explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected InetStream {
-        std::unique_ptr<FreeRdpCallback> freeRdp;
-        PixelFormat serverFormat;
-        XCB::Region damageRegion;
-
-        std::once_flag stop_flag_;
+        std::unique_ptr<FreeRdpEvents> rdpEvents_;
+        PixelFormat serverFormat_;
+        XCB::Region damageRegion_;
+        std::once_flag stopFlag_;
+        uint32_t frameRate_{16};
 
       protected:
         // dbus virtual signals
@@ -68,7 +68,6 @@ namespace LTSM::Connector {
         void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
         void disconnectedEvent(void);
 
-
         bool channelsInit(void);
         void channelsFree(void);
 
@@ -81,27 +80,28 @@ namespace LTSM::Connector {
 
         bool createX11Session(uint8_t depth);
         bool updateDisplayEvent(bool nodamage);
+        uint32_t frameRateOption(void) const;
 
         void setEncryptionInfo(const std::string &);
         void setAutoLogin(const std::string &, const std::string &);
 
         // freerdp callback func
-        static BOOL cbServerPostConnect(freerdp_peer* client);
-        static BOOL cbServerActivate(freerdp_peer* client);
-        static BOOL cbServerAuthenticate(freerdp_peer* client, const char** user, const char** domain,
+        static BOOL rdpServerPostConnect(freerdp_peer* client);
+        static BOOL rdpServerActivate(freerdp_peer* client);
+        static BOOL rdpServerAuthenticate(freerdp_peer* client, const char** user, const char** domain,
                                          const char** password);
-        static BOOL cbServerSynchronizeEvent(rdpInput* input, UINT32 flags);
-        static BOOL cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
-        static BOOL cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
-        static BOOL cbServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
-        static BOOL cbServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
-        static BOOL cbServerRefreshRequest(freerdp_peer* client);
+        static BOOL rdpServerSynchronizeEvent(rdpInput* input, UINT32 flags);
+        static BOOL rdpServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
+        static BOOL rdpServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+        static BOOL rdpServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
+        static BOOL rdpServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
+        static BOOL rdpServerRefreshRequest(freerdp_peer* client);
 
-        static BOOL cbServerClose(freerdp_peer* client);
-        static void cbServerDisconnect(freerdp_peer* client);
-        static BOOL cbServerCapabilities(freerdp_peer* client);
-        static BOOL cbServerAdjustMonitorsLayout(freerdp_peer* client);
-        static BOOL cbServerClientCapabilities(freerdp_peer* client);
+        static BOOL rdpServerClose(freerdp_peer* client);
+        static void rdpServerDisconnect(freerdp_peer* client);
+        static BOOL rdpServerCapabilities(freerdp_peer* client);
+        static BOOL rdpServerAdjustMonitorsLayout(freerdp_peer* client);
+        static BOOL rdpServerClientCapabilities(freerdp_peer* client);
     };
 }
 
