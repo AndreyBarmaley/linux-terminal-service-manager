@@ -126,17 +126,17 @@ namespace LTSM {
         size_t screen = config_->getInteger("display", 0);
 
         try {
-            xcbDisplay()->displayReconnect(screen);
+            RootDisplay::displayReconnect(screen);
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             co_return false;
         }
 
         Application::info("{}: display: {}, size: {}, depth: {}",
-                NS_FuncNameV, screen, xcbDisplay()->size(), xcbDisplay()->depth());
+                NS_FuncNameV, screen, RootDisplay::size(), RootDisplay::depth());
         Application::debug(DebugType::App, "{}: xcb max request: {}",
-                NS_FuncNameV, xcbDisplay()->getMaxRequest());
-        const xcb_visualtype_t* visual = xcbDisplay()->visual();
+                NS_FuncNameV, RootDisplay::getMaxRequest());
+        const xcb_visualtype_t* visual = RootDisplay::visual();
 
         if(! visual) {
             Application::error("{}: xcb visual empty", NS_FuncNameV);
@@ -146,7 +146,7 @@ namespace LTSM {
         co_await xcbShmInit();
 
         // init server format
-        pf_ = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        pf_ = PixelFormat(RootDisplay::bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
         co_return true;
     }
 
