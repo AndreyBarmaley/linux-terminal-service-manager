@@ -147,8 +147,6 @@ namespace LTSM::Connector {
         virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
         int displayNum(void) const;
-        bool xcbConnect(int screen, XCB::RootDisplay &);
-
         boost::asio::awaitable<void> xcbConnectAwait(int screen, const std::string & xauthFile, XCB::RootDisplay &);
 
       public:

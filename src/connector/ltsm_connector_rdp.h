@@ -88,6 +88,8 @@ namespace LTSM::Connector {
         bool rdpChannelsInit(void);
         void rdpChannelsFree(void);
 
+        asio::awaitable<void> onLoginSuccessAwait(std::string userName, uint32_t userUid, XCB::Size);
+
       public:
         ConnectorRdp(const std::filesystem::path & confile, bool debug);
         ~ConnectorRdp();

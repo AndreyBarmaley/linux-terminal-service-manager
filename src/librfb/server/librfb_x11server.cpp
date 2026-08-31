@@ -38,10 +38,6 @@ using namespace boost;
 using namespace std::chrono_literals;
 
 namespace LTSM {
-    XCB::RootDisplay* RFB::X11Server::xcbDisplay(void) {
-        return this;
-    }
-
     XCB::Region RFB::X11Server::getClientRegion(void) const {
         return XCB::Rectangle(clientRegion_.load());
     }

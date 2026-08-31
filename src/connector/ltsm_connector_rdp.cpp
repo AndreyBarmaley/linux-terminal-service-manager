@@ -675,49 +675,33 @@ namespace LTSM::Connector {
         co_return;
     }
 
-    void ConnectorRdp::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
-        if(display != displayNum()) {
-            return;
-        }
-
-        // disable xcb messages processing
+    asio::awaitable<void> ConnectorRdp::onLoginSuccessAwait(std::string userName, uint32_t userUid, XCB::Size csz) {
         xcbDisableMessages(true);
-        rdpEvents_->xcbDisconnected();
+        co_await waitUpdateProcessAwait();
 
-        Application::notice("{}: display: {}, username: {}", NS_FuncNameV, display, userName);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
 
         if(newDisplay < 0) {
-            Application::error("{}: {} failed", NS_FuncNameV, "user session request");
+            Application::error("{}: {} failed", NS_FuncNameV, "busStartUserSession");
             throw rdp_error(NS_FuncNameS);
         }
 
         if(newDisplay != oldDisplay) {
-            // wait xcb old operations ended
-            std::this_thread::sleep_for(100ms);
-
-            if(! xcbConnect(newDisplay, *this)) {
-                Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
-                throw rdp_error(NS_FuncNameS);
-            }
-
             busShutdownDisplay(oldDisplay);
+            auto xauthFile = busDisplayAuthFile(newDisplay);
+
+            co_await xcbConnectAwait(newDisplay, xauthFile, *this);
         }
 
-        // update context
-        rdpEvents_->xcbConnected();
         xcbDisableMessages(false);
 
         // fix new session size
-        auto wsz = RootDisplay::size();
+        if(auto wsz = RootDisplay::size(); wsz != csz) {
+            Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
+                                 csz, displayNum());
 
-        if(wsz.width != rdpEvents_->peer->settings->DesktopWidth || wsz.height != rdpEvents_->peer->settings->DesktopHeight) {
-            Application::warning("{}: remote request desktop size: [{}, {}], display: {}", NS_FuncNameV,
-                                 rdpEvents_->peer->settings->DesktopWidth, rdpEvents_->peer->settings->DesktopHeight, displayNum());
-
-            if(RootDisplay::setRandrScreenSize(XCB::Size(rdpEvents_->peer->settings->DesktopWidth,
-                    rdpEvents_->peer->settings->DesktopHeight))) {
+            if(RootDisplay::setRandrScreenSize(csz)) {
                 wsz = RootDisplay::size();
                 Application::info("{}: change session size: {}, display: {}", NS_FuncNameV, wsz, displayNum());
             }
@@ -726,7 +710,33 @@ namespace LTSM::Connector {
             serverScreenUpdateRequest(RootDisplay::region());
         }
 
+        auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
+        setIdleTimeoutSec(json.getInteger("session:idle:timeout", 0));
+
         busConnectorConnected(newDisplay, getpid());
+        co_return;
+    }
+
+    void ConnectorRdp::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
+        if(display != displayNum()) {
+            return;
+        }
+
+        Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
+                            userName, userUid);
+
+        auto settings = rdpEvents_->peer->settings;
+
+        asio::co_spawn(xcb_strand(), onLoginSuccessAwait(userName, userUid, XCB::Size(settings->DesktopWidth, settings->DesktopHeight)), [this](std::exception_ptr ptr){
+            if(ptr) {
+                try {
+                    std::rethrow_exception(ptr);
+                } catch (const std::exception& err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    asio::post(ioc(), std::bind(&ConnectorRdp::stop, this));
+                }
+            }
+        });
     }
 
     void ConnectorRdp::onShutdownConnector(const int32_t & display) {

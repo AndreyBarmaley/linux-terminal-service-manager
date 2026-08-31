@@ -108,7 +108,6 @@ namespace LTSM {
             boost::asio::awaitable<bool> extClipboardSourceReadyAwait(xcb_atom_t atom);
             void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
 
-            XCB::RootDisplay* xcbDisplay(void);
             XCB::Region getClientRegion(void) const;
             XCB::Region joinAllDamages(void);
 

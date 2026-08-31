@@ -115,7 +115,7 @@ namespace LTSM::Connector {
 
         if(newDisplay < 0) {
             Application::error("{}: {} failed", NS_FuncNameV, "busStartUserSession");
-            throw std::runtime_error(NS_FuncNameS);
+            throw proto_error(NS_FuncNameS);
         }
 
         if(newDisplay != oldDisplay) {
@@ -131,11 +131,11 @@ namespace LTSM::Connector {
         const auto clientRegion = getClientRegion();
 
         // fix new session size
-        if(xcbDisplay()->size() != clientRegion.toSize()) {
+        if(RootDisplay::size() != clientRegion.toSize()) {
             Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
                                  clientRegion.toSize(), displayNum());
 
-            if(0 < xcbDisplay()->setRandrScreenSize(clientRegion)) {
+            if(RootDisplay::setRandrScreenSize(clientRegion)) {
                 Application::info("{}: change session size: {}, display: {}",
                         NS_FuncNameV, clientRegion.toSize(), displayNum());
             }
@@ -237,16 +237,16 @@ namespace LTSM::Connector {
         auto xauthFile = busDisplayAuthFile(screen);
 
         co_await xcbConnectAwait(screen, xauthFile, *this);
-        const xcb_visualtype_t* visual = xcbDisplay()->visual();
+        const xcb_visualtype_t* visual = RootDisplay::visual();
 
         if(! visual) {
             Application::error("{}: xcb visual empty", NS_FuncNameV);
             throw proto_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", NS_FuncNameV, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", NS_FuncNameV, RootDisplay::getMaxRequest());
         // init server format
-        serverPf_ = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        serverPf_ = PixelFormat(RootDisplay::bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // load keymap
         if(config().hasKey("vnc:keymap:file")) {
@@ -392,8 +392,8 @@ namespace LTSM::Connector {
                 return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
             });
 
-            asio::dispatch(xcb_strand(), [group = std::distance(names.begin(), it), display = xcbDisplay()]() {
-                if(auto xkb = static_cast<const XCB::ModuleXkb*>(display->getExtension(XCB::Module::XKB))) {
+            asio::dispatch(xcb_strand(), [this, group = std::distance(names.begin(), it)]() {
+                if(auto xkb = static_cast<const XCB::ModuleXkb*>(RootDisplay::getExtension(XCB::Module::XKB))) {
                     // wait pause for apply layouts
                     std::this_thread::sleep_for(200ms);
                     xkb->switchLayoutGroup(group);
@@ -428,7 +428,7 @@ namespace LTSM::Connector {
         auto layout = jo.getString("layout");
 
         if(xcbAllowMessages()) {
-            if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(RootDisplay::getExtension(XCB::Module::XKB))) {
                 Application::debug(DebugType::App, "{}: layout: {}", NS_FuncNameV, layout);
                 auto names = xkb->getNames();
                 auto it = std::ranges::find_if(names, [&](auto & str) {

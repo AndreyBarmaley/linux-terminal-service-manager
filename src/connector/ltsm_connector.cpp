@@ -196,35 +196,6 @@ namespace LTSM::Connector {
         return connType_;
     }
 
-    bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
-        std::string xauthFile = busDisplayAuthFile(screen);
-        Application::info("{}: display: {}, xauthfile: {}", NS_FuncNameV, screen, xauthFile);
-        setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        std::filesystem::path socketPath = Tools::x11UnixPath(screen);
-
-        const uint32_t sessTimeout = configGetInteger("session:timeout", 5000);
-
-        // wait display starting
-        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(sessTimeout, 100, [ &socketPath ]() {
-            return Tools::checkUnixSocket(socketPath);
-        });
-
-        if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", NS_FuncNameV, socketPath);
-            return false;
-         }
- 
-        try {
-            xcbDisplay.displayReconnect(screen);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            return false;
-        }
-
-        xcbDisplayNum_ = screen;
-        return true;
-    }
-
     asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
         if(std::filesystem::is_socket(file)) {
             co_return;
