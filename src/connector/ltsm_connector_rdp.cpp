@@ -120,35 +120,55 @@ namespace LTSM::Connector {
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->connector;
 
+#if defined(FREERDP3_API)
+        return connector && connector->serverCapabilitiesEvent(peer->context->settings);
+#else
         return connector && connector->serverCapabilitiesEvent(peer->settings);
+#endif
     }
 
     BOOL rdpServerActivateCb(freerdp_peer* peer) {
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->connector;
 
+#if defined(FREERDP3_API)
+        return connector && connector->serverActivateEvent(peer->context->settings);
+#else
         return connector && connector->serverActivateEvent(peer->settings);
+#endif
     }
 
     BOOL rdpServerAdjustMonitorsLayoutCb(freerdp_peer* peer) {
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->connector;
 
+#if defined(FREERDP3_API)
+        return connector && connector->serverAdjustMonitorsEvent(peer->context->settings);
+#else
         return connector && connector->serverAdjustMonitorsEvent(peer->settings);
+#endif
     }
 
     BOOL rdpServerClientCapabilitiesCb(freerdp_peer* peer) {
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->connector;
 
+#if defined(FREERDP3_API)
+        return connector && connector->clientCapabilitiesEvent(peer->context->settings);
+#else
         return connector && connector->clientCapabilitiesEvent(peer->settings);
+#endif
     }
 
     BOOL rdpServerPostConnectCb(freerdp_peer* peer) {
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->connector;
 
+#if defined(FREERDP3_API)
+        return connector && connector->serverPostConnectEvent(peer->context->settings);
+#else
         return connector && connector->serverPostConnectEvent(peer->settings);
+#endif
     }
 
     BOOL rdpServerCloseCb(freerdp_peer* peer) {
@@ -169,7 +189,11 @@ namespace LTSM::Connector {
 
     /// @param flags: KBD_FLAGS_EXTENDED(0x0100), KBD_FLAGS_EXTENDED1(0x0200), KBD_FLAGS_DOWN(0x4000), KBD_FLAGS_RELEASE(0x8000)
     /// @see:  freerdp/input.h
+#if defined(FREERDP3_API)
+    BOOL rdpServerKeyboardEventCb(rdpInput* input, UINT16 flags, BYTE code) {
+#else
     BOOL rdpServerKeyboardEventCb(rdpInput* input, UINT16 flags, UINT16 code) {
+#endif
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->connector;
 
@@ -265,19 +289,37 @@ namespace LTSM::Connector {
             context->clipboard = false;
 
             auto certfile = connector->checkFileOption("rdp:server:certfile");
+#if defined(FREERDP3_API)
+            auto settings = peer->context->settings;
+#else
             auto settings = peer->settings;
+#endif
 
             if(certfile.size()) {
+#if defined(FREERDP3_API)
+                if(auto cert = freerdp_certificate_new_from_file(certfile.c_str())) {
+                    freerdp_settings_set_pointer_len(settings, FreeRDP_RdpServerCertificate, cert, 1);
+                    Application::info("{}: server cert: {}", NS_FuncNameV, certfile);
+                }
+#else
                 settings->CertificateFile = strdup(certfile.c_str());
-                Application::info("{}: server cert: {}", NS_FuncNameV, settings->CertificateFile);
+                Application::info("{}: server cert: {}", NS_FuncNameV, certfile);
+#endif
             }
 
             auto keyfile = connector->checkFileOption("rdp:server:keyfile");
 
             if(keyfile.size()) {
+#if defined(FREERDP3_API)
+                if(auto key = freerdp_key_new_from_file_enc(keyfile.c_str(), nullptr)) {
+                    freerdp_settings_set_pointer_len(settings, FreeRDP_RdpServerRsaKey, key, 1);
+                    Application::info("{}: server key: {}", NS_FuncNameV, keyfile);
+                }
+#else
                 settings->PrivateKeyFile = strdup(keyfile.c_str());
-                settings->RdpKeyFile = strdup(keyfile.c_str());
-                Application::info("{}: server key: {}", NS_FuncNameV, settings->RdpKeyFile);
+                //settings->RdpKeyFile = strdup(keyfile.c_str());
+                Application::info("{}: server key: {}", NS_FuncNameV, keyfile);
+#endif
             }
 
             int encryptionLevel = ENCRYPTION_LEVEL_NONE;
@@ -300,10 +342,17 @@ namespace LTSM::Connector {
             peer->Capabilities = rdpServerCapabilitiesCb;
             peer->AdjustMonitorsLayout = rdpServerAdjustMonitorsLayoutCb;
             peer->ClientCapabilities = rdpServerClientCapabilitiesCb;
+#if defined(FREERDP3_API)
+            peer->context->input->KeyboardEvent = rdpServerKeyboardEventCb;
+            peer->context->input->MouseEvent = rdpServerMouseEventCb;
+            peer->context->update->RefreshRect = rdpServerRefreshRectCb;
+            peer->context->update->SuppressOutput = rdpServerSuppressOutputCb;
+#else
             peer->input->KeyboardEvent = rdpServerKeyboardEventCb;
             peer->input->MouseEvent = rdpServerMouseEventCb;
             peer->update->RefreshRect = rdpServerRefreshRectCb;
             peer->update->SuppressOutput = rdpServerSuppressOutputCb;
+#endif
 
             settings->RdpSecurity = config.getBoolean("rdp:security:rdp", true) ? TRUE : FALSE;
             settings->TlsSecurity = config.getBoolean("rdp:security:tls", true) ? TRUE : FALSE;
@@ -607,10 +656,15 @@ namespace LTSM::Connector {
                     code |= KBDEXT;
                 }
 
+#if defined(FREERDP3_API)
+                constexpr auto type2 = WINPR_KEYCODE_TYPE_EVDEV;
+#else
+                constexpr auto type2 = KEYCODE_TYPE_EVDEV;
+#endif
                 // winpr: input
                 auto vkcode = GetVirtualKeyCodeFromVirtualScanCode(code, 4);
                 auto keycode = GetKeycodeFromVirtualKeyCode((flags & KBD_FLAGS_EXTENDED ? vkcode | KBDEXT : vkcode),
-                    KEYCODE_TYPE_EVDEV);
+                    type2);
                 test->screenInputKeycode(keycode, flags & KBD_FLAGS_DOWN);
             }
         }
@@ -675,6 +729,17 @@ namespace LTSM::Connector {
         co_return;
     }
 
+    asio::awaitable<void> ConnectorRdp::waitUpdateProcessAwait(void) {
+        auto ex = co_await asio::this_coro::executor;
+
+        while(0 < update_jobs_.load()) {
+            asio::steady_timer tm_delay{ex, 1ms};
+            co_await tm_delay.async_wait(asio::use_awaitable);
+        }
+
+        co_return;
+    }
+
     asio::awaitable<void> ConnectorRdp::onLoginSuccessAwait(std::string userName, uint32_t userUid, XCB::Size csz) {
         xcbDisableMessages(true);
         co_await waitUpdateProcessAwait();
@@ -725,9 +790,13 @@ namespace LTSM::Connector {
         Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
                             userName, userUid);
 
+#if defined(FREERDP3_API)
+        auto settings = rdpEvents_->peer->context->settings;
+#else
         auto settings = rdpEvents_->peer->settings;
+#endif
 
-        asio::co_spawn(xcb_strand(), onLoginSuccessAwait(userName, userUid, XCB::Size(settings->DesktopWidth, settings->DesktopHeight)), [this](std::exception_ptr ptr){
+        asio::co_spawn(xcb_strand_, onLoginSuccessAwait(userName, userUid, XCB::Size(settings->DesktopWidth, settings->DesktopHeight)), [this](std::exception_ptr ptr){
             if(ptr) {
                 try {
                     std::rethrow_exception(ptr);
@@ -747,8 +816,13 @@ namespace LTSM::Connector {
     }
 
     void ConnectorRdp::onSendBellSignal(const int32_t & display) {
+#if defined(FREERDP3_API)
+        auto settings = rdpEvents_->peer->context->settings;
+#else
+        auto settings = rdpEvents_->peer->settings;
+#endif
         if(display == displayNum() &&
-           rdpEvents_ && rdpEvents_->peer && rdpEvents_->peer->settings && rdpEvents_->peer->settings->SoundBeepsEnabled) {
+           settings && settings->SoundBeepsEnabled) {
             // FIXME beep
         }
     }
@@ -1043,19 +1117,37 @@ namespace LTSM::Connector {
     void ConnectorRdp::rdpDesktopResizeEvent(const XCB::Size & dsz) {
         auto peer = rdpEvents_->peer;
 
-        peer->settings->DesktopWidth = dsz.width;
-        peer->settings->DesktopHeight = dsz.height;
+#if defined(FREERDP3_API)
+        auto settings = peer->context->settings;
+        auto update = peer->context->update;
+#else
+        auto settings = peer->settings;
+        auto update = peer->update;
+#endif
 
-        if(! peer->update->DesktopResize(peer->update->context)) {
+        settings->DesktopWidth = dsz.width;
+        settings->DesktopHeight = dsz.height;
+
+        if(! update->DesktopResize(update->context)) {
             Application::error("{}: {} failed", NS_FuncNameV, "DesktopResize");
         }
     }
 
     bool ConnectorRdp::rdpUpdateBitmapPlanar(const XCB::Region & reg, const XCB::PixmapInfoReply & reply) {
-        auto context = static_cast<ServerContext*>(rdpEvents_->peer->context);
+        auto peer = rdpEvents_->peer;
+        auto context = static_cast<ServerContext*>(peer->context);
+
+#if defined(FREERDP3_API)
+        auto settings = peer->context->settings;
+        auto update = peer->context->update;
+#else
+        auto settings = peer->settings;
+        auto update = peer->update;
+#endif
+
         const size_t scanLineBytes = reg.width * reply->bytePerPixel();
         const size_t tileSize = 64;
-        const size_t pixelFormat = rdpEvents_->peer->settings->OsMajorType == 6 ? PIXEL_FORMAT_RGBX32 : PIXEL_FORMAT_BGRX32;
+        const size_t pixelFormat = settings->OsMajorType == 6 ? PIXEL_FORMAT_RGBX32 : PIXEL_FORMAT_BGRX32;
 
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
             Application::error("{}: {} failed, length: {}, size: {}, bpp: {}", NS_FuncNameV,
@@ -1067,7 +1159,7 @@ namespace LTSM::Connector {
         if(! context->planar) {
             DWORD planarFlags = PLANAR_FORMAT_HEADER_RLE;
 
-            if(rdpEvents_->peer->settings->DrawAllowSkipAlpha) {
+            if(settings->DrawAllowSkipAlpha) {
                 planarFlags |= PLANAR_FORMAT_HEADER_NA;
             }
 
@@ -1114,7 +1206,7 @@ namespace LTSM::Connector {
                 pixelFormat, subreg.width, subreg.height, scanLineBytes, nullptr, & st.bitmapLength);
             st.cbCompMainBodySize = st.bitmapLength;
 
-            if(rdpEvents_->peer->settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz) {
+            if(settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz) {
                 Application::error("{}: {} failed", NS_FuncNameV, "MultifragMaxRequestSize");
                 throw rdp_error(NS_FuncNameS);
             }
@@ -1123,12 +1215,13 @@ namespace LTSM::Connector {
         }
 
         auto it1 = vec.begin();
+        update->BeginPaint(context);
 
         while(it1 != vec.end()) {
             // calc blocks
             size_t totalSize = 0;
             auto it2 = std::ranges::find_if(it1, vec.end(), [&](auto & st) {
-                if(totalSize + (st.cbCompMainBodySize + hdrsz) > rdpEvents_->peer->settings->MultifragMaxRequestSize) {
+                if(totalSize + (st.cbCompMainBodySize + hdrsz) > settings->MultifragMaxRequestSize) {
                     return true;
                 }
 
@@ -1137,16 +1230,21 @@ namespace LTSM::Connector {
             });
 
             BITMAP_UPDATE bitmapUpdate = {};
+#if defined(FREERDP3_API)
+            bitmapUpdate.number = std::distance(it1, it2);
+#else
             bitmapUpdate.count = bitmapUpdate.number = std::distance(it1, it2);
+#endif
             bitmapUpdate.rectangles = & (*it1);
 
-            if(! rdpEvents_->peer->update->BitmapUpdate(context, & bitmapUpdate)) {
+            if(! update->BitmapUpdate(context, & bitmapUpdate)) {
                 Application::error("{}: {} failed, length: {}", NS_FuncNameV, "BitmapUpdate", totalSize);
                 throw rdp_error(NS_FuncNameS);
             }
 
             it1 = it2;
         }
+        update->EndPaint(context);
 
         for(const auto & st : vec) {
             std::free(st.bitmapDataStream);
@@ -1156,7 +1254,17 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorRdp::rdpUpdateBitmapInterleaved(const XCB::Region & reg, const XCB::PixmapInfoReply & reply) {
-        auto context = static_cast<ServerContext*>(rdpEvents_->peer->context);
+        auto peer = rdpEvents_->peer;
+        auto context = static_cast<ServerContext*>(peer->context);
+
+#if defined(FREERDP3_API)
+        auto settings = peer->context->settings;
+        auto update = peer->context->update;
+#else
+        auto settings = peer->settings;
+        auto update = peer->update;
+#endif
+
         const size_t scanLineBytes = reg.width * reply->bytePerPixel();
         // size fixed: libfreerdp/codec/interleaved.c
         const size_t tileSize = 64;
@@ -1219,6 +1327,7 @@ namespace LTSM::Connector {
         BITMAP_DATA st = {};
         // full size reserved
         auto data = std::make_unique<uint8_t[]>(tileSize * tileSize * 4);
+        update->BeginPaint(context);
 
         for(const auto & subreg : blocks) {
             const int16_t localX = subreg.x - reg.x;
@@ -1246,21 +1355,26 @@ namespace LTSM::Connector {
             st.bitmapDataStream = data.get();
             st.cbCompMainBodySize = st.bitmapLength;
 
-            if(rdpEvents_->peer->settings->MultifragMaxRequestSize < st.bitmapLength + 22) {
+            if(settings->MultifragMaxRequestSize < st.bitmapLength + 22) {
                 Application::error("{}: {} failed", NS_FuncNameV, "MultifragMaxRequestSize");
                 throw rdp_error(NS_FuncNameS);
             }
 
             BITMAP_UPDATE bitmapUpdate = {};
+#if defined(FREERDP3_API)
+            bitmapUpdate.number = 1;
+#else
             bitmapUpdate.count = bitmapUpdate.number = 1;
+#endif
             bitmapUpdate.rectangles = & st;
-            auto ret = rdpEvents_->peer->update->BitmapUpdate(context, & bitmapUpdate);
+            auto ret = update->BitmapUpdate(context, & bitmapUpdate);
 
             if(! ret) {
                 Application::error("{}: {} failed", NS_FuncNameV, "BitmapUpdate");
                 throw rdp_error(NS_FuncNameS);
             }
         }
+        update->EndPaint(context);
 
         return true;
     }
