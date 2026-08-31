@@ -25,6 +25,7 @@
 #define _LTSM_CONNECTOR_RDP_
 
 #include <mutex>
+#include <atomic>
 #include <exception>
 
 #include "ltsm_sockets.h"
@@ -42,12 +43,26 @@ namespace LTSM::Connector {
 
     class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected InetStream {
         std::unique_ptr<FreeRdpEvents> rdpEvents_;
-        PixelFormat serverFormat_;
+        PixelFormat serverPf_;
         XCB::Region damageRegion_;
+
         std::once_flag stopFlag_;
+        std::atomic<uint16_t> update_jobs_{0};
+
         uint32_t frameRate_{16};
+        bool x11NoDamage_{false};
+
+        std::unique_ptr<JsonObject> keymap_;
+
+        boost::asio::cancellation_signal rdp_events_cancel_;
+        boost::asio::cancellation_signal xcb_events_cancel_;
+        boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
+        boost::asio::strand<boost::asio::any_io_executor> rdp_strand_;
+        boost::asio::steady_timer tm_not_activated_;
 
       protected:
+        void notActivatedCb(const boost::system::error_code &);
+
         // dbus virtual signals
         void onLoginSuccess(const int32_t & display, const std::string & userName,
                             const uint32_t & userUid) override;
@@ -62,14 +77,16 @@ namespace LTSM::Connector {
         void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
         void xcbXkbGroupChangedEvent(int) override;
 
-        bool updateRegionEvent(const XCB::Region &);
-        bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
-        bool updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
-        void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
-        void disconnectedEvent(void);
+        void xcbUpdateDisplay(void);
+        void xcbKeyboardEvent(uint16_t flags, uint16_t code);
+        void xcbMouseEvent(uint16_t flags, uint16_t posx, uint16_t posy);
 
-        bool channelsInit(void);
-        void channelsFree(void);
+        bool rdpUpdateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
+        bool rdpUpdateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
+        void rdpDesktopResizeEvent(const XCB::Size &);
+
+        bool rdpChannelsInit(void);
+        void rdpChannelsFree(void);
 
       public:
         ConnectorRdp(const std::filesystem::path & confile, bool debug);
@@ -78,30 +95,26 @@ namespace LTSM::Connector {
         void stop(void) noexcept;
         int start(void) final;
 
-        bool createX11Session(uint8_t depth);
-        bool updateDisplayEvent(bool nodamage);
         uint32_t frameRateOption(void) const;
+        bool xcbNoDamageOption(void) const;
+
+        boost::asio::awaitable<void> xcbEventsAwait(void);
+        boost::asio::awaitable<void> createX11SessionAwait(void);
 
         void setEncryptionInfo(const std::string &);
         void setAutoLogin(const std::string &, const std::string &);
 
-        // freerdp callback func
-        static BOOL rdpServerPostConnect(freerdp_peer* client);
-        static BOOL rdpServerActivate(freerdp_peer* client);
-        static BOOL rdpServerAuthenticate(freerdp_peer* client, const char** user, const char** domain,
-                                         const char** password);
-        static BOOL rdpServerSynchronizeEvent(rdpInput* input, UINT32 flags);
-        static BOOL rdpServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
-        static BOOL rdpServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
-        static BOOL rdpServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
-        static BOOL rdpServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
-        static BOOL rdpServerRefreshRequest(freerdp_peer* client);
-
-        static BOOL rdpServerClose(freerdp_peer* client);
-        static void rdpServerDisconnect(freerdp_peer* client);
-        static BOOL rdpServerCapabilities(freerdp_peer* client);
-        static BOOL rdpServerAdjustMonitorsLayout(freerdp_peer* client);
-        static BOOL rdpServerClientCapabilities(freerdp_peer* client);
+        bool serverCapabilitiesEvent(rdpSettings*);
+        bool clientCapabilitiesEvent(const rdpSettings*);
+        bool serverActivateEvent(const rdpSettings*);
+        bool serverAdjustMonitorsEvent(const rdpSettings*);
+        bool serverPostConnectEvent(const rdpSettings*);
+        bool serverKeyboardEvent(uint16_t flags, uint16_t code);
+        bool serverMouseEvent(uint16_t flags, uint16_t posx, uint16_t posy);
+        bool serverRefreshEvent(uint8_t counts, const RECTANGLE_16*);
+        bool serverSuppressEvent(bool allow);
+        void serverDisconnectEvent(void);
+        bool serverCloseEvent(void);
     };
 }
 

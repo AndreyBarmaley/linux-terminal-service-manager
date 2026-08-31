@@ -224,11 +224,12 @@ namespace LTSM::Connector {
     }
 
     asio::awaitable<void> ConnectorLtsm::connectorHandshakeVersionAwait(void) {
-        // Xvfb: session request
-        int screen = busStartLoginSession(getpid(), 24, remoteAddress(), "ltsm");
+        // session request
+        const int depth = 24;
+        int screen = busStartLoginSession(getpid(), depth, remoteAddress(), "ltsm");
 
         if(screen <= 0) {
-            Application::error("{}: login session request: failure", NS_FuncNameV);
+            Application::error("{}: {} failed", NS_FuncNameV, "login session request");
             throw proto_error(NS_FuncNameS);
         }
 
@@ -350,8 +351,7 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorLtsm::xcbNoDamageOption(void) const {
-        return isClientLtsmSupported() ?
-               static_cast<bool>(x11NoDamage_) : false;
+        return isClientLtsmSupported() && x11NoDamage_;
     }
 
     void ConnectorLtsm::xcbDisableMessages(bool f) {
