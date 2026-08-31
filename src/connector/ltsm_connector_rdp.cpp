@@ -311,7 +311,7 @@ namespace LTSM::Connector {
 
             if(keyfile.size()) {
 #if defined(FREERDP3_API)
-                if(auto key = freerdp_key_new_from_file_enc(keyfile.c_str(), nullptr)) {
+                if(auto key = freerdp_key_new_from_file(keyfile.c_str())) {
                     freerdp_settings_set_pointer_len(settings, FreeRDP_RdpServerRsaKey, key, 1);
                     Application::info("{}: server key: {}", NS_FuncNameV, keyfile);
                 }
