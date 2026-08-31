@@ -92,7 +92,7 @@ namespace LTSM::Connector {
         context->vcm = WTSOpenServerA((LPSTR) peer->context);
 
         if(! context->vcm || context->vcm == INVALID_HANDLE_VALUE) {
-            Application::error("{}: failed", "WTSOpenServer");
+            Application::error("{}: {} failed", NS_FuncNameV, "WTSOpenServer");
             return FALSE;
         }
 
@@ -102,7 +102,6 @@ namespace LTSM::Connector {
         context->config = nullptr;
         context->conrdp = nullptr;
         context->keymap.reset();
-        Application::info("{}: success", NS_FuncNameV);
         return TRUE;
     }
 
@@ -140,7 +139,7 @@ namespace LTSM::Connector {
 
         FreeRdpEvents(int clientFd, const std::string & remoteaddr, const JsonObject & config,
                         ConnectorRdp* connector) : peer(nullptr), context(nullptr) {
-            Application::info("freerdp version usage: {}, winpr: {}", FREERDP_VERSION_FULL, WINPR_VERSION_FULL);
+            Application::info("{}: FreeRDP API version usage: {}, winpr: {}", NS_FuncNameV, FREERDP_VERSION_FULL, WINPR_VERSION_FULL);
             winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
             WTSRegisterWtsApiFunctionTable(FreeRDP_InitWtsApi());
             // init freerdp log system
@@ -180,12 +179,12 @@ namespace LTSM::Connector {
             peer->ContextFree = (psPeerContextFree) ServerContextFree;
 
             if(! freerdp_peer_context_new(peer)) {
-                Application::error("{}: failed", "freerdp_peer_context_new");
+                Application::error("{}: {} failed", NS_FuncNameV, "freerdp_peer_context_new");
                 throw rdp_error(NS_FuncNameS);
             }
 
-            Application::debug(DebugType::App, "peer context: {}", fmt::ptr(peer));
-            Application::debug(DebugType::App, "rdp context: {}", fmt::ptr(peer->context));
+            Application::debug(DebugType::App, "{}: peer context: {}", NS_FuncNameV, fmt::ptr(peer));
+            Application::debug(DebugType::App, "{}: rdp context: {}", NS_FuncNameV, fmt::ptr(peer->context));
             context = static_cast<ServerContext*>(peer->context);
             context->config = & config;
             context->conrdp = connector;
@@ -196,7 +195,7 @@ namespace LTSM::Connector {
 
                 if(jc.isValid() && jc.isObject()) {
                     context->keymap = std::make_unique<JsonObject>(jc.toObject());
-                    Application::info("keymap loaded: {}, items: {}", keymapFile, context->keymap->size());
+                    Application::info("{}: keymap loaded: {}, items: {}", NS_FuncNameV, keymapFile, context->keymap->size());
                 }
             }
 
@@ -204,7 +203,7 @@ namespace LTSM::Connector {
 
             if(certfile.size()) {
                 peer->settings->CertificateFile = strdup(certfile.c_str());
-                Application::info("server cert: {}", peer->settings->CertificateFile);
+                Application::info("{}: server cert: {}", NS_FuncNameV, peer->settings->CertificateFile);
             }
 
             auto keyfile = connector->checkFileOption("rdp:server:keyfile");
@@ -212,7 +211,7 @@ namespace LTSM::Connector {
             if(keyfile.size()) {
                 peer->settings->PrivateKeyFile = strdup(keyfile.c_str());
                 peer->settings->RdpKeyFile = strdup(keyfile.c_str());
-                Application::info("server key: {}", peer->settings->RdpKeyFile);
+                Application::info("{}: server key: {}", NS_FuncNameV, peer->settings->RdpKeyFile);
             }
 
             int encryptionLevel = ENCRYPTION_LEVEL_NONE;
@@ -306,7 +305,7 @@ namespace LTSM::Connector {
         }
 
         bool enterEventLoop(bool nodamage) {
-            Application::info("{}: enter event loop", NS_FuncNameV);
+            Application::info("{}: start event loop", NS_FuncNameV);
             ConnectorRdp* connector = context->conrdp;
 
             using TimePointSeconds = Tools::TimePoint<std::chrono::seconds>;
@@ -396,7 +395,6 @@ namespace LTSM::Connector {
             if(0 < displayNum()) {
                 busConnectorTerminated(displayNum(), getpid());
                 disconnectedEvent();
-                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
             }
         } catch(const std::exception & err) {
             Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
@@ -422,7 +420,6 @@ namespace LTSM::Connector {
         Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
 
         // create FreeRdpEvents
-        Application::info("{}: {}", NS_FuncNameV, "create freerdp context");
         rdpEvents_ = std::make_unique<FreeRdpEvents>(InetStream::fd(), remoteAddress(), config(), this);
         damageRegion_.assign(0, 0, 0, 0);
 
@@ -491,22 +488,22 @@ namespace LTSM::Connector {
         int screen = busStartLoginSession(getpid(), depth, remoteAddress(), "rdp");
 
         if(screen <= 0) {
-            Application::error("{}", "login session request failure");
+            Application::error("{}: {} failed", NS_FuncNameV, "login session request");
             return false;
         }
 
-        Application::debug(DebugType::App, "login session request success, display: {}", screen);
+        Application::debug(DebugType::App, "{}: success, display: {}", NS_FuncNameV, screen);
         rdpEvents_->xcbDisconnected();
 
         if(! xcbConnect(screen, *this)) {
-            Application::error("{}", "xcb connect failed");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
             return false;
         }
 
         const xcb_visualtype_t* visual = XCB::RootDisplay::visual();
 
         if(! visual) {
-            Application::error("{}", "xcb visual empty");
+            Application::error("{}: {} failed", NS_FuncNameV, "xcb visual");
             return false;
         }
 
