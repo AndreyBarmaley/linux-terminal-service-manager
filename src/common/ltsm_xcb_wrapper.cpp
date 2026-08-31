@@ -2192,7 +2192,7 @@ namespace LTSM {
     }
 
     int XCB::Connector::hasError(void) const {
-        return xcb_connection_has_error(_conn.get());
+        return _conn ? xcb_connection_has_error(_conn.get()) : -1;
     }
 
     bool XCB::Connector::setWindowGeometry(xcb_window_t win, const Region & geom) {
