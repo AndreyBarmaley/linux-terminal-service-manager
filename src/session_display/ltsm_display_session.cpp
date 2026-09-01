@@ -369,7 +369,7 @@ namespace LTSM::DisplaySession {
 
         co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
         Application::info("{}: cmd: {}, pid: {}, display: {}, socket: {}",
-                NS_FuncNameV, xorgBin, res.ps_xorg_->id(), displayNum, socket_path);
+                          NS_FuncNameV, xorgBin, res.ps_xorg_->id(), displayNum, socket_path);
 
         co_return res;
     }
@@ -400,7 +400,8 @@ namespace LTSM::DisplaySession {
         ArgsList sessionArgs;
 
         std::unordered_map<bp::environment::key, bp::environment::value> sessionEnvs;
-        for (const auto& kv: bp::environment::current()) {
+
+        for(const auto& kv : bp::environment::current()) {
             sessionEnvs[kv.key()] = kv.value();
         }
 
@@ -443,14 +444,14 @@ namespace LTSM::DisplaySession {
         X11SessionBase res;
         // start Session
         res.ps_sess_ = std::make_shared<bp::process>(ex, sessionBin, std::move(sessionArgs),
-                bp::process_environment{sessionEnvs}, SessionProcess::createRedirect(sessionBin));
+                       bp::process_environment{sessionEnvs}, SessionProcess::createRedirect(sessionBin));
 
         // wait dbus
         const uint32_t deadline_ms = json.configGetInteger("xvfb:timeout", 3500);
         res.dbus_address_ = co_await waitSessionDbusAddressAwait(displayNum, deadline_ms);
 
         Application::info("{}: cmd: {}, pid: {}, display: {}, dbus address: `{}'",
-                NS_FuncNameV, sessionBin, res.ps_sess_->id(), displayNum, res.dbus_address_);
+                          NS_FuncNameV, sessionBin, res.ps_sess_->id(), displayNum, res.dbus_address_);
 
         co_return res;
     }
@@ -520,7 +521,8 @@ namespace LTSM::DisplaySession {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", NS_FuncNameV, cmd, Tools::join(args, ", "));
 
         std::unordered_map<bp::environment::key, bp::environment::value> p_envs;
-        for (const auto& kv: bp::environment::current()) {
+
+        for(const auto& kv : bp::environment::current()) {
             p_envs[kv.key()] = kv.value();
         }
 
@@ -537,7 +539,7 @@ namespace LTSM::DisplaySession {
             Application::debug(DebugType::Dbus, "{}: running cmd: {}, pid: {}", NS_FuncNameV, cmd, pid);
             child_pids_.insert(pid);
 
-            asio::co_spawn(ioc_, [self=shared_from_this(),proc=std::move(proc),cmd,pid]() mutable -> asio::awaitable<void> {
+            asio::co_spawn(ioc_, [self = shared_from_this(), proc = std::move(proc), cmd, pid]() mutable -> asio::awaitable<void> {
                 StdoutBuf res;
 
                 try {
@@ -573,7 +575,8 @@ namespace LTSM::DisplaySession {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", NS_FuncNameV, cmd, Tools::join(args, ", "));
 
         std::unordered_map<bp::environment::key, bp::environment::value> p_envs;
-        for (const auto& kv: bp::environment::current()) {
+
+        for(const auto& kv : bp::environment::current()) {
             p_envs[kv.key()] = kv.value();
         }
 
@@ -592,10 +595,10 @@ namespace LTSM::DisplaySession {
             system::error_code ec;
             asio::read(proc, asio::dynamic_buffer(res), ec);
 
-            if (ec && ec != asio::error::eof) {
+            if(ec && ec != asio::error::eof) {
                 throw system::system_error(ec);
             }
-        
+
             int exit_code = proc.wait();
             Application::debug(DebugType::Dbus, "{}: {} exited, pid: {}, code: {}", "WaitProcess", cmd, proc.id(), exit_code);
 
@@ -652,7 +655,7 @@ namespace LTSM::DisplaySession {
             ps_xorg_->request_exit();
         }
 
-        for(auto pid: child_pids_) {
+        for(auto pid : child_pids_) {
             kill(pid, SIGTERM);
         }
 
