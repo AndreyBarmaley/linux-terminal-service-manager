@@ -274,11 +274,15 @@ namespace LTSM::Connector {
 #ifdef LTSM_WITH_GSSAPI
 
         if(auto info = ServerEncoder::authInfo(); ! info.first.empty()) {
-            const auto & login = info.first;
-            helperSetSessionLoginPassword(displayNum(), login, "", false);
-            // not so fast
-            std::this_thread::sleep_for(50ms);
-            busSetAuthenticateToken(displayNum(), login);
+            asio::co_spawn(ioc(), [this,login=info.first]() -> asio::awaitable<void> {
+                helperSetSessionLoginPassword(displayNum(), login, "", false);
+                // not so fast
+                auto ex = co_await asio::this_coro::executor;
+                asio::steady_timer tm_delay{ex, 200ms};
+                co_await tm_delay.async_wait(asio::use_awaitable);
+                busSetAuthenticateToken(displayNum(), login);
+                co_return;
+            }, asio::detached);
         }
 
 #endif
@@ -392,13 +396,16 @@ namespace LTSM::Connector {
                 return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
             });
 
-            asio::dispatch(xcb_strand(), [this, group = std::distance(names.begin(), it)]() {
+            asio::co_spawn(xcb_strand(), [this, group = std::distance(names.begin(), it)]() -> asio::awaitable<void> {
                 if(auto xkb = static_cast<const XCB::ModuleXkb*>(RootDisplay::getExtension(XCB::Module::XKB))) {
                     // wait pause for apply layouts
-                    std::this_thread::sleep_for(200ms);
+                    auto ex = co_await asio::this_coro::executor;
+                    asio::steady_timer tm_delay{ex, 200ms};
+                    co_await tm_delay.async_wait(asio::use_awaitable);
                     xkb->switchLayoutGroup(group);
                 }
-            });
+                co_return;
+            }, asio::detached);
         }
 
         if(auto opts = jo.getObject("options")) {
