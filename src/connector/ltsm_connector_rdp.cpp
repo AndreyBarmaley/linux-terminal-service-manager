@@ -692,10 +692,6 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorRdp::setEncryptionInfo(const std::string & info) {
-        busSetEncryptionInfo(displayNum(), info);
-    }
-
     void ConnectorRdp::setAutoLogin(const std::string & login, const std::string & pass) {
         helperSetSessionLoginPassword(displayNum(), login, pass, false);
     }
@@ -944,7 +940,7 @@ namespace LTSM::Connector {
         }
 
         if(encryptionInfo.size()) {
-            setEncryptionInfo(encryptionInfo);
+            busSetEncryptionInfo(displayNum(), encryptionInfo);
         }
 
         rdpEvents_->context->activated = true;
@@ -969,7 +965,7 @@ namespace LTSM::Connector {
         return true;
     }
 
-    bool ConnectorRdp::clientCapabilitiesEvent(const rdpSettings* settings) {
+    bool ConnectorRdp::clientCapabilitiesEvent(const rdpSettings* settings) const {
         Application::info("{}: settings - {}: {:#010x}", NS_FuncNameV, "RdpVersion", settings->RdpVersion);
         Application::info("{}: settings - {}: {:#06x}", NS_FuncNameV, "OsMajorType", settings->OsMajorType);
         Application::info("{}: settings - {}: {:#06x}", NS_FuncNameV, "OsMinorType", settings->OsMinorType);
@@ -1008,7 +1004,7 @@ namespace LTSM::Connector {
         return true;
     }
 
-    bool ConnectorRdp::serverAdjustMonitorsEvent(const rdpSettings* settings) {
+    bool ConnectorRdp::serverAdjustMonitorsEvent(const rdpSettings* settings) const {
         UINT32 monitorCount = freerdp_settings_get_uint32(settings, FreeRDP_MonitorCount);
         Application::info("{}: monitors: {}", NS_FuncNameV, monitorCount);
         return true;
@@ -1037,7 +1033,7 @@ namespace LTSM::Connector {
         asio::post(ioc(), std::bind(&ConnectorRdp::stop, this));
     }
 
-    bool ConnectorRdp::serverCloseEvent(void) {
+    bool ConnectorRdp::serverCloseEvent(void) const {
         Application::info("{}: event", NS_FuncNameV);
         return true;
     }

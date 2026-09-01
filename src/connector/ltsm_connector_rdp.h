@@ -87,9 +87,12 @@ namespace LTSM::Connector {
 
         bool rdpChannelsInit(void);
         void rdpChannelsFree(void);
+        void setAutoLogin(const std::string &, const std::string &);
 
+        boost::asio::awaitable<void> createX11SessionAwait(void);
         boost::asio::awaitable<void> onLoginSuccessAwait(std::string userName, uint32_t userUid, XCB::Size);
         boost::asio::awaitable<void> waitUpdateProcessAwait(void);
+        boost::asio::awaitable<void> xcbEventsAwait(void);
 
       public:
         ConnectorRdp(const std::filesystem::path & confile, bool debug);
@@ -101,23 +104,17 @@ namespace LTSM::Connector {
         uint32_t frameRateOption(void) const;
         bool xcbNoDamageOption(void) const;
 
-        boost::asio::awaitable<void> xcbEventsAwait(void);
-        boost::asio::awaitable<void> createX11SessionAwait(void);
-
-        void setEncryptionInfo(const std::string &);
-        void setAutoLogin(const std::string &, const std::string &);
-
         bool serverCapabilitiesEvent(rdpSettings*);
-        bool clientCapabilitiesEvent(const rdpSettings*);
+        bool clientCapabilitiesEvent(const rdpSettings*) const;
         bool serverActivateEvent(const rdpSettings*);
-        bool serverAdjustMonitorsEvent(const rdpSettings*);
+        bool serverAdjustMonitorsEvent(const rdpSettings*) const;
         bool serverPostConnectEvent(const rdpSettings*);
         bool serverKeyboardEvent(uint16_t flags, uint16_t code);
         bool serverMouseEvent(uint16_t flags, uint16_t posx, uint16_t posy);
         bool serverRefreshEvent(uint8_t counts, const RECTANGLE_16*);
         bool serverSuppressEvent(bool allow);
         void serverDisconnectEvent(void);
-        bool serverCloseEvent(void);
+        bool serverCloseEvent(void) const;
     };
 }
 
