@@ -696,10 +696,9 @@ namespace LTSM::Connector {
         helperSetSessionLoginPassword(displayNum(), login, pass, false);
     }
 
-    asio::awaitable<void> ConnectorRdp::createX11SessionAwait(void) {
+    asio::awaitable<void> ConnectorRdp::createX11SessionAwait(const XCB::Size& csz, uint8_t depth) {
         // session request
-        const int depth = 24;
-        int screen = busStartLoginSession(getpid(), depth, remoteAddress(), "rdp");
+        int screen = busStartLoginSession(getpid(), csz.width, csz.height, depth, remoteAddress(), "rdp");
 
         if(screen <= 0) {
             Application::error("{}: {} failed", NS_FuncNameV, "login session request");
@@ -755,9 +754,6 @@ namespace LTSM::Connector {
             co_await xcbConnectAwait(newDisplay, xauthFile, *this);
         }
 
-        xcbDisableMessages(false);
-
-        // fix new session size
         if(auto wsz = RootDisplay::size(); wsz != csz) {
             Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
                                  csz, displayNum());
@@ -766,10 +762,10 @@ namespace LTSM::Connector {
                 wsz = RootDisplay::size();
                 Application::info("{}: change session size: {}, display: {}", NS_FuncNameV, wsz, displayNum());
             }
-        } else {
-            // full update
-            serverScreenUpdateRequest(RootDisplay::region());
         }
+
+        xcbDisableMessages(false);
+        serverScreenUpdateRequest(XCB::Region{0,0,csz.width,csz.height});
 
         auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
         setIdleTimeoutSec(json.getInteger("session:idle:timeout", 0));
@@ -792,7 +788,9 @@ namespace LTSM::Connector {
         auto settings = rdpEvents_->peer->settings;
 #endif
 
-        asio::co_spawn(xcb_strand_, onLoginSuccessAwait(userName, userUid, XCB::Size(settings->DesktopWidth, settings->DesktopHeight)), [this](std::exception_ptr ptr){
+        asio::co_spawn(xcb_strand_, onLoginSuccessAwait(userName, userUid, XCB::Size(settings->DesktopWidth, settings->DesktopHeight)),
+            // exit callback
+            [this](std::exception_ptr ptr) {
             if(ptr) {
                 try {
                     std::rethrow_exception(ptr);
@@ -839,12 +837,13 @@ namespace LTSM::Connector {
             return future.get();
         }
 
-        Application::info("{}: desktop size: [{}, {}], depth: {}",
-                         NS_FuncNameV, settings->DesktopWidth, settings->DesktopHeight, settings->ColorDepth);
+        Application::info("{}: desktop size: {}, depth: {}",
+                         NS_FuncNameV, XCB::Size(settings->DesktopWidth, settings->DesktopHeight), settings->ColorDepth);
 
-        auto res = asio::co_spawn(xcb_strand_, [this]() -> asio::awaitable<bool> {
+        auto csz = XCB::Size(settings->DesktopWidth, settings->DesktopHeight);
+        auto res = asio::co_spawn(xcb_strand_, [this, csz, depth=settings->ColorDepth]() -> asio::awaitable<bool> {
             try {
-                co_await createX11SessionAwait();
+                co_await createX11SessionAwait(csz, depth);
                 co_return true;
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
@@ -874,6 +873,9 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorRdp::serverActivateEvent(const rdpSettings* settings) {
+        Application::info("{}: desktop size: {}, depth: {}",
+                         NS_FuncNameV, XCB::Size(settings->DesktopWidth, settings->DesktopHeight), settings->ColorDepth);
+
         if(1) {
             Application::info("{}: settings - {}: {:#010x}", NS_FuncNameV, "RdpVersion", settings->RdpVersion);
             Application::info("{}: settings - {}: {:#06x}", NS_FuncNameV, "OsMajorType", settings->OsMajorType);
@@ -966,6 +968,9 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorRdp::clientCapabilitiesEvent(const rdpSettings* settings) const {
+        Application::info("{}: desktop size: {}, depth: {}",
+                         NS_FuncNameV, XCB::Size(settings->DesktopWidth, settings->DesktopHeight), settings->ColorDepth);
+
         Application::info("{}: settings - {}: {:#010x}", NS_FuncNameV, "RdpVersion", settings->RdpVersion);
         Application::info("{}: settings - {}: {:#06x}", NS_FuncNameV, "OsMajorType", settings->OsMajorType);
         Application::info("{}: settings - {}: {:#06x}", NS_FuncNameV, "OsMinorType", settings->OsMinorType);
@@ -1011,19 +1016,6 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorRdp::serverPostConnectEvent(const rdpSettings* settings) {
-        auto wsz = XCB::Size(settings->DesktopWidth, settings->DesktopHeight);
-
-        Application::info("{}: desktop: {}, depth: {}",
-                NS_FuncNameV, wsz, settings->ColorDepth);
-
-        auto dsz = RootDisplay::size();
-
-        if(wsz != dsz) {
-            asio::post(xcb_strand_, [this, wsz](){
-                Application::info("{}: request desktop resize: {}", NS_FuncNameV, wsz);
-                RootDisplay::setRandrScreenSize(wsz);
-            });
-        }
 
         return rdpChannelsInit();
     }

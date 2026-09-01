@@ -7,6 +7,8 @@
         </method>
         <method name="busStartLoginSession">
             <arg type="i" name="connectorId" direction="in" />
+            <arg type="q" name="width" direction="in" />
+            <arg type="q" name="height" direction="in" />
             <arg type="y" name="depth" direction="in" />
             <arg type="s" name="remoteAddr" direction="in" />
             <arg type="s" name="connType" direction="in" />

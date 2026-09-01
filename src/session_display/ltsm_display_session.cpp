@@ -275,6 +275,13 @@ namespace LTSM::DisplaySession {
         res.default_height_ = json.configGetInteger("default:height", 1024);
         res.default_depth_ = json.configGetInteger("default:depth", 24);
 
+        if(auto val = getenv("SESSION_SIZE")) {
+            size_t idx;
+            res.default_width_ = std::stoi(val, &idx);
+            res.default_height_ = std::stoi(val + idx + 1);
+            Application::info("{}: client request session size: {}", NS_FuncNameV, XCB::Size(res.default_width_, res.default_height_));
+        }
+
         switch(res.default_depth_) {
             case 32:
                 // xorg supported: 30, 24, 16, 15, 8
@@ -370,6 +377,26 @@ namespace LTSM::DisplaySession {
         co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
         Application::info("{}: cmd: {}, pid: {}, display: {}, socket: {}",
                           NS_FuncNameV, xorgBin, res.ps_xorg_->id(), displayNum, socket_path);
+
+        if(useXorg) {
+            // xrandr job
+            asio::co_spawn(ex, [display=res.display_num_,dsz=XCB::Size(res.default_width_, res.default_height_)]() -> asio::awaitable<void> {
+                int attempts = 5;
+                auto ex = co_await asio::this_coro::executor;
+                asio::steady_timer tm_pause{ex};
+                while(0 < attempts--) {
+                    tm_pause.expires_after(100ms);
+                    co_await tm_pause.async_wait(asio::use_awaitable);
+                    try {
+                        if(XCB::RootDisplay(display).setRandrScreenSize(dsz)) {
+                            break;
+                        }
+                    } catch(const std::exception&) {
+                    }
+                }
+                co_return;
+            }, asio::detached);
+        }
 
         co_return res;
     }

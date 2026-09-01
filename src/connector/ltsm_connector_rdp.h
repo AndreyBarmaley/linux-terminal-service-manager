@@ -89,7 +89,7 @@ namespace LTSM::Connector {
         void rdpChannelsFree(void);
         void setAutoLogin(const std::string &, const std::string &);
 
-        boost::asio::awaitable<void> createX11SessionAwait(void);
+        boost::asio::awaitable<void> createX11SessionAwait(const XCB::Size&, uint8_t depth);
         boost::asio::awaitable<void> onLoginSuccessAwait(std::string userName, uint32_t userUid, XCB::Size);
         boost::asio::awaitable<void> waitUpdateProcessAwait(void);
         boost::asio::awaitable<void> xcbEventsAwait(void);

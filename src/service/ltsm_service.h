@@ -428,7 +428,7 @@ namespace LTSM::Manager {
       private: /* virtual dbus methods */
         int32_t busGetServiceVersion(void) override;
         void busShutdownService(void) override;
-        int32_t busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
+        int32_t busStartLoginSession(const int32_t & connectorId, const uint16_t& width, const uint16_t& height, const uint8_t & depth,
                                      const std::string & remoteAddr, const std::string & connType) override;
         int32_t busStartUserSession(const int32_t & oldDisplay, const int32_t & connectorId,
                                     const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;

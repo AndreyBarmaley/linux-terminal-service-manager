@@ -126,11 +126,8 @@ namespace LTSM::Connector {
         }
 
         co_await xcbShmInit(userUid);
-
-        xcbDisableMessages(false);
         const auto clientRegion = getClientRegion();
 
-        // fix new session size
         if(RootDisplay::size() != clientRegion.toSize()) {
             Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
                                  clientRegion.toSize(), displayNum());
@@ -139,10 +136,11 @@ namespace LTSM::Connector {
                 Application::info("{}: change session size: {}, display: {}",
                         NS_FuncNameV, clientRegion.toSize(), displayNum());
             }
-        } else {
-            // full update
-            X11Server::serverScreenUpdateRequest();
         }
+
+        xcbDisableMessages(false);
+        // full update
+        X11Server::serverScreenUpdateRequest();
 
         auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
 
@@ -225,8 +223,10 @@ namespace LTSM::Connector {
 
     asio::awaitable<void> ConnectorLtsm::connectorHandshakeVersionAwait(void) {
         // session request
-        const int depth = 24;
-        int screen = busStartLoginSession(getpid(), depth, remoteAddress(), "ltsm");
+        const uint16_t width = 0;
+        const uint16_t height = 0;
+        const uint8_t depth = 24;
+        int screen = busStartLoginSession(getpid(), width, height, depth, remoteAddress(), "ltsm");
 
         if(screen <= 0) {
             Application::error("{}: {} failed", NS_FuncNameV, "login session request");

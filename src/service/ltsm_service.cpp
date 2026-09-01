@@ -1576,12 +1576,22 @@ namespace LTSM::Manager {
         return nullptr;
     }
 
-    int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
-            const std::string & remoteAddr, const std::string & connType) {
+    int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint16_t& width, const uint16_t& height,
+            const uint8_t & depth, const std::string & remoteAddr, const std::string & connType) {
         Application::debug(DebugType::Dbus, "{}: login request, remote: {}, type: {}",
                            NS_FuncNameV, remoteAddr, connType);
 
-        auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
+        EnvironmentsMap envs;
+
+        if(width && height) {
+            envs.emplace("SESSION_SIZE", fmt::format("{}x{}", width, height));
+        }
+
+        if(depth) {
+            envs.emplace("SESSION_DEPTH", std::to_string(static_cast<int>(depth)));
+        }
+
+        auto sess = runNewDisplaySession(ltsm_user_conn, "", std::move(envs), {});
 
         if(sess) {
             // registered DisplaySession job
