@@ -676,7 +676,7 @@ namespace LTSM::DisplaySession {
                 int signal = co_await signals.async_wait(asio::use_awaitable);
 
                 if(signal == SIGTERM || signal == SIGINT) {
-                    Application::info("{}: {} signal shutdown...", NS_FuncNameV);
+                    Application::info("{}: signal shutdown...", NS_FuncNameV);
                     asio::post(ioc_, [self = shared_from_this()]() {
                         self->stop();
                     });
@@ -700,7 +700,7 @@ namespace LTSM::DisplaySession {
             auto& proc = self->ps_xorg_;
             auto exit_code = co_await proc->async_wait(asio::use_awaitable);
             Application::info("{}: {} exited, pid: {}, code: {}, service shutdown...", "WaitProcess", "xorg", proc->id(), exit_code);
-            proc->detached();
+            proc->detach();
             std::raise(SIGTERM);
             co_return;
         }, asio::detached);
@@ -709,7 +709,7 @@ namespace LTSM::DisplaySession {
             auto& proc = self->ps_sess_;
             auto exit_code = co_await proc->async_wait(asio::use_awaitable);
             Application::info("{}: {} exited, pid: {}, code: {}, service shutdown...", "WaitProcess", "session", proc->id(), exit_code);
-            proc->detached();
+            proc->detach();
             std::raise(SIGTERM);
             co_return;
         }, asio::detached);
