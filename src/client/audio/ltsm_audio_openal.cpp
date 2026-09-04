@@ -108,6 +108,9 @@ namespace LTSM {
     }
 
     OpenAL::Playback::~Playback() {
+        alSourceStop(sourceId);
+        alSourcei(sourceId, AL_BUFFER, 0);
+
         alDeleteSources(1, & sourceId);
         alcMakeContextCurrent(nullptr);
 
