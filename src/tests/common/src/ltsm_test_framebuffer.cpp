@@ -146,7 +146,7 @@ TEST(PixelFormatTest, FormatConversion) {
     uint32_t pixel16 = fmt32.convertTo(pixel32, fmt16);
     EXPECT_EQ(pixel16, 0xFFFF);
 
-    uint32_t converted_back = fmt16.convertFrom(fmt32, pixel16);
+    [[maybe_unused]] uint32_t converted_back = fmt16.convertFrom(fmt32, pixel16);
     EXPECT_NO_THROW(fmt32.convertFrom(fmt16, pixel16));
 }
 
@@ -292,7 +292,7 @@ TEST(FrameBufferTest, AnalysisAndSerialization) {
 TEST(FrameBufferTest, RawPixelStaticDecoder) {
     uint32_t le_pixel = 0x12345678;
 
-    uint32_t decoded = FrameBuffer::rawPixel(&le_pixel, 32, false /* Little Endian */);
+    [[maybe_unused]] uint32_t decoded = FrameBuffer::rawPixel(&le_pixel, 32, false /* Little Endian */);
     EXPECT_NO_THROW(FrameBuffer::rawPixel(&le_pixel, 32, true));
 }
 

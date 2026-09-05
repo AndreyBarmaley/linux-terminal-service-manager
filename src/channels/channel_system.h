@@ -635,7 +635,6 @@ namespace LTSM {
         virtual void sendLtsmChannelData(CID, std::vector<uint8_t>&&) = 0;
         virtual void sendLtsmChannelData(CID, std::string&&) = 0;
         virtual bool serverSide(void) const = 0;
-        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const = 0;
         virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
             return false;
         }

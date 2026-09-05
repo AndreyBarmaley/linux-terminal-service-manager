@@ -71,6 +71,7 @@ namespace LTSM {
         boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t type) override;
         void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
         void decoderInitEvent(RFB::DecodingBase*) override;
+        void systemLoginSuccessEvent(const JsonObject &) override { /* empty */ }
 
         int startSocket(std::string_view host, int port) const;
 

@@ -202,6 +202,8 @@ namespace LTSM {
         }
 
         std::vector<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const {
+            assertm(0 < cols, "invalid cols");
+            assertm(0 < rows, "invalid rows");
             uint16_t bw = width <= cols ? 1 : width / cols;
             uint16_t bh = height <= rows ? 1 : height / rows;
             return divideBlocks(Size(bw, bh));
@@ -213,8 +215,11 @@ namespace LTSM {
             }
 
             std::vector<Region> res;
-            int cw = sz.width > width ? width : sz.width;
-            int ch = sz.height > height ? height : sz.height;
+
+            const int cw = sz.width > width ? width : sz.width;
+            const int ch = sz.height > height ? height : sz.height;
+            assertm(0 < cw, "invalid cw");
+            assertm(0 < ch, "invalid ch");
 
             // integer divide with roud up
             int count_w = (width + cw - 1) / cw;

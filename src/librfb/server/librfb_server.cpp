@@ -760,7 +760,7 @@ namespace LTSM {
 
         // RFB: 6.4.2
         // skip padding
-        const auto pad1 = co_await stream_->async_recv_byte();
+        [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
         uint16_t numEncodings = co_await stream_->async_recv_be16();
         Application::info("{}: encoding counts: {}", NS_FuncNameV, numEncodings);
 

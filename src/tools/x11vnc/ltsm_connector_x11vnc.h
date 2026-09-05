@@ -58,6 +58,11 @@ namespace LTSM {
             RFB::SecurityInfo rfbSecurityInfo(void) const override;
             int rfbUserKeycode(uint32_t) const override;
 
+            void systemClientVariablesEvent(const JsonObject &) override { /* empty */ }
+            void systemKeyboardChangeEvent(const LTSM::JsonObject&) override { /* empty */ }
+            void systemTransferFilesEvent(const JsonObject &) override { /* empty */ }
+            void systemCursorFailedEvent(const JsonObject &) override { /* empty */ }
+
             boost::asio::awaitable<void> connectorHandshakeVersionAwait(void) override;
 
             uint32_t frameRateOption(void) const override {
