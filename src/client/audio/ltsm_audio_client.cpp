@@ -51,8 +51,8 @@ namespace LTSM {
 using namespace std::chrono_literals;
 
 // createClientAudioConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioConnector(uint8_t channel,
-        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
+std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioConnector(CID channel,
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
@@ -65,10 +65,10 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioCo
 }
 
 /// ConnectorClientAudio
-LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(uint8_t ch, const std::string & url,
-        const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
-    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
+LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(CID channel, const std::string & url,
+        const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
+    : ConnectorBase(channel, mod, chOpts, srv) {
+    Application::info("{}: channelId: {}", NS_FuncNameV, channel);
     // start threads
     setRunning(true);
 }
@@ -79,10 +79,6 @@ LTSM::Channel::ConnectorClientAudio::~ConnectorClientAudio() {
 
 int LTSM::Channel::ConnectorClientAudio::error(void) const {
     return 0;
-}
-
-uint8_t LTSM::Channel::ConnectorClientAudio::channel(void) const {
-    return cid;
 }
 
 void LTSM::Channel::ConnectorClientAudio::setSpeed(const Channel::Speed & speed) {
@@ -226,7 +222,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! format) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return false;
     }
 
@@ -249,7 +245,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! player) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return false;
     }
 
@@ -259,7 +255,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     reply.writeIntLE16(AudioOp::ProtoVer);
     // encoding type
     reply.writeIntLE16(format->type);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 

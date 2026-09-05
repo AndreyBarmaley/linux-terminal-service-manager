@@ -101,13 +101,13 @@ namespace LTSM::Connector {
         void serverDisplayResizedEvent(const XCB::Size &) override;
         void serverEncodingsEvent(void) override;
 
-        // rfb channel client
+        // rfb channel listenet
         bool isUserSession(void) const override;
-        void systemChannelError(const JsonObject &) override;
-        void systemTransferFiles(const JsonObject &) override;
-        void systemClientVariables(const JsonObject &) override;
-        void systemKeyboardChange(const JsonObject &) override;
-        void systemCursorFailed(const JsonObject & jo) override;
+        void systemChannelErrorEvent(const JsonObject &) override;
+        void systemTransferFilesEvent(const JsonObject &) override;
+        void systemClientVariablesEvent(const JsonObject &) override;
+        void systemKeyboardChangeEvent(const JsonObject &) override;
+        void systemCursorFailedEvent(const JsonObject & jo) override;
         bool noVncMode(void) const override;
 
       protected:

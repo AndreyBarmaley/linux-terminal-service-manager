@@ -191,10 +191,10 @@ namespace LTSM {
         void xcbXkbGroupChangedEvent(int) override;
 #endif
         void clientRecvLtsmHandshakeEvent(int flags) override;
-        void systemLoginSuccess(const JsonObject &) override;
+        void systemLoginSuccessEvent(const JsonObject &) override;
 
         const char* pkcs11Library(void) const override;
-        bool createChannelAllow(const Channel::ConnectorType &, const std::string &,
+        bool allowCreateChannel(const Channel::ConnectorType &, const std::string &,
                                 const Channel::ConnectorMode &) const override;
         bool clientLtsmSupported(void) const override {
             return ltsmSupport;

@@ -79,7 +79,7 @@ namespace LTSM {
 
     // ServerEncoder
     RFB::ServerEncoder::ServerEncoder(const boost::asio::any_io_executor& ctx)
-        : rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx}, send_lock_{ctx} {
+        : ChannelListener(ctx), rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx}, send_lock_{ctx} {
         stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
@@ -1457,7 +1457,7 @@ namespace LTSM {
         return false;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t> buf) const {
+    asio::awaitable<void> RFB::ServerEncoder::sendLtsmChannelAwait(CID channel, std::span<const uint8_t> buf) const {
         if(! clientLtsmSupported) {
             co_return;
         }
@@ -1495,59 +1495,18 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {
+    void RFB::ServerEncoder::sendLtsmChannelData(CID channel, std::vector<uint8_t>&& buf) {
         asio::co_spawn(rfb_strand_, [this, channel, buf=std::move(buf)]() -> asio::awaitable<void> {
 	    co_await sendLtsmChannelAwait(channel, buf);
 	    co_return;
 	}, asio::detached);
     }
 
-    void RFB::ServerEncoder::sendLtsmChannelData(uint8_t channel, std::string&& buf) {
+    void RFB::ServerEncoder::sendLtsmChannelData(CID channel, std::string&& buf) {
         asio::co_spawn(rfb_strand_, [this, channel, buf=std::move(buf)]() -> asio::awaitable<void> {
     	    co_await sendLtsmChannelAwait(channel, std::span{ (const uint8_t*) buf.data(), buf.size() });
 	    co_return;
 	}, asio::detached);
-    }
-
-    void RFB::ServerEncoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {
-        JsonContent jc;
-        jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
-
-        if(! jc.isObject()) {
-            Application::error("{}: {}", NS_FuncNameV, "json broken");
-            throw std::invalid_argument(NS_FuncNameS);
-        }
-
-        auto jo = jc.toObject();
-        auto cmd = jo.getString("cmd");
-
-        if(cmd.empty()) {
-            Application::error("{}: {}", NS_FuncNameV, "format message broken");
-            throw std::invalid_argument(NS_FuncNameS);
-        }
-
-        Application::debug(DebugType::Rfb, "{}: cmd: {}", NS_FuncNameV, cmd);
-
-        if(cmd == SystemCommand::ClientVariables) {
-            systemClientVariables(jo);
-        } else if(cmd == SystemCommand::KeyboardChange) {
-            systemKeyboardChange(jo);
-        } else if(cmd == SystemCommand::CursorFailed) {
-            systemCursorFailed(jo);
-        } else if(cmd == SystemCommand::TransferFiles) {
-            systemTransferFiles(jo);
-        } else if(cmd == SystemCommand::ChannelClose) {
-            systemChannelClose(jo);
-        } else if(cmd == SystemCommand::ChannelConnected) {
-            systemChannelConnected(jo);
-        } else if(cmd == SystemCommand::ChannelError) {
-            systemChannelError(jo);
-        } else if(cmd == SystemCommand::LoginSuccess) {
-            systemLoginSuccess(jo);
-        } else {
-            Application::error("{}: {}", NS_FuncNameV, "unknown cmd");
-            throw std::invalid_argument(NS_FuncNameS);
-        }
     }
 
     std::pair<std::string, std::string> RFB::ServerEncoder::authInfo(void) const {

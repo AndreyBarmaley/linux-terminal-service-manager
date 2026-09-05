@@ -167,8 +167,8 @@ namespace LTSM {
 }
 
 // createClientFuseConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(uint8_t channel,
-        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
+std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(CID channel,
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
@@ -181,10 +181,10 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseCon
 }
 
 /// ConnectorClientFuse
-LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(uint8_t ch, const std::string & url, const ConnectorMode & mod,
-        const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
+LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(CID channel, const std::string & url, const ConnectorMode & mod,
+        const Opts & chOpts, ChannelBase & srv)
+    : ConnectorBase(channel, mod, chOpts, srv), reply(4096) {
+    Application::info("{}: channelId: {}", NS_FuncNameV, channel);
     // start threads
     setRunning(true);
 }
@@ -199,10 +199,6 @@ LTSM::Channel::ConnectorClientFuse::~ConnectorClientFuse() {
 
 int LTSM::Channel::ConnectorClientFuse::error(void) const {
     return 0;
-}
-
-uint8_t LTSM::Channel::ConnectorClientFuse::channel(void) const {
-    return cid;
 }
 
 void LTSM::Channel::ConnectorClientFuse::setSpeed(const Channel::Speed & speed) {
@@ -303,7 +299,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
 
     auto mountPoint = sb.readString(len);
 
-    if(! owner->createChannelAllow(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
+    if(! owner->allowCreateChannel(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
         Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "mount point", mountPoint);
         fuseInit = false;
     } else {
@@ -329,7 +325,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
         replyWriteShareRootInfo(reply, shareRoot);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -376,7 +372,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -407,7 +403,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 */
@@ -456,7 +452,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
         reply.writeIntLE32(ret);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -489,7 +485,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
         opens.remove(fdh);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -521,7 +517,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.writeIntLE32(error);
         Application::error("{}: {} failed, error: {}, code: {}, offset: {}",
                            NS_FuncNameV, "lseek", strerror(error), error, offset);
-        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return true;
     }
 
@@ -552,6 +548,6 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.write(buf);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }

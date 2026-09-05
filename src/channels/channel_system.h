@@ -27,6 +27,7 @@
 #include <span>
 #include <list>
 #include <mutex>
+#include <array>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -70,7 +71,7 @@ namespace LTSM {
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
 
-    class ChannelClient;
+    class ChannelBase;
     class ChannelListener;
 
     /// channel_error execption
@@ -78,7 +79,10 @@ namespace LTSM {
         explicit channel_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    enum class ChannelType : uint8_t { System = 0, Reserved = 0xFF };
+    using CID = uint8_t;
+    const CID ChannelTypeSystem = 0;
+    const CID ChannelTypeReserved = 0xFF;
+    const CID ChannelLimit = UINT8_MAX;
 
     namespace Channel {
         enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11 };
@@ -133,7 +137,7 @@ namespace LTSM {
             UrlMode clientOpts;
             Opts chOpts;
             int serverFd = -1;
-            uint8_t channel = 0;
+            CID channel = 0;
         };
 
         // Local2Remote
@@ -148,13 +152,13 @@ namespace LTSM {
             size_t blocksz = 4096;
 
             int error = 0;
-            uint8_t id = 255;
+            CID id = 255;
             bool zlib = false;
 
             bool sendData(void);
 
           public:
-            Local2Remote(uint8_t cid, int flags);
+            Local2Remote(CID, int flags);
             virtual ~Local2Remote();
 
             Local2Remote(const Local2Remote&) = delete;
@@ -167,7 +171,7 @@ namespace LTSM {
             bool readData(void);
             void setSpeed(const Channel::Speed &);
 
-            uint8_t cid(void) const {
+            const CID& cid(void) const {
                 return id;
             }
 
@@ -194,7 +198,7 @@ namespace LTSM {
             bool needClose = true;
 
           public:
-            Local2Remote_FD(uint8_t cid, int fd0, bool close, int flags);
+            Local2Remote_FD(CID, int fd0, bool close, int flags);
             ~Local2Remote_FD();
 
             bool hasInput(void) const override;
@@ -214,14 +218,14 @@ namespace LTSM {
             size_t transfer2 = 0;
 
             int error = 0;
-            uint8_t id = 255;
+            CID id = 255;
             bool zlib = false;
 
           protected:
             std::vector<uint8_t> popData(void);
 
           public:
-            Remote2Local(uint8_t cid, int flags);
+            Remote2Local(CID, int flags);
             virtual ~Remote2Local();
 
             Remote2Local(const Remote2Local&) = delete;
@@ -234,9 +238,10 @@ namespace LTSM {
             void setSpeed(const Channel::Speed &);
             bool isEmpty(void) const;
 
-            uint8_t cid(void) const {
+            const CID& cid(void) const {
                 return id;
             }
+
             int getError(void) const {
                 return error;
             }
@@ -252,7 +257,7 @@ namespace LTSM {
             bool needClose = true;
 
           public:
-            Remote2Local_FD(uint8_t cid, int fd0, bool close, int flags);
+            Remote2Local_FD(CID, int fd0, bool close, int flags);
             ~Remote2Local_FD();
 
             ssize_t writeDataFrom(const void* buf, size_t len) override;
@@ -264,17 +269,19 @@ namespace LTSM {
             std::atomic<bool> loopRunning{false};
             std::atomic<bool> remoteConnected{false};
 
+            CID cid = 255;
+
           protected:
-            ChannelClient* owner = nullptr;
+            ChannelBase* owner = nullptr;
             ConnectorMode mode = ConnectorMode::Unknown;
+
           public:
             int flags = 0;
 
           public:
-            ConnectorBase(uint8_t ch, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv);
+            ConnectorBase(CID, const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv);
             virtual ~ConnectorBase() = default;
 
-            virtual uint8_t channel(void) const = 0;
             virtual int error(void) const = 0;
 
             virtual void setSpeed(const Channel::Speed &) = 0;
@@ -287,12 +294,16 @@ namespace LTSM {
             bool isRemoteConnected(void) const;
             void setRemoteConnected(bool);
 
-            ChannelClient* getOwner(void) {
+            ChannelBase* getOwner(void) {
                 return owner;
             }
 
             bool isMode(ConnectorMode cm) const {
                 return mode == cm;
+            }
+
+            CID channel(void) const {
+                return cid;
             }
         };
 
@@ -304,10 +315,9 @@ namespace LTSM {
             std::thread thr;
 
           public:
-            ConnectorFD_R(uint8_t channel, int fd, bool close, const Opts &, ChannelClient &);
+            ConnectorFD_R(CID, int fd, bool close, const Opts &, ChannelBase &);
             virtual ~ConnectorFD_R();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override { /* skipped */ }
@@ -319,10 +329,9 @@ namespace LTSM {
             std::thread thw;
 
           public:
-            ConnectorFD_W(uint8_t channel, int fd, bool close, const Opts &, ChannelClient &);
+            ConnectorFD_W(CID, int fd, bool close, const Opts &, ChannelBase &);
             virtual ~ConnectorFD_W();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
@@ -337,10 +346,9 @@ namespace LTSM {
             std::thread thw;
 
           public:
-            ConnectorFD_RW(uint8_t channel, int fd, const Opts &, ChannelClient &);
+            ConnectorFD_RW(CID, int fd, const Opts &, ChannelBase &);
             virtual ~ConnectorFD_RW();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
@@ -351,7 +359,7 @@ namespace LTSM {
             FILE* fcmd = nullptr;
 
           public:
-            ConnectorCMD_R(uint8_t channel, FILE*, const Opts &, ChannelClient &);
+            ConnectorCMD_R(CID, FILE*, const Opts &, ChannelBase &);
             virtual ~ConnectorCMD_R();
         };
 
@@ -360,7 +368,7 @@ namespace LTSM {
             FILE* fcmd = nullptr;
 
           public:
-            ConnectorCMD_W(uint8_t channel, FILE*, const Opts &, ChannelClient &);
+            ConnectorCMD_W(CID, FILE*, const Opts &, ChannelBase &);
             virtual ~ConnectorCMD_W();
         };
 
@@ -373,7 +381,6 @@ namespace LTSM {
 
             bool fuseInit = false;
             uint16_t fuseVer = 0;
-            uint8_t cid = 255;
 
             std::vector<uint8_t> last;
 
@@ -388,10 +395,9 @@ namespace LTSM {
             bool fuseOpLookup(const StreamBufRef &);
 
           public:
-            ConnectorClientFuse(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+            ConnectorClientFuse(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientFuse();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
@@ -401,8 +407,6 @@ namespace LTSM {
         class ConnectorClientAudio : public ConnectorBase {
             std::forward_list<AudioFormat> formats;
             const AudioFormat* format = nullptr;
-
-            uint8_t cid = 255;
 
             using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
             std::unique_ptr<TimePoint> silent;
@@ -417,10 +421,9 @@ namespace LTSM {
             void audioOpSilent(const StreamBufRef &);
 
           public:
-            ConnectorClientAudio(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+            ConnectorClientAudio(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientAudio();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
@@ -429,8 +432,6 @@ namespace LTSM {
         /// ConnectorClientPcsc
         class ConnectorClientPcsc : public ConnectorBase {
             //uint16_t    pcscVer = 0;
-            uint8_t cid = 255;
-
             std::vector<uint8_t> last;
 
           protected:
@@ -454,10 +455,9 @@ namespace LTSM {
             void pcscLiteSetAttrib(const StreamBufRef &);
 
           public:
-            ConnectorClientPcsc(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+            ConnectorClientPcsc(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientPcsc();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
@@ -471,8 +471,6 @@ namespace LTSM {
             PKCS11::LibraryPtr pkcs11;
             std::vector<uint8_t> last;
 
-            uint8_t cid = 255;
-
           protected:
             bool pkcs11Init(const StreamBufRef &);
             bool pkcs11GetSlots(const StreamBufRef &);
@@ -482,10 +480,9 @@ namespace LTSM {
             bool pkcs11DecryptData(const StreamBufRef &);
 
           public:
-            ConnectorClientPkcs11(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+            ConnectorClientPkcs11(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientPkcs11();
 
-            uint8_t channel(void) const override;
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
@@ -500,26 +497,26 @@ namespace LTSM {
         }
 
 #ifdef __UNIX__
-        ConnectorBasePtr createUnixConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createUnixConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createUnixConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createUnixConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
 
-        ConnectorBasePtr createTcpConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createTcpConnector(uint8_t channel, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createTcpConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createTcpConnector(CID, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
 #ifdef LTSM_PKCS11_AUTH
-        ConnectorBasePtr createClientPkcs11Connector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientPkcs11Connector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
 #ifdef LTSM_WITH_PCSC
-        ConnectorBasePtr createClientPcscConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientPcscConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
 #ifdef LTSM_WITH_FUSE
-        ConnectorBasePtr createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientFuseConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
 #ifdef LTSM_WITH_AUDIO
-        ConnectorBasePtr createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientAudioConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
-        ConnectorBasePtr createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createFileConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createCommandConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 
 #ifdef __UNIX__
         /// Listener
@@ -562,13 +559,15 @@ namespace LTSM {
         std::unique_ptr<Listener> createTcpListener(const Channel::UrlMode & serverOpts, size_t listen,
                 const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
 #endif
-    }
+    } // namespace Channel
 
-    class ChannelClient {
+    class ChannelBase {
+        boost::asio::strand<boost::asio::any_io_executor> strand_;
+
         mutable std::mutex lockch;
         mutable std::mutex lockpl;
 
-        std::list<std::unique_ptr<Channel::ConnectorBase>> channels;
+        std::array<Channel::ConnectorBasePtr, 256> channels_;
         std::list<Channel::Planned> channelsPlanned;
 
       protected:
@@ -577,88 +576,99 @@ namespace LTSM {
       protected:
         void plannedEmplace(Channel::Planned &&);
 
-        Channel::ConnectorBase* findChannel(uint8_t);
-        Channel::Planned* findPlanned(uint8_t);
-        bool channelPlannedCreate(uint8_t, const Channel::Planned &);
+        Channel::ConnectorBase* findChannel(CID);
+        Channel::Planned* findPlanned(CID);
 
-        void recvLtsmProto(uint8_t channel, std::vector<uint8_t> &&);
-        virtual void recvChannelSystemEvent(const std::vector<uint8_t> &) = 0;
-        void recvChannelData(uint8_t channel, std::vector<uint8_t> &&);
+        bool channelPlannedCreate(CID, const Channel::Planned &);
+
+        void recvLtsmProto(CID, std::vector<uint8_t> &&);
+        void recvChannelData(CID, std::vector<uint8_t> &&);
+        void recvChannelSystem(const JsonContent &);
 
         virtual bool isUserSession(void) const {
             return false;
         }
 
         // recv system events
-        virtual void systemClientVariables(const JsonObject &) { /* empty */ }
-        virtual void systemCursorFailed(const JsonObject &) { /* empty */ }
-        virtual void systemKeyboardChange(const JsonObject &) { /* empty */ }
-        virtual void systemChannelError(const JsonObject &) { /* empty */ }
-        virtual void systemTransferFiles(const JsonObject &) { /* empty */ }
-        virtual void systemLoginSuccess(const JsonObject &) { /* empty */ }
+        virtual void recvChannelSystemEvent(const std::string&, const JsonObject &) = 0;
+        virtual void systemChannelErrorEvent(const JsonObject &) { /* empty */ }
 
-        void systemChannelOpen(const JsonObject &);
-        void systemChannelListen(const JsonObject &) { /* empty */ }
-
-        bool systemChannelConnected(const JsonObject &);
-        void systemChannelClose(const JsonObject &);
+        void systemChannelConnectedEvent(const JsonObject &);
+        void systemChannelCloseEvent(const JsonObject &);
 
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
-        void destroyChannel(uint8_t channel);
-
+        void destroyChannel(CID);
 
 #ifdef __UNIX__
-        bool createChannelUnix(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelUnixFd(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelUnixFd(CID, int, const Channel::ConnectorMode &, const Channel::Opts &);
 
-        bool createChannelSocket(uint8_t channel, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelSocketFd(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelSocket(CID, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelSocketFd(CID, int, const Channel::ConnectorMode &, const Channel::Opts &);
 #endif
-        bool createChannelFile(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelCommand(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelClientFuse(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelClientAudio(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelClientPcsc(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelClientPkcs11(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelBaseFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelBaseAudio(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelBasePcsc(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelBasePkcs11(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
 
         size_t countFreeChannels(void) const;
 
-        void setChannelDebug(const uint8_t & channel, const bool & debug);
+        void setChannelDebug(CID, bool);
         void channelsShutdown(void);
 
       public:
-        ChannelClient() = default;
-        virtual ~ChannelClient() = default;
+        explicit ChannelBase(const boost::asio::any_io_executor& ctx) : strand_{ctx} {
+        }
+
+        virtual ~ChannelBase() = default;
+
+        boost::asio::awaitable<bool> sendSystemTransferFiles(std::forward_list<std::string>);
+        void sendSystemChannelOpen(CID, const Channel::UrlMode &, const Channel::Opts &);
+        void sendSystemChannelClose(CID);
+        void sendSystemChannelConnected(CID, int flags, bool noerror);
+        void sendSystemChannelError(CID, int code, const std::string &);
+
+        void recvLtsmEvent(CID, std::vector<uint8_t> &&);
+
+        virtual void sendLtsmChannelData(CID, std::vector<uint8_t>&&) = 0;
+        virtual void sendLtsmChannelData(CID, std::string&&) = 0;
+        virtual bool serverSide(void) const = 0;
+        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const = 0;
+        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
+            return false;
+        }
+    };
+
+    class ChannelClient : public ChannelBase {
+      protected:
+        void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
+
+        void systemChannelOpenEvent(const JsonObject &);
+        void systemChannelListenEvent(const JsonObject &);
+
+        virtual void systemLoginSuccessEvent(const JsonObject &) = 0;
+
+      public:
+        explicit ChannelClient(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {
+        }
 
         void sendSystemCursorFailed(int cursorId);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
-        boost::asio::awaitable<bool> sendSystemTransferFiles(std::forward_list<std::string>);
-        void sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode &, const Channel::Opts &);
-        void sendSystemChannelClose(uint8_t channel);
-        void sendSystemChannelConnected(uint8_t channel, int flags, bool noerror);
-        void sendSystemChannelError(uint8_t channel, int code, const std::string &);
-
-        void recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
-
-        virtual void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) = 0;
-        virtual void sendLtsmChannelData(uint8_t channel, std::string&&) = 0;
-
-        virtual bool serverSide(void) const {
-            return false;
-        }
-
-        virtual bool createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
-            return false;
-        }
 
         virtual const char* pkcs11Library(void) const {
             return nullptr;
         }
+
+        bool serverSide(void) const override {
+            return false;
+        }
     };
 
 #ifdef __UNIX__
-    class ChannelListener : public ChannelClient {
+    class ChannelListener : public ChannelBase {
         std::list<std::unique_ptr<Channel::Listener>> listeners;
         mutable std::mutex lockls;
 
@@ -666,9 +676,20 @@ namespace LTSM {
         bool createListener(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, size_t listen, const Channel::Opts &);
         void destroyListener(const std::string & clientUrl, const std::string & serverUrl);
 
+        void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
+
+        virtual void systemClientVariablesEvent(const JsonObject &) = 0;
+        virtual void systemKeyboardChangeEvent(const JsonObject &) = 0;
+        virtual void systemTransferFilesEvent(const JsonObject &) = 0;
+        virtual void systemCursorFailedEvent(const JsonObject &) = 0;
+
       public:
-        ChannelListener() = default;
-        virtual ~ChannelListener() = default;
+        explicit ChannelListener(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {
+        }
+
+        bool serverSide(void) const override {
+            return true;
+        }
 
         bool createChannelAcceptFd(const Channel::UrlMode & clientOpts, int sock, const Channel::UrlMode & serverOpts, const Channel::Opts &);
     };

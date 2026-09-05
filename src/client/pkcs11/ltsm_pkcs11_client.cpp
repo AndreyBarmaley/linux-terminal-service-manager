@@ -45,8 +45,8 @@ namespace LTSM {
 using namespace std::chrono_literals;
 
 // createClientPkcs11Connector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(uint8_t channel,
-        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
+std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(CID channel,
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
@@ -59,10 +59,10 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11C
 }
 
 /// ConnectorClientPkcs11
-LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(uint8_t ch, const std::string & url,
-        const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
+LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(CID channel, const std::string & url,
+        const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
+    : ConnectorBase(channel, mod, chOpts, srv), reply(4096) {
+    Application::info("{}: channelId: {}", NS_FuncNameV, channel);
     // start threads
     setRunning(true);
 }
@@ -73,10 +73,6 @@ LTSM::Channel::ConnectorClientPkcs11::~ConnectorClientPkcs11() {
 
 int LTSM::Channel::ConnectorClientPkcs11::error(void) const {
     return 0;
-}
-
-uint8_t LTSM::Channel::ConnectorClientPkcs11::channel(void) const {
-    return cid;
 }
 
 void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed) {
@@ -163,13 +159,18 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     reply.writeIntLE16(Pkcs11Op::Init);
 
     try {
-        pkcs11 = PKCS11::loadLibrary(owner->pkcs11Library());
+        if(auto client = dynamic_cast<ChannelClient*>(owner)) {
+            pkcs11 = PKCS11::loadLibrary(client->pkcs11Library());
+        } else {
+            Application::error("{}: {} failed", NS_FuncNameV, "ChannelClient");
+            return false;
+        }
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         std::string error = err.what();
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return false;
     }
 
@@ -186,7 +187,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     reply.write(std::span{info->libraryDescription});
     reply.writeInt8(info->libraryVersion.major);
     reply.writeInt8(info->libraryVersion.minor);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -254,7 +255,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
         }
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -292,7 +293,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
         }
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -337,7 +338,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
         reply.write(rawValue);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -393,7 +394,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     auto sign = sess->signData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
     reply.write(sign);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -449,6 +450,6 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     auto sign = sess->decryptData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
     reply.write(sign);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }

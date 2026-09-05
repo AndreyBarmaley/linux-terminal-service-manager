@@ -768,6 +768,7 @@ namespace LTSM {
 #endif
         signals_.cancel();
         sdl_guard_.reset();
+        ioc().stop();
 
         Application::debug(DebugType::App, "{}: client stopped", NS_FuncNameV);
     }
@@ -1649,7 +1650,7 @@ namespace LTSM {
         return jo.flush();
     }
 
-    void ClientApp::systemLoginSuccess(const JsonObject & jo) {
+    void ClientApp::systemLoginSuccessEvent(const JsonObject & jo) {
         if(jo.getBoolean("action", false)) {
             if(! primarySize_.isEmpty() && primarySize_ != windowSize_) {
                 asio::co_spawn(rfb_strand(), [this, psz=primarySize_]() -> asio::awaitable<void> {
@@ -1671,7 +1672,7 @@ namespace LTSM {
 #endif
     }
 
-    bool ClientApp::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
+    bool ClientApp::allowCreateChannel(const Channel::ConnectorType & type, const std::string & content,
                                      const Channel::ConnectorMode & mode) const {
         if(type == Channel::ConnectorType::Fuse) {
             if(std::ranges::none_of(shareFolders, [&](auto & val) { return val == content; })) {

@@ -748,10 +748,10 @@ namespace LTSM::Connector {
         }
 
         if(newDisplay != oldDisplay) {
-            busShutdownDisplay(oldDisplay);
             auto xauthFile = busDisplayAuthFile(newDisplay);
-
             co_await xcbConnectAwait(newDisplay, xauthFile, *this);
+            // send later
+            asio::post(ioc(), std::bind(&ConnectorRdp::busShutdownDisplay, this, oldDisplay));
         }
 
         if(auto wsz = RootDisplay::size(); wsz != csz) {

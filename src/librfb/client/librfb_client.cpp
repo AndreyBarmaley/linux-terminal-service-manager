@@ -812,7 +812,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t> buf) const {
+    asio::awaitable<void> RFB::ClientDecoder::sendLtsmChannelAwait(CID channel, std::span<const uint8_t> buf) const {
         Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
         StreamBuf sb(5);
@@ -1128,7 +1128,7 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&& buf) {
+    void RFB::ClientDecoder::sendLtsmChannelData(CID channel, std::vector<uint8_t>&& buf) {
         if(! buf.empty()) {
             assert(0xFFFF >= buf.size());
             asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
@@ -1138,7 +1138,7 @@ namespace LTSM {
         }
     }
 
-    void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, std::string&& buf) {
+    void RFB::ClientDecoder::sendLtsmChannelData(CID channel, std::string&& buf) {
         if(! buf.empty()) {
             assert(0xFFFF >= buf.size());
             asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
@@ -1251,40 +1251,5 @@ namespace LTSM {
         }
 
         co_return;
-    }
-
-    void RFB::ClientDecoder::recvChannelSystemEvent(const std::vector<uint8_t> & buf) {
-        JsonContent jc;
-        jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
-
-        if(! jc.isObject()) {
-            Application::error("{}: {}", NS_FuncNameV, "json broken");
-            throw std::invalid_argument(NS_FuncNameS);
-        }
-
-        auto jo = jc.toObject();
-        auto cmd = jo.getString("cmd");
-
-        if(cmd.empty()) {
-            Application::error("{}: {}", NS_FuncNameV, "format message broken");
-            throw std::invalid_argument(NS_FuncNameS);
-        }
-
-        if(cmd == SystemCommand::ChannelOpen) {
-            systemChannelOpen(jo);
-        } else if(cmd == SystemCommand::ChannelListen) {
-            systemChannelListen(jo);
-        } else if(cmd == SystemCommand::ChannelClose) {
-            systemChannelClose(jo);
-        } else if(cmd == SystemCommand::ChannelConnected) {
-            systemChannelConnected(jo);
-        } else if(cmd == SystemCommand::ChannelError) {
-            systemChannelError(jo);
-        } else if(cmd == SystemCommand::LoginSuccess) {
-            systemLoginSuccess(jo);
-        } else {
-            Application::error("{}: {}", NS_FuncNameV, "unknown cmd");
-            throw std::invalid_argument(NS_FuncNameS);
-        }
     }
 }

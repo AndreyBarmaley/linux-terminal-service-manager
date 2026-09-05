@@ -110,9 +110,6 @@ namespace LTSM {
             virtual void serverScreenUpdateRequest(void /* full update */) = 0;
             virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
-            // channel listenner interface
-            void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
-
             //
             std::string serverEncryptionInfo(void) const;
 
@@ -141,11 +138,7 @@ namespace LTSM {
             // fixme asio::job
             boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
             boost::asio::awaitable<void> sendEncodingLtsmDataAwait(std::span<const uint8_t>) const;
-            boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>) const;
-
-            bool serverSide(void) const override {
-                return true;
-            }
+            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const;
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
             boost::asio::awaitable<void> recvPixelFormatAwait(void);
@@ -181,8 +174,8 @@ namespace LTSM {
             void asioStop(void);
             void serverSelectEncodings(void);
 
-            void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override final;
-            void sendLtsmChannelData(uint8_t channel, std::string&&) override final;
+            void sendLtsmChannelData(CID, std::vector<uint8_t>&&) override final;
+            void sendLtsmChannelData(CID, std::string&&) override final;
 
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);

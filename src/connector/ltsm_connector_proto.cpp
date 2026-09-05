@@ -70,11 +70,13 @@ namespace LTSM::Connector {
             if(0 < displayNum()) {
                 busConnectorTerminated(displayNum(), getpid());
                 clientDisconnectedEvent(displayNum());
-                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
             }
 
             X11Server::rfbStop();
             DBusProxy::asioStop();
+            ioc().stop();
+
+            Application::debug(DebugType::App, "{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
         } catch(const std::exception & err) {
             Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
         }
@@ -119,10 +121,10 @@ namespace LTSM::Connector {
         }
 
         if(newDisplay != oldDisplay) {
-            busShutdownDisplay(oldDisplay);
             auto xauthFile = busDisplayAuthFile(newDisplay);
-
             co_await xcbConnectAwait(newDisplay, xauthFile, *this);
+            // send later
+            asio::post(ioc(), std::bind(&ConnectorLtsm::busShutdownDisplay, this, oldDisplay));
         }
 
         co_await xcbShmInit(userUid);
@@ -154,7 +156,7 @@ namespace LTSM::Connector {
         JsonObjectStream jos;
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", true);
-        static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
+        static_cast<ChannelBase*>(this)->sendLtsmChannelData(ChannelTypeSystem, jos.flush());
 
         co_return;
     }
@@ -381,7 +383,7 @@ namespace LTSM::Connector {
         return userSession_;
     }
 
-    void ConnectorLtsm::systemClientVariables(const JsonObject & jo) {
+    void ConnectorLtsm::systemClientVariablesEvent(const JsonObject & jo) {
         Application::debug(DebugType::App, "{}: count: {}", NS_FuncNameV, jo.size());
 
         if(auto env = jo.getObject("environments")) {
@@ -422,7 +424,7 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::systemCursorFailed(const JsonObject & jo) {
+    void ConnectorLtsm::systemCursorFailedEvent(const JsonObject & jo) {
         auto cursorId = jo.getInteger("cursor");
 
         if(cursorId) {
@@ -431,7 +433,7 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::systemKeyboardChange(const JsonObject & jo) {
+    void ConnectorLtsm::systemKeyboardChangeEvent(const JsonObject & jo) {
         auto layout = jo.getString("layout");
 
         if(xcbAllowMessages()) {
@@ -453,7 +455,7 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::systemTransferFiles(const JsonObject & jo) {
+    void ConnectorLtsm::systemTransferFilesEvent(const JsonObject & jo) {
         if(! isUserSession()) {
             Application::error("{}: not user session", NS_FuncNameV);
             return;
@@ -648,19 +650,20 @@ namespace LTSM::Connector {
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", false);
         jos.push("error", msg);
-        static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
+        static_cast<ChannelBase*>(this)->sendLtsmChannelData(ChannelTypeSystem, jos.flush());
     }
 
-    void ConnectorLtsm::systemChannelError(const JsonObject & jo) {
+    void ConnectorLtsm::systemChannelErrorEvent(const JsonObject & jo) {
         auto channel = jo.getInteger("id");
         auto code = jo.getInteger("code");
         auto err = jo.getString("error");
         Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'",
                  NS_FuncNameV, channel, displayNum(), code, err);
 
-        if(isUserSession())
+        if(isUserSession()) {
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
                           NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+        }
     }
 
     bool ConnectorLtsm::noVncMode(void) const {

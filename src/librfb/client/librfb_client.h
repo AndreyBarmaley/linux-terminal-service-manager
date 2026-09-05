@@ -83,7 +83,7 @@ namespace LTSM {
             boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const;
             boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const;
             // fixme asio::job
-            boost::asio::awaitable<void> sendLtsmChannelAwait(uint8_t channel, std::span<const uint8_t>) const;
+            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const;
 
             boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
             boost::asio::awaitable<void> recvFBUpdateRegionAwait(void);
@@ -102,7 +102,6 @@ namespace LTSM {
             boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
             boost::asio::awaitable<void> recvDecodingUpdateRegionAwait(int type, const XCB::Region &);
 
-            void recvChannelSystemEvent(const std::vector<uint8_t> &) override;
             bool isUserSession(void) const override {
                 return true;
             }
@@ -113,7 +112,8 @@ namespace LTSM {
 
           public:
             ClientDecoder(const boost::asio::any_io_executor& ctx)
-                : rfb_strand_{ctx}
+                : ChannelClient(ctx)
+                , rfb_strand_{ctx}
                 , xcb_strand_{ctx}
                 , incr_update_timer_{rfb_strand_} {
             }
@@ -126,8 +126,8 @@ namespace LTSM {
             bool isContinueUpdatesProcessed(void) const;
             bool isDecoderFFmpeg(void) const;
 
-            void sendLtsmChannelData(uint8_t channel, std::vector<uint8_t>&&) override;
-            void sendLtsmChannelData(uint8_t channel, std::string&&) override;
+            void sendLtsmChannelData(CID, std::vector<uint8_t>&&) override;
+            void sendLtsmChannelData(CID, std::string&&) override;
 
             static std::list<int> supportedEncodings(bool extclip = false);
 
