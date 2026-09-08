@@ -102,10 +102,6 @@ namespace LTSM {
             boost::asio::awaitable<void> recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size &);
             boost::asio::awaitable<void> recvDecodingUpdateRegionAwait(int type, const XCB::Region &);
 
-            bool isUserSession(void) const override {
-                return true;
-            }
-
             boost::asio::awaitable<void> rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay = false);
             boost::asio::awaitable<void> rfbHandshakeAwait(const SecurityInfo &);
             boost::asio::awaitable<void> rfbMessagesLoopAwait(void);

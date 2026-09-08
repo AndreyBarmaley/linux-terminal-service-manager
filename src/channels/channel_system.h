@@ -565,38 +565,33 @@ namespace LTSM {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         mutable std::mutex lockch;
-        mutable std::mutex lockpl;
-
         std::array<Channel::ConnectorBasePtr, 256> channels_;
-        std::list<Channel::Planned> channelsPlanned;
 
       protected:
         int channelDebug = -1;
 
       protected:
-        void plannedEmplace(Channel::Planned &&);
-
         Channel::ConnectorBase* findChannel(CID);
-        Channel::Planned* findPlanned(CID);
+        void setRemoteConnected(CID, bool);
 
-        bool channelPlannedCreate(CID, const Channel::Planned &);
+        size_t countValidChannels(void) const;
 
         void recvLtsmProto(CID, std::vector<uint8_t> &&);
         void recvChannelData(CID, std::vector<uint8_t> &&);
         void recvChannelSystem(const JsonContent &);
 
-        virtual bool isUserSession(void) const {
-            return false;
+        inline boost::asio::strand<boost::asio::any_io_executor> chan_strand(void) const {
+            return strand_;
         }
 
         // recv system events
         virtual void recvChannelSystemEvent(const std::string&, const JsonObject &) = 0;
         virtual void systemChannelErrorEvent(const JsonObject &) { /* empty */ }
+        virtual void systemChannelConnectedEvent(const JsonObject &) = 0;
+        virtual bool isAllowChannel(const Channel::ConnectorBase*) const = 0;
 
-        void systemChannelConnectedEvent(const JsonObject &);
         void systemChannelCloseEvent(const JsonObject &);
 
-        bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         void destroyChannel(CID);
 
 #ifdef __UNIX__
@@ -608,12 +603,10 @@ namespace LTSM {
 #endif
         bool createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelBaseFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelBaseAudio(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelBasePcsc(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelBasePkcs11(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-
-        size_t countFreeChannels(void) const;
+        bool createChannelFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelAudio(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelPcsc(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelPkcs11(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
 
         void setChannelDebug(CID, bool);
         void channelsShutdown(void);
@@ -643,6 +636,7 @@ namespace LTSM {
     class ChannelClient : public ChannelBase {
       protected:
         void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
+        void systemChannelConnectedEvent(const JsonObject &) override;
 
         void systemChannelOpenEvent(const JsonObject &);
         void systemChannelListenEvent(const JsonObject &);
@@ -664,6 +658,10 @@ namespace LTSM {
         bool serverSide(void) const override {
             return false;
         }
+
+        bool isAllowChannel(const Channel::ConnectorBase*) const override {
+            return true;
+        }
     };
 
 #ifdef __UNIX__
@@ -671,16 +669,26 @@ namespace LTSM {
         std::list<std::unique_ptr<Channel::Listener>> listeners;
         mutable std::mutex lockls;
 
+        std::list<Channel::Planned> channelsPlanned;
+        std::atomic<uint32_t> planned_counts_{0};
+        mutable std::mutex lockpl;
+
       protected:
         bool createListener(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, size_t listen, const Channel::Opts &);
         void destroyListener(const std::string & clientUrl, const std::string & serverUrl);
 
         void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
+        void systemChannelConnectedEvent(const JsonObject &) override;
 
         virtual void systemClientVariablesEvent(const JsonObject &) = 0;
         virtual void systemKeyboardChangeEvent(const JsonObject &) = 0;
         virtual void systemTransferFilesEvent(const JsonObject &) = 0;
         virtual void systemCursorFailedEvent(const JsonObject &) = 0;
+
+        CID plannedEmplace(Channel::Planned &&);
+        bool channelPlannedCreate(CID, const Channel::Planned &);
+        bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
+        uint32_t countFreeChannels(void) const;
 
       public:
         explicit ChannelListener(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {
@@ -688,6 +696,12 @@ namespace LTSM {
 
         bool serverSide(void) const override {
             return true;
+        }
+
+        bool isAllowChannel(const Channel::ConnectorBase*) const override;
+
+        virtual bool isUserSession(void) const {
+            return false;
         }
 
         bool createChannelAcceptFd(const Channel::UrlMode & clientOpts, int sock, const Channel::UrlMode & serverOpts, const Channel::Opts &);
