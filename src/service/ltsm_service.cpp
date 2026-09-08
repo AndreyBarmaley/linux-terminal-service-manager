@@ -1865,8 +1865,9 @@ namespace LTSM::Manager {
             xvfb->connectorId = connectorId;
             xvfb->tpOnline = std::chrono::system_clock::now();
             xvfb->onlineTimeLimitSec = configGetInteger("session:online:timeout", 0);
-            xvfb->mode = SessionMode::Connected;
-
+            if(xvfb->mode != SessionMode::Login) {
+                xvfb->mode = SessionMode::Connected;
+            }
 #ifdef LTSM_WITH_AUDIT
             auditLog->auditUserConnected(xvfb->displayAddr);
 #endif
@@ -2322,6 +2323,8 @@ namespace LTSM::Manager {
                 emitLoginFailure(xvfb->displayNum, fmt::format("session busy, from: {}", userSess->remoteAddr));
                 return false;
             } else if(userSess->policy == SessionPolicy::AuthTake) {
+                Application::warning("{}: disconnect session, policy: {}, user: {}, session display: {}, from: {}, display: {}",
+                                   NS_FuncNameV, "authtake", login, userSess->displayNum, userSess->remoteAddr, xvfb->displayNum);
                 // shutdown prev connect
                 emitShutdownConnector(userSess->displayNum);
                 // wait session: changes connected

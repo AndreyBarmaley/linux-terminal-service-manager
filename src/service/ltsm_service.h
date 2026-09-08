@@ -142,7 +142,7 @@ namespace LTSM::Manager {
         EnvList getEnvList(void);
     };
 
-    enum class SessionMode : int { Started = 0, Connected = 1, Disconnected = 2, Login = 3, Shutdown = 4 };
+    enum class SessionMode : int { Shutdown = 0, Login = 1, Started = 2, Connected = 3, Disconnected = 4 };
     enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
 
     /// Flags
@@ -278,7 +278,7 @@ namespace LTSM::Manager {
         uint16_t height = 0;
         uint8_t depth = 0;
 
-        std::atomic<SessionMode> mode{ SessionMode::Login };
+        std::atomic<SessionMode> mode{ SessionMode::Shutdown };
         SessionPolicy policy = SessionPolicy::AuthTake;
 
         inline bool checkStatus(uint64_t st) const {
