@@ -2488,8 +2488,8 @@ namespace LTSM::Manager {
         auto fuse = xvfb->options.find("redirect:fuse");
 
         // wait new session started
-        if(xvfb->sessionOnlinedSec() < 2s) {
-            waitAsioCallable(ioc_, 2000, 500, [xvfb](){ return 2s <= xvfb->sessionOnlinedSec(); });
+        if(xvfb->sessionOnlinedSec() < 1s) {
+            waitAsioCallable(ioc_, 1500, 100, [xvfb](){ return 1s <= xvfb->sessionOnlinedSec(); });
         }
 
         try {
