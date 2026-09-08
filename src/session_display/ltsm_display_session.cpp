@@ -444,8 +444,11 @@ namespace LTSM::DisplaySession {
 
         auto xresources = std::filesystem::path{getenv("HOME")} / ".ltsm" / ".Xresources";
         std::filesystem::remove(xresources);
+        X11SessionBase res;
 
         if(getenv("LTSM_LOGIN_MODE")) {
+            res.login_mode_ = true;
+
             // helper login
             auto helperBin = json.configGetString("helper:path", "/usr/libexec/ltsm/ltsm_helper");
 
@@ -468,7 +471,6 @@ namespace LTSM::DisplaySession {
 
         auto ex = co_await asio::this_coro::executor;
 
-        X11SessionBase res;
         // start Session
         res.ps_sess_ = std::make_shared<bp::process>(ex, sessionBin, std::move(sessionArgs),
                        bp::process_environment{sessionEnvs}, SessionProcess::createRedirect(sessionBin));
@@ -725,8 +727,10 @@ namespace LTSM::DisplaySession {
 
         asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
             auto& proc = self->ps_xorg_;
+            auto mode = (self->login_mode_ ? "LOGIN" : "SESSION");
             auto exit_code = co_await proc->async_wait(asio::use_awaitable);
-            Application::info("{}: {} exited, pid: {}, code: {}, service shutdown...", "WaitProcess", "xorg", proc->id(), exit_code);
+            Application::info("{}[{}]: {} exited, pid: {}, code: {}, service shutdown...",
+                                "WaitProcess", mode, "xorg", proc->id(), exit_code);
             proc->detach();
             std::raise(SIGTERM);
             co_return;
@@ -734,8 +738,10 @@ namespace LTSM::DisplaySession {
 
         asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
             auto& proc = self->ps_sess_;
+            auto mode = (self->login_mode_ ? "LOGIN" : "SESSION");
             auto exit_code = co_await proc->async_wait(asio::use_awaitable);
-            Application::info("{}: {} exited, pid: {}, code: {}, service shutdown...", "WaitProcess", "session", proc->id(), exit_code);
+            Application::info("{}[{}]: {} exited, pid: {}, code: {}, service shutdown...",
+                                "WaitProcess", mode, "session", proc->id(), exit_code);
             proc->detach();
             std::raise(SIGTERM);
             co_return;

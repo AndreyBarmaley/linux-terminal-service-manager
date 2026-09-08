@@ -50,7 +50,7 @@ namespace LTSM {
         if(damagePool_.write_available()) {
             damagePool_.push(rt);
         } else {
-            Application::warning("{}: damage pool is full, shrinking...", NS_FuncNameV);
+            Application::debug(DebugType::X11Srv, "{}: damage pool is full, shrinking...", NS_FuncNameV);
             XCB::Region res;
             damagePool_.consume_all([&res](const auto& rt) {
                 res.join(rt.x, rt.y, rt.width, rt.height);

@@ -77,6 +77,7 @@ namespace LTSM::DisplaySession {
     struct X11SessionBase {
         std::string dbus_address_;
         std::shared_ptr<bp::process> ps_sess_;
+        bool login_mode_{false};
     };
 
     int startDisplaySession(int displayNum, const char* xauthFile, bool debug);
