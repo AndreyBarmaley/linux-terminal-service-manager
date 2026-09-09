@@ -671,9 +671,10 @@ namespace LTSM {
 
         std::list<Channel::Planned> channelsPlanned;
         std::atomic<uint32_t> planned_counts_{0};
-        mutable std::mutex lockpl;
 
       protected:
+        void exceptionHandler(std::exception_ptr ptr);
+
         bool createListener(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, size_t listen, const Channel::Opts &);
         void destroyListener(const std::string & clientUrl, const std::string & serverUrl);
 
@@ -685,10 +686,12 @@ namespace LTSM {
         virtual void systemTransferFilesEvent(const JsonObject &) = 0;
         virtual void systemCursorFailedEvent(const JsonObject &) = 0;
 
-        CID plannedEmplace(Channel::Planned &&);
         bool channelPlannedCreate(CID, const Channel::Planned &);
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         uint32_t countFreeChannels(void) const;
+
+        boost::asio::awaitable<void> systemChannelConnectedAwait(CID channel, int flags, int error);
+        boost::asio::awaitable<void> plannedEmplaceAwait(Channel::Planned job);
 
       public:
         explicit ChannelListener(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {

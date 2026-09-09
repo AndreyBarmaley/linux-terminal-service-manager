@@ -917,11 +917,10 @@ bool ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clientOpts,
         return false;
     }
 
-    CID channel = plannedEmplace(
-            Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock });
-
-    // send channel open to client
-    sendSystemChannelOpen(channel, clientOpts, chOpts);
+    auto job = Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock };
+    asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [this](std::exception_ptr ptr) {
+        exceptionHandler(ptr);
+    });
 
     // next part: ChannelBase::systemChannelConnected
 
@@ -949,15 +948,24 @@ void ChannelListener::recvChannelSystemEvent(const std::string& cmd, const JsonO
     throw std::invalid_argument(NS_FuncNameS);
 }
 
+void ChannelListener::exceptionHandler(std::exception_ptr ptr) {
+    if(ptr) {
+        std::rethrow_exception(ptr);
+    }
+}
+
 void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
     bool error = jo.getBoolean("error");
     int flags = jo.getInteger("flags", 0);
 
-    Application::info("{}: channel: {}, error: {}, flags: {:08x}", NS_FuncNameV, channel, error, flags);
+    asio::co_spawn(chan_strand(), systemChannelConnectedAwait(channel, flags, error), [this](std::exception_ptr ptr) {
+        exceptionHandler(ptr);
+    });
+}
 
-    // move planed to running
-    const std::scoped_lock guard{lockpl};
+asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, int flags, int error) {
+    // find planed
     auto it = std::ranges::find_if(channelsPlanned, [=](auto & st) {
         return st.channel == channel;
     });
@@ -967,6 +975,7 @@ void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
         throw channel_error(NS_FuncNameS);
     }
 
+    // move planed to running
     auto job = std::move(*it);
     channelsPlanned.erase(it);
     planned_counts_.fetch_sub(1);
@@ -1002,6 +1011,9 @@ void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
         jobFailed();
         throw channel_error(NS_FuncNameS);
     }
+
+    Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
+    co_return;
 }
 
 uint32_t ChannelListener::countFreeChannels(void) const {
@@ -1045,20 +1057,17 @@ bool ChannelListener::createChannel(const Channel::UrlMode & clientOpts, const C
         return false;
     }
 
-    CID channel = plannedEmplace(
-            Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts });
-
-    // send channel open to client
-    sendSystemChannelOpen(channel, clientOpts, chOpts);
+    auto job = Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts };
+    asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [this](std::exception_ptr ptr) {
+        exceptionHandler(ptr);
+    });
 
     // next part: ChannelBase::systemChannelConnected
 
     return true;
 }
 
-CID ChannelListener::plannedEmplace(Channel::Planned && val) {
-    const std::scoped_lock guard{lockpl};
-
+asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job) {
     // find free channel
     CID channel = 1;
 
@@ -1079,12 +1088,16 @@ CID ChannelListener::plannedEmplace(Channel::Planned && val) {
         throw channel_error(NS_FuncNameS);
     }
 
-    val.channel = channel;
+    job.channel = channel;
 
-    channelsPlanned.emplace_back(std::move(val));
+    channelsPlanned.emplace_back(std::move(job));
     planned_counts_.fetch_add(1);
 
-    return channel;
+    const auto & back = channelsPlanned.back();
+
+    // send channel open to client
+    sendSystemChannelOpen(back.channel, back.clientOpts, back.chOpts);
+    co_return;
 }
 
 bool ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned & job) {
