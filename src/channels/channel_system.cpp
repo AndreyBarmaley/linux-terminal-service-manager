@@ -352,7 +352,7 @@ void ChannelBase::recvChannelData(CID channel, std::vector<uint8_t> && buf) {
     }
 
     if(! isAllowChannel(channelConn.get())) {
-        Application::error("{}: ltsm channel disable'", NS_FuncNameV);
+        Application::error("{}: ltsm channel disable", NS_FuncNameV);
         throw std::invalid_argument(NS_FuncNameS);
     }
 
@@ -844,7 +844,7 @@ void ChannelClient::systemChannelConnectedEvent(const JsonObject & jo) {
     bool error = jo.getBoolean("error");
     int flags = jo.getInteger("flags", 0);
 
-    Application::info("{}: channel: {}, error: {}, flags: {08x}", NS_FuncNameV, channel, error, flags);
+    Application::info("{}: channel: {}, error: {}, flags: {:08x}", NS_FuncNameV, channel, error, flags);
     setRemoteConnected(channel, true);
 }
 
