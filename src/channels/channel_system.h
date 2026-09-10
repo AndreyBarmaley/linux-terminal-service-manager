@@ -162,8 +162,8 @@ namespace LTSM {
             Local2Remote(CID, int flags);
             virtual ~Local2Remote();
 
-            Local2Remote(const Local2Remote&) = delete;
-            Local2Remote& operator=(const Local2Remote&) = delete;
+            Local2Remote(const Local2Remote &) = delete;
+            Local2Remote & operator=(const Local2Remote &) = delete;
 
             virtual bool hasInput(void) const = 0;
             virtual size_t hasData(void) const = 0;
@@ -172,7 +172,7 @@ namespace LTSM {
             bool readData(void);
             void setSpeed(const Channel::Speed &);
 
-            const CID& cid(void) const {
+            const CID & cid(void) const {
                 return id;
             }
 
@@ -229,8 +229,8 @@ namespace LTSM {
             Remote2Local(CID, int flags);
             virtual ~Remote2Local();
 
-            Remote2Local(const Remote2Local&) = delete;
-            Remote2Local& operator=(const Remote2Local&) = delete;
+            Remote2Local(const Remote2Local &) = delete;
+            Remote2Local & operator=(const Remote2Local &) = delete;
 
             virtual ssize_t writeDataFrom(const void* buf, size_t len) = 0;
 
@@ -239,7 +239,7 @@ namespace LTSM {
             void setSpeed(const Channel::Speed &);
             bool isEmpty(void) const;
 
-            const CID& cid(void) const {
+            const CID & cid(void) const {
                 return id;
             }
 
@@ -579,7 +579,7 @@ namespace LTSM {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         mutable std::mutex lockch;
-        std::array<Channel::ConnectorBasePtr, ChannelTypeLast + 1> channels_;
+        std::array < Channel::ConnectorBasePtr, ChannelTypeLast + 1 > channels_;
 
         int channel_debug_ = -1;
 
@@ -601,10 +601,10 @@ namespace LTSM {
             return channel_debug_ == channel;
         }
 
-        void emplaceChannel(CID channel, Channel::ConnectorBasePtr&&);
+        void emplaceChannel(CID channel, Channel::ConnectorBasePtr &&);
 
         // recv system events
-        virtual void recvChannelSystemEvent(const std::string&, const JsonObject &) = 0;
+        virtual void recvChannelSystemEvent(const std::string &, const JsonObject &) = 0;
         virtual void systemChannelErrorEvent(const JsonObject &) { /* empty */ }
         virtual void systemChannelConnectedEvent(const JsonObject &) = 0;
         virtual bool isAllowChannel(const Channel::ConnectorBase*) const = 0;
@@ -644,8 +644,8 @@ namespace LTSM {
 
         void recvLtsmEvent(CID, std::vector<uint8_t> &&);
 
-        virtual void sendLtsmChannelData(CID, std::vector<uint8_t>&&) = 0;
-        virtual void sendLtsmChannelData(CID, std::string&&) = 0;
+        virtual void sendLtsmChannelData(CID, std::vector<uint8_t> &&) = 0;
+        virtual void sendLtsmChannelData(CID, std::string &&) = 0;
         virtual bool serverSide(void) const = 0;
         virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
             return false;
@@ -654,7 +654,7 @@ namespace LTSM {
 
     class ChannelClient : public ChannelBase {
       protected:
-        void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
+        void recvChannelSystemEvent(const std::string &, const JsonObject &) override;
         void systemChannelConnectedEvent(const JsonObject &) override;
 
         void systemChannelOpenEvent(const JsonObject &);
@@ -693,7 +693,7 @@ namespace LTSM {
       protected:
         void exceptionHandler(std::exception_ptr ptr);
 
-        void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
+        void recvChannelSystemEvent(const std::string &, const JsonObject &) override;
         void systemChannelConnectedEvent(const JsonObject &) override;
 
         virtual void systemClientVariablesEvent(const JsonObject &) = 0;

@@ -278,14 +278,18 @@ Channel::Connector::parseAddrPort(const std::string & addrPort) {
 /// ChannelBase
 size_t ChannelBase::countValidChannels(void) const {
     const std::scoped_lock guard{lockch};
-    return std::count_if(channels_.begin(), channels_.end(), [](auto& ptr){ return !!ptr; });
+    return std::count_if(channels_.begin(), channels_.end(), [](auto & ptr) {
+        return !! ptr;
+    });
 }
 
 Channel::ConnectorBase* ChannelBase::findChannel(CID channel) {
     const std::scoped_lock guard{lockch};
+
     if(auto& ptr = channels_[channel]) {
         return ptr.get();
     }
+
     return nullptr;
 }
 
@@ -296,6 +300,7 @@ void ChannelBase::emplaceChannel(CID channel, Channel::ConnectorBasePtr&& ptr) {
 
 void ChannelBase::destroyChannel(CID channel) {
     const std::scoped_lock guard{this->lockch};
+
     if(auto& ptr = channels_[channel]) {
         ptr->setRunning(false);
         ptr.reset();
@@ -307,6 +312,7 @@ void ChannelBase::destroyChannel(CID channel) {
 
 void ChannelBase::shutdownChannels(void) {
     const std::scoped_lock guard{lockch};
+
     for(auto & ptr : channels_) {
         if(ptr) {
             ptr->setRunning(false);
@@ -404,7 +410,7 @@ asio::awaitable<bool> ChannelBase::sendSystemTransferFiles(std::forward_list<std
 
         if(! std::filesystem::is_regular_file(file, err)) {
             Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
-                NS_FuncNameV, "is_regular_file", err.value(), err.message(), file);
+                                 NS_FuncNameV, "is_regular_file", err.value(), err.message(), file);
             return true;
         }
 
@@ -548,6 +554,7 @@ bool ChannelBase::createChannelPkcs11(CID channel, const std::string & url, cons
 
 bool ChannelBase::createChannelFile(CID channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #ifdef __WIN32__
+
     if(! allowCreateChannel(Channel::ConnectorType::File, path.string(), mode))
 #else
     if(! allowCreateChannel(Channel::ConnectorType::File, path.native(), mode))
@@ -678,8 +685,7 @@ void ChannelBase::sendSystemChannelConnected(CID channel, int flags, bool error)
                         push("id", channel).flush());
 }
 
-void ChannelBase::recvLtsmProto(CID channel, std::vector<uint8_t> && buf)
-{
+void ChannelBase::recvLtsmProto(CID channel, std::vector<uint8_t> && buf) {
     Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
     if(isChannelDebug(channel)) {
@@ -842,7 +848,7 @@ void ChannelClient::systemChannelConnectedEvent(const JsonObject & jo) {
 #ifdef __UNIX__
 // ChannelListener
 boost::asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clientOpts,
-                                        Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit) {
+        Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit) {
 
     if(std::ranges::any_of(listeners_, [&](auto & ptr) { return ptr.isListenUrl(serverOpts.url); })) {
         Application::warning("{}: {}, server url: {}", NS_FuncNameV, "listen present", serverOpts.url);
@@ -860,8 +866,8 @@ boost::asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMo
         Application::info("{}: server url: {}, client url: {}", NS_FuncNameV, serverOpts.url, clientOpts.url);
 
         std::unique_ptr<Channel::Listener> ptr = is_unix ?
-                Channel::createUnixListener(serverOpts, listenLimit, clientOpts, channelOpts, *this) :
-                Channel::createTcpListener(serverOpts, listenLimit, clientOpts, channelOpts, *this);
+            Channel::createUnixListener(serverOpts, listenLimit, clientOpts, channelOpts, *this) :
+            Channel::createTcpListener(serverOpts, listenLimit, clientOpts, channelOpts, *this);
 
         listeners_.push_back(std::move(ptr));
     } catch(const std::exception & err) {
@@ -872,7 +878,9 @@ boost::asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMo
 }
 
 boost::asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
-    auto it = std::ranges::find_if(listeners_, [&](auto & ptr) { return ptr.isListenUrl(url); });
+    auto it = std::ranges::find_if(listeners_, [&](auto & ptr) {
+        return ptr.isListenUrl(url);
+    });
 
     if(it != listeners_.end()) {
         Application::info("{}: server url: {}", NS_FuncNameV, url);
@@ -956,7 +964,7 @@ void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
 
 asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, int flags, int error) {
     // find planed
-    auto it = std::ranges::find_if(channels_planned_, [=](auto & st) {
+    auto it = std::ranges::find_if(channels_planned_, [ = ](auto & st) {
         return st.channel == channel;
     });
 
@@ -1067,7 +1075,7 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     CID channel = 1;
 
     auto findPlanned = [this](CID id) {
-        return std::ranges::any_of(channels_planned_, [=](auto & st) {
+        return std::ranges::any_of(channels_planned_, [ = ](auto & st) {
             return st.channel == id;
         });
     };
@@ -1099,7 +1107,7 @@ bool ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned &
 
     if(0 <= job.serverFd) {
         Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
-                        NS_FuncNameV, "found planned job", channel, job.clientOpts.url, "listener");
+                          NS_FuncNameV, "found planned job", channel, job.clientOpts.url, "listener");
 
         switch(job.serverOpts.type()) {
             case Channel::ConnectorType::Unix:
@@ -1116,7 +1124,7 @@ bool ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned &
         }
     } else if(! job.serverOpts.content().empty()) {
         Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
-                        NS_FuncNameV, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
+                          NS_FuncNameV, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
 
         switch(job.serverOpts.type()) {
             case Channel::ConnectorType::Unix:
@@ -1162,7 +1170,7 @@ Channel::Remote2Local::Remote2Local(CID cid, int flags) : id(cid) {
 
 Channel::Remote2Local::~Remote2Local() {
     Application::info("{}: channel: {}, receive: {} byte, transfer: {} byte, error: {}",
-                        "Remote2Local", id, transfer1, transfer2, error);
+                      "Remote2Local", id, transfer1, transfer2, error);
 }
 
 bool Channel::Remote2Local::isEmpty(void) const {
@@ -1652,7 +1660,7 @@ Channel::createUnixConnector(CID channel, const std::filesystem::path & path, co
 
     if(! std::filesystem::is_socket(path, err)) {
         Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-            NS_FuncNameV, "is_socket", err.value(), err.message(), path.string());
+                           NS_FuncNameV, "is_socket", err.value(), err.message(), path.string());
         throw channel_error(NS_FuncNameS);
     }
 
@@ -1775,7 +1783,7 @@ Channel::createFileConnector(CID channel, const std::filesystem::path & path, co
     if(mode == ConnectorMode::ReadOnly &&
        ! std::filesystem::exists(path, err)) {
         Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-            NS_FuncNameV, "exists", err.value(), err.message(), path.string());
+                           NS_FuncNameV, "exists", err.value(), err.message(), path.string());
         throw channel_error(NS_FuncNameS);
     }
 
@@ -1848,7 +1856,7 @@ Channel::createCommandConnector(CID channel, const std::string & runcmd, const C
 
     if(! std::filesystem::exists(list.front(), err)) {
         Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-            NS_FuncNameV, "exists", err.value(), err.message(), list.front());
+                           NS_FuncNameV, "exists", err.value(), err.message(), list.front());
         throw channel_error(NS_FuncNameS);
     }
 
@@ -1952,7 +1960,7 @@ void Channel::Listener::loopAccept(Listener* st) {
 
 std::unique_ptr<Channel::Listener>
 Channel::createUnixListener(const UrlMode & serverOpts, int listenLimit,
-                                  const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
+                            const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
     auto & path = serverOpts.content();
     std::error_code err;
 
@@ -1974,7 +1982,7 @@ Channel::createUnixListener(const UrlMode & serverOpts, int listenLimit,
 
 std::unique_ptr<Channel::Listener>
 Channel::createTcpListener(const UrlMode & serverOpts, int listenLimit,
-                                 const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
+                           const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
     auto [ ipaddr, port ] = Connector::parseAddrPort(serverOpts.content());
 
     if(0 >= port) {
