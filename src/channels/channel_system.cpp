@@ -850,46 +850,45 @@ void ChannelClient::systemChannelConnectedEvent(const JsonObject & jo) {
 
 #ifdef __UNIX__
 // ChannelListener
-bool ChannelListener::createListener(const Channel::UrlMode & clientOpts, const Channel::UrlMode & serverOpts, size_t listen, const Channel::Opts & chOpts) {
-    Application::debug(DebugType::Channels, "{}: client: {}, server: {}", NS_FuncNameV, clientOpts.url, serverOpts.url);
+boost::asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clientOpts,
+                                        Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit) {
+
+    if(std::ranges::any_of(listeners_, [&](auto & ptr) { return ptr.isListenUrl(serverOpts.url); })) {
+        Application::warning("{}: {}, server url: {}", NS_FuncNameV, "listen present", serverOpts.url);
+        co_return;
+    }
+
+    const bool is_unix = (serverOpts.type() == Channel::ConnectorType::Unix);
+
+    if(serverOpts.type() != Channel::ConnectorType::Socket && ! is_unix) {
+        Application::warning("{}: {}, server url: {}", NS_FuncNameV, "invalid socket type", serverOpts.url);
+        co_return;
+    }
 
     try {
-        const std::scoped_lock guard{lockls};
+        Application::info("{}: server url: {}, client url: {}", NS_FuncNameV, serverOpts.url, clientOpts.url);
 
-        if(std::ranges::any_of(listeners, [&](auto & ptr) { return ptr->getServerUrl() == serverOpts.url; })) {
-            Application::debug(DebugType::Channels, "{}: listen present, url: {}", NS_FuncNameV, serverOpts.url);
-            return true;
-        }
+        std::unique_ptr<Channel::Listener> ptr = is_unix ?
+                Channel::createUnixListener(serverOpts, listenLimit, clientOpts, channelOpts, *this) :
+                Channel::createTcpListener(serverOpts, listenLimit, clientOpts, channelOpts, *this);
 
-        if(serverOpts.type() == Channel::ConnectorType::Socket) {
-            listeners.emplace_back(Channel::createTcpListener(serverOpts, listen, clientOpts, chOpts, *this));
-            return true;
-        } else if(serverOpts.type() == Channel::ConnectorType::Unix) {
-            listeners.emplace_back(Channel::createUnixListener(serverOpts, listen, clientOpts, chOpts, *this));
-            return true;
-        }
+        listeners_.push_back(std::move(ptr));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
     }
 
-    Application::error("{}: allow unix or socket format only, url: `{}'", NS_FuncNameV, serverOpts.url);
-    return false;
+    co_return;
 }
 
-void ChannelListener::destroyListener(const std::string & clientUrl, const std::string & serverUrl) {
-    const std::scoped_lock guard{lockls};
-    auto it = std::ranges::find_if(listeners, [&](auto & ptr) {
-        return ptr && ptr->getClientUrl() == clientUrl;
-    });
+boost::asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
+    auto it = std::ranges::find_if(listeners_, [&](auto & ptr) { return ptr.isListenUrl(url); });
 
-    if(it != listeners.end()) {
-        (*it)->setRunning(false);
-
-        std::this_thread::sleep_for(100ms);
-        listeners.erase(it);
-        Application::info("{}: client url: `{}'", NS_FuncNameV, clientUrl);
+    if(it != listeners_.end()) {
+        Application::info("{}: server url: {}", NS_FuncNameV, url);
+        listeners_.erase(it);
     }
+
+    co_return;
 }
 
 bool ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clientOpts, int sock, const Channel::UrlMode & serverOpts, const Channel::Opts & chOpts) {
@@ -966,18 +965,18 @@ void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
 
 asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, int flags, int error) {
     // find planed
-    auto it = std::ranges::find_if(channelsPlanned, [=](auto & st) {
+    auto it = std::ranges::find_if(channels_planned_, [=](auto & st) {
         return st.channel == channel;
     });
 
-    if(it == channelsPlanned.end()) {
+    if(it == channels_planned_.end()) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "job planning not found", channel);
         throw channel_error(NS_FuncNameS);
     }
 
     // move planed to running
     auto job = std::move(*it);
-    channelsPlanned.erase(it);
+    channels_planned_.erase(it);
     planned_counts_.fetch_sub(1);
 
     job.chOpts.flags = flags;
@@ -1072,7 +1071,7 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     CID channel = 1;
 
     auto findPlanned = [this](CID id) {
-        return std::ranges::any_of(channelsPlanned, [=](auto & st) {
+        return std::ranges::any_of(channels_planned_, [=](auto & st) {
             return st.channel == id;
         });
     };
@@ -1090,10 +1089,10 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
 
     job.channel = channel;
 
-    channelsPlanned.emplace_back(std::move(job));
+    channels_planned_.emplace_back(std::move(job));
     planned_counts_.fetch_add(1);
 
-    const auto & back = channelsPlanned.back();
+    const auto & back = channels_planned_.back();
 
     // send channel open to client
     sendSystemChannelOpen(back.channel, back.clientOpts, back.chOpts);
@@ -1969,7 +1968,7 @@ void Channel::Listener::loopAccept(Listener* st) {
 }
 
 std::unique_ptr<Channel::Listener>
-Channel::createUnixListener(const UrlMode & serverOpts, size_t listen,
+Channel::createUnixListener(const UrlMode & serverOpts, int listenLimit,
                                   const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
     auto & path = serverOpts.content();
     std::error_code err;
@@ -1980,7 +1979,7 @@ Channel::createUnixListener(const UrlMode & serverOpts, size_t listen,
         throw channel_error(NS_FuncNameS);
     }
 
-    int srvfd = UnixSocket::listen(path, listen);
+    int srvfd = UnixSocket::listen(path, listenLimit);
 
     if(0 > srvfd) {
         Application::error("{}: {}, path: `{}'", NS_FuncNameV, "unix failed", path);
@@ -1991,7 +1990,7 @@ Channel::createUnixListener(const UrlMode & serverOpts, size_t listen,
 }
 
 std::unique_ptr<Channel::Listener>
-Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
+Channel::createTcpListener(const UrlMode & serverOpts, int listenLimit,
                                  const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
     auto [ ipaddr, port ] = Connector::parseAddrPort(serverOpts.content());
 
@@ -2005,7 +2004,7 @@ Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
         ipaddr = "127.0.0.1";
     }
 
-    int srvfd = TCPSocket::listen(ipaddr, port, listen);
+    int srvfd = TCPSocket::listen(ipaddr, port, listenLimit);
 
     if(0 > srvfd) {
         Application::error("{}: {}, ipaddr: {}, port: {}", NS_FuncNameV, "socket failed", ipaddr, port);

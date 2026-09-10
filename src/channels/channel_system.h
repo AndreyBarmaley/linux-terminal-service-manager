@@ -37,6 +37,7 @@
 #include <forward_list>
 
 #include <boost/asio.hpp>
+#include <boost/ptr_container/ptr_list.hpp>
 
 #include "ltsm_audio.h"
 
@@ -549,14 +550,18 @@ namespace LTSM {
                 return sopts.url;
             }
 
-            bool isUnix(void) const {
+            inline bool isListenUrl(const std::string & url) const {
+                return sopts.url == url;
+            }
+
+            inline bool isUnix(void) const {
                 return sopts.type() == ConnectorType::Unix;
             }
         };
 
-        std::unique_ptr<Listener> createUnixListener(const Channel::UrlMode & serverOpts, size_t listen,
+        std::unique_ptr<Listener> createUnixListener(const Channel::UrlMode & serverOpts, int listenLimit,
                 const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
-        std::unique_ptr<Listener> createTcpListener(const Channel::UrlMode & serverOpts, size_t listen,
+        std::unique_ptr<Listener> createTcpListener(const Channel::UrlMode & serverOpts, int listenLimit,
                 const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
 #endif
     } // namespace Channel
@@ -666,17 +671,13 @@ namespace LTSM {
 
 #ifdef __UNIX__
     class ChannelListener : public ChannelBase {
-        std::list<std::unique_ptr<Channel::Listener>> listeners;
-        mutable std::mutex lockls;
+        boost::ptr_list<Channel::Listener> listeners_;
 
-        std::list<Channel::Planned> channelsPlanned;
+        std::list<Channel::Planned> channels_planned_;
         std::atomic<uint32_t> planned_counts_{0};
 
       protected:
         void exceptionHandler(std::exception_ptr ptr);
-
-        bool createListener(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, size_t listen, const Channel::Opts &);
-        void destroyListener(const std::string & clientUrl, const std::string & serverUrl);
 
         void recvChannelSystemEvent(const std::string&, const JsonObject &) override;
         void systemChannelConnectedEvent(const JsonObject &) override;
@@ -692,6 +693,9 @@ namespace LTSM {
 
         boost::asio::awaitable<void> systemChannelConnectedAwait(CID channel, int flags, int error);
         boost::asio::awaitable<void> plannedEmplaceAwait(Channel::Planned job);
+
+        boost::asio::awaitable<void> createListenerAwait(Channel::UrlMode clientOpts, Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit);
+        boost::asio::awaitable<void> destroyListenerAwait(std::string clientUrl);
 
       public:
         explicit ChannelListener(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {

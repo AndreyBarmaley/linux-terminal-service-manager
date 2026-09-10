@@ -628,14 +628,19 @@ namespace LTSM::Connector {
                                          const std::string & server, const std::string & smode, const std::string & speed, const uint8_t & limit,
                                          const uint32_t & flags) {
         if(display == displayNum()) {
-            createListener(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), limit,
-                           Channel::Opts{Channel::connectorSpeed(speed), (int) flags});
+            asio::co_spawn(chan_strand(), 
+                createListenerAwait(
+                    Channel::UrlMode(client, cmode),
+                    Channel::UrlMode(server, smode),
+                    Channel::Opts{Channel::connectorSpeed(speed), (int) flags},
+                    limit),
+                asio::detached);
         }
     }
 
     void ConnectorLtsm::onDestroyListener(const int32_t & display, const std::string & client, const std::string & server) {
         if(display == displayNum()) {
-            destroyListener(client, server);
+            asio::co_spawn(chan_strand(), destroyListenerAwait(server), asio::detached);
         }
     }
 
