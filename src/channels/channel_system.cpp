@@ -276,12 +276,43 @@ Channel::Connector::parseAddrPort(const std::string & addrPort) {
 }
 
 /// ChannelBase
+size_t ChannelBase::countValidChannels(void) const {
+    const std::scoped_lock guard{lockch};
+    return std::count_if(channels_.begin(), channels_.end(), [](auto& ptr){ return !!ptr; });
+}
+
 Channel::ConnectorBase* ChannelBase::findChannel(CID channel) {
     const std::scoped_lock guard{lockch};
     if(auto& ptr = channels_[channel]) {
         return ptr.get();
     }
     return nullptr;
+}
+
+void ChannelBase::emplaceChannel(CID channel, Channel::ConnectorBasePtr&& ptr) {
+    const std::scoped_lock guard{lockch};
+    channels_[channel] = std::move(ptr);
+}
+
+void ChannelBase::destroyChannel(CID channel) {
+    const std::scoped_lock guard{this->lockch};
+    if(auto& ptr = channels_[channel]) {
+        ptr->setRunning(false);
+        ptr.reset();
+        Application::info("{}: {}, id: {}", NS_FuncNameV, "channel removed", channel);
+    } else {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not running", channel);
+    }
+}
+
+void ChannelBase::shutdownChannels(void) {
+    const std::scoped_lock guard{lockch};
+    for(auto & ptr : channels_) {
+        if(ptr) {
+            ptr->setRunning(false);
+            ptr.reset();
+        }
+    }
 }
 
 void ChannelBase::recvLtsmEvent(CID channel, std::vector<uint8_t> && buf) {
@@ -414,8 +445,7 @@ bool ChannelBase::createChannelAudio(CID channel, const std::string & url, const
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createClientAudioConnector(channel, url, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createClientAudioConnector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -433,8 +463,7 @@ bool ChannelBase::createChannelFuse(CID channel, const std::string & url, const 
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createClientFuseConnector(channel, url, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createClientFuseConnector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -452,8 +481,7 @@ bool ChannelBase::createChannelPcsc(CID channel, const std::string & url, const 
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createClientPcscConnector(channel, url, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createClientPcscConnector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -476,8 +504,7 @@ bool ChannelBase::createChannelUnix(CID channel, const std::filesystem::path & p
     Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", NS_FuncNameV, channel, path, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createUnixConnector(channel, path, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createUnixConnector(channel, path, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -490,8 +517,7 @@ bool ChannelBase::createChannelUnixFd(CID channel, int sock, const Channel::Conn
     Application::debug(DebugType::Channels, "{}: id: {}, sock: {}, mode: {}", NS_FuncNameV, channel, sock, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createUnixConnector(channel, sock, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createUnixConnector(channel, sock, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -507,8 +533,7 @@ bool ChannelBase::createChannelPkcs11(CID channel, const std::string & url, cons
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createClientPkcs11Connector(channel, url, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createClientPkcs11Connector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -535,8 +560,7 @@ bool ChannelBase::createChannelFile(CID channel, const std::filesystem::path & p
     Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", NS_FuncNameV, channel, path, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createFileConnector(channel, path, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createFileConnector(channel, path, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -554,8 +578,7 @@ bool ChannelBase::createChannelCommand(CID channel, const std::string & runcmd, 
     Application::debug(DebugType::Channels, "{}: id: {}, run cmd: `{}', mode: {}", NS_FuncNameV, channel, runcmd, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createCommandConnector(channel, runcmd, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createCommandConnector(channel, runcmd, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -584,8 +607,7 @@ bool ChannelBase::createChannelSocket(CID channel, std::pair<std::string, int> i
     }
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -598,8 +620,7 @@ bool ChannelBase::createChannelSocketFd(CID channel, int sock, const Channel::Co
     Application::debug(DebugType::Channels, "{}: id: {}, sock: {}, mode: {}", NS_FuncNameV, channel, sock, Channel::Connector::modeString(mode));
 
     try {
-        const std::scoped_lock guard{lockch};
-        channels_[channel] = std::move(Channel::createTcpConnector(channel, sock, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createTcpConnector(channel, sock, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -608,18 +629,6 @@ bool ChannelBase::createChannelSocketFd(CID channel, int sock, const Channel::Co
     return true;
 }
 #endif
-
-void ChannelBase::destroyChannel(CID channel) {
-    const std::scoped_lock guard{this->lockch};
-
-    if(auto& ptr = channels_[channel]) {
-        ptr->setRunning(false);
-        ptr.reset();
-        Application::info("{}: {}, id: {}", NS_FuncNameV, "channel removed", channel);
-    } else {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not running", channel);
-    }
-}
 
 void ChannelBase::sendSystemChannelOpen(CID channel, const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts) {
     Application::info("{}: id: {}, content: `{}'", NS_FuncNameV, channel, clientOpts.content());
@@ -673,7 +682,7 @@ void ChannelBase::recvLtsmProto(CID channel, std::vector<uint8_t> && buf)
 {
     Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
-    if(channelDebug == channel) {
+    if(isChannelDebug(channel)) {
         auto str = Tools::hexString(buf, 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            NS_FuncNameV, channel, buf.size(), str);
@@ -684,20 +693,9 @@ void ChannelBase::recvLtsmProto(CID channel, std::vector<uint8_t> && buf)
 
 void ChannelBase::setChannelDebug(CID channel, bool debug) {
     if(debug) {
-        channelDebug = channel;
-    } else if(channelDebug == channel) {
-        channelDebug = -1;
-    }
-}
-
-void ChannelBase::channelsShutdown(void) {
-    const std::scoped_lock guard{lockch};
-
-    for(auto & ptr : channels_) {
-        if(ptr) {
-            ptr->setRunning(false);
-            ptr.reset();
-        }
+        channel_debug_ = channel;
+    } else if(channel_debug_ == channel) {
+        channel_debug_ = -1;
     }
 }
 
@@ -708,11 +706,6 @@ void ChannelBase::setRemoteConnected(CID channel, bool status) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not running", channel);
         throw channel_error(NS_FuncNameS);
     }
-}
-
-size_t ChannelBase::countValidChannels(void) const {
-    const std::scoped_lock guard{lockch};
-    return std::count_if(channels_.begin(), channels_.end(), [](auto& ptr){ return !!ptr; });
 }
 
 /// ChannelClient
@@ -783,7 +776,7 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
         replyError = true;
     }
 
-    Channel::ConnectorMode mode = Channel::connectorMode(smode);
+    const auto mode = Channel::connectorMode(smode);
 
     if(mode == Channel::ConnectorMode::Unknown) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "unknown channel mode", channel);
@@ -1019,12 +1012,12 @@ uint32_t ChannelListener::countFreeChannels(void) const {
     const auto channels_valid = countValidChannels();
     const auto used = 2 + channels_valid + planned_counts_.load();
 
-    if(used > ChannelLimit) {
+    if(used > ChannelTypeLast) {
         Application::error("{}: used channel count is large, count: {}", NS_FuncNameV, used);
         throw channel_error(NS_FuncNameS);
     }
 
-    return ChannelLimit - used;
+    return ChannelTypeLast - used;
 }
 
 bool ChannelListener::createChannel(const Channel::UrlMode & clientOpts, const Channel::UrlMode & serverOpts, const Channel::Opts & chOpts) {
@@ -1414,35 +1407,35 @@ ssize_t Channel::Local2Remote_FD::readDataTo(void* buf, size_t len) {
 
 /// ConnectorBase
 Channel::ConnectorBase::ConnectorBase(CID ch, const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
-    : cid(ch), owner(& srv), mode(mod), flags(chOpts.flags) {
-    owner->sendSystemChannelConnected(ch, chOpts.flags, true);
+    : owner_(& srv), mode_(mod), flags_(chOpts.flags), cid_(ch) {
+    owner_->sendSystemChannelConnected(ch, chOpts.flags, true);
 }
 
 bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
-    return (flags & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
-}
-
-bool Channel::ConnectorBase::isRunning(void) const {
-    return loopRunning;
+    return (flags_ & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
 }
 
 bool Channel::ConnectorBase::isRemoteConnected(void) const {
-    return remoteConnected;
+    return remote_connected_;
+}
+
+bool Channel::ConnectorBase::isRunning(void) const {
+    return running_;
 }
 
 void Channel::ConnectorBase::setRunning(bool f) {
-    loopRunning = f;
+    running_ = f;
 }
 
 void Channel::ConnectorBase::setRemoteConnected(bool f) {
-    remoteConnected = f;
+    remote_connected_ = f;
 }
 
 void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
     bool error = false;
-    auto owner = cn->getOwner();
+    auto owner_ = cn->getOwner();
 
-    if(! owner) {
+    if(! owner_) {
         Application::error("{}: id: {}, {} failed", NS_FuncNameV, st->cid(), "owner");
         return;
     }
@@ -1460,7 +1453,7 @@ void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
     }
 
     if(error) {
-        owner->sendSystemChannelError(st->cid(), st->getError(), std::string(NS_FuncNameV).append(": ").append(strerror(st->getError())));
+        owner_->sendSystemChannelError(st->cid(), st->getError(), std::string(NS_FuncNameV).append(": ").append(strerror(st->getError())));
 
         Application::error("{}: id: {}, error: {}", NS_FuncNameV, st->cid(), strerror(st->getError()));
     } else {
@@ -1473,8 +1466,8 @@ void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
     }
 
     // read/write priority send
-    if(! cn->isMode(ConnectorMode::ReadWrite) || cn->isMode(ConnectorMode::WriteOnly)) {
-        owner->sendSystemChannelClose(st->cid());
+    if(! cn->connectorMode(ConnectorMode::ReadWrite) || cn->connectorMode(ConnectorMode::WriteOnly)) {
+        owner_->sendSystemChannelClose(st->cid());
     }
 }
 
@@ -1508,7 +1501,7 @@ void Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
     }
 
     // read/write priority send
-    if(cn->isMode(ConnectorMode::ReadWrite) || cn->isMode(ConnectorMode::ReadOnly)) {
+    if(cn->connectorMode(ConnectorMode::ReadWrite) || cn->connectorMode(ConnectorMode::ReadOnly)) {
         owner->sendSystemChannelClose(st->cid());
     }
 }
@@ -1906,20 +1899,20 @@ Channel::createCommandConnector(CID channel, const std::string & runcmd, const C
 #ifdef __UNIX__
 /// Listener
 Channel::Listener::Listener(int fd, const UrlMode & serverOpts, const UrlMode & clientOpts, const Channel::Opts & ch, ChannelListener & sender)
-    : sopts(serverOpts), copts(clientOpts), owner(& sender), chopts(ch), srvfd(fd) {
-    loopRunning = true;
+    : sopts(serverOpts), copts(clientOpts), chopts(ch), owner_(& sender), srvfd_(fd) {
+    running_ = true;
     th = std::thread(loopAccept, this);
 }
 
 Channel::Listener::~Listener() {
-    loopRunning = false;
+    running_ = false;
 
     if(th.joinable()) {
         th.join();
     }
 
-    if(0 <= srvfd) {
-        close(srvfd);
+    if(0 <= srvfd_) {
+        close(srvfd_);
     }
 
     if(isUnix()) {
@@ -1933,32 +1926,32 @@ Channel::Listener::~Listener() {
 }
 
 bool Channel::Listener::isRunning(void) const {
-    return loopRunning;
+    return running_;
 }
 
 void Channel::Listener::setRunning(bool f) {
-    loopRunning = f;
+    running_ = f;
 }
 
 void Channel::Listener::loopAccept(Listener* st) {
-    while(st->loopRunning) {
+    while(st->running_) {
         bool input = false;
 
         try {
-            input = NetworkStream::hasInput(st->srvfd);
+            input = NetworkStream::hasInput(st->srvfd_);
         } catch(const std::exception & err) {
-            st->loopRunning = false;
+            st->running_ = false;
 
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         if(input) {
             auto sock = st->isUnix() ?
-                        UnixSocket::accept(st->srvfd) : TCPSocket::accept(st->srvfd);
+                        UnixSocket::accept(st->srvfd_) : TCPSocket::accept(st->srvfd_);
 
             if(sock < 0) {
-                st->loopRunning = false;
-            } else if(! st->owner->createChannelAcceptFd(st->copts, sock, st->sopts, st->chopts)) {
+                st->running_ = false;
+            } else if(! st->owner_->createChannelAcceptFd(st->copts, sock, st->sopts, st->chopts)) {
                 close(sock);
             }
         } else {

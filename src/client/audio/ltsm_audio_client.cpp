@@ -176,7 +176,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 
     int prefferedAudioEnc = RFB::ENCODING_LTSM_OPUS;
     
-    if(auto rfb = dynamic_cast<const RFB::ClientDecoder*>(owner)) {
+    if(auto rfb = dynamic_cast<const RFB::ClientDecoder*>(connectorOwner())) {
         // opus or pcm
         if(rfb->clientPrefferedAudioEncoding()) {
             prefferedAudioEnc = rfb->clientPrefferedAudioEncoding();
@@ -222,7 +222,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! format) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+        connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return false;
     }
 
@@ -245,7 +245,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     if(! player) {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+        connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return false;
     }
 
@@ -255,7 +255,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     reply.writeIntLE16(AudioOp::ProtoVer);
     // encoding type
     reply.writeIntLE16(format->type);
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 

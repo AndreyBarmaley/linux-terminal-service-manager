@@ -447,7 +447,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void) {
-        channelsShutdown();
+        shutdownChannels();
         incr_update_timer_.cancel();
         if(stream_) {
             stream_->closeSocket();
@@ -825,7 +825,7 @@ namespace LTSM {
             // data
             writeIntBE16(buf.size());
 
-        if(channelDebug == channel) {
+        if(isChannelDebug(channel)) {
             auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
             Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            NS_FuncNameV, channel, buf.size(), str);

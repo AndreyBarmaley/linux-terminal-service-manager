@@ -607,7 +607,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::asioStop(void) {
-        channelsShutdown();
+        shutdownChannels();
         if(stream_) {
             stream_->closeSocket();
         }
@@ -681,7 +681,7 @@ namespace LTSM {
         const uint16_t length = co_await stream_->async_recv_be16();
         auto buf = co_await stream_->async_recv_buffer(length);
 
-        if(channelDebug == channel) {
+        if(isChannelDebug(channel)) {
             auto str = Tools::hexString(buf, 2);
             Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            NS_FuncNameV, channel, length, str);
@@ -1480,7 +1480,7 @@ namespace LTSM {
     	    // data
     	    writeIntBE16(buf.size());
 
-        if(channelDebug == channel) {
+        if(isChannelDebug(channel)) {
             auto str = Tools::rangeHexString(buf.begin(), buf.end(), 2);
             Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            NS_FuncNameV, channel, buf.size(), str);

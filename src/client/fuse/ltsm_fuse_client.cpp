@@ -299,7 +299,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
 
     auto mountPoint = sb.readString(len);
 
-    if(! owner->allowCreateChannel(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
+    if(! connectorOwner()->allowCreateChannel(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
         Application::error("{}: {} failed, path: `{}'", NS_FuncNameV, "mount point", mountPoint);
         fuseInit = false;
     } else {
@@ -325,7 +325,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
         replyWriteShareRootInfo(reply, shareRoot);
     }
 
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -372,7 +372,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -403,7 +403,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 */
@@ -452,7 +452,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
         reply.writeIntLE32(ret);
     }
 
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -485,7 +485,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
         opens.remove(fdh);
     }
 
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }
 
@@ -517,7 +517,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.writeIntLE32(error);
         Application::error("{}: {} failed, error: {}, code: {}, offset: {}",
                            NS_FuncNameV, "lseek", strerror(error), error, offset);
-        owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+        connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
         return true;
     }
 
@@ -548,6 +548,6 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         reply.write(buf);
     }
 
-    owner->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
     return true;
 }

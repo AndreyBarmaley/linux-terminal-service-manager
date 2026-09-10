@@ -81,9 +81,9 @@ namespace LTSM {
     };
 
     using CID = uint8_t;
-    const CID ChannelTypeSystem = 0;
-    const CID ChannelTypeReserved = 0xFF;
-    const CID ChannelLimit = UINT8_MAX;
+    constexpr CID ChannelTypeSystem = 0;
+    constexpr CID ChannelTypeReserved = 0xFF;
+    constexpr CID ChannelTypeLast = UINT8_MAX;
 
     namespace Channel {
         enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11 };
@@ -267,17 +267,19 @@ namespace LTSM {
         /// ConnectorBase
         class ConnectorBase {
           private:
-            std::atomic<bool> loopRunning{false};
-            std::atomic<bool> remoteConnected{false};
+            std::atomic<bool> running_{false};
+            std::atomic<bool> remote_connected_{false};
 
-            CID cid = 255;
+            ChannelBase* owner_ = nullptr;
+            ConnectorMode mode_ = ConnectorMode::Unknown;
+
+            int flags_ = 0;
+            CID cid_ = 255;
 
           protected:
-            ChannelBase* owner = nullptr;
-            ConnectorMode mode = ConnectorMode::Unknown;
-
-          public:
-            int flags = 0;
+            inline ChannelBase* connectorOwner(void) {
+                return owner_;
+            }
 
           public:
             ConnectorBase(CID, const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv);
@@ -289,22 +291,27 @@ namespace LTSM {
             virtual void pushData(std::vector<uint8_t> &&) = 0;
 
             bool isAllowSessionFor(bool user) const;
+
             bool isRunning(void) const;
             void setRunning(bool);
 
             bool isRemoteConnected(void) const;
             void setRemoteConnected(bool);
 
-            ChannelBase* getOwner(void) {
-                return owner;
+            inline ChannelBase* getOwner(void) {
+                return owner_;
             }
 
-            bool isMode(ConnectorMode cm) const {
-                return mode == cm;
+            inline bool connectorMode(const ConnectorMode & cm) const {
+                return mode_ == cm;
             }
 
-            CID channel(void) const {
-                return cid;
+            inline int connectorFlags(void) const {
+                return flags_;
+            }
+
+            inline CID channel(void) const {
+                return cid_;
             }
         };
 
@@ -523,15 +530,14 @@ namespace LTSM {
         /// Listener
         class Listener {
             std::thread th;
-            std::atomic<bool> loopRunning{false};
+            std::atomic<bool> running_{false};
 
             UrlMode sopts;
             UrlMode copts;
-
-            ChannelListener* owner = nullptr;
-
             Opts chopts;
-            int srvfd = -1;
+
+            ChannelListener* owner_ = nullptr;
+            int srvfd_ = -1;
 
           public:
             Listener(int fd, const UrlMode & srvOpts, const UrlMode & cliOpts, const Channel::Opts &, ChannelListener &);
@@ -570,10 +576,9 @@ namespace LTSM {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         mutable std::mutex lockch;
-        std::array<Channel::ConnectorBasePtr, 256> channels_;
+        std::array<Channel::ConnectorBasePtr, ChannelTypeLast + 1> channels_;
 
-      protected:
-        int channelDebug = -1;
+        int channel_debug_ = -1;
 
       protected:
         Channel::ConnectorBase* findChannel(CID);
@@ -588,6 +593,12 @@ namespace LTSM {
         inline boost::asio::strand<boost::asio::any_io_executor> chan_strand(void) const {
             return strand_;
         }
+
+        inline bool isChannelDebug(CID channel) const {
+            return channel_debug_ == channel;
+        }
+
+        void emplaceChannel(CID channel, Channel::ConnectorBasePtr&&);
 
         // recv system events
         virtual void recvChannelSystemEvent(const std::string&, const JsonObject &) = 0;
@@ -614,7 +625,7 @@ namespace LTSM {
         bool createChannelPkcs11(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
 
         void setChannelDebug(CID, bool);
-        void channelsShutdown(void);
+        void shutdownChannels(void);
 
       public:
         explicit ChannelBase(const boost::asio::any_io_executor& ctx) : strand_{ctx} {
