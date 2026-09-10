@@ -670,11 +670,11 @@ void ChannelBase::sendSystemChannelClose(CID channel) {
     sendLtsmChannelData(ChannelTypeSystem, JsonObjectStream().push("cmd", SystemCommand::ChannelClose).push("id", channel).flush());
 }
 
-void ChannelBase::sendSystemChannelConnected(CID channel, int flags, bool noerror) {
+void ChannelBase::sendSystemChannelConnected(CID channel, int flags, bool error) {
     sendLtsmChannelData(ChannelTypeSystem, JsonObjectStream().
                         push("cmd", SystemCommand::ChannelConnected).
                         push("flags", flags).
-                        push("error", ! noerror).
+                        push("error", error).
                         push("id", channel).flush());
 }
 
@@ -824,9 +824,7 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
         }
     }
 
-    if(replyError) {
-        sendSystemChannelConnected(channel, flags, false);
-    }
+    sendSystemChannelConnected(channel, flags, replyError);
 }
 
 void ChannelClient::systemChannelListenEvent(const JsonObject & jo) {
@@ -999,12 +997,17 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
         throw channel_error(NS_FuncNameS);
     }
 
-    if(! channelPlannedCreate(channel, job)) {
+    bool replyError = false;
+
+    if(channelPlannedCreate(channel, job)) {
+        Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
+        setRemoteConnected(channel, true);
+    } else {
         jobFailed();
-        throw channel_error(NS_FuncNameS);
+        replyError = true;
     }
 
-    Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
+    sendSystemChannelConnected(channel, flags, replyError);
     co_return;
 }
 
@@ -1136,14 +1139,6 @@ bool ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned &
                 Application::error("{}: {}, id: {}", NS_FuncNameV, "channel type not implemented", channel);
                 return false;
         }
-    }
-
-    // set connected flag
-    if(auto ptr = findChannel(job.channel)) {
-        ptr->setRemoteConnected(true);
-    } else {
-        Application::error("{}: channel not running, id: {}", NS_FuncNameV, job.channel);
-        throw channel_error(NS_FuncNameS);
     }
 
     return true;
@@ -1406,11 +1401,6 @@ ssize_t Channel::Local2Remote_FD::readDataTo(void* buf, size_t len) {
 }
 
 /// ConnectorBase
-Channel::ConnectorBase::ConnectorBase(CID ch, const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
-    : owner_(& srv), mode_(mod), flags_(chOpts.flags), cid_(ch) {
-    owner_->sendSystemChannelConnected(ch, chOpts.flags, true);
-}
-
 bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
     return (flags_ & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
 }

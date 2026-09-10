@@ -282,7 +282,10 @@ namespace LTSM {
             }
 
           public:
-            ConnectorBase(CID, const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv);
+            ConnectorBase(CID cid, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
+                : owner_(& srv), mode_(mod), flags_(opts.flags), cid_(cid) {
+            }
+
             virtual ~ConnectorBase() = default;
 
             virtual int error(void) const = 0;
@@ -636,7 +639,7 @@ namespace LTSM {
         boost::asio::awaitable<bool> sendSystemTransferFiles(std::forward_list<std::string>);
         void sendSystemChannelOpen(CID, const Channel::UrlMode &, const Channel::Opts &);
         void sendSystemChannelClose(CID);
-        void sendSystemChannelConnected(CID, int flags, bool noerror);
+        void sendSystemChannelConnected(CID, int flags, bool error);
         void sendSystemChannelError(CID, int code, const std::string &);
 
         void recvLtsmEvent(CID, std::vector<uint8_t> &&);
