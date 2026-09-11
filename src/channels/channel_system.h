@@ -91,6 +91,7 @@ namespace LTSM {
     namespace Channel {
         enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11 };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
+        enum class ConnectorStatus { Unknown, Openning, Connected, Running };
 
         // UltraSlow: ~10k/sec, ~40k/sec, ~80k/sec, ~800k/sec, ~1600k/sec
         enum class Speed { VerySlow, Slow, Medium, Fast, UltraFast, Ultra5 };
@@ -270,8 +271,7 @@ namespace LTSM {
         /// ConnectorBase
         class ConnectorBase {
           private:
-            std::atomic<bool> running_{false};
-            std::atomic<bool> remote_connected_{false};
+            std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
 
             ChannelBase* owner_ = nullptr;
             ConnectorMode mode_ = ConnectorMode::Unknown;
@@ -291,6 +291,14 @@ namespace LTSM {
 
             virtual ~ConnectorBase() = default;
 
+            // FIXME compat
+            virtual bool isShutdown(void) const {
+                return true;
+            }
+            virtual void setShutdown(void) {
+            }
+
+            //
             virtual int error(void) const = 0;
 
             virtual void setSpeed(const Channel::Speed &) = 0;
@@ -298,11 +306,21 @@ namespace LTSM {
 
             bool isAllowSessionFor(bool user) const;
 
-            bool isRunning(void) const;
-            void setRunning(bool);
+            inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
+                status_ = st;
+            }
 
-            bool isRemoteConnected(void) const;
-            void setRemoteConnected(bool);
+            inline Channel::ConnectorStatus connectorStatus(void) const {
+                return status_;
+            }
+
+            inline bool isRunning(void) const {
+                return Channel::ConnectorStatus::Running == connectorStatus();
+            }
+
+            inline bool isConnected(void) const {
+                return Channel::ConnectorStatus::Connected == connectorStatus();
+            }
 
             inline ChannelBase* getOwner(void) {
                 return owner_;
@@ -327,6 +345,15 @@ namespace LTSM {
         class ConnectorFD_R : public ConnectorBase {
             std::unique_ptr<Local2Remote> localRemote;
             std::thread thr;
+            std::atomic<bool> shutdown_{false};
+
+          public:
+            void setShutdown(void) override {
+                shutdown_ = true;
+            }
+            bool isShutdown(void) const override {
+                return shutdown_;
+            }
 
           public:
             ConnectorFD_R(CID, int fd, bool close, const Opts &, ChannelBase &);
@@ -341,6 +368,15 @@ namespace LTSM {
         class ConnectorFD_W : public ConnectorBase {
             std::unique_ptr<Remote2Local> remoteLocal;
             std::thread thw;
+            std::atomic<bool> shutdown_{false};
+
+          public:
+            void setShutdown(void) override {
+                shutdown_ = true;
+            }
+            bool isShutdown(void) const override {
+                return shutdown_;
+            }
 
           public:
             ConnectorFD_W(CID, int fd, bool close, const Opts &, ChannelBase &);
@@ -358,6 +394,15 @@ namespace LTSM {
 
             std::thread thr;
             std::thread thw;
+            std::atomic<bool> shutdown_{false};
+
+          public:
+            void setShutdown(void) override {
+                shutdown_ = true;
+            }
+            bool isShutdown(void) const override {
+                return shutdown_;
+            }
 
           public:
             ConnectorFD_RW(CID, int fd, const Opts &, ChannelBase &);
@@ -436,7 +481,7 @@ namespace LTSM {
 
           public:
             ConnectorClientAudio(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
-            virtual ~ConnectorClientAudio();
+            virtual ~ConnectorClientAudio() = default;
 
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
@@ -470,7 +515,7 @@ namespace LTSM {
 
           public:
             ConnectorClientPcsc(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
-            virtual ~ConnectorClientPcsc();
+            virtual ~ConnectorClientPcsc() = default;
 
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
@@ -495,7 +540,7 @@ namespace LTSM {
 
           public:
             ConnectorClientPkcs11(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
-            virtual ~ConnectorClientPkcs11();
+            virtual ~ConnectorClientPkcs11() = default;
 
             int error(void) const override;
             void setSpeed(const Channel::Speed &) override;
@@ -531,51 +576,6 @@ namespace LTSM {
 #endif
         ConnectorBasePtr createFileConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
         ConnectorBasePtr createCommandConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
-
-#ifdef __UNIX__
-        /// Listener
-        class Listener {
-            std::thread th;
-            std::atomic<bool> running_{false};
-
-            UrlMode sopts;
-            UrlMode copts;
-            Opts chopts;
-
-            ChannelListener* owner_ = nullptr;
-            int srvfd_ = -1;
-
-          public:
-            Listener(int fd, const UrlMode & srvOpts, const UrlMode & cliOpts, const Channel::Opts &, ChannelListener &);
-            virtual ~Listener();
-
-            static void loopAccept(Listener*);
-
-            bool isRunning(void) const;
-            void setRunning(bool);
-
-            const std::string & getClientUrl(void) const {
-                return copts.url;
-            }
-
-            const std::string & getServerUrl(void) const {
-                return sopts.url;
-            }
-
-            inline bool isListenUrl(const std::string & url) const {
-                return sopts.url == url;
-            }
-
-            inline bool isUnix(void) const {
-                return sopts.type() == ConnectorType::Unix;
-            }
-        };
-
-        std::unique_ptr<Listener> createUnixListener(const Channel::UrlMode & serverOpts, int listenLimit,
-                const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
-        std::unique_ptr<Listener> createTcpListener(const Channel::UrlMode & serverOpts, int listenLimit,
-                const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
-#endif
     } // namespace Channel
 
     class ChannelBase {
@@ -588,7 +588,21 @@ namespace LTSM {
 
       protected:
         Channel::ConnectorBase* findChannel(CID);
-        void setRemoteConnected(CID, bool);
+
+        void setChannelStatus(CID, const Channel::ConnectorStatus &);
+        Channel::ConnectorStatus channelStatus(CID) const;
+
+        inline bool channelConnected(CID ch) const {
+            return Channel::ConnectorStatus::Connected == channelStatus(ch);
+        }
+
+        inline void setChannelConnected(CID ch) {
+            setChannelStatus(ch, Channel::ConnectorStatus::Connected);
+        }
+
+        inline void setChannelRunning(CID ch) {
+            setChannelStatus(ch, Channel::ConnectorStatus::Running);
+        }
 
         size_t countValidChannels(void) const;
 
@@ -642,7 +656,7 @@ namespace LTSM {
         boost::asio::awaitable<bool> sendSystemTransferFiles(std::forward_list<std::string>);
         void sendSystemChannelOpen(CID, const Channel::UrlMode &, const Channel::Opts &);
         void sendSystemChannelClose(CID);
-        void sendSystemChannelConnected(CID, int flags, bool error);
+        void sendSystemChannelConnected(CID, int flags, int error);
         void sendSystemChannelError(CID, int code, const std::string &);
 
         void recvLtsmEvent(CID, std::vector<uint8_t> &&);

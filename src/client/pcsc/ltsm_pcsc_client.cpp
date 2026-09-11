@@ -162,12 +162,6 @@ LTSM::Channel::ConnectorClientPcsc::ConnectorClientPcsc(CID channel, const std::
         const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-    // start threads
-    setRunning(true);
-}
-
-LTSM::Channel::ConnectorClientPcsc::~ConnectorClientPcsc() {
-    setRunning(false);
 }
 
 int LTSM::Channel::ConnectorClientPcsc::error(void) const {

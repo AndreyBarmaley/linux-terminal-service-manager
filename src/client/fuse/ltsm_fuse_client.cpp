@@ -185,13 +185,9 @@ LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(CID channel, const std::
         const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv), reply(4096) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-    // start threads
-    setRunning(true);
 }
 
 LTSM::Channel::ConnectorClientFuse::~ConnectorClientFuse() {
-    setRunning(false);
-
     for(const auto & fd : opens) {
         ::close(fd);
     }

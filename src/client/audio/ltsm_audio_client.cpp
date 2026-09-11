@@ -69,12 +69,6 @@ LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(CID channel, const std
         const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-    // start threads
-    setRunning(true);
-}
-
-LTSM::Channel::ConnectorClientAudio::~ConnectorClientAudio() {
-    setRunning(false);
 }
 
 int LTSM::Channel::ConnectorClientAudio::error(void) const {

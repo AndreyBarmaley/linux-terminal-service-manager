@@ -63,12 +63,6 @@ LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(CID channel, const s
         const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv), reply(4096) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-    // start threads
-    setRunning(true);
-}
-
-LTSM::Channel::ConnectorClientPkcs11::~ConnectorClientPkcs11() {
-    setRunning(false);
 }
 
 int LTSM::Channel::ConnectorClientPkcs11::error(void) const {

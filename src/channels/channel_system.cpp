@@ -272,7 +272,6 @@ void ChannelBase::destroyChannel(CID channel) {
     const std::scoped_lock guard{this->lockch};
 
     if(auto& ptr = channels_[channel]) {
-        ptr->setRunning(false);
         ptr.reset();
         Application::info("{}: {}, id: {}", NS_FuncNameV, "channel removed", channel);
     } else {
@@ -285,7 +284,6 @@ void ChannelBase::shutdownChannels(void) {
 
     for(auto & ptr : channels_) {
         if(ptr) {
-            ptr->setRunning(false);
             ptr.reset();
         }
     }
@@ -348,11 +346,6 @@ void ChannelBase::recvChannelData(CID channel, std::vector<uint8_t> && buf) {
         throw std::invalid_argument(NS_FuncNameS);
     }
 
-    if(! channelConn->isRemoteConnected()) {
-        Application::error("{}: {}, id: {}, error: {}", NS_FuncNameV, "channel not connected", channel, channelConn->error());
-        throw std::invalid_argument(NS_FuncNameS);
-    }
-
     if(! channelConn->isRunning()) {
         Application::error("{}: {}, id: {}, error: {}", NS_FuncNameV, "channel not running", channel, channelConn->error());
         throw std::invalid_argument(NS_FuncNameS);
@@ -363,12 +356,12 @@ void ChannelBase::recvChannelData(CID channel, std::vector<uint8_t> && buf) {
         throw std::invalid_argument(NS_FuncNameS);
     }
 
-
     channelConn->pushData(std::move(buf));
 }
 
 void ChannelBase::systemChannelCloseEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
+    Application::info("{}: channel: {}", NS_FuncNameV, channel);
     destroyChannel(channel);
 }
 
@@ -644,10 +637,11 @@ void ChannelBase::sendSystemChannelError(CID channel, int code, const std::strin
 }
 
 void ChannelBase::sendSystemChannelClose(CID channel) {
+    Application::info("{}: id: {}", NS_FuncNameV, channel);
     sendLtsmChannelData(ChannelTypeSystem, JsonObjectStream().push("cmd", SystemCommand::ChannelClose).push("id", channel).flush());
 }
 
-void ChannelBase::sendSystemChannelConnected(CID channel, int flags, bool error) {
+void ChannelBase::sendSystemChannelConnected(CID channel, int flags, int error) {
     sendLtsmChannelData(ChannelTypeSystem, JsonObjectStream().
                         push("cmd", SystemCommand::ChannelConnected).
                         push("flags", flags).
@@ -675,9 +669,17 @@ void ChannelBase::setChannelDebug(CID channel, bool debug) {
     }
 }
 
-void ChannelBase::setRemoteConnected(CID channel, bool status) {
+Channel::ConnectorStatus ChannelBase::channelStatus(CID channel) const {
     if(auto& ptr = channels_[channel]) {
-        ptr->setRemoteConnected(status);
+        return ptr->connectorStatus();
+    }
+
+    return Channel::ConnectorStatus::Unknown;
+}
+
+void ChannelBase::setChannelStatus(CID channel, const Channel::ConnectorStatus& st) {
+    if(auto& ptr = channels_[channel]) {
+        ptr->setConnectorStatus(st);
     } else {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not running", channel);
         throw channel_error(NS_FuncNameS);
@@ -800,6 +802,9 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
         }
     }
 
+    // set local connected
+    setChannelConnected(channel);
+
     sendSystemChannelConnected(channel, flags, replyError);
 }
 
@@ -808,11 +813,21 @@ void ChannelClient::systemChannelListenEvent(const JsonObject & jo) {
 
 void ChannelClient::systemChannelConnectedEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
-    bool error = jo.getBoolean("error");
+    int error = jo.getInteger("error");
     int flags = jo.getInteger("flags", 0);
 
-    Application::info("{}: channel: {}, error: {}, flags: {:08x}", NS_FuncNameV, channel, error, flags);
-    setRemoteConnected(channel, true);
+    if(error) {
+        Application::error("{}: error: {}, id: {}", NS_FuncNameV, error, channel);
+        throw channel_error(NS_FuncNameS);
+    }
+
+    if(channelConnected(channel)) {
+        Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
+        setChannelRunning(channel);
+    } else {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not connected", channel);
+        throw channel_error(NS_FuncNameS);
+    }
 }
 
 #ifdef __UNIX__
@@ -1021,7 +1036,7 @@ void ChannelListener::exceptionHandler(std::exception_ptr ptr) {
 
 void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
-    bool error = jo.getBoolean("error");
+    int error = jo.getInteger("error");
     int flags = jo.getInteger("flags", 0);
 
     asio::co_spawn(chan_strand(), systemChannelConnectedAwait(channel, flags, error), [this](std::exception_ptr ptr) {
@@ -1055,7 +1070,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
     };
 
     if(error) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "client connect error", channel);
+        Application::error("{}: error: {}, id: {}", NS_FuncNameV, error, channel);
         jobFailed();
         throw channel_error(NS_FuncNameS);
     }
@@ -1076,13 +1091,16 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
 
     if(channelPlannedCreate(channel, job)) {
         Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
-        setRemoteConnected(channel, true);
+        // set local connected
+        setChannelConnected(channel);
     } else {
         jobFailed();
         replyError = true;
     }
 
     sendSystemChannelConnected(channel, flags, replyError);
+    setChannelRunning(channel);
+
     co_return;
 }
 
@@ -1480,22 +1498,6 @@ bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
     return (flags_ & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
 }
 
-bool Channel::ConnectorBase::isRemoteConnected(void) const {
-    return remote_connected_;
-}
-
-bool Channel::ConnectorBase::isRunning(void) const {
-    return running_;
-}
-
-void Channel::ConnectorBase::setRunning(bool f) {
-    running_ = f;
-}
-
-void Channel::ConnectorBase::setRemoteConnected(bool f) {
-    remote_connected_ = f;
-}
-
 void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
     bool error = false;
     auto owner_ = cn->getOwner();
@@ -1505,7 +1507,7 @@ void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
         return;
     }
 
-    while(cn->isRunning()) {
+    while(!cn->isShutdown()) {
         if(st->isEmpty()) {
             std::this_thread::sleep_for(st->getDelay());
             continue;
@@ -1513,14 +1515,14 @@ void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
 
         if(! st->writeData()) {
             error = true;
-            cn->setRunning(false);
+            break;
         }
     }
 
     if(error) {
         owner_->sendSystemChannelError(st->cid(), st->getError(), std::string(NS_FuncNameV).append(": ").append(strerror(st->getError())));
-
         Application::error("{}: id: {}, error: {}", NS_FuncNameV, st->cid(), strerror(st->getError()));
+        cn->setShutdown();
     } else {
         // all data write
         while(! st->isEmpty()) {
@@ -1545,10 +1547,10 @@ void Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
         return;
     }
 
-    while(cn->isRunning()) {
+    while(!cn->isShutdown()) {
         if(! st->readData()) {
             error = true;
-            cn->setRunning(false);
+            break;
         }
 
         if(st->getBuf().empty()) {
@@ -1563,6 +1565,7 @@ void Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
     if(error) {
         owner->sendSystemChannelError(st->cid(), st->getError(), std::string(NS_FuncNameV).append(": ").append(strerror(st->getError())));
         Application::error("{}: id: {}, error: {}", NS_FuncNameV, st->cid(), strerror(st->getError()));
+        cn->setShutdown();
     }
 
     // read/write priority send
@@ -1575,8 +1578,6 @@ void Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
 Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd0, bool close, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(ch, ConnectorMode::ReadOnly, chOpts, srv) {
     // start threads
-    setRunning(true);
-
     localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, close, chOpts.flags);
     localRemote->setSpeed(chOpts.speed);
 
@@ -1586,8 +1587,7 @@ Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd0, bool close, const Opts & 
 }
 
 Channel::ConnectorFD_R::~ConnectorFD_R() {
-    setRunning(false);
-
+    shutdown_ = true;
     if(thr.joinable()) {
         thr.join();
     }
@@ -1607,8 +1607,6 @@ void Channel::ConnectorFD_R::setSpeed(const Channel::Speed & speed) {
 Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd0, bool close, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(ch, ConnectorMode::WriteOnly, chOpts, srv) {
     // start threads
-    setRunning(true);
-
     remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, close, chOpts.flags);
     remoteLocal->setSpeed(chOpts.speed);
 
@@ -1618,8 +1616,7 @@ Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd0, bool close, const Opts & 
 }
 
 Channel::ConnectorFD_W::~ConnectorFD_W() {
-    setRunning(false);
-
+    shutdown_ = true;
     if(thw.joinable()) {
         thw.join();
     }
@@ -1645,8 +1642,6 @@ void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
 Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(ch, ConnectorMode::ReadWrite, chOpts, srv) {
     // start threads
-    setRunning(true);
-
     localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, true, chOpts.flags);
     localRemote->setSpeed(chOpts.speed);
 
@@ -1663,7 +1658,7 @@ Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd0, const Opts & chOpts, Ch
 }
 
 Channel::ConnectorFD_RW::~ConnectorFD_RW() {
-    setRunning(false);
+    shutdown_ = true;
 
     if(thr.joinable()) {
         thr.join();
@@ -1960,115 +1955,3 @@ Channel::createCommandConnector(CID channel, const std::string & runcmd, const C
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
     throw channel_error(NS_FuncNameS);
 }
-
-#ifdef __UNIX__
-/// Listener
-Channel::Listener::Listener(int fd, const UrlMode & serverOpts, const UrlMode & clientOpts, const Channel::Opts & ch, ChannelListener & sender)
-    : sopts(serverOpts), copts(clientOpts), chopts(ch), owner_(& sender), srvfd_(fd) {
-    running_ = true;
-    th = std::thread(loopAccept, this);
-}
-
-Channel::Listener::~Listener() {
-    running_ = false;
-
-    if(th.joinable()) {
-        th.join();
-    }
-
-    if(0 <= srvfd_) {
-        close(srvfd_);
-    }
-
-    if(isUnix()) {
-        try {
-            if(std::filesystem::exists(sopts.content()) && std::filesystem::is_socket(sopts.content())) {
-                std::filesystem::remove(sopts.content());
-            }
-        } catch(const std::filesystem::filesystem_error &) {
-        }
-    }
-}
-
-bool Channel::Listener::isRunning(void) const {
-    return running_;
-}
-
-void Channel::Listener::setRunning(bool f) {
-    running_ = f;
-}
-
-void Channel::Listener::loopAccept(Listener* st) {
-    while(st->running_) {
-        bool input = false;
-
-        try {
-            input = NetworkStream::hasInput(st->srvfd_);
-        } catch(const std::exception & err) {
-            st->running_ = false;
-
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        }
-
-        if(input) {
-            auto sock = st->isUnix() ?
-                        UnixSocket::accept(st->srvfd_) : TCPSocket::accept(st->srvfd_);
-
-            if(sock < 0) {
-                st->running_ = false;
-            } else if(! st->owner_->createChannelAcceptFd(st->copts, sock, st->sopts, st->chopts)) {
-                close(sock);
-            }
-        } else {
-            std::this_thread::sleep_for(250ms);
-        }
-    }
-}
-
-std::unique_ptr<Channel::Listener>
-Channel::createUnixListener(const UrlMode & serverOpts, int listenLimit,
-                            const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
-    auto & path = serverOpts.content();
-    std::error_code err;
-
-    if(std::filesystem::exists(path, err) &&
-       ! std::filesystem::is_socket(path, err)) {
-        Application::error("{}: {}, path: `{}'", NS_FuncNameV, "not socket", path);
-        throw channel_error(NS_FuncNameS);
-    }
-
-    int srvfd = UnixSocket::listen(path, listenLimit);
-
-    if(0 > srvfd) {
-        Application::error("{}: {}, path: `{}'", NS_FuncNameV, "unix failed", path);
-        throw channel_error(NS_FuncNameS);
-    }
-
-    return std::make_unique<Listener>(srvfd, serverOpts, clientOpts, chOpts, sender);
-}
-
-std::unique_ptr<Channel::Listener>
-Channel::createTcpListener(const UrlMode & serverOpts, int listenLimit,
-                           const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender) {
-    auto [ ipaddr, port ] = Connector::parseAddrPort(serverOpts.content());
-
-    if(0 >= port) {
-        Application::error("{}: {}, url: `{}'", NS_FuncNameV, "socket format", serverOpts.content());
-        throw channel_error(NS_FuncNameS);
-    }
-
-    // hardcore server listen
-    if(sender.serverSide()) {
-        ipaddr = "127.0.0.1";
-    }
-
-    int srvfd = TCPSocket::listen(ipaddr, port, listenLimit);
-
-    if(0 > srvfd) {
-        Application::error("{}: {}, ipaddr: {}, port: {}", NS_FuncNameV, "socket failed", ipaddr, port);
-        throw channel_error(NS_FuncNameS);
-    }
-
-    return std::make_unique<Listener>(srvfd, serverOpts, clientOpts, chOpts, sender);
-}
-#endif
