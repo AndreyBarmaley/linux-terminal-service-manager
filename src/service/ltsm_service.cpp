@@ -1770,7 +1770,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busShutdownDisplay(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
+        Application::notice("{}: display: {}", NS_FuncNameV, display);
 
         if(auto ptr = findDisplaySession(display)) {
             displayShutdownAsync(std::move(ptr), true);
@@ -1879,7 +1879,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busConnectorTerminated(const int32_t & display, const int32_t & connectorId) {
-        Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
+        Application::notice("{}: display: {}", NS_FuncNameV, display);
 
         auto ptr = findDisplaySession(display);
 
