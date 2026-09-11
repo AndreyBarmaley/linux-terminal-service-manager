@@ -24,6 +24,7 @@
 #ifndef _CHANNEL_SYSTEM_
 #define _CHANNEL_SYSTEM_
 
+
 #include <span>
 #include <list>
 #include <mutex>
@@ -37,7 +38,9 @@
 #include <forward_list>
 
 #include <boost/asio.hpp>
-#include <boost/ptr_container/ptr_list.hpp>
+
+#undef D
+#include <boost/container/flat_map.hpp>
 
 #include "ltsm_audio.h"
 
@@ -684,13 +687,28 @@ namespace LTSM {
     };
 
 #ifdef __UNIX__
+    using CancelationSignalPtr = std::unique_ptr<boost::asio::cancellation_signal>;
+
     class ChannelListener : public ChannelBase {
-        boost::ptr_list<Channel::Listener> listeners_;
+        boost::container::flat_map<std::string, CancelationSignalPtr> listeners_;
 
         std::list<Channel::Planned> channels_planned_;
         std::atomic<uint32_t> planned_counts_{0};
 
       protected:
+        template<typename Acceptor>
+        boost::asio::awaitable<void> acceptorAcceptAwait(Acceptor acceptor, const Channel::Planned & job) {
+            auto ex = co_await boost::asio::this_coro::executor;
+
+            for(;;) {
+                auto sock = co_await acceptor.async_accept(boost::asio::use_awaitable);
+                auto job2 = job;
+                job2.serverFd = sock.release();
+                plannedEmplaceSpawn(std::move(job2));
+            }
+        }
+
+        void plannedEmplaceSpawn(Channel::Planned &&);
         void exceptionHandler(std::exception_ptr ptr);
 
         void recvChannelSystemEvent(const std::string &, const JsonObject &) override;
@@ -711,8 +729,18 @@ namespace LTSM {
         boost::asio::awaitable<void> createListenerAwait(Channel::UrlMode clientOpts, Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit);
         boost::asio::awaitable<void> destroyListenerAwait(std::string clientUrl);
 
+
+        boost::asio::ip::tcp::endpoint createTcpEndpoint(const Channel::UrlMode & serverOpts) const;
+        boost::asio::local::stream_protocol::endpoint createUnixEndpoint(const Channel::UrlMode & serverOpts) const;
+
+        boost::asio::awaitable<void> createUnixListenerAwait(const Channel::UrlMode & serverOpts, int listenLimit,
+                                        const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts);
+        boost::asio::awaitable<void> createTcpListenerAwait(const Channel::UrlMode & serverOpts, int listenLimit,
+                                        const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts);
+
       public:
         explicit ChannelListener(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {
+            listeners_.reserve(8);
         }
 
         bool serverSide(void) const override {

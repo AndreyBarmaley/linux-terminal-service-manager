@@ -53,7 +53,7 @@ namespace LTSM::Channel::Connector {
     void loopWriter(ConnectorBase*, Remote2Local*);
     void loopReader(ConnectorBase*, Local2Remote*);
 
-    std::pair<std::string, int> parseAddrPort(const std::string &);
+    std::pair<std::string, uint16_t> parseAddrPort(const std::string &);
 }
 
 ///
@@ -220,7 +220,7 @@ Channel::parseUrl(std::string_view url) {
     return std::make_pair(Channel::ConnectorType::Unknown, view2string(url));
 }
 
-std::pair<std::string, int>
+std::pair<std::string, uint16_t>
 Channel::Connector::parseAddrPort(const std::string & addrPort) {
     Application::debug(DebugType::Channels, "{}: addr: `{}'", NS_FuncNameV, addrPort);
 
@@ -229,50 +229,20 @@ Channel::Connector::parseAddrPort(const std::string & addrPort) {
     // url2: xx.xx.xx.xx:port
     auto list = Tools::split(addrPort, ':');
 
-    int port = -1;
-    std::string addr = "127.0.0.1";
-
     if(2 != list.size()) {
-        return std::make_pair(addr, port);
+        Application::error("{}: invalid format, address:: `{}'", NS_FuncNameV, addrPort);
+        throw channel_error(NS_FuncNameS);
     }
 
-    // check addr
-    if(auto octets = Tools::split(list.front(), '.'); 4 == octets.size()) {
-        bool error = false;
+    auto addr = list.front().empty() ? "127.0.0.1" : list.front();
+    int port = std::stoi(list.back());
 
-        try {
-            // check numbers
-            if(std::ranges::any_of(octets, [](auto & val) { return 255 < std::stoi(val); })) {
-                error = true;
-            }
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            error = true;
-        }
-
-        if(error) {
-            Application::error("{}: {}, addr: `{}'", NS_FuncNameV, "incorrect ipaddr", addrPort);
-        }
-    } else
-        // resolv hostname
-    {
-        std::string addr2 = TCPSocket::resolvHostname(list.front());
-
-        if(addr2.empty()) {
-            Application::error("{}: {}, addr: `{}'", NS_FuncNameV, "incorrect hostname", addrPort);
-        } else {
-            addr = addr2;
-        }
+    if(port < 1 || UINT16_MAX < port) {
+        Application::error("{}: {}, port: {}", NS_FuncNameV, "invalid port", port);
+        throw channel_error(NS_FuncNameS);
     }
 
-    // check port
-    try {
-        port = std::stoi(list.back());
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-    }
-
-    return std::make_pair(addr, port);
+    return std::make_pair(addr, static_cast<uint16_t>(port));
 }
 
 /// ChannelBase
@@ -847,10 +817,49 @@ void ChannelClient::systemChannelConnectedEvent(const JsonObject & jo) {
 
 #ifdef __UNIX__
 // ChannelListener
-boost::asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clientOpts,
+asio::local::stream_protocol::endpoint ChannelListener::createUnixEndpoint(const Channel::UrlMode & serverOpts) const {
+    auto & path = serverOpts.content();
+    std::error_code err;
+
+    if(std::filesystem::exists(path, err)) {
+        if(! std::filesystem::is_socket(path, err)) {
+            Application::error("{}: {}, path: `{}'", NS_FuncNameV, "not socket", path);
+            throw channel_error(NS_FuncNameS);
+        }
+
+        std::filesystem::remove(path, err);
+    }
+
+    return asio::local::stream_protocol::endpoint{path};
+}
+
+asio::ip::tcp::endpoint ChannelListener::createTcpEndpoint(const Channel::UrlMode & serverOpts) const {
+    auto [ ipaddr, port ] = Channel::Connector::parseAddrPort(serverOpts.content());
+    return asio::ip::tcp::endpoint{asio::ip::address_v4::loopback(), port};
+}
+
+void ChannelListener::plannedEmplaceSpawn(Channel::Planned && job) {
+    Application::debug(DebugType::Channels, "{}: accept client, url: `{}', mode: {}, fd: {}",
+        NS_FuncNameV, job.clientOpts.url, Channel::Connector::modeString(job.clientOpts.mode), job.serverFd);
+
+    asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [func=NS_FuncNameV](std::exception_ptr ptr) {
+        try {
+            if(ptr) {
+                std::rethrow_exception(ptr);
+            }
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            Application::error("{}: system error: {}, code: {}", func, ec.message(), ec.value());
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", func, err.what());
+        }
+    });
+}
+
+asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clientOpts,
         Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit) {
 
-    if(std::ranges::any_of(listeners_, [&](auto & ptr) { return ptr.isListenUrl(serverOpts.url); })) {
+    if(auto it = listeners_.find(serverOpts.url); it != listeners_.end()) {
         Application::warning("{}: {}, server url: {}", NS_FuncNameV, "listen present", serverOpts.url);
         co_return;
     }
@@ -862,31 +871,89 @@ boost::asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMo
         co_return;
     }
 
+    if(clientOpts.mode == Channel::ConnectorMode::Unknown) {
+        Application::error("{}: unknown {} mode", NS_FuncNameV, "client");
+        co_return;
+    }
+ 
+    if(serverOpts.mode == Channel::ConnectorMode::Unknown) {
+        Application::error("{}: unknown {} mode", NS_FuncNameV, "server");
+        co_return;
+    }
+ 
+    if(clientOpts.type() == Channel::ConnectorType::Unknown) {
+        Application::error("{}: unknown client url: `{}'", NS_FuncNameV, clientOpts.url);
+        co_return;
+    }
+
+    if(serverOpts.mode == clientOpts.mode &&
+       (serverOpts.mode == Channel::ConnectorMode::ReadOnly || serverOpts.mode == Channel::ConnectorMode::WriteOnly)) {
+        Application::error("{}: incorrect modes pair (wo,wo) or (ro,ro)", NS_FuncNameV);
+        co_return;
+    }
+
+    auto ex = co_await asio::this_coro::executor;
+    auto job = Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = channelOpts, .serverFd = 0 };
+
+    auto sig = std::make_unique<asio::cancellation_signal>();
+    const auto& slot = sig->slot();
+    listeners_[serverOpts.url.data()] = std::move(sig);
+
     try {
         Application::info("{}: server url: {}, client url: {}", NS_FuncNameV, serverOpts.url, clientOpts.url);
 
-        std::unique_ptr<Channel::Listener> ptr = is_unix ?
-            Channel::createUnixListener(serverOpts, listenLimit, clientOpts, channelOpts, *this) :
-            Channel::createTcpListener(serverOpts, listenLimit, clientOpts, channelOpts, *this);
+        if(is_unix) {
+            auto endpoint = createUnixEndpoint(serverOpts);
+            using protocol = asio::local::stream_protocol;
+            protocol::acceptor acceptor{ex};
 
-        listeners_.push_back(std::move(ptr));
+            acceptor.open(endpoint.protocol());
+            acceptor.bind(endpoint);
+            if(0 < listenLimit) {
+                acceptor.listen(listenLimit);
+            }
+            Application::debug(DebugType::Channels, "listen path: {}", NS_FuncNameV, endpoint.path());
+            // wait accept
+            co_await asio::co_spawn(ex,
+                acceptorAcceptAwait(std::move(acceptor), job),
+                boost::asio::bind_cancellation_slot(slot, boost::asio::use_awaitable));
+        } else {
+            auto endpoint = createTcpEndpoint(serverOpts);
+            using protocol = asio::ip::tcp;
+            protocol::acceptor acceptor{ex};
+
+            acceptor.open(endpoint.protocol());
+            acceptor.set_option(protocol::socket::reuse_address(true));
+            acceptor.bind(endpoint);
+            if(0 < listenLimit) {
+                acceptor.listen(listenLimit);
+            }
+            Application::debug(DebugType::Channels, "listen port: {}", NS_FuncNameV, endpoint.port());
+            // wait accept
+            co_await asio::co_spawn(ex,
+                acceptorAcceptAwait(std::move(acceptor), job),
+                boost::asio::bind_cancellation_slot(slot, boost::asio::use_awaitable));
+        }
+    } catch(const system::system_error& err) {
+        if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+        }
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
 
+    listeners_.erase(serverOpts.url);
     co_return;
 }
 
-boost::asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
-    auto it = std::ranges::find_if(listeners_, [&](auto & ptr) {
-        return ptr.isListenUrl(url);
-    });
-
-    if(it != listeners_.end()) {
+asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
+    if(auto it = listeners_.find(url); it != listeners_.end()) {
+        if(it->second) {
+            it->second->emit(asio::cancellation_type::terminal);
+        }
         Application::info("{}: server url: {}", NS_FuncNameV, url);
         listeners_.erase(it);
     }
-
     co_return;
 }
 

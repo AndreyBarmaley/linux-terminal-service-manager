@@ -54,6 +54,8 @@
 #include <filesystem>
 #include <functional>
 
+#include <boost/crc.hpp>
+
 #include "ltsm_compat.h"
 #include "ltsm_streambuf.h"
 
@@ -238,7 +240,11 @@ namespace LTSM {
         std::string hex(int value, int width = 8);
 
         template<typename Iterator>
-        uint32_t rangeCrc32b(Iterator it1, Iterator it2, const uint32_t magic = 0xEDB88320) {
+        uint32_t rangeCrc32b(Iterator it1, Iterator it2) {
+            boost::crc_32_type result;
+            result.process_block(std::addressof(*it1), std::addressof(*it2));
+            return result.checksum();
+/*
             uint32_t res = std::accumulate(it1, it2, 0xFFFFFFFF, [ = ](uint64_t crc, auto val) {
                 crc ^= static_cast<uint32_t>(val);
                 for(int bit = 0; bit < 8; ++bit) {
@@ -248,6 +254,7 @@ namespace LTSM {
                 return crc;
             });
             return ~res;
+*/
         }
 
         inline uint32_t crc32b(std::span<const uint8_t> cont) {
