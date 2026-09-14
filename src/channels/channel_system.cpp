@@ -1068,6 +1068,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
 
     auto jobFailed = [&job]() {
         if(0 <= job.serverFd) {
+            shutdown(job.serverFd, SHUT_RDWR);
             close(job.serverFd);
             job.serverFd = -1;
         }
@@ -1376,12 +1377,12 @@ void Channel::Remote2Local::setSpeed(const Channel::Speed & speed) {
 }
 
 /// Remote2Local_FD
-Channel::Remote2Local_FD::Remote2Local_FD(CID cid, int fd0, bool close, int flags)
-    : Remote2Local(cid, flags), fd(fd0), needClose(close) {
+Channel::Remote2Local_FD::Remote2Local_FD(CID cid, int fd0, int flags)
+    : Remote2Local(cid, flags), fd(fd0) {
 }
 
 Channel::Remote2Local_FD::~Remote2Local_FD() {
-    if(needClose && 0 <= fd) {
+    if(0 <= fd) {
         close(fd);
     }
 }
@@ -1490,12 +1491,12 @@ void Channel::Local2Remote::setSpeed(const Channel::Speed & speed) {
 }
 
 /// Local2Remote_FD
-Channel::Local2Remote_FD::Local2Remote_FD(CID cid, int fd0, bool close, int flags)
-    : Local2Remote(cid, flags), fd(fd0), needClose(close) {
+Channel::Local2Remote_FD::Local2Remote_FD(CID cid, int fd0, int flags)
+    : Local2Remote(cid, flags), fd(fd0) {
 }
 
 Channel::Local2Remote_FD::~Local2Remote_FD() {
-    if(needClose && 0 <= fd) {
+    if(0 <= fd) {
         close(fd);
     }
 }
@@ -1594,10 +1595,10 @@ void Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
 }
 
 /// ConnectorFD_R
-Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd0, bool close, const Opts & chOpts, ChannelBase & srv)
+Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(ch, ConnectorMode::ReadOnly, chOpts, srv) {
     // start threads
-    localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, close, chOpts.flags);
+    localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, chOpts.flags);
     localRemote->setSpeed(chOpts.speed);
 
     if(localRemote) {
@@ -1623,10 +1624,10 @@ void Channel::ConnectorFD_R::setSpeed(const Channel::Speed & speed) {
 }
 
 /// ConnectorFD_W
-Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd0, bool close, const Opts & chOpts, ChannelBase & srv)
+Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(ch, ConnectorMode::WriteOnly, chOpts, srv) {
     // start threads
-    remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, close, chOpts.flags);
+    remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, chOpts.flags);
     remoteLocal->setSpeed(chOpts.speed);
 
     if(remoteLocal) {
@@ -1661,10 +1662,10 @@ void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
 Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(ch, ConnectorMode::ReadWrite, chOpts, srv) {
     // start threads
-    localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, true, chOpts.flags);
+    localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, chOpts.flags);
     localRemote->setSpeed(chOpts.speed);
 
-    remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, true, chOpts.flags);
+    remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, chOpts.flags);
     remoteLocal->setSpeed(chOpts.speed);
 
     if(localRemote) {
@@ -1713,22 +1714,24 @@ void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
 
 // ConnectorCMD_W
 Channel::ConnectorCMD_W::ConnectorCMD_W(CID channel, FILE* ptr, const Opts & chOpts, ChannelBase & owner)
-    : ConnectorFD_W(channel, fileno(ptr), false, chOpts, owner), fcmd(ptr) {
+    : ConnectorFD_W(channel, fileno(ptr), chOpts, owner), fcmd(ptr) {
 }
 
 Channel::ConnectorCMD_W::~ConnectorCMD_W() {
     if(fcmd) {
+        setShutdown();
         pclose(fcmd);
     }
 }
 
 // ConnectorCMD_R
 Channel::ConnectorCMD_R::ConnectorCMD_R(CID channel, FILE* ptr, const Opts & chOpts, ChannelBase & owner)
-    : ConnectorFD_R(channel, fileno(ptr), false, chOpts, owner), fcmd(ptr) {
+    : ConnectorFD_R(channel, fileno(ptr), chOpts, owner), fcmd(ptr) {
 }
 
 Channel::ConnectorCMD_R::~ConnectorCMD_R() {
     if(fcmd) {
+        setShutdown();
         pclose(fcmd);
     }
 }
@@ -1759,11 +1762,11 @@ Channel::createUnixConnector(CID channel, const std::filesystem::path & path, co
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1784,11 +1787,11 @@ Channel::createUnixConnector(CID channel, int sock, const ConnectorMode & mode, 
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, sock, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_R>(channel, sock, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, sock, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_W>(channel, sock, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1812,11 +1815,11 @@ Channel::createTcpConnector(CID channel, const std::string & ipaddr, int port, c
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1837,11 +1840,11 @@ Channel::createTcpConnector(CID channel, int sock, const ConnectorMode & mode, c
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, sock, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_R>(channel, sock, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, sock, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_W>(channel, sock, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1905,11 +1908,11 @@ Channel::createFileConnector(CID channel, const std::filesystem::path & path, co
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, true, chOpts, sender);
+        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");

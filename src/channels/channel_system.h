@@ -200,10 +200,9 @@ namespace LTSM {
         /// Local2Remote_FD
         class Local2Remote_FD : public Local2Remote {
             int fd = -1;
-            bool needClose = true;
 
           public:
-            Local2Remote_FD(CID, int fd0, bool close, int flags);
+            Local2Remote_FD(CID, int fd0, int flags);
             ~Local2Remote_FD();
 
             bool hasInput(void) const override;
@@ -259,10 +258,9 @@ namespace LTSM {
         /// Remote2Local_FD
         class Remote2Local_FD : public Remote2Local {
             int fd = -1;
-            bool needClose = true;
 
           public:
-            Remote2Local_FD(CID, int fd0, bool close, int flags);
+            Remote2Local_FD(CID, int fd0, int flags);
             ~Remote2Local_FD();
 
             ssize_t writeDataFrom(const void* buf, size_t len) override;
@@ -356,7 +354,7 @@ namespace LTSM {
             }
 
           public:
-            ConnectorFD_R(CID, int fd, bool close, const Opts &, ChannelBase &);
+            ConnectorFD_R(CID, int fd, const Opts &, ChannelBase &);
             virtual ~ConnectorFD_R();
 
             int error(void) const override;
@@ -379,7 +377,7 @@ namespace LTSM {
             }
 
           public:
-            ConnectorFD_W(CID, int fd, bool close, const Opts &, ChannelBase &);
+            ConnectorFD_W(CID, int fd, const Opts &, ChannelBase &);
             virtual ~ConnectorFD_W();
 
             int error(void) const override;
