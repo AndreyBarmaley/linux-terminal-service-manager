@@ -28,7 +28,6 @@
 #include <atomic>
 #include <exception>
 
-#include "ltsm_sockets.h"
 #include "ltsm_connector.h"
 
 #include "freerdp/freerdp.h"
@@ -41,7 +40,7 @@ namespace LTSM::Connector {
         explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected InetStream {
+    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay {
         std::unique_ptr<FreeRdpEvents> rdpEvents_;
         PixelFormat serverPf_;
         XCB::Region damageRegion_;
@@ -49,6 +48,7 @@ namespace LTSM::Connector {
         std::once_flag stopFlag_;
         std::atomic<uint16_t> update_jobs_{0};
 
+        int socket_fd_{-1};
         uint32_t frameRate_{16};
         bool x11NoDamage_{false};
 
@@ -95,7 +95,7 @@ namespace LTSM::Connector {
         boost::asio::awaitable<void> xcbEventsAwait(void);
 
       public:
-        ConnectorRdp(const std::filesystem::path & confile, bool debug);
+        ConnectorRdp(const std::filesystem::path & confile, int fd, bool debug);
         ~ConnectorRdp();
 
         void stop(void) noexcept;

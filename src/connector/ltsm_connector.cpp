@@ -390,10 +390,10 @@ namespace LTSM::Connector {
         // protocol up
         if(type == "auto") {
             if(int first = autoDetectType(fd); first == 0x03) {
-                connector = std::make_unique<ConnectorRdp>(confile, debug);
+                connector = std::make_unique<ConnectorRdp>(confile, fd, debug);
             }
         } else if(type == "rdp") {
-            connector = std::make_unique<ConnectorRdp>(confile, debug);
+            connector = std::make_unique<ConnectorRdp>(confile, fd, debug);
         }
 
 #endif

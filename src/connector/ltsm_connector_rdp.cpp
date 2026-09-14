@@ -430,8 +430,9 @@ namespace LTSM::Connector {
         }
     };
 
-    ConnectorRdp::ConnectorRdp(const std::filesystem::path & confile, bool debug)
+    ConnectorRdp::ConnectorRdp(const std::filesystem::path & confile, int fd, bool debug)
         : DBusProxy(ConnectorType::RDP, confile, debug)
+        , socket_fd_{fd}
         , xcb_strand_{asio::make_strand(ioc())}
         , rdp_strand_{asio::make_strand(ioc())}
         , tm_not_activated_{ioc()} {
@@ -525,7 +526,7 @@ namespace LTSM::Connector {
         Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
 
         // create FreeRdpEvents
-        rdpEvents_ = std::make_unique<FreeRdpEvents>(InetStream::fd(), remoteAddress(), config(), this);
+        rdpEvents_ = std::make_unique<FreeRdpEvents>(socket_fd_, remoteAddress(), config(), this);
         damageRegion_.assign(0, 0, 0, 0);
 
         x11NoDamage_ = config().getBoolean("rdp:xcb:nodamage", false);
