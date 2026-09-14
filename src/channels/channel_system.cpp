@@ -745,67 +745,71 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
     auto smode = jo.getString("mode");
     auto sspeed = jo.getString("speed");
     int flags = jo.getInteger("flags", 0);
-    bool replyError = false;
 
-    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#010x}", NS_FuncNameV, channel, stype, smode, sspeed, flags);
+    auto replyError = [this,channel,flags]() {
+        sendSystemChannelConnected(channel, flags, true /* replyError */);
+    };
 
     if(channel <= ChannelTypeSystem || channel >= ChannelTypeReserved) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel incorrect", channel);
-        replyError = true;
+        return replyError();
     }
 
     const auto mode = Channel::connectorMode(smode);
 
     if(mode == Channel::ConnectorMode::Unknown) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "unknown channel mode", channel);
-        replyError = true;
+        return replyError();
     }
 
     if(findChannel(channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel busy", channel);
-        replyError = true;
+        return replyError();
     }
 
-    if(! replyError) {
-        Channel::ConnectorType type = Channel::connectorType(stype);
-        Channel::Opts chopts{ Channel::connectorSpeed(sspeed), flags };
+    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#010x}", NS_FuncNameV, channel, stype, smode, sspeed, flags);
+    bool success = false;
 
-        if(type == Channel::ConnectorType::File) {
-            replyError = ! createChannelFile(channel, jo.getString("path"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Audio) {
-            replyError = ! createChannelAudio(channel, jo.getString("audio"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Fuse) {
-            replyError = ! createChannelFuse(channel, jo.getString("fuse"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Pcsc) {
-            replyError = ! createChannelPcsc(channel, jo.getString("pcsc"), mode, chopts);
-        }
+    Channel::ConnectorType type = Channel::connectorType(stype);
+    Channel::Opts chopts{ Channel::connectorSpeed(sspeed), flags };
+
+    if(type == Channel::ConnectorType::File) {
+        success = createChannelFile(channel, jo.getString("path"), mode, chopts);
+    } else if(type == Channel::ConnectorType::Audio) {
+        success = createChannelAudio(channel, jo.getString("audio"), mode, chopts);
+    } else if(type == Channel::ConnectorType::Fuse) {
+        success = createChannelFuse(channel, jo.getString("fuse"), mode, chopts);
+    } else if(type == Channel::ConnectorType::Pcsc) {
+        success = createChannelPcsc(channel, jo.getString("pcsc"), mode, chopts);
+    }
 
 #ifdef __UNIX__
-        else if(type == Channel::ConnectorType::Unix) {
-            replyError = ! createChannelUnix(channel, jo.getString("path"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Socket) {
-            replyError = ! createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
-        }
+    else if(type == Channel::ConnectorType::Unix) {
+        success = createChannelUnix(channel, jo.getString("path"), mode, chopts);
+    } else if(type == Channel::ConnectorType::Socket) {
+        success = createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
+    }
 
 #endif
 #ifdef LTSM_PKCS11_AUTH
-        else if(type == Channel::ConnectorType::Pkcs11) {
-            replyError = ! createChannelPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
-        }
-
-#endif
-        else if(type == Channel::ConnectorType::Command) {
-            replyError = ! createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
-        } else {
-            Application::error("{}: {} `{}', id: {}", NS_FuncNameV, "unknown channel type", stype, channel);
-            replyError = true;
-        }
+    else if(type == Channel::ConnectorType::Pkcs11) {
+        success = createChannelPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
     }
 
-    // set local connected
-    setChannelConnected(channel);
+#endif
+    else if(type == Channel::ConnectorType::Command) {
+        success = createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
+    } else {
+        Application::error("{}: {} `{}', id: {}", NS_FuncNameV, "unknown channel type", stype, channel);
+    }
 
-    sendSystemChannelConnected(channel, flags, replyError);
+    if(success) {
+        // set local connected
+        setChannelConnected(channel);
+        sendSystemChannelConnected(channel, flags, false /* replyError */);
+    } else {
+        sendSystemChannelConnected(channel, flags, true /* replyError */);
+    }
 }
 
 void ChannelClient::systemChannelListenEvent(const JsonObject & jo) {
@@ -1069,36 +1073,53 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
         }
     };
 
+    auto replyError = [this,channel,flags]() {
+        sendSystemChannelConnected(channel, flags, true /* replyError */);
+    };
+
     if(error) {
         Application::error("{}: error: {}, id: {}", NS_FuncNameV, error, channel);
         jobFailed();
+        replyError();
         throw channel_error(NS_FuncNameS);
     }
 
     if(job.channel <= ChannelTypeSystem || job.channel >= ChannelTypeReserved) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel incorrect", job.channel);
         jobFailed();
+        replyError();
         throw channel_error(NS_FuncNameS);
     }
 
     if(findChannel(job.channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel busy", channel);
         jobFailed();
+        replyError();
         throw channel_error(NS_FuncNameS);
     }
 
-    bool replyError = false;
+    bool success = false;
 
-    if(channelPlannedCreate(channel, job)) {
-        Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
-        // set local connected
-        setChannelConnected(channel);
-    } else {
-        jobFailed();
-        replyError = true;
+    try {
+        channelPlannedCreate(channel, job);
+        success = true;
+    } catch(const system::system_error& err) {
+        auto ec = err.code();
+        Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+    } catch(const std::exception& err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
 
-    sendSystemChannelConnected(channel, flags, replyError);
+    if(! success) {
+        jobFailed();
+        replyError();
+        throw channel_error(NS_FuncNameS);
+    }
+
+    Application::info("{}: channel: {}, flags: {:08x}", NS_FuncNameV, channel, flags);
+    // set local connected
+    setChannelConnected(channel);
+    sendSystemChannelConnected(channel, flags, false /* replyError */);
     setChannelRunning(channel);
 
     co_return;
@@ -1188,7 +1209,7 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     co_return;
 }
 
-bool ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned & job) {
+void ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned & job) {
 
     if(0 <= job.serverFd) {
         Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
@@ -1230,11 +1251,9 @@ bool ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned &
 
             default:
                 Application::error("{}: {}, id: {}", NS_FuncNameV, "channel type not implemented", channel);
-                return false;
+                throw channel_error(NS_FuncNameS);
         }
     }
-
-    return true;
 }
 
 bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {

@@ -733,7 +733,7 @@ namespace LTSM {
         virtual void systemTransferFilesEvent(const JsonObject &) = 0;
         virtual void systemCursorFailedEvent(const JsonObject &) = 0;
 
-        bool channelPlannedCreate(CID, const Channel::Planned &);
+        void channelPlannedCreate(CID, const Channel::Planned &);
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         uint32_t countFreeChannels(void) const;
 
