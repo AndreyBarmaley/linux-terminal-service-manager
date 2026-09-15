@@ -1102,7 +1102,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
     bool success = false;
 
     try {
-        channelPlannedCreate(channel, job);
+        co_await createPlannedAwait(channel, job);
         success = true;
     } catch(const system::system_error& err) {
         auto ec = err.code();
@@ -1210,7 +1210,7 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     co_return;
 }
 
-void ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned & job) {
+asio::awaitable<void> ChannelListener::createPlannedAwait(CID channel, const Channel::Planned & job) {
 
     if(0 <= job.serverFd) {
         Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
@@ -1255,6 +1255,8 @@ void ChannelListener::channelPlannedCreate(CID channel, const Channel::Planned &
                 throw channel_error(NS_FuncNameS);
         }
     }
+
+    co_return;
 }
 
 bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {

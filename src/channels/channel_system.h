@@ -731,10 +731,10 @@ namespace LTSM {
         virtual void systemTransferFilesEvent(const JsonObject &) = 0;
         virtual void systemCursorFailedEvent(const JsonObject &) = 0;
 
-        void channelPlannedCreate(CID, const Channel::Planned &);
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         uint32_t countFreeChannels(void) const;
 
+        boost::asio::awaitable<void> createPlannedAwait(CID, const Channel::Planned &);
         boost::asio::awaitable<void> systemChannelConnectedAwait(CID channel, int flags, int error);
         boost::asio::awaitable<void> plannedEmplaceAwait(Channel::Planned job);
 
