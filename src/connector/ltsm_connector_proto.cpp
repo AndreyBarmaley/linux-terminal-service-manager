@@ -110,6 +110,8 @@ namespace LTSM::Connector {
 
     asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(std::string userName, uint32_t userUid) {
         xcbDisableMessages(true);
+        switch_mode_ = true;
+
         co_await waitUpdateProcessAwait();
 
         int oldDisplay = displayNum();
@@ -140,7 +142,9 @@ namespace LTSM::Connector {
             }
         }
 
+        switch_mode_ = false;
         xcbDisableMessages(false);
+
         // full update
         X11Server::serverScreenUpdateRequest();
 
@@ -187,6 +191,11 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
+            if(switch_mode_) {
+                Application::info("{}: display: {}, switch mode, skipped...", NS_FuncNameV, display);
+                return;
+            }
+
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
             asio::post(ioc(), std::bind(&ConnectorLtsm::stop, this));
         }

@@ -1271,6 +1271,7 @@ Channel::ConnectorFD_R::~ConnectorFD_R() {
 
 asio::awaitable<void> Channel::ConnectorFD_R::waitRunningAwait(void) {
     auto ex = co_await boost::asio::this_coro::executor;
+    Application::info("{}: wait status", NS_FuncNameV);
     while(connectorStatus() != Channel::ConnectorStatus::Running) {
         asio::steady_timer tm_delay{ex, 1ms};
         co_await tm_delay.async_wait(asio::use_awaitable);
