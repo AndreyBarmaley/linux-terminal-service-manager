@@ -50,9 +50,6 @@ using namespace boost;
 using namespace LTSM;
 
 namespace LTSM::Channel::Connector {
-    void loopWriter(ConnectorBase*, Remote2Local*);
-    void loopReader(ConnectorBase*, Local2Remote*);
-
     std::pair<std::string, uint16_t> parseAddrPort(const std::string &);
 }
 
@@ -349,13 +346,18 @@ void ChannelBase::recvChannelData(CID channel, std::vector<uint8_t> && buf) {
         throw std::invalid_argument(NS_FuncNameS);
     }
 
-    if(! channelConn->isRunning()) {
-        Application::error("{}: {}, id: {}, error: {}", NS_FuncNameV, "channel not running", channel, channelConn->error());
+    if(! isAllowChannel(channelConn.get())) {
+        Application::error("{}: ltsm channel disable", NS_FuncNameV);
         throw std::invalid_argument(NS_FuncNameS);
     }
 
-    if(! isAllowChannel(channelConn.get())) {
-        Application::error("{}: ltsm channel disable", NS_FuncNameV);
+    if(! channelConn->isRunning()) {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not running", channel);
+        throw std::invalid_argument(NS_FuncNameS);
+    }
+
+    if(! channelConn->isWriteAllow()) {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel write disable", channel);
         throw std::invalid_argument(NS_FuncNameS);
     }
 
@@ -1039,14 +1041,14 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
         throw channel_error(NS_FuncNameS);
     }
 
-    if(job.channel <= ChannelTypeSystem || job.channel >= ChannelTypeReserved) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel incorrect", job.channel);
+    if(channel <= ChannelTypeSystem || channel >= ChannelTypeReserved) {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel incorrect", channel);
         jobFailed();
         replyError();
         throw channel_error(NS_FuncNameS);
     }
 
-    if(findChannel(job.channel)) {
+    if(findChannel(channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel busy", channel);
         jobFailed();
         replyError();
@@ -1171,23 +1173,23 @@ asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Cha
 
     switch(job.serverOpts.type()) {
         case Channel::ConnectorType::Fd:
-            createChannelFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
+            createChannelFd(channel, job.serverFd, job.serverOpts.mode, job.chOpts);
             break;
 
         case Channel::ConnectorType::Unix:
-            createChannelUnix(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+            createChannelUnix(channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
             break;
 
         case Channel::ConnectorType::Socket:
-            createChannelSocket(job.channel, Channel::Connector::parseAddrPort(job.serverOpts.content()), job.serverOpts.mode, job.chOpts);
+            createChannelSocket(channel, Channel::Connector::parseAddrPort(job.serverOpts.content()), job.serverOpts.mode, job.chOpts);
             break;
 
         case Channel::ConnectorType::File:
-            createChannelFile(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+            createChannelFile(channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
             break;
 
         case Channel::ConnectorType::Command:
-            createChannelCommand(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+            createChannelCommand(channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
             break;
 
         default:
@@ -1209,470 +1211,194 @@ bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {
 
 #endif
 
-// Remote2Local
-Channel::Remote2Local::Remote2Local(CID cid, int flags) : id(cid) {
-    zlib = static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags;
-}
-
-Channel::Remote2Local::~Remote2Local() {
-    Application::info("{}: channel: {}, receive: {} byte, transfer: {} byte, error: {}",
-                      "Remote2Local", id, transfer1, transfer2, error);
-}
-
-bool Channel::Remote2Local::isEmpty(void) const {
-    const std::scoped_lock guard{lockQueue};
-    return queueBufs.empty();
-}
-
-void Channel::Remote2Local::pushData(std::vector<uint8_t> && buf) {
-    const std::scoped_lock guard{lockQueue};
-    queueBufs.emplace_back(std::move(buf));
-}
-
-std::vector<uint8_t> Channel::Remote2Local::popData(void) {
-    const std::scoped_lock guard{lockQueue};
-
-    if(queueBufs.empty())
-        return {};
-
-    auto queueSz = queueBufs.size();
-
-    if(queueSz > 10) {
-        // descrease delay
-        if(delay > std::chrono::milliseconds{10}) {
-            Application::warning("{}: id: {}, queue large: {}, change delay to {}ms", NS_FuncNameV, id, queueSz, delay.count());
-            delay -= std::chrono::milliseconds{10};
-        } else {
-            Application::warning("{}: id: {}, queue large: {}, fixme: `{}'", NS_FuncNameV, id, queueSz, "fixme: remote decrease speed");
-        }
-    }
-
-    auto buf = std::move(queueBufs.front());
-    queueBufs.pop_front();
-
-    return buf;
-}
-
-bool Channel::Remote2Local::writeData(void) {
-    auto buf = popData();
-
-    if(buf.empty()) {
-        return true;
-    }
-
-    transfer1 += buf.size();
-
-    if(zlib) {
-        buf = ZLib::inflate(buf);
-        // Application::debug(DebugType::Channels, "{}: inflate, size1: {}, size2: {}", NS_FuncNameV, buf.size(), buf2.size());
-    }
-
-    size_t writesz = 0;
-
-    while(writesz < buf.size()) {
-        ssize_t real = writeDataFrom(buf.data() + writesz, buf.size() - writesz);
-
-        if(0 < real) {
-            writesz += real;
-            transfer2 += real;
-            continue;
-        }
-
-        if(EAGAIN == errno || EINTR == errno) {
-            continue;
-        }
-
-        error = errno;
-        return false;
-    }
-
-    return true;
-}
-
-void Channel::Remote2Local::setSpeed(const Channel::Speed & speed) {
-    switch(speed) {
-        case Speed::VerySlow:
-            delay = std::chrono::milliseconds(200);
-            break;
-
-        case Speed::Slow:
-            delay = std::chrono::milliseconds(100);
-            break;
-
-        case Speed::Medium:
-            delay = std::chrono::milliseconds(70);
-            break;
-
-        case Speed::Fast:
-            delay = std::chrono::milliseconds(40);
-            break;
-
-        case Speed::UltraFast:
-            delay = std::chrono::milliseconds(20);
-            break;
-
-        case Speed::Ultra5:
-            delay = std::chrono::milliseconds(5);
-            break;
-    }
-}
-
-/// Remote2Local_FD
-Channel::Remote2Local_FD::Remote2Local_FD(CID cid, int fd0, int flags)
-    : Remote2Local(cid, flags), fd(fd0) {
-}
-
-Channel::Remote2Local_FD::~Remote2Local_FD() {
-    if(0 <= fd) {
-        close(fd);
-    }
-}
-
-ssize_t Channel::Remote2Local_FD::writeDataFrom(const void* buf, size_t len) {
-    return ::write(fd, buf, len);
-}
-
-// Local2Remote
-Channel::Local2Remote::Local2Remote(CID cid, int flags) : id(cid) {
-    zlib = static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags;
-    buf.reserve(UINT16_MAX);
-}
-
-Channel::Local2Remote::~Local2Remote() {
-    Application::info("{}: channel: {}, receive: {} byte, transfer: {} byte, error: {}", "Local2Remote", id, transfer1, transfer2, error);
-}
-
-bool Channel::Local2Remote::readData(void) {
-    size_t dtsz = 0;
-
-    try {
-        if(hasInput()) {
-            dtsz = hasData();
-        }
-    } catch(const std::exception & err) {
-        error = errno;
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    if(0 == dtsz) {
-        buf.clear();
-        return true;
-    }
-
-    buf.resize(std::min(dtsz, blocksz));
-    ssize_t real = readDataTo(buf.data(), buf.size());
-
-    if(0 < real) {
-        buf.resize(real);
-        transfer1 += real;
-
-        if(zlib) {
-            buf = ZLib::deflate(buf, Z_BEST_SPEED + 2);
-            transfer2 += buf.size();
-            // Application::debug(DebugType::Channels, "{}: deflate, size1: {}, size2: {}", NS_FuncNameV, buf2.size(), buf.size());
-        } else {
-            transfer2 += real;
-        }
-
-        return true;
-    }
-
-    // eof
-    if(0 == real) {
-        return false;
-    }
-
-    if(EAGAIN == errno || EINTR == errno) {
-        buf.clear();
-        return true;
-    }
-
-    error = errno;
-    return false;
-}
-
-void Channel::Local2Remote::setSpeed(const Channel::Speed & speed) {
-    switch(speed) {
-        // ~10k/sec
-        case Speed::VerySlow:
-            blocksz = 8192;
-            delay = std::chrono::milliseconds(200);
-            break;
-
-        // ~40k/sec
-        case Speed::Slow:
-            blocksz = 16384;
-            delay = std::chrono::milliseconds(100);
-            break;
-
-        // ~80k/sec
-        case Speed::Medium:
-            blocksz = 16384;
-            delay = std::chrono::milliseconds(70);
-            break;
-
-        // ~800k/sec
-        case Speed::Fast:
-            blocksz = 32768;
-            delay = std::chrono::milliseconds(40);
-            break;
-
-        // ~1600k/sec
-        case Speed::UltraFast:
-            delay = std::chrono::milliseconds(20);
-            blocksz = 32768;
-            break;
-
-        case Speed::Ultra5:
-            delay = std::chrono::milliseconds(5);
-            blocksz = 32768;
-            break;
-    }
-}
-
-/// Local2Remote_FD
-Channel::Local2Remote_FD::Local2Remote_FD(CID cid, int fd0, int flags)
-    : Local2Remote(cid, flags), fd(fd0) {
-}
-
-Channel::Local2Remote_FD::~Local2Remote_FD() {
-    if(0 <= fd) {
-        close(fd);
-    }
-}
-
-bool Channel::Local2Remote_FD::hasInput(void) const {
-    return NetworkStream::hasInput(fd);
-}
-
-size_t Channel::Local2Remote_FD::hasData(void) const {
-    return NetworkStream::hasData(fd);
-}
-
-ssize_t Channel::Local2Remote_FD::readDataTo(void* buf, size_t len) {
-    return ::read(fd, buf, len);
-}
-
 /// ConnectorBase
 bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
     return (flags_ & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
 }
 
-void Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st) {
-    bool error = false;
-    auto owner_ = cn->getOwner();
+std::pair<std::chrono::milliseconds,uint32_t> Channel::ConnectorBase::speedInfo(void) const {
+    switch(speed_) {
+        // ~10k/sec
+        default:
+            return std::make_pair(std::chrono::milliseconds(200), 8192);
 
-    if(! owner_) {
-        Application::error("{}: id: {}, {} failed", NS_FuncNameV, st->cid(), "owner");
-        return;
-    }
+        // ~40k/sec
+        case Speed::Slow:
+            return std::make_pair(std::chrono::milliseconds(100), 16384);
 
-    while(!cn->isShutdown()) {
-        if(st->isEmpty()) {
-            std::this_thread::sleep_for(st->getDelay());
-            continue;
-        }
+        // ~80k/sec
+        case Speed::Medium:
+            return std::make_pair(std::chrono::milliseconds(70), 16384);
 
-        if(! st->writeData()) {
-            error = true;
-            break;
-        }
-    }
+        // ~800k/sec
+        case Speed::Fast:
+            return std::make_pair(std::chrono::milliseconds(40), 32768);
 
-    if(error) {
-        owner_->sendSystemChannelError(st->cid(), st->getError(), std::string(NS_FuncNameV).append(": ").append(strerror(st->getError())));
-        Application::error("{}: id: {}, error: {}", NS_FuncNameV, st->cid(), strerror(st->getError()));
-        cn->setShutdown();
-    } else {
-        // all data write
-        while(! st->isEmpty()) {
-            if(! st->writeData()) {
-                break;
-            }
-        }
-    }
+        // ~1600k/sec
+        case Speed::UltraFast:
+            return std::make_pair(std::chrono::milliseconds(20), 32768);
 
-    // read/write priority send
-    if(! cn->connectorMode(ConnectorMode::ReadWrite) || cn->connectorMode(ConnectorMode::WriteOnly)) {
-        owner_->sendSystemChannelClose(st->cid());
-    }
-}
-
-void Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st) {
-    bool error = false;
-    auto owner = cn->getOwner();
-
-    if(! owner) {
-        Application::error("{}: id: {}, {} failed", NS_FuncNameV, st->cid(), "owner");
-        return;
-    }
-
-    while(!cn->isShutdown()) {
-        if(! st->readData()) {
-            error = true;
-            break;
-        }
-
-        if(st->getBuf().empty()) {
-            std::this_thread::sleep_for(st->getDelay());
-            continue;
-        } else {
-            auto & buf = st->getBuf();
-            owner->sendLtsmChannelData(st->cid(), std::move(buf));
-        }
-    }
-
-    if(error) {
-        owner->sendSystemChannelError(st->cid(), st->getError(), std::string(NS_FuncNameV).append(": ").append(strerror(st->getError())));
-        Application::error("{}: id: {}, error: {}", NS_FuncNameV, st->cid(), strerror(st->getError()));
-        cn->setShutdown();
-    }
-
-    // read/write priority send
-    if(cn->connectorMode(ConnectorMode::ReadWrite) || cn->connectorMode(ConnectorMode::ReadOnly)) {
-        owner->sendSystemChannelClose(st->cid());
+        case Speed::Ultra5:
+            return std::make_pair(std::chrono::milliseconds(5), 32768);
     }
 }
 
 /// ConnectorFD_R
-Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::ReadOnly, chOpts, srv) {
-    // start threads
-    localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, chOpts.flags);
-    localRemote->setSpeed(chOpts.speed);
-
-    if(localRemote) {
-        thr = std::thread(Connector::loopReader, this, localRemote.get());
-    }
+Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv)
+    : ConnectorBase(ch, ConnectorMode::ReadOnly, opts, srv), sd_{srv.chan_strand(), fd}, tm_delay_{srv.chan_strand()} {
+    // read loop
+    loop_running_.exchange(true);
+    asio::co_spawn(srv.chan_strand(), readLoopAwait(),
+        boost::asio::bind_cancellation_slot(read_cancel_.slot(), [this](std::exception_ptr ptr) {
+            loop_running_.exchange(false);
+        })
+    );
 }
 
 Channel::ConnectorFD_R::~ConnectorFD_R() {
-    shutdown_ = true;
-    if(thr.joinable()) {
-        thr.join();
+    sd_.cancel();
+    tm_delay_.cancel();
+    read_cancel_.emit(asio::cancellation_type::terminal);
+    // wait loop ended
+    if(loop_running_.load()) {
+        Application::info("{}: wait ended", NS_FuncNameV);
+        while(loop_running_.load()) {
+            std::this_thread::yield();
+        }
     }
 }
 
-int Channel::ConnectorFD_R::error(void) const {
-    return localRemote ? localRemote->getError() : 0;
+asio::awaitable<void> Channel::ConnectorFD_R::waitRunningAwait(void) {
+    auto ex = co_await boost::asio::this_coro::executor;
+    while(connectorStatus() != Channel::ConnectorStatus::Running) {
+        asio::steady_timer tm_delay{ex, 1ms};
+        co_await tm_delay.async_wait(asio::use_awaitable);
+    }
+    co_return;
 }
 
-void Channel::ConnectorFD_R::setSpeed(const Channel::Speed & speed) {
-    if(localRemote) {
-        localRemote->setSpeed(speed);
+asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
+    co_await waitRunningAwait();
+
+    try {
+        auto info = speedInfo();
+        std::vector<uint8_t> buf(info.second);
+
+        for(;;) {
+            tm_delay_.expires_after(info.first);
+            co_await tm_delay_.async_wait(asio::use_awaitable);
+
+            // read local
+            co_await asio::async_read(sd_, asio::buffer(buf), boost::asio::transfer_all(), asio::use_awaitable);
+
+            if(isZlib()) {
+                buf = ZLib::deflate(buf, Z_BEST_SPEED + 2);
+            }
+
+            // send to remote
+            co_await getOwner()->sendLtsmChannelAwait(channel(), buf);
+        }
+    } catch(const system::system_error& err) {
+        if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            getOwner()->sendSystemChannelError(channel(), ec.value(), std::string(NS_FuncNameV).append(": ").append(ec.message()));
+        }
+    } catch(const std::exception& err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        getOwner()->sendSystemChannelError(channel(), -1, std::string(NS_FuncNameV).append(": ").append(err.what()));
     }
+
+    setConnectorStatus(ConnectorStatus::Error);
+    getOwner()->sendSystemChannelClose(channel());
+
+    co_return;
 }
 
 /// ConnectorFD_W
-Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::WriteOnly, chOpts, srv) {
-    // start threads
-    remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, chOpts.flags);
-    remoteLocal->setSpeed(chOpts.speed);
-
-    if(remoteLocal) {
-        thw = std::thread(Connector::loopWriter, this, remoteLocal.get());
-    }
+Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv)
+    : ConnectorBase(ch, ConnectorMode::WriteOnly, opts, srv), sd_{srv.chan_strand(), fd} {
 }
 
 Channel::ConnectorFD_W::~ConnectorFD_W() {
-    shutdown_ = true;
-    if(thw.joinable()) {
-        thw.join();
+    sd_.cancel();
+    // wait all write process
+    if(auto num = write_process_.load()) {
+        Application::info("{}: wait ended, process: {}", NS_FuncNameV, num);
+        while(write_process_.load()) {
+            std::this_thread::yield();
+        }
     }
 }
 
-int Channel::ConnectorFD_W::error(void) const {
-    return remoteLocal ? remoteLocal->getError() : 0;
-}
+boost::asio::awaitable<void> Channel::ConnectorFD_W::writeDataAwait(std::vector<uint8_t> buf) {
+    bool error = false;
 
-void Channel::ConnectorFD_W::setSpeed(const Channel::Speed & speed) {
-    if(remoteLocal) {
-        remoteLocal->setSpeed(speed);
+    try {
+        if(isZlib()) {
+            auto buf2 = ZLib::inflate(buf);
+            co_await asio::async_write(sd_, asio::const_buffer(buf2.data(), buf2.size()), boost::asio::transfer_all(), asio::use_awaitable);
+        } else {
+            co_await asio::async_write(sd_, asio::const_buffer(buf.data(), buf.size()), boost::asio::transfer_all(), asio::use_awaitable);
+        }
+    } catch(const system::system_error& err) {
+        if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            getOwner()->sendSystemChannelError(channel(), ec.value(), std::string(NS_FuncNameV).append(": ").append(ec.message()));
+        }
+        error = true;
+    } catch(const std::exception& err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        getOwner()->sendSystemChannelError(channel(), -1, std::string(NS_FuncNameV).append(": ").append(err.what()));
+        error = true;
     }
+
+    if(error) {
+        setConnectorStatus(ConnectorStatus::Error);
+        getOwner()->sendSystemChannelClose(channel());
+    }
+
+    co_return;
 }
 
 void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
-    if(! buf.empty() && remoteLocal) {
-        remoteLocal->pushData(std::move(buf));
+    if(10 < write_process_.load()) {
+        Application::error("{}: overload", NS_FuncNameV);
+        throw channel_error(NS_FuncNameS);
     }
+
+    write_process_.fetch_add(1);
+
+    asio::co_spawn(getOwner()->chan_strand(), writeDataAwait(std::move(buf)),
+        [this](std::exception_ptr ptr) {
+            // complete token
+            write_process_.fetch_sub(1);
+        }
+    );
 }
 
 /// ConnectorFD_RW
-Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd0, const Opts & chOpts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::ReadWrite, chOpts, srv) {
-    // start threads
-    localRemote = std::make_unique<Local2Remote_FD>(ch, fd0, chOpts.flags);
-    localRemote->setSpeed(chOpts.speed);
-
-    remoteLocal = std::make_unique<Remote2Local_FD>(ch, fd0, chOpts.flags);
-    remoteLocal->setSpeed(chOpts.speed);
-
-    if(localRemote) {
-        thr = std::thread(Connector::loopReader, this, localRemote.get());
-    }
-
-    if(remoteLocal) {
-        thw = std::thread(Connector::loopWriter, this, remoteLocal.get());
-    }
-}
-
-Channel::ConnectorFD_RW::~ConnectorFD_RW() {
-    shutdown_ = true;
-
-    if(thr.joinable()) {
-        thr.join();
-    }
-
-    if(thw.joinable()) {
-        thw.join();
-    }
-}
-
-int Channel::ConnectorFD_RW::error(void) const {
-    int err1 = remoteLocal ? remoteLocal->getError() : 0;
-    int err2 = localRemote ? localRemote->getError() : 0;
-
-    return err1 ? err1 : err2;
-}
-
-void Channel::ConnectorFD_RW::setSpeed(const Channel::Speed & speed) {
-    if(localRemote) {
-        localRemote->setSpeed(speed);
-    }
-
-    if(remoteLocal) {
-        remoteLocal->setSpeed(speed);
-    }
-}
-
 void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
-    if(! buf.empty() && remoteLocal) {
-        remoteLocal->pushData(std::move(buf));
-    }
+    fdw_.pushData(std::move(buf));
 }
 
 // ConnectorCMD_W
-Channel::ConnectorCMD_W::ConnectorCMD_W(CID channel, FILE* ptr, const Opts & chOpts, ChannelBase & owner)
-    : ConnectorFD_W(channel, fileno(ptr), chOpts, owner), fcmd(ptr) {
+Channel::ConnectorCMD_W::ConnectorCMD_W(CID channel, FILE* file, const Opts & opts, ChannelBase & owner)
+    : ConnectorFD_W(channel, fileno(file), opts, owner), fcmd(file) {
 }
 
 Channel::ConnectorCMD_W::~ConnectorCMD_W() {
     if(fcmd) {
-        setShutdown();
         pclose(fcmd);
     }
 }
 
 // ConnectorCMD_R
-Channel::ConnectorCMD_R::ConnectorCMD_R(CID channel, FILE* ptr, const Opts & chOpts, ChannelBase & owner)
-    : ConnectorFD_R(channel, fileno(ptr), chOpts, owner), fcmd(ptr) {
+Channel::ConnectorCMD_R::ConnectorCMD_R(CID channel, FILE* file, const Opts & opts, ChannelBase & owner)
+    : ConnectorFD_R(channel, fileno(file), opts, owner), fcmd(file) {
 }
 
 Channel::ConnectorCMD_R::~ConnectorCMD_R() {
     if(fcmd) {
-        setShutdown();
         pclose(fcmd);
     }
 }
@@ -1689,12 +1415,11 @@ Channel::createUnixConnector(CID channel, const std::filesystem::path & path, co
         throw channel_error(NS_FuncNameS);
     }
 
+    int fd = UnixSocket::connect(path);
     Application::info("{}: id: {}, path: `{}', mode: {}", NS_FuncNameV, channel, path, Channel::Connector::modeString(mode));
 
-    int fd = UnixSocket::connect(path);
-
     if(0 > fd) {
-        Application::error("{}: {}, id: {}, path: `{}'", NS_FuncNameV, "unix failed", channel, path);
+        Application::error("{}: {}, id: {}, addr: `{}'", NS_FuncNameV, "socket failed", channel, path);
         throw channel_error(NS_FuncNameS);
     }
 

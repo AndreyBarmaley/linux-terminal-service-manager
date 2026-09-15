@@ -91,7 +91,7 @@ namespace LTSM {
     namespace Channel {
         enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11, Fd };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
-        enum class ConnectorStatus { Unknown, Openning, Connected, Running };
+        enum class ConnectorStatus { Unknown, Openning, Connected, Running, Error };
 
         // UltraSlow: ~10k/sec, ~40k/sec, ~80k/sec, ~800k/sec, ~1600k/sec
         enum class Speed { VerySlow, Slow, Medium, Fast, UltraFast, Ultra5 };
@@ -148,134 +148,14 @@ namespace LTSM {
             CID channel = 0;
         };
 
-        // Local2Remote
-        class Local2Remote {
-          protected:
-            std::chrono::milliseconds delay{100};
-
-            std::vector<uint8_t> buf;
-
-            size_t transfer1 = 0;
-            size_t transfer2 = 0;
-            size_t blocksz = 4096;
-
-            int error = 0;
-            CID id = 255;
-            bool zlib = false;
-
-            bool sendData(void);
-
-          public:
-            Local2Remote(CID, int flags);
-            virtual ~Local2Remote();
-
-            Local2Remote(const Local2Remote &) = delete;
-            Local2Remote & operator=(const Local2Remote &) = delete;
-
-            virtual bool hasInput(void) const = 0;
-            virtual size_t hasData(void) const = 0;
-            virtual ssize_t readDataTo(void* buf, size_t len) = 0;
-
-            bool readData(void);
-            void setSpeed(const Channel::Speed &);
-
-            const CID & cid(void) const {
-                return id;
-            }
-
-            int getError(void) const {
-                return error;
-            }
-
-            std::chrono::milliseconds getDelay(void) const {
-                return delay;
-            }
-
-            std::vector<uint8_t> & getBuf(void) {
-                return buf;
-            }
-
-            const std::vector<uint8_t> & getBuf(void) const {
-                return buf;
-            }
-        };
-
-        /// Local2Remote_FD
-        class Local2Remote_FD : public Local2Remote {
-            int fd = -1;
-
-          public:
-            Local2Remote_FD(CID, int fd0, int flags);
-            ~Local2Remote_FD();
-
-            bool hasInput(void) const override;
-            size_t hasData(void) const override;
-            ssize_t readDataTo(void* buf, size_t len) override;
-        };
-
-        // Remote2Local
-        class Remote2Local {
-            mutable std::mutex lockQueue;
-          protected:
-            std::list<std::vector<uint8_t>> queueBufs;
-
-            std::chrono::milliseconds delay{100};
-
-            size_t transfer1 = 0;
-            size_t transfer2 = 0;
-
-            int error = 0;
-            CID id = 255;
-            bool zlib = false;
-
-          protected:
-            std::vector<uint8_t> popData(void);
-
-          public:
-            Remote2Local(CID, int flags);
-            virtual ~Remote2Local();
-
-            Remote2Local(const Remote2Local &) = delete;
-            Remote2Local & operator=(const Remote2Local &) = delete;
-
-            virtual ssize_t writeDataFrom(const void* buf, size_t len) = 0;
-
-            void pushData(std::vector<uint8_t> &&);
-            bool writeData(void);
-            void setSpeed(const Channel::Speed &);
-            bool isEmpty(void) const;
-
-            const CID & cid(void) const {
-                return id;
-            }
-
-            int getError(void) const {
-                return error;
-            }
-
-            std::chrono::milliseconds getDelay(void) const {
-                return delay;
-            }
-        };
-
-        /// Remote2Local_FD
-        class Remote2Local_FD : public Remote2Local {
-            int fd = -1;
-
-          public:
-            Remote2Local_FD(CID, int fd0, int flags);
-            ~Remote2Local_FD();
-
-            ssize_t writeDataFrom(const void* buf, size_t len) override;
-        };
-
         /// ConnectorBase
         class ConnectorBase {
           private:
             std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
 
             ChannelBase* owner_ = nullptr;
-            ConnectorMode mode_ = ConnectorMode::Unknown;
+            ConnectorMode mode_;
+            Speed speed_;
 
             int flags_ = 0;
             CID cid_ = 255;
@@ -285,27 +165,23 @@ namespace LTSM {
                 return owner_;
             }
 
+            std::pair<std::chrono::milliseconds,uint32_t> speedInfo(void) const;
+
           public:
             ConnectorBase(CID cid, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
-                : owner_(& srv), mode_(mod), flags_(opts.flags), cid_(cid) {
+                : owner_(& srv), mode_(mod), speed_{opts.speed}, flags_(opts.flags), cid_(cid) {
             }
 
             virtual ~ConnectorBase() = default;
 
-            // FIXME compat
-            virtual bool isShutdown(void) const {
-                return true;
-            }
-            virtual void setShutdown(void) {
-            }
-
             //
-            virtual int error(void) const = 0;
-
-            virtual void setSpeed(const Channel::Speed &) = 0;
-            virtual void pushData(std::vector<uint8_t> &&) = 0;
+            virtual void pushData(std::vector<uint8_t> &&) { /* empty */ }
 
             bool isAllowSessionFor(bool user) const;
+
+            inline bool isZlib(void) const {
+                return static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags_;
+            }
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
                 status_ = st;
@@ -315,12 +191,12 @@ namespace LTSM {
                 return status_;
             }
 
-            inline bool isRunning(void) const {
-                return Channel::ConnectorStatus::Running == connectorStatus();
-            }
-
             inline bool isConnected(void) const {
                 return Channel::ConnectorStatus::Connected == connectorStatus();
+            }
+
+            inline bool isRunning(void) const {
+                return Channel::ConnectorStatus::Running == connectorStatus();
             }
 
             inline ChannelBase* getOwner(void) {
@@ -329,6 +205,16 @@ namespace LTSM {
 
             inline bool connectorMode(const ConnectorMode & cm) const {
                 return mode_ == cm;
+            }
+
+            inline bool isReadAllow(void) const {
+                return connectorMode(ConnectorMode::ReadOnly) ||
+                    connectorMode(ConnectorMode::ReadWrite);
+            }
+
+            inline bool isWriteAllow(void) const {
+                return connectorMode(ConnectorMode::WriteOnly) ||
+                    connectorMode(ConnectorMode::ReadWrite);
             }
 
             inline int connectorFlags(void) const {
@@ -344,73 +230,46 @@ namespace LTSM {
 
         // ConnectorFD_R
         class ConnectorFD_R : public ConnectorBase {
-            std::unique_ptr<Local2Remote> localRemote;
-            std::thread thr;
-            std::atomic<bool> shutdown_{false};
+            boost::asio::posix::stream_descriptor sd_;
+            boost::asio::steady_timer tm_delay_;
+            boost::asio::cancellation_signal read_cancel_;
+            std::atomic<bool> loop_running_{false};
+
+          protected:
+            boost::asio::awaitable<void> waitRunningAwait(void);
+            boost::asio::awaitable<void> readLoopAwait(void);
 
           public:
-            void setShutdown(void) override {
-                shutdown_ = true;
-            }
-            bool isShutdown(void) const override {
-                return shutdown_;
-            }
-
-          public:
-            ConnectorFD_R(CID, int fd, const Opts &, ChannelBase &);
+            ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv);
             virtual ~ConnectorFD_R();
-
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
-            void pushData(std::vector<uint8_t> &&) override { /* skipped */ }
         };
 
         // ConnectorFD_W
         class ConnectorFD_W : public ConnectorBase {
-            std::unique_ptr<Remote2Local> remoteLocal;
-            std::thread thw;
-            std::atomic<bool> shutdown_{false};
+            boost::asio::posix::stream_descriptor sd_;
+            std::atomic<uint32_t> write_process_{0};
+
+          protected:
+            boost::asio::awaitable<void> writeDataAwait(std::vector<uint8_t>);
 
           public:
-            void setShutdown(void) override {
-                shutdown_ = true;
-            }
-            bool isShutdown(void) const override {
-                return shutdown_;
-            }
-
-          public:
-            ConnectorFD_W(CID, int fd, const Opts &, ChannelBase &);
+            ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv);
             virtual ~ConnectorFD_W();
 
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
 
         // ConnectorFD_RW
         class ConnectorFD_RW : public ConnectorBase {
-            std::unique_ptr<Remote2Local> remoteLocal;
-            std::unique_ptr<Local2Remote> localRemote;
-
-            std::thread thr;
-            std::thread thw;
-            std::atomic<bool> shutdown_{false};
+            ConnectorFD_R fdr_;
+            ConnectorFD_W fdw_;
 
           public:
-            void setShutdown(void) override {
-                shutdown_ = true;
+            ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv)
+                : ConnectorBase(ch, ConnectorMode::ReadWrite, opts, srv), fdr_(ch, fd, opts, srv), fdw_(ch, fd, opts, srv) {
             }
-            bool isShutdown(void) const override {
-                return shutdown_;
-            }
+            virtual ~ConnectorFD_RW() = default;
 
-          public:
-            ConnectorFD_RW(CID, int fd, const Opts &, ChannelBase &);
-            virtual ~ConnectorFD_RW();
-
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
 
@@ -420,7 +279,7 @@ namespace LTSM {
 
           public:
             ConnectorCMD_R(CID, FILE*, const Opts &, ChannelBase &);
-            virtual ~ConnectorCMD_R();
+            ~ConnectorCMD_R();
         };
 
         // ConnectorCMD_W
@@ -429,7 +288,7 @@ namespace LTSM {
 
           public:
             ConnectorCMD_W(CID, FILE*, const Opts &, ChannelBase &);
-            virtual ~ConnectorCMD_W();
+            ~ConnectorCMD_W();
         };
 
 #ifdef LTSM_CLIENT
@@ -458,8 +317,6 @@ namespace LTSM {
             ConnectorClientFuse(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientFuse();
 
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
 
@@ -484,8 +341,6 @@ namespace LTSM {
             ConnectorClientAudio(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientAudio() = default;
 
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
 
@@ -518,8 +373,6 @@ namespace LTSM {
             ConnectorClientPcsc(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientPcsc() = default;
 
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
 
@@ -543,8 +396,6 @@ namespace LTSM {
             ConnectorClientPkcs11(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
             virtual ~ConnectorClientPkcs11() = default;
 
-            int error(void) const override;
-            void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
 #endif // LTSM_PKCS11_AUTH
@@ -581,7 +432,7 @@ namespace LTSM {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         mutable std::mutex lockch;
-        std::array < Channel::ConnectorBasePtr, ChannelTypeLast + 1 > channels_;
+        std::array <Channel::ConnectorBasePtr, ChannelTypeLast + 1> channels_;
 
         int channel_debug_ = -1;
 
@@ -608,10 +459,6 @@ namespace LTSM {
         void recvLtsmProto(CID, std::vector<uint8_t> &&);
         void recvChannelData(CID, std::vector<uint8_t> &&);
         void recvChannelSystem(const JsonContent &);
-
-        inline boost::asio::strand<boost::asio::any_io_executor> chan_strand(void) const {
-            return strand_;
-        }
 
         inline bool isChannelDebug(CID channel) const {
             return channel_debug_ == channel;
@@ -650,7 +497,12 @@ namespace LTSM {
 
         virtual ~ChannelBase() = default;
 
+        inline boost::asio::strand<boost::asio::any_io_executor> chan_strand(void) const {
+            return strand_;
+        }
+
         boost::asio::awaitable<bool> sendSystemTransferFiles(std::forward_list<std::string>);
+
         void sendSystemChannelOpen(CID, const Channel::UrlMode &, const Channel::Opts &);
         void sendSystemChannelClose(CID);
         void sendSystemChannelConnected(CID, int flags, int error);
@@ -658,8 +510,11 @@ namespace LTSM {
 
         void recvLtsmEvent(CID, std::vector<uint8_t> &&);
 
+        virtual boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const = 0;
+        // fixme remove
         virtual void sendLtsmChannelData(CID, std::vector<uint8_t> &&) = 0;
         virtual void sendLtsmChannelData(CID, std::string &&) = 0;
+
         virtual bool serverSide(void) const = 0;
         virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
             return false;

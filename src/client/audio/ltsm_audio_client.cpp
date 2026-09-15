@@ -38,16 +38,6 @@
 #include "ltsm_audio_openal.h"
 #endif
 
-namespace LTSM {
-    namespace Channel {
-        namespace Connector {
-            // channel_system.cpp
-            void loopWriter(ConnectorBase*, Remote2Local*);
-            void loopReader(ConnectorBase*, Local2Remote*);
-        }
-    }
-}
-
 using namespace std::chrono_literals;
 
 // createClientAudioConnector
@@ -69,13 +59,6 @@ LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(CID channel, const std
         const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-}
-
-int LTSM::Channel::ConnectorClientAudio::error(void) const {
-    return 0;
-}
-
-void LTSM::Channel::ConnectorClientAudio::setSpeed(const Channel::Speed & speed) {
 }
 
 void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv) {

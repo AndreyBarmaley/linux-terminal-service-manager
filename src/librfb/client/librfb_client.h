@@ -82,8 +82,6 @@ namespace LTSM {
             boost::asio::awaitable<void> sendCutTextAwait(std::span<const uint8_t>, bool ext) const;
             boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const;
             boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const;
-            // fixme asio::job
-            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const;
 
             boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
             boost::asio::awaitable<void> recvFBUpdateRegionAwait(void);
@@ -122,6 +120,8 @@ namespace LTSM {
             bool isContinueUpdatesProcessed(void) const;
             bool isDecoderFFmpeg(void) const;
 
+            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const final;
+            // fixme remove
             void sendLtsmChannelData(CID, std::vector<uint8_t>&&) override;
             void sendLtsmChannelData(CID, std::string&&) override;
 

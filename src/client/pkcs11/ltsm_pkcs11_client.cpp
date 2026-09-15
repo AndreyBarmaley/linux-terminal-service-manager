@@ -32,16 +32,6 @@
 #include "ltsm_application.h"
 #include "ltsm_pkcs11_wrapper.h"
 
-namespace LTSM {
-    namespace Channel {
-        namespace Connector {
-            // channel_system.cpp
-            void loopWriter(ConnectorBase*, Remote2Local*);
-            void loopReader(ConnectorBase*, Local2Remote*);
-        }
-    }
-}
-
 using namespace std::chrono_literals;
 
 // createClientPkcs11Connector
@@ -63,13 +53,6 @@ LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(CID channel, const s
         const ConnectorMode & mod, const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv), reply(4096) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-}
-
-int LTSM::Channel::ConnectorClientPkcs11::error(void) const {
-    return 0;
-}
-
-void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed) {
 }
 
 void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv) {

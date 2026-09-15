@@ -37,14 +37,6 @@
 #include "ltsm_application.h"
 
 namespace LTSM {
-    namespace Channel {
-        namespace Connector {
-            // channel_system.cpp
-            void loopWriter(ConnectorBase*, Remote2Local*);
-            void loopReader(ConnectorBase*, Local2Remote*);
-        }
-    }
-
     void replyWriteStatStruct(StreamBuf & reply, const struct stat & st) {
         reply.writeIntLE64(st.st_dev);
         reply.writeIntLE64(st.st_ino);
@@ -191,13 +183,6 @@ LTSM::Channel::ConnectorClientFuse::~ConnectorClientFuse() {
     for(const auto & fd : opens) {
         ::close(fd);
     }
-}
-
-int LTSM::Channel::ConnectorClientFuse::error(void) const {
-    return 0;
-}
-
-void LTSM::Channel::ConnectorClientFuse::setSpeed(const Channel::Speed & speed) {
 }
 
 void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) {

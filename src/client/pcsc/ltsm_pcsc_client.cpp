@@ -130,17 +130,6 @@ namespace PcscLite {
     }
 }
 
-namespace LTSM {
-    namespace Channel {
-        namespace Connector {
-            // channel_system.cpp
-            void loopWriter(ConnectorBase*, Remote2Local*);
-            void loopReader(ConnectorBase*, Local2Remote*);
-        }
-    }
-
-}
-
 using namespace std::chrono_literals;
 
 // createClientPcscConnector
@@ -162,13 +151,6 @@ LTSM::Channel::ConnectorClientPcsc::ConnectorClientPcsc(CID channel, const std::
         const Opts & chOpts, ChannelBase & srv)
     : ConnectorBase(channel, mod, chOpts, srv) {
     Application::info("{}: channelId: {}", NS_FuncNameV, channel);
-}
-
-int LTSM::Channel::ConnectorClientPcsc::error(void) const {
-    return 0;
-}
-
-void LTSM::Channel::ConnectorClientPcsc::setSpeed(const Channel::Speed & speed) {
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) {

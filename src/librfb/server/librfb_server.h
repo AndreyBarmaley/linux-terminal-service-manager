@@ -135,10 +135,8 @@ namespace LTSM {
             boost::asio::awaitable<void> sendEncodingDesktopResizeAwait(DesktopResizeStatus, DesktopResizeError, XCB::Size) const;
             boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, const XCB::Point &) const;
             boost::asio::awaitable<void> sendEncodingLtsmCursorAwait(const XCB::Point &, const XCB::Size &, std::span<const uint8_t> pixels) const;
-            // fixme asio::job
             boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
             boost::asio::awaitable<void> sendEncodingLtsmDataAwait(std::span<const uint8_t>) const;
-            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const;
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
             boost::asio::awaitable<void> recvPixelFormatAwait(void);
@@ -174,6 +172,8 @@ namespace LTSM {
             void asioStop(void);
             void serverSelectEncodings(void);
 
+            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const final;
+            // fixme remove
             void sendLtsmChannelData(CID, std::vector<uint8_t>&&) override final;
             void sendLtsmChannelData(CID, std::string&&) override final;
 
