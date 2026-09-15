@@ -513,9 +513,7 @@ namespace LTSM {
         virtual void sendLtsmChannelData(CID, std::string &&) = 0;
 
         virtual bool serverSide(void) const = 0;
-        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
-            return false;
-        }
+        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const = 0;
     };
 
     class ChannelClient : public ChannelBase {
@@ -614,6 +612,10 @@ namespace LTSM {
 
         virtual bool isUserSession(void) const {
             return false;
+        }
+
+        bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const override {
+            return true;
         }
     };
 #endif
