@@ -48,7 +48,6 @@ target_sources(${CUR_TARGET} PRIVATE
     ltsm_application.cpp
     ltsm_tools.cpp
     ltsm_streambuf.cpp
-    ltsm_sockets.cpp
     ltsm_framebuffer.cpp
     ltsm_xcb_types.cpp)
 

@@ -500,7 +500,7 @@ bool ChannelBase::createChannelUnix(CID channel, const std::filesystem::path & p
     return true;
 }
 
-bool ChannelBase::createChannelSocket(CID channel, std::pair<std::string, int> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+bool ChannelBase::createChannelSocket(CID channel, std::pair<std::string, uint16_t> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! allowCreateChannel(Channel::ConnectorType::Socket, ipAddrPort.first, mode)) {
         Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", ipAddrPort.first);
         return false;
@@ -1405,18 +1405,38 @@ Channel::ConnectorCMD_R::~ConnectorCMD_R() {
 }
 
 #ifdef __UNIX__
+namespace Asio {
+template<typename Executor>
+int unixConnect(const std::filesystem::path & path, Executor ex) {
+    asio::local::stream_protocol::socket sock{ex};
+    asio::local::stream_protocol::endpoint endpoint{path.c_str()};
+
+    sock.connect(endpoint);
+    return sock.release();
+}
+
+template<typename Executor>
+int tcpConnect(const std::string & addr, uint16_t port, Executor ex) {
+    asio::ip::tcp::socket sock{ex};
+    asio::ip::tcp::endpoint endpoint(
+        asio::ip::make_address_v4(addr), port);
+
+    sock.connect(endpoint);
+    return sock.release();
+}
+}
+
 /// createUnixConnector
 Channel::ConnectorBasePtr
 Channel::createUnixConnector(CID channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     std::error_code err;
-
     if(! std::filesystem::is_socket(path, err)) {
         Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
                            NS_FuncNameV, "is_socket", err.value(), err.message(), path.string());
         throw channel_error(NS_FuncNameS);
     }
 
-    int fd = UnixSocket::connect(path);
+    int fd = Asio::unixConnect(path, sender.chan_strand());
     Application::info("{}: id: {}, path: `{}', mode: {}", NS_FuncNameV, channel, path, Channel::Connector::modeString(mode));
 
     if(0 > fd) {
@@ -1442,10 +1462,10 @@ Channel::createUnixConnector(CID channel, const std::filesystem::path & path, co
 
 /// createTcpConnector
 Channel::ConnectorBasePtr
-Channel::createTcpConnector(CID channel, const std::string & ipaddr, int port, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
+Channel::createTcpConnector(CID channel, const std::string & ipaddr, uint16_t port, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, addr: `{}', port: {}, mode: {}", NS_FuncNameV, channel, ipaddr, port, Channel::Connector::modeString(mode));
 
-    int fd = TCPSocket::connect(ipaddr, port);
+    int fd = Asio::tcpConnect(ipaddr, port, sender.chan_strand());
 
     if(0 > fd) {
         Application::error("{}: {}, id: {}, addr: `{}', port: {}", NS_FuncNameV, "socket failed", channel, ipaddr, port);

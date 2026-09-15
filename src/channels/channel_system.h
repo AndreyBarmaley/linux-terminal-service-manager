@@ -48,7 +48,6 @@
 #include "ltsm_pkcs11_wrapper.h"
 #endif
 
-#include "ltsm_sockets.h"
 #include "ltsm_streambuf.h"
 #include "ltsm_json_wrapper.h"
 
@@ -408,7 +407,7 @@ namespace LTSM {
         ConnectorBasePtr createFdConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
 #ifdef __UNIX__
         ConnectorBasePtr createUnixConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
-        ConnectorBasePtr createTcpConnector(CID, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createTcpConnector(CID, const std::string & ipaddr, uint16_t port, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
 #ifdef LTSM_PKCS11_AUTH
         ConnectorBasePtr createClientPkcs11Connector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
@@ -476,7 +475,7 @@ namespace LTSM {
 
 #ifdef __UNIX__
         bool createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelSocket(CID, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool createChannelSocket(CID, std::pair<std::string, uint16_t>, const Channel::ConnectorMode &, const Channel::Opts &);
 #endif
         bool createChannelFd(CID, int fd, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
