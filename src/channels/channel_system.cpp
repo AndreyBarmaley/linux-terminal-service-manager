@@ -1177,6 +1177,7 @@ asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Cha
             break;
 
         case Channel::ConnectorType::Unix:
+            // FIXME return
             createChannelUnix(channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
             break;
 

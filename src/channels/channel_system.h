@@ -152,13 +152,12 @@ namespace LTSM {
         class ConnectorBase {
           private:
             std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
-
             ChannelBase* owner_ = nullptr;
-            ConnectorMode mode_;
-            Speed speed_;
 
-            int flags_ = 0;
-            CID cid_ = 255;
+            const ConnectorMode mode_;
+            const Speed speed_;
+            const int flags_;
+            const CID cid_;
 
           protected:
             inline ChannelBase* connectorOwner(void) {
@@ -184,11 +183,11 @@ namespace LTSM {
             }
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
-                status_ = st;
+                status_.exchange(st);
             }
 
             inline Channel::ConnectorStatus connectorStatus(void) const {
-                return status_;
+                return status_.load();
             }
 
             inline bool isConnected(void) const {
@@ -241,7 +240,7 @@ namespace LTSM {
 
           public:
             ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            virtual ~ConnectorFD_R();
+            ~ConnectorFD_R();
         };
 
         // ConnectorFD_W
@@ -254,7 +253,7 @@ namespace LTSM {
 
           public:
             ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            virtual ~ConnectorFD_W();
+            ~ConnectorFD_W();
 
             void pushData(std::vector<uint8_t> &&) override;
         };
@@ -268,7 +267,6 @@ namespace LTSM {
             ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv)
                 : ConnectorBase(ch, ConnectorMode::ReadWrite, opts, srv), fdr_(ch, fd, opts, srv), fdw_(ch, fd, opts, srv) {
             }
-            virtual ~ConnectorFD_RW() = default;
 
             void pushData(std::vector<uint8_t> &&) override;
         };
