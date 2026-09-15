@@ -101,6 +101,9 @@ Channel::Speed Channel::connectorSpeed(std::string_view str) {
 
 const char* Channel::Connector::typeString(const ConnectorType & type) {
     switch(type) {
+        case ConnectorType::Fd:
+            return "fd";
+
         case ConnectorType::Unix:
             return "unix";
 
@@ -962,41 +965,6 @@ asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
     co_return;
 }
 
-bool ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clientOpts, int sock, const Channel::UrlMode & serverOpts, const Channel::Opts & chOpts) {
-    if(clientOpts.mode == Channel::ConnectorMode::Unknown) {
-        Application::error("{}: unknown {} mode", NS_FuncNameV, "client");
-        return false;
-    }
-
-    if(serverOpts.mode == Channel::ConnectorMode::Unknown) {
-        Application::error("{}: unknown {} mode", NS_FuncNameV, "server");
-        return false;
-    }
-
-    if(serverOpts.mode == clientOpts.mode &&
-       (serverOpts.mode == Channel::ConnectorMode::ReadOnly || serverOpts.mode == Channel::ConnectorMode::WriteOnly)) {
-        Application::error("{}: incorrect modes pair (wo,wo) or (ro,ro)", NS_FuncNameV);
-        return false;
-    }
-
-    // parse url client
-    Application::debug(DebugType::Channels, "client url: `{}', mode: {}", clientOpts.url, Channel::Connector::modeString(clientOpts.mode));
-
-    if(clientOpts.type() == Channel::ConnectorType::Unknown) {
-        Application::error("{}: unknown client url: `{}'", NS_FuncNameV, clientOpts.url);
-        return false;
-    }
-
-    auto job = Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock };
-    asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [this](std::exception_ptr ptr) {
-        exceptionHandler(ptr);
-    });
-
-    // next part: ChannelBase::systemChannelConnected
-
-    return true;
-}
-
 void ChannelListener::recvChannelSystemEvent(const std::string& cmd, const JsonObject & jo) {
     if(cmd == SystemCommand::ClientVariables) {
         return systemClientVariablesEvent(jo);
@@ -1088,7 +1056,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
     bool success = false;
 
     try {
-        co_await createPlannedAwait(channel, job);
+        co_await createChannelAwait(channel, job);
         success = true;
     } catch(const system::system_error& err) {
         auto ec = err.code();
@@ -1196,50 +1164,35 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     co_return;
 }
 
-asio::awaitable<void> ChannelListener::createPlannedAwait(CID channel, const Channel::Planned & job) {
+asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Channel::Planned & job) {
 
-    if(0 <= job.serverFd) {
-        Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
-                          NS_FuncNameV, "found planned job", channel, job.clientOpts.url, "listener");
+    Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
+                      NS_FuncNameV, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
 
-        switch(job.serverOpts.type()) {
-            case Channel::ConnectorType::Unix:
-                createChannelFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
-                break;
+    switch(job.serverOpts.type()) {
+        case Channel::ConnectorType::Fd:
+            createChannelFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
+            break;
 
-            case Channel::ConnectorType::Socket:
-                createChannelFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
-                break;
+        case Channel::ConnectorType::Unix:
+            createChannelUnix(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+            break;
 
-            default:
-                Application::error("{}: {}, id: {}", NS_FuncNameV, "channel type not implemented", channel);
-                throw channel_error(NS_FuncNameS);
-        }
-    } else if(! job.serverOpts.content().empty()) {
-        Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
-                          NS_FuncNameV, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
+        case Channel::ConnectorType::Socket:
+            createChannelSocket(job.channel, Channel::Connector::parseAddrPort(job.serverOpts.content()), job.serverOpts.mode, job.chOpts);
+            break;
 
-        switch(job.serverOpts.type()) {
-            case Channel::ConnectorType::Unix:
-                createChannelUnix(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
-                break;
+        case Channel::ConnectorType::File:
+            createChannelFile(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+            break;
 
-            case Channel::ConnectorType::Socket:
-                createChannelSocket(job.channel, Channel::Connector::parseAddrPort(job.serverOpts.content()), job.serverOpts.mode, job.chOpts);
-                break;
+        case Channel::ConnectorType::Command:
+            createChannelCommand(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+            break;
 
-            case Channel::ConnectorType::File:
-                createChannelFile(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
-                break;
-
-            case Channel::ConnectorType::Command:
-                createChannelCommand(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
-                break;
-
-            default:
-                Application::error("{}: {}, id: {}", NS_FuncNameV, "channel type not implemented", channel);
-                throw channel_error(NS_FuncNameS);
-        }
+        default:
+            Application::error("{}: {}, id: {}", NS_FuncNameV, "channel type not implemented", channel);
+            throw channel_error(NS_FuncNameS);
     }
 
     co_return;

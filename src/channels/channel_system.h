@@ -89,7 +89,7 @@ namespace LTSM {
     constexpr CID ChannelTypeLast = UINT8_MAX;
 
     namespace Channel {
-        enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11 };
+        enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11, Fd };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
         enum class ConnectorStatus { Unknown, Openning, Connected, Running };
 
@@ -119,6 +119,9 @@ namespace LTSM {
             }
             const std::string & content(void) const {
                 return second;
+            }
+            void updateType(ConnectorType type) {
+                first = type;
             }
         };
 
@@ -730,9 +733,9 @@ namespace LTSM {
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         uint32_t countFreeChannels(void) const;
 
-        boost::asio::awaitable<void> createPlannedAwait(CID, const Channel::Planned &);
         boost::asio::awaitable<void> systemChannelConnectedAwait(CID channel, int flags, int error);
         boost::asio::awaitable<void> plannedEmplaceAwait(Channel::Planned job);
+        boost::asio::awaitable<void> createChannelAwait(CID, const Channel::Planned &);
 
         boost::asio::awaitable<void> createListenerAwait(Channel::UrlMode clientOpts, Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit);
         boost::asio::awaitable<void> destroyListenerAwait(std::string clientUrl);
@@ -760,8 +763,6 @@ namespace LTSM {
         virtual bool isUserSession(void) const {
             return false;
         }
-
-        bool createChannelAcceptFd(const Channel::UrlMode & clientOpts, int sock, const Channel::UrlMode & serverOpts, const Channel::Opts &);
     };
 #endif
 }
