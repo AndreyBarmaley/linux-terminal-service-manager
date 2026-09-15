@@ -463,6 +463,19 @@ bool ChannelBase::createChannelPcsc(CID channel, const std::string & url, const 
 #endif
 }
 
+bool ChannelBase::createChannelFd(CID channel, int fd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+    Application::debug(DebugType::Channels, "{}: id: {}, fd: {}, mode: {}", NS_FuncNameV, channel, fd, Channel::Connector::modeString(mode));
+
+    try {
+        emplaceChannel(channel, Channel::createFdConnector(channel, fd, mode, chOpts, *this));
+    } catch(const std::exception & err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        return false;
+    }
+
+    return true;
+}
+
 #ifdef __UNIX__
 bool ChannelBase::createChannelUnix(CID channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! allowCreateChannel(Channel::ConnectorType::Unix, path.native(), mode)) {
@@ -482,11 +495,26 @@ bool ChannelBase::createChannelUnix(CID channel, const std::filesystem::path & p
     return true;
 }
 
-bool ChannelBase::createChannelUnixFd(CID channel, int sock, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
-    Application::debug(DebugType::Channels, "{}: id: {}, sock: {}, mode: {}", NS_FuncNameV, channel, sock, Channel::Connector::modeString(mode));
+bool ChannelBase::createChannelSocket(CID channel, std::pair<std::string, int> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+    if(! allowCreateChannel(Channel::ConnectorType::Socket, ipAddrPort.first, mode)) {
+        Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", ipAddrPort.first);
+        return false;
+    }
+
+    Application::debug(DebugType::Channels, "{}: id: {}, addr: {}, port: {}, mode: {}", NS_FuncNameV, channel, ipAddrPort.first, ipAddrPort.second, Channel::Connector::modeString(mode));
+
+    if(serverSide() && ! startsWith(ipAddrPort.first, "127.")) {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "server side allow socket only for localhost", channel);
+        return false;
+    }
+
+    if(0 > ipAddrPort.second) {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "incorrect connection info", channel);
+        return false;
+    }
 
     try {
-        emplaceChannel(channel, Channel::createUnixConnector(channel, sock, mode, chOpts, *this));
+        emplaceChannel(channel, Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
@@ -557,48 +585,6 @@ bool ChannelBase::createChannelCommand(CID channel, const std::string & runcmd, 
     return true;
 }
 
-#ifdef __UNIX__
-bool ChannelBase::createChannelSocket(CID channel, std::pair<std::string, int> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
-    if(! allowCreateChannel(Channel::ConnectorType::Socket, ipAddrPort.first, mode)) {
-        Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", ipAddrPort.first);
-        return false;
-    }
-
-    Application::debug(DebugType::Channels, "{}: id: {}, addr: {}, port: {}, mode: {}", NS_FuncNameV, channel, ipAddrPort.first, ipAddrPort.second, Channel::Connector::modeString(mode));
-
-    if(serverSide() && ! startsWith(ipAddrPort.first, "127.")) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "server side allow socket only for localhost", channel);
-        return false;
-    }
-
-    if(0 > ipAddrPort.second) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "incorrect connection info", channel);
-        return false;
-    }
-
-    try {
-        emplaceChannel(channel, Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
-}
-
-bool ChannelBase::createChannelSocketFd(CID channel, int sock, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
-    Application::debug(DebugType::Channels, "{}: id: {}, sock: {}, mode: {}", NS_FuncNameV, channel, sock, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createTcpConnector(channel, sock, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
-}
-#endif
 
 void ChannelBase::sendSystemChannelOpen(CID channel, const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts) {
     Application::info("{}: id: {}, content: `{}'", NS_FuncNameV, channel, clientOpts.content());
@@ -1218,11 +1204,11 @@ asio::awaitable<void> ChannelListener::createPlannedAwait(CID channel, const Cha
 
         switch(job.serverOpts.type()) {
             case Channel::ConnectorType::Unix:
-                createChannelUnixFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
+                createChannelFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
                 break;
 
             case Channel::ConnectorType::Socket:
-                createChannelSocketFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
+                createChannelFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
                 break;
 
             default:
@@ -1775,31 +1761,6 @@ Channel::createUnixConnector(CID channel, const std::filesystem::path & path, co
     throw channel_error(NS_FuncNameS);
 }
 
-Channel::ConnectorBasePtr
-Channel::createUnixConnector(CID channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
-    Application::info("{}: id: {}, sock: {}, mode: {}", NS_FuncNameV, channel, sock, Channel::Connector::modeString(mode));
-
-    if(0 > sock) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "unix failed", channel);
-        throw channel_error(NS_FuncNameS);
-    }
-
-    if(mode == ConnectorMode::ReadWrite) {
-        return std::make_unique<ConnectorFD_RW>(channel, sock, chOpts, sender);
-    }
-
-    if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, sock, chOpts, sender);
-    }
-
-    if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, sock, chOpts, sender);
-    }
-
-    Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
-    throw channel_error(NS_FuncNameS);
-}
-
 /// createTcpConnector
 Channel::ConnectorBasePtr
 Channel::createTcpConnector(CID channel, const std::string & ipaddr, int port, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
@@ -1828,31 +1789,32 @@ Channel::createTcpConnector(CID channel, const std::string & ipaddr, int port, c
     throw channel_error(NS_FuncNameS);
 }
 
-Channel::ConnectorBasePtr
-Channel::createTcpConnector(CID channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
-    Application::info("{}: id: {}, sock: {}, mode: {}", NS_FuncNameV, channel, sock, Channel::Connector::modeString(mode));
+#endif
 
-    if(0 > sock) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "socket failed", channel);
+Channel::ConnectorBasePtr
+Channel::createFdConnector(CID channel, int fd, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
+    Application::info("{}: id: {}, fd: {}, mode: {}", NS_FuncNameV, channel, fd, Channel::Connector::modeString(mode));
+
+    if(0 > fd) {
+        Application::error("{}: {}, id: {}", NS_FuncNameV, "fd failed", channel);
         throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadWrite) {
-        return std::make_unique<ConnectorFD_RW>(channel, sock, chOpts, sender);
+        return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, sock, chOpts, sender);
+        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, sock, chOpts, sender);
+        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
     throw channel_error(NS_FuncNameS);
 }
-#endif
 
 /// createFileConnector
 Channel::ConnectorBasePtr

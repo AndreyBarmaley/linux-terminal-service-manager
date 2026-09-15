@@ -553,11 +553,9 @@ namespace LTSM {
             const char* speedString(const Speed &);
         }
 
+        ConnectorBasePtr createFdConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
 #ifdef __UNIX__
-        ConnectorBasePtr createUnixConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
         ConnectorBasePtr createUnixConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
-
-        ConnectorBasePtr createTcpConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
         ConnectorBasePtr createTcpConnector(CID, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
 #ifdef LTSM_PKCS11_AUTH
@@ -630,11 +628,9 @@ namespace LTSM {
 
 #ifdef __UNIX__
         bool createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelUnixFd(CID, int, const Channel::ConnectorMode &, const Channel::Opts &);
-
         bool createChannelSocket(CID, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelSocketFd(CID, int, const Channel::ConnectorMode &, const Channel::Opts &);
 #endif
+        bool createChannelFd(CID, int fd, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
