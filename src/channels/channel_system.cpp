@@ -1166,7 +1166,7 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     co_return;
 }
 
-asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Channel::Planned & job) {
+asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Channel::Planned& job) {
 
     Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
                       NS_FuncNameV, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
@@ -1246,9 +1246,9 @@ std::pair<std::chrono::milliseconds,uint32_t> Channel::ConnectorBase::speedInfo(
 
 /// ConnectorFD_R
 Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::ReadOnly, opts, srv), sd_{srv.chan_strand(), fd}, tm_delay_{srv.chan_strand()} {
+    : ConnectorBase(ch, ConnectorMode::ReadOnly, opts, srv),
+        sd_{srv.chan_strand(), fd}, tm_delay_{srv.chan_strand()} {
     // read loop
-    loop_running_.exchange(true);
     asio::co_spawn(srv.chan_strand(), readLoopAwait(),
         boost::asio::bind_cancellation_slot(read_cancel_.slot(), [this](std::exception_ptr ptr) {
             loop_running_.exchange(false);
@@ -1260,6 +1260,7 @@ Channel::ConnectorFD_R::~ConnectorFD_R() {
     sd_.cancel();
     tm_delay_.cancel();
     read_cancel_.emit(asio::cancellation_type::terminal);
+    setConnectorStatus(ConnectorStatus::Error);
     // wait loop ended
     if(loop_running_.load()) {
         Application::info("{}: wait ended", NS_FuncNameV);
@@ -1269,29 +1270,29 @@ Channel::ConnectorFD_R::~ConnectorFD_R() {
     }
 }
 
-asio::awaitable<void> Channel::ConnectorFD_R::waitRunningAwait(void) {
-    auto ex = co_await boost::asio::this_coro::executor;
-    Application::info("{}: wait status", NS_FuncNameV);
-    while(connectorStatus() != Channel::ConnectorStatus::Running) {
-        asio::steady_timer tm_delay{ex, 1ms};
-        co_await tm_delay.async_wait(asio::use_awaitable);
-    }
-    co_return;
-}
-
 asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
-    co_await waitRunningAwait();
+    loop_running_.exchange(true);
 
     try {
         auto info = speedInfo();
         std::vector<uint8_t> buf(info.second);
 
         for(;;) {
+            if(connectorStatus() == Channel::ConnectorStatus::Error) {
+                Application::error("{}: status error", NS_FuncNameV);
+                co_return;
+            }
+
             tm_delay_.expires_after(info.first);
             co_await tm_delay_.async_wait(asio::use_awaitable);
 
+            if(connectorStatus() != Channel::ConnectorStatus::Running) {
+                continue;
+            }
+
             // read local
-            co_await asio::async_read(sd_, asio::buffer(buf), boost::asio::transfer_all(), asio::use_awaitable);
+            auto transferred = co_await sd_.async_read_some(asio::buffer(buf), asio::use_awaitable);
+            buf.resize(transferred);
 
             if(isZlib()) {
                 buf = ZLib::deflate(buf, Z_BEST_SPEED + 2);
@@ -1379,6 +1380,12 @@ void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
 }
 
 /// ConnectorFD_RW
+Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv)
+    : ConnectorFD_R(ch, fd, opts, srv), fdw_(ch, dup(fd), opts, srv) {
+    // overwrite mode
+    setConnectorMode(ConnectorMode::ReadWrite);
+}
+
 void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
     fdw_.pushData(std::move(buf));
 }

@@ -157,8 +157,8 @@ namespace LTSM {
           private:
             std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
             ChannelBase* owner_ = nullptr;
+            ConnectorMode mode_;
 
-            const ConnectorMode mode_;
             const Speed speed_;
             const int flags_;
             const CID cid_;
@@ -166,6 +166,10 @@ namespace LTSM {
           protected:
             inline ChannelBase* connectorOwner(void) {
                 return owner_;
+            }
+
+            inline void setConnectorMode(const ConnectorMode & cm) {
+                mode_ = cm;
             }
 
             std::pair<std::chrono::milliseconds,uint32_t> speedInfo(void) const;
@@ -239,7 +243,6 @@ namespace LTSM {
             std::atomic<bool> loop_running_{false};
 
           protected:
-            boost::asio::awaitable<void> waitRunningAwait(void);
             boost::asio::awaitable<void> readLoopAwait(void);
 
           public:
@@ -263,14 +266,11 @@ namespace LTSM {
         };
 
         // ConnectorFD_RW
-        class ConnectorFD_RW : public ConnectorBase {
-            ConnectorFD_R fdr_;
+        class ConnectorFD_RW : public ConnectorFD_R {
             ConnectorFD_W fdw_;
 
           public:
-            ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-                : ConnectorBase(ch, ConnectorMode::ReadWrite, opts, srv), fdr_(ch, fd, opts, srv), fdw_(ch, fd, opts, srv) {
-            }
+            ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv);
 
             void pushData(std::vector<uint8_t> &&) override;
         };
