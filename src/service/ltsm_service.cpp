@@ -2608,7 +2608,15 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        return waitFileSetPermission(ioc_, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+        if(waitFileSetPermission(ioc_, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)) {
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), printerSocket);
+            return true;
+        }
+
+        Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", printerSocket);
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+        return false;
     }
 
     bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2653,17 +2661,13 @@ namespace LTSM::Manager {
         if(waitFileSetPermission(ioc_, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)){
             Application::info("{}: display: {}, user: {}, socket: `{}'",
                           NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), audioSocket);
-
             if(xvfb->dbusAudioChannelConnect(audioSocket)) {
                 return true;
             }
-
-            // destroy channel
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket.string());
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Audio, "");
-            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
+        } else {
+            Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", audioSocket);
         }
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
         return false;
     }
 
@@ -2719,8 +2723,16 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        return waitFileSetPermission(ioc_, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
-                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+        if(waitFileSetPermission(ioc_, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)) {
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), saneSocket);
+            return true;
+        }
+
+        Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", saneSocket);
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+        return false;
     }
 
     bool DBusAdaptor::startPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2769,13 +2781,10 @@ namespace LTSM::Manager {
             if(xvfb->dbusPcscChannelConnect(pcscSocket)) {
                 return true;
             }
-
-            // destroy channel
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket.string());
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Pcsc, "");
-            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
+        } else {
+            Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", pcscSocket);
         }
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
         return false;
     }
 
@@ -2823,7 +2832,15 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
-        return waitFileSetPermission(ioc_, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR);
+        if(waitFileSetPermission(ioc_, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)) {
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), pkcs11Socket);
+            return true;
+        }
+
+        Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", pkcs11Socket);
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+        return false;
     }
 
     void DBusAdaptor::stopPkcs11Listener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2899,14 +2916,11 @@ namespace LTSM::Manager {
                 xvfb->fusePoints.emplace_front(std::move(localPoint));
                 return true;
             }
-    
-            // destroy channel
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, fuseSocket.string());
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Fuse, "");
-            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
+        } else {
+            Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", fuseSocket);
         }
 
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
         return false;
     }
 
