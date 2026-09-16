@@ -414,57 +414,33 @@ asio::awaitable<bool> ChannelBase::sendSystemTransferFiles(std::forward_list<std
     co_return true;
 }
 
-bool ChannelBase::createChannelAudio(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelAudio(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_WITH_AUDIO)
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createClientAudioConnector(channel, url, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createClientAudioConnector(channel, url, mode, chOpts, *this));
 #else
     Application::error("{}: {}, url: `{}'", NS_FuncNameV, "unsupported audio", url);
-    return false;
+    throw channel_error(NS_FuncNameS);
 #endif
 }
 
-bool ChannelBase::createChannelFuse(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelFuse(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_WITH_FUSE)
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createClientFuseConnector(channel, url, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createClientFuseConnector(channel, url, mode, chOpts, *this));
 #else
     Application::error("{}: {}, url: `{}'", NS_FuncNameV, "unsupported fuse", url);
-    return false;
+    throw channel_error(NS_FuncNameS);
 #endif
 }
 
-bool ChannelBase::createChannelPcsc(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelPcsc(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_WITH_PCSC)
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createClientPcscConnector(channel, url, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createClientPcscConnector(channel, url, mode, chOpts, *this));
 #else
     Application::error("{}: {}, url: `{}'", NS_FuncNameV, "unsupported pcsc", url);
-    return false;
+    throw channel_error(NS_FuncNameS);
 #endif
 }
 
@@ -501,21 +477,13 @@ void ChannelBase::createChannelSocket(CID channel, std::pair<std::string, uint16
 
 #endif // __UNIX__
 
-bool ChannelBase::createChannelPkcs11(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelPkcs11(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_PKCS11_AUTH)
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createClientPkcs11Connector(channel, url, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createClientPkcs11Connector(channel, url, mode, chOpts, *this));
 #else
     Application::error("{}: {}, url: `{}'", NS_FuncNameV, "unsupported pkcs11", url);
-    return false;
+    throw channel_error(NS_FuncNameS);
 #endif
 }
 
@@ -534,22 +502,14 @@ void ChannelBase::createChannelFile(CID channel, const std::filesystem::path & p
     emplaceChannel(channel, Channel::createFileConnector(channel, path, mode, chOpts, *this));
 }
 
-bool ChannelBase::createChannelCommand(CID channel, const std::string & runcmd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelCommand(CID channel, const std::string & runcmd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! allowCreateChannel(Channel::ConnectorType::Command, runcmd, mode)) {
         Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", runcmd);
-        return false;
+        throw channel_error(NS_FuncNameS);
     }
 
     Application::debug(DebugType::Channels, "{}: id: {}, run cmd: `{}', mode: {}", NS_FuncNameV, channel, runcmd, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createCommandConnector(channel, runcmd, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createCommandConnector(channel, runcmd, mode, chOpts, *this));
 }
 
 
@@ -727,35 +687,39 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
     Channel::Opts chopts{ Channel::connectorSpeed(sspeed), flags };
 
     try {
-        if(type == Channel::ConnectorType::File) {
-            createChannelFile(channel, jo.getString("path"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Audio) {
-            success = createChannelAudio(channel, jo.getString("audio"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Fuse) {
-            success = createChannelFuse(channel, jo.getString("fuse"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Pcsc) {
-            success = createChannelPcsc(channel, jo.getString("pcsc"), mode, chopts);
-        }
+        switch(type) {
+            case Channel::ConnectorType::File:
+                createChannelFile(channel, jo.getString("path"), mode, chopts);
+                break;
+            case Channel::ConnectorType::Audio:
+                createChannelAudio(channel, jo.getString("audio"), mode, chopts);
+                break;
+            case Channel::ConnectorType::Fuse:
+                createChannelFuse(channel, jo.getString("fuse"), mode, chopts);
+                break;
+            case Channel::ConnectorType::Pcsc:
+                createChannelPcsc(channel, jo.getString("pcsc"), mode, chopts);
+                break;
 
 #ifdef __UNIX__
-        else if(type == Channel::ConnectorType::Unix) {
-            createChannelUnix(channel, jo.getString("path"), mode, chopts);
-        } else if(type == Channel::ConnectorType::Socket) {
-            createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
-        }
-
+            case Channel::ConnectorType::Unix:
+                createChannelUnix(channel, jo.getString("path"), mode, chopts);
+                break;
+            case Channel::ConnectorType::Socket:
+                createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
+                break;
 #endif
 #ifdef LTSM_PKCS11_AUTH
-        else if(type == Channel::ConnectorType::Pkcs11) {
-            success = createChannelPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
-        }
-
+            case Channel::ConnectorType::Pkcs11:
+                createChannelPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
+                break;
 #endif
-        else if(type == Channel::ConnectorType::Command) {
-            success = createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
-        } else {
-            Application::error("{}: {} `{}', id: {}", NS_FuncNameV, "unknown channel type", stype, channel);
-            success = false;
+            case Channel::ConnectorType::Command:
+                createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
+                break;
+            default:
+                Application::error("{}: {} `{}', id: {}", NS_FuncNameV, "unknown channel type", stype, channel);
+                success = false;
         }
     } catch(const system::system_error& err) {
         auto ec = err.code();

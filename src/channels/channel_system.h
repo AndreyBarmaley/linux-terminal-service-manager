@@ -484,11 +484,11 @@ namespace LTSM {
 #endif
         void createChannelFd(CID, int fd, const Channel::ConnectorMode &, const Channel::Opts &);
         void createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelAudio(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelPcsc(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelPkcs11(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelAudio(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelPcsc(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelPkcs11(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
 
         void setChannelDebug(CID, bool);
         void shutdownChannels(void);
