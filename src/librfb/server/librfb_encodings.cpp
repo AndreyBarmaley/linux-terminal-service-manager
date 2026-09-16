@@ -23,57 +23,114 @@
 
 #include <cmath>
 #include <chrono>
+#include <cassert>
 #include <numeric>
 #include <cstring>
 #include <utility>
+
+#include <boost/endian.hpp>
 
 #include "ltsm_tools.h"
 #include "librfb_server.h"
 #include "ltsm_application.h"
 #include "librfb_encodings.h"
 
-#ifdef LTSM_ENCODING
 #include "lz4.h"
 #include "turbojpeg.h"
-#endif
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
-    // EncoderStream
-    int RFB::EncoderStream::sendHeader(int type, const XCB::Region & reg) {
-        // region size
-        sendIntBE16(reg.x);
-        sendIntBE16(reg.y);
-        sendIntBE16(reg.width);
-        sendIntBE16(reg.height);
-        // region type
-        sendIntBE32(type);
-        return 12;
+    const int HEADER_REGION_SIZE = 12;
+
+    // EncodePacket
+    RFB::EncodePacket::EncodePacket(uint32_t rez, bool t2)
+        : StreamBuf(HEADER_REGION_SIZE + sizeof(uint32_t) + rez), type_v2_{t2} {
+
+        if(type_v2_) {
+            // v2 format: <header><uint32><data>
+            writeZero(HEADER_REGION_SIZE + sizeof(uint32_t));
+        } else {
+            // v1 format: <header><data>
+            writeZero(HEADER_REGION_SIZE);
+        }
     }
 
-    int RFB::EncoderStream::sendPixelRaw(uint32_t pixel, uint8_t bpp, bool be) {
+    void RFB::EncodePacket::writeHeader(uint32_t type, const XCB::Region & reg) {
+        auto ptr = rawbuf().data();
+        // header format: <regx:be16,regy:be16,regw:be16,regh:be16,type:be32>
+
+        endian::store_big_u16(ptr, reg.x);
+        ptr += sizeof(uint16_t);
+        endian::store_big_u16(ptr, reg.y);
+        ptr += sizeof(uint16_t);
+        endian::store_big_u16(ptr, reg.width);
+        ptr += sizeof(uint16_t);
+        endian::store_big_u16(ptr, reg.height);
+        ptr += sizeof(uint16_t);
+        endian::store_big_u32(ptr, type);
+    }
+
+    std::span<const uint8_t> RFB::EncodePacket::span(void) const {
+        return std::span{ rawbuf() };
+    }
+
+    std::span<uint8_t> RFB::EncodePacket::encodeData(void) {
+        auto span = std::span{ rawbuf() };
+        const uint32_t data_off = type_v2_ ? HEADER_REGION_SIZE + sizeof(uint32_t) : HEADER_REGION_SIZE;
+        assert(last() >= data_off);
+        return span.subspan(data_off);
+    }
+
+    void RFB::EncodePacket::writeData(std::span<const uint8_t> buf) {
+        const uint32_t data_off = type_v2_ ? HEADER_REGION_SIZE + sizeof(uint32_t) : HEADER_REGION_SIZE;
+        assert(last() >= data_off);
+        rawbuf().resize(data_off);
+        write(buf);
+    }
+
+    void RFB::EncodePacket::writeDataSize(uint32_t len) {
+        if(!type_v2_) {
+            return;
+        }
+
+        const uint32_t data_off = HEADER_REGION_SIZE + sizeof(uint32_t);
+
+        if(len) {
+            assert(last() >= (data_off + len));
+            auto ptr = rawbuf().data() + HEADER_REGION_SIZE;
+            endian::store_big_u32(ptr, len);
+            rawbuf().resize(data_off + len);
+        } else {
+            assert(last() >= data_off);
+            const uint32_t data_sz = last() - data_off;
+
+            auto ptr = rawbuf().data() + HEADER_REGION_SIZE;
+            endian::store_big_u32(ptr, data_sz);
+        }
+    }
+
+    int RFB::EncodePacket::writeRawPixel(uint32_t pixel, uint8_t bpp, bool be) {
         switch(bpp) {
             case 4:
                 if(be) {
-                    sendIntBE32(pixel);
+                    writeIntBE32(pixel);
                 } else {
-                    sendIntLE32(pixel);
+                    writeIntLE32(pixel);
                 }
-
                 return 4;
 
             case 2:
                 if(be) {
-                    sendIntBE16(pixel);
+                    writeIntBE16(pixel);
                 } else {
-                    sendIntLE16(pixel);
+                    writeIntLE16(pixel);
                 }
-
                 return 2;
 
             case 1:
-                sendInt8(pixel);
+                writeInt8(pixel);
                 return 1;
 
             default:
@@ -84,38 +141,7 @@ namespace LTSM {
         throw rfb_error(NS_FuncNameS);
     }
 
-    int RFB::EncoderStream::sendPixel(uint32_t pixel) {
-        return sendPixelRaw(clientFormat().convertFrom(serverFormat(), pixel), clientFormat().bytePerPixel(), clientIsBigEndian());
-    }
-
-    int RFB::EncoderStream::sendCPixel(uint32_t pixel) {
-        if(clientFormat().bitsPerPixel() != 32) {
-            return sendPixel(pixel);
-        }
-
-        if(! serverFormat().compare(clientFormat(), true /* skip alpha */)) {
-            pixel = clientFormat().convertFrom(serverFormat(), pixel);
-        }
-
-        auto ptr = reinterpret_cast<const uint8_t*>(& pixel);
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-
-        if(! serverFormat().leastSignificant()) {
-            ptr++;
-        }
-
-#else
-
-        if(serverFormat().leastSignificant()) {
-            ptr++;
-        }
-
-#endif
-        sendRaw(ptr, 3);
-        return 3;
-    }
-
-    int RFB::EncoderStream::sendRunLength(uint32_t length) {
+    int RFB::EncodePacket::writeRunLength(uint32_t length) {
         if(0 == length) {
             Application::error("{}: {}", NS_FuncNameV, "length is zero");
             throw rfb_error(NS_FuncNameS);
@@ -124,61 +150,74 @@ namespace LTSM {
         int res = 0;
 
         while(255 < length) {
-            sendInt8(255);
+            writeInt8(255);
             res += 1;
             length -= 255;
         }
 
-        sendInt8((length - 1) % 255);
+        writeInt8((length - 1) % 255);
         return res + 1;
     }
 
-    // EncoderWrapper
-    void RFB::EncoderWrapper::sendRaw(const void* ptr, size_t len) {
-        if(ptr && len) {
-            buffer->append(static_cast<const uint8_t*>(ptr), len);
+    int RFB::EncodePacket::writePixel(const EncoderStream* st, uint32_t pixel) {
+        return writeRawPixel(st->clientFormat().convertFrom(st->serverFormat(), pixel),
+                             st->clientFormat().bytePerPixel(), st->clientIsBigEndian());
+    }
+
+    int RFB::EncodePacket::writeCPixel(const EncoderStream* st, uint32_t pixel) {
+        if(st->clientFormat().bitsPerPixel() != 32) {
+            return writePixel(st, pixel);
         }
+
+        if(! st->serverFormat().compare(st->clientFormat(), true /* skip alpha */)) {
+            pixel = st->clientFormat().convertFrom(st->serverFormat(), pixel);
+        }
+
+        auto ptr = reinterpret_cast<const uint8_t*>(& pixel);
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+
+        if(! st->serverFormat().leastSignificant()) {
+            ptr++;
+        }
+
+#else
+
+        if(st->serverFormat().leastSignificant()) {
+            ptr++;
+        }
+
+#endif
+        write(std::span{ptr, 3});
+        return 3;
     }
 
-    bool RFB::EncoderWrapper::hasInput(void) const {
-        LTSM::Application::error("{}: disabled", NS_FuncNameV);
-        throw network_error(NS_FuncNameS);
-    }
-
-    size_t RFB::EncoderWrapper::hasData(void) const {
-        LTSM::Application::error("{}: disabled", NS_FuncNameV);
-        throw network_error(NS_FuncNameS);
-    }
-
-    void RFB::EncoderWrapper::recvRaw(void* ptr, size_t len) const {
-        LTSM::Application::error("{}: disabled", NS_FuncNameV);
-        throw network_error(NS_FuncNameS);
-    }
-
-    // EncodingBase
-    RFB::EncodingBase::EncodingBase(int v) : type(v) {
-        Application::info("{}: init encoding: {}", NS_FuncNameV, encodingName(type));
-    }
-
-    int RFB::EncodingBase::getType(void) const {
-        return type;
-    }
-
-    void RFB::EncodingBase::setThreads(int v) {
-        threads = v;
-    }
-
-    void RFB::EncodingBase::sendRawRegionPixels(EncoderStream* ns, EncoderStream* st, const XCB::Region & reg,
-            const FrameBuffer & fb) {
-        for(uint16_t py = 0; py < reg.height; ++py) {
+    int RFB::EncodePacket::writeRawRegionPixels(const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb) {
+        int ret = 0;
+	for(uint16_t py = 0; py < reg.height; ++py) {
             const uint8_t* pitch = fb.pitchData(reg.y + py);
 
             for(uint16_t px = 0; px < reg.width; ++px) {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
                 auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
-                ns->sendPixel(pix);
+                ret += writePixel(st, pix);
             }
         }
+	return ret;
+    }
+
+    BinaryBuf RFB::EncodePacket::getRawRegionPixels(const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb) {
+        EncodePacket sb(reg.width * reg.height * fb.bytePerPixel());
+        sb.writeRawRegionPixels(st, reg, fb);
+	return sb.rawbuf();
+    }
+
+    // EncodingBase
+    RFB::EncodingBase::EncodingBase(int v) : type_(v) {
+        Application::info("{}: init encoding: {}", NS_FuncNameV, encodingName(type_));
+    }
+
+    int RFB::EncodingBase::getType(void) const {
+        return type_;
     }
 
     std::list<XCB::RegionPixel> RFB::EncodingBase::rreProcessing(const XCB::Region & badreg, const FrameBuffer & fb,
@@ -194,10 +233,15 @@ namespace LTSM {
 
                     if((subreg.width == 1 && subreg.height == 1) || fb.allOfPixel(pixel, subreg)) {
                         if(pixel != skipPixel) {
+                            if(goods.empty()) {
+                                goods.emplace_back(subreg, pixel);
+                                continue;
+                            }
+                            auto& back = goods.back();
                             // maybe join prev
-                            if(! goods.empty() && goods.back().first.y == subreg.y && goods.back().first.height == subreg.height &&
-                               goods.back().first.x + goods.back().first.width == subreg.x && goods.back().second == pixel) {
-                                goods.back().first.width += subreg.width;
+                            if(back.first.y == subreg.y && back.first.height == subreg.height &&
+                               back.first.x - back.first.width == subreg.x && back.second == pixel) {
+                                back.first.width -= subreg.width;
                             } else {
                                 goods.emplace_back(subreg, pixel);
                             }
@@ -222,35 +266,36 @@ namespace LTSM {
     }
 
     // EncodingRaw
-    void RFB::EncodingRaw::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingRaw::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
-        // regions counts
-        st->sendIntBE16(1);
-        int jobId = 1;
         // single thread: stream spec
-        auto job = sendRegion(st, top, reg0 - top, fb, jobId);
-        st->sendHeader(getType(), job.first);
-        st->sendData(buf);
-        st->sendFlush();
+        auto buf = writeRegionTo(st, top, fb, reg0 - top);
+
+        RFB::FrameBufferPackets packets;
+        packets.emplace_back(std::move(buf));
+        
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        Application::debug(DebugType::Enc, "{}: job id: {}, region: {}", NS_FuncNameV, jobId, reg);
+    RFB::EncodingRet RFB::EncodingRaw::writeRegionTo(const EncoderStream* st, const XCB::Point & top,
+            const FrameBuffer & fb, XCB::Region reg) const {
+        Application::debug(DebugType::Enc, "{}:  region: {}", NS_FuncNameV, reg);
 
-        buf.clear();
-        EncoderWrapper wrap(& buf, st);
-        sendRawRegionPixels(& wrap, st, reg, fb);
-        return std::make_pair(reg + top, BinaryBuf{});
+        // make encoder region packet
+        EncodePacket sb(fb.width() * fb.height() * fb.bytePerPixel(), false /* type v1 */);
+        sb.writeHeader(getType(), reg + top);
+        sb.writeRawRegionPixels(st, reg, fb);
+
+        return std::move(sb.rawbuf());
     }
 
     // EncodingRRE
-    void RFB::EncodingRRE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingRRE::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
@@ -259,34 +304,31 @@ namespace LTSM {
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz = isCoRRE() ? XCB::Size(64, 64) : XCB::Size(128, 128);
         auto regions = reg0.divideBlocks(bsz);
-        // regions counts
-        st->sendIntBE16(regions.size());
-        int jobId = 1;
 
-        ParallelsJobs<EncodingRet> jobs(threads);
+        auto runJob = std::bind(&EncodingRRE::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
 
+        // move job to thread pool
         for(auto & reg : regions) {
-            jobs.addJob(make_async_job(&EncodingRRE::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
         }
 
-        // wait jobs
-        for(auto & job : jobs.jobList()) {
-            auto ret = job.get();
-            st->sendHeader(getType(), ret.first);
-            st->sendData(ret.second);
+        // and wait jobs
+        for(auto & job : jobs_) {
+            packets.emplace_back(job.get());
         }
 
-        st->sendFlush();
+        jobs_.clear();
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingRRE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        // thread buffer
-        BinaryBuf bb;
-        bb.reserve(4096);
-        EncoderWrapper wrap(& bb, st);
-        auto map = fb.pixelMapWeight(reg);
+    RFB::EncodingRet RFB::EncodingRRE::writeRegionTo(const EncoderStream* st, const XCB::Point & top, const FrameBuffer & fb, XCB::Region reg) const {
 
+        // make encoder region packet
+        EncodePacket sb(4096, false /* type v1 */);
+        sb.writeHeader(getType(), reg + top);
+
+        auto map = fb.pixelMapWeight(reg);
         if(map.empty()) {
             Application::error("{}: {}", NS_FuncNameV, "pixels map is empty");
             throw rfb_error(NS_FuncNameS);
@@ -298,75 +340,74 @@ namespace LTSM {
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}, sub rects: {}",
-                               NS_FuncNameV, jobId, reg + top, back, goods.size());
+            Application::debug(DebugType::Enc, "{}: region: {}, back pixel {:#010x}, sub rects: {}",
+                               NS_FuncNameV, reg + top, back, goods.size());
 
-            sendRects(& wrap, reg, fb, jobId, back, goods);
-        }
-        // if(map.size() == 1)
-        else {
+            writeRectsTo(sb, st, reg, fb, back, goods);
+        } else {
+            // if(map.size() == 1)
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}, {}",
-                               NS_FuncNameV, jobId, reg + top, back, "solid");
+            Application::debug(DebugType::Enc, "{}: region: {}, back pixel {:#010x}, {}",
+                               NS_FuncNameV, reg + top, back, "solid");
 
             // num sub rects
-            wrap.sendIntBE32(1);
+            sb.writeIntBE32(1);
             // back pixel
-            wrap.sendPixel(back);
+            sb.writePixel(st, back);
             /* one fake sub region : RRE requires */
             // subrect pixel
-            wrap.sendPixel(back);
+            sb.writePixel(st, back);
 
             // subrect region (relative coords)
             if(isCoRRE()) {
-                wrap.sendInt8(0);
-                wrap.sendInt8(0);
-                wrap.sendInt8(1);
-                wrap.sendInt8(1);
+                sb.writeInt8(0).
+            	    writeInt8(0).
+            	    writeInt8(1).
+            	    writeInt8(1);
             } else {
-                wrap.sendIntBE16(0);
-                wrap.sendIntBE16(0);
-                wrap.sendIntBE16(1);
-                wrap.sendIntBE16(1);
+                sb.writeIntBE16(0).
+            	    writeIntBE16(0).
+            	    writeIntBE16(1).
+            	    writeIntBE16(1);
             }
         }
 
-        return std::make_pair(reg + top, std::move(bb));
+        return std::move(sb.rawbuf());
     }
 
-    void RFB::EncodingRRE::sendRects(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId,
-                                     int back, const std::list<XCB::RegionPixel> & rreList) {
+    void RFB::EncodingRRE::writeRectsTo(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
+                                     int back, const std::list<XCB::RegionPixel> & rreList) const {
         // num sub rects
-        st->sendIntBE32(rreList.size());
+        sb.writeIntBE32(rreList.size());
         // back pixel
-        st->sendPixel(back);
+        sb.writePixel(st, back);
 
         for(const auto & pair : rreList) {
             // subrect pixel
-            st->sendPixel(pair.pixel());
+            sb.writePixel(st, pair.pixel());
             auto & region = pair.region();
 
             // subrect region (relative coords)
             if(isCoRRE()) {
-                st->sendInt8(region.x - reg.x);
-                st->sendInt8(region.y - reg.y);
-                st->sendInt8(region.width);
-                st->sendInt8(region.height);
+                sb.writeInt8(region.x - reg.x);
+                sb.writeInt8(region.y - reg.y);
+                sb.writeInt8(region.width);
+                sb.writeInt8(region.height);
             } else {
-                st->sendIntBE16(region.x - reg.x);
-                st->sendIntBE16(region.y - reg.y);
-                st->sendIntBE16(region.width);
-                st->sendIntBE16(region.height);
+                sb.writeIntBE16(region.x - reg.x);
+                sb.writeIntBE16(region.y - reg.y);
+                sb.writeIntBE16(region.width);
+                sb.writeIntBE16(region.height);
             }
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#010x}",
-                               NS_FuncNameV, jobId, region - reg.topLeft(), pair.pixel());
+            Application::trace(DebugType::Enc, "{}: region: {}, back pixel {:#010x}",
+                               NS_FuncNameV, region - reg.topLeft(), pair.pixel());
         }
     }
 
     // EncodingHexTile
-    void RFB::EncodingHexTile::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingHexTile::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
@@ -375,34 +416,31 @@ namespace LTSM {
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz(16, 16);
         auto regions = reg0.divideBlocks(bsz);
-        // regions counts
-        st->sendIntBE16(regions.size());
-        int jobId = 1;
 
-        ParallelsJobs<EncodingRet> jobs(threads);
+        auto runJob = std::bind(&EncodingHexTile::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
 
+        // move job to thread pool
         for(auto & reg : regions) {
-            jobs.addJob(make_async_job(&EncodingHexTile::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
         }
 
-        // wait jobs
-        for(auto & job : jobs.jobList()) {
-            auto ret = job.get();
-            st->sendHeader(getType(), ret.first);
-            st->sendData(ret.second);
+        // and wait jobs
+        for(auto & job : jobs_) {
+            packets.emplace_back(job.get());
         }
 
-        st->sendFlush();
+        jobs_.clear();
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingHexTile::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        // thread buffer
-        BinaryBuf bb;
-        bb.reserve(4096);
-        EncoderWrapper wrap(& bb, st);
-        auto map = fb.pixelMapWeight(reg);
+    RFB::EncodingRet RFB::EncodingHexTile::writeRegionTo(const EncoderStream* st, const XCB::Point & top,
+            const FrameBuffer & fb, XCB::Region reg) const {
+        // make encoder region packet
+        EncodePacket sb(4096, false /* type v1 */);
+        sb.writeHeader(getType(), reg + top);
 
+        auto map = fb.pixelMapWeight(reg);
         if(map.empty()) {
             Application::error("{}: {}", NS_FuncNameV, "pixels map is empty");
             throw rfb_error(NS_FuncNameS);
@@ -411,12 +449,12 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, {}",
-                               NS_FuncNameV, jobId, reg + top, back, "solid");
+            Application::debug(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}, {}",
+                               NS_FuncNameV, reg + top, back, "solid");
 
             // hextile flags
-            wrap.sendInt8(RFB::HEXTILE_BACKGROUND);
-            wrap.sendPixel(back);
+            sb.writeInt8(RFB::HEXTILE_BACKGROUND);
+            sb.writePixel(st, back);
         } else if(map.size() > 1) {
             // no wait, worked
             auto back = map.maxWeightPixel();
@@ -433,86 +471,85 @@ namespace LTSM {
 
                 // compare with raw
                 if(hextileRawLength < hextileForegroundLength) {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, {}",
-                                       NS_FuncNameV, jobId, reg + top, "raw");
+                    Application::debug(DebugType::Enc, "{}: region: {}, {}",
+                                       NS_FuncNameV, reg + top, "raw");
 
-                    sendRegionRaw(& wrap, reg, fb, jobId);
+                    writeRegionToRaw(sb, st, reg, fb);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, sub rects: {}, {}",
-                                       NS_FuncNameV, jobId, reg + top, back, goods.size(), "foreground");
+                    Application::debug(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}, sub rects: {}, {}",
+                                       NS_FuncNameV, reg + top, back, goods.size(), "foreground");
 
-                    sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
+                    writeRegionToForeground(sb, st, reg, fb, back, goods);
                 }
             } else {
                 const size_t hextileColoredLength = 2 + fb.bytePerPixel() + goods.size() * (2 + fb.bytePerPixel());
 
                 // compare with raw
                 if(hextileRawLength < hextileColoredLength) {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, {}",
-                                       NS_FuncNameV, jobId, reg + top, "raw");
+                    Application::debug(DebugType::Enc, "{}: region: {}, {}",
+                                       NS_FuncNameV, reg + top, "raw");
 
-                    sendRegionRaw(& wrap, reg, fb, jobId);
+                    writeRegionToRaw(sb, st, reg, fb);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, sub rects: {}, {}",
-                                       NS_FuncNameV, jobId, reg + top, back, goods.size(), "colored");
+                    Application::debug(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}, sub rects: {}, {}",
+                                       NS_FuncNameV, reg + top, back, goods.size(), "colored");
 
-                    sendRegionColored(& wrap, reg, fb, jobId, back, goods);
+                    writeRegionToColored(sb, st, reg, fb, back, goods);
                 }
             }
         }
 
-        return std::make_pair(reg + top, std::move(bb));
+        return std::move(sb.rawbuf());
     }
 
-    void RFB::EncodingHexTile::sendRegionColored(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
-            int jobId, int back, const std::list<XCB::RegionPixel> & rreList) {
+    void RFB::EncodingHexTile::writeRegionToColored(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
+            int back, const std::list<XCB::RegionPixel> & rreList) const {
         // hextile flags
-        st->sendInt8(RFB::HEXTILE_BACKGROUND | RFB::HEXTILE_COLOURED | RFB::HEXTILE_SUBRECTS);
+        sb.writeInt8(RFB::HEXTILE_BACKGROUND | RFB::HEXTILE_COLOURED | RFB::HEXTILE_SUBRECTS);
         // hextile background
-        st->sendPixel(back);
+        sb.writePixel(st, back);
         // hextile subrects
-        st->sendInt8(rreList.size());
+        sb.writeInt8(rreList.size());
 
         for(const auto & pair : rreList) {
             auto & region = pair.region();
-            st->sendPixel(pair.pixel());
-            st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
-            st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
+            sb.writePixel(st, pair.pixel());
+            sb.writeInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
+            sb.writeInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}",
-                               NS_FuncNameV, jobId, region - reg.topLeft(), pair.pixel());
+            Application::trace(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}",
+                               NS_FuncNameV, region - reg.topLeft(), pair.pixel());
         }
     }
 
-    void RFB::EncodingHexTile::sendRegionForeground(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
-            int jobId, int back, const std::list<XCB::RegionPixel> & rreList) {
+    void RFB::EncodingHexTile::writeRegionToForeground(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
+            int back, const std::list<XCB::RegionPixel> & rreList) const {
         // hextile flags
-        st->sendInt8(RFB::HEXTILE_BACKGROUND | RFB::HEXTILE_FOREGROUND | RFB::HEXTILE_SUBRECTS);
+        sb.writeInt8(RFB::HEXTILE_BACKGROUND | RFB::HEXTILE_FOREGROUND | RFB::HEXTILE_SUBRECTS);
         // hextile background
-        st->sendPixel(back);
+        sb.writePixel(st, back);
         // hextile foreground
-        st->sendPixel(rreList.front().second);
+        sb.writePixel(st, rreList.front().second);
         // hextile subrects
-        st->sendInt8(rreList.size());
+        sb.writeInt8(rreList.size());
 
         for(const auto & pair : rreList) {
             auto & region = pair.region();
-            st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
-            st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
+            sb.writeInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
+            sb.writeInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}",
-                               NS_FuncNameV, jobId, region - reg.topLeft());
+            Application::trace(DebugType::Enc, "{}: region: {}", NS_FuncNameV, region - reg.topLeft());
         }
     }
 
-    void RFB::EncodingHexTile::sendRegionRaw(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId) {
+    void RFB::EncodingHexTile::writeRegionToRaw(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb) const {
         // hextile flags
-        st->sendInt8(RFB::HEXTILE_RAW);
-        sendRawRegionPixels(st, st, reg, fb);
+        sb.writeInt8(RFB::HEXTILE_RAW);
+        sb.writeRawRegionPixels(st, reg, fb);
     }
 
     // EncodingTRLE
-    void RFB::EncodingTRLE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingTRLE::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
@@ -521,50 +558,40 @@ namespace LTSM {
         const XCB::Size bsz(64, 64);
         const XCB::Point top(reg0.x, reg0.y);
         auto regions = reg0.divideBlocks(bsz);
-        // regions counts
-        st->sendIntBE16(regions.size());
-        int jobId = 1;
 
-        ParallelsJobs<EncodingRet> jobs(threads);
+        auto runJob = std::bind(&EncodingTRLE::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
 
+        // move job to thread pool
         for(auto & reg : regions) {
-            jobs.addJob(make_async_job(&EncodingTRLE::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
         }
 
-        // wait jobs
-        for(auto & job : jobs.jobList()) {
-            auto ret = job.get();
-            st->sendHeader(getType(), ret.first);
-
-            if(isZRLE()) {
-                auto zip = zlib_->deflateData(ret.second, Z_SYNC_FLUSH);
-                st->sendIntBE32(zip.size());
-                st->sendRaw(zip.data(), zip.size());
-            } else {
-                st->sendData(ret.second);
-            }
+        // and wait jobs
+        for(auto & job : jobs_) {
+            packets.emplace_back(job.get());
         }
 
-        st->sendFlush();
+        jobs_.clear();
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingTRLE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        auto map = fb.pixelMapPalette(reg);
-        // thread buffer
-        BinaryBuf bb;
-        bb.reserve(reg.width * reg.height * fb.bytePerPixel());
-        EncoderWrapper wrap(& bb, st);
+    RFB::EncodingRet RFB::EncodingTRLE::writeRegionTo(const EncoderStream* st, const XCB::Point & top,
+            const FrameBuffer & fb, XCB::Region reg) const {
+        // make encoder region packet
+        EncodePacket sb(reg.width * reg.height * 8 / 3, false /* type v1 */);
+        sb.writeHeader(getType(), reg + top);
 
+        auto map = fb.pixelMapPalette(reg);
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#010x}, {}",
-                               NS_FuncNameV, jobId, reg + top, back, "solid");
+            Application::debug(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}, {}",
+                               NS_FuncNameV, reg + top, back, "solid");
 
             // subencoding type: solid tile
-            wrap.sendInt8(1);
-            wrap.sendCPixel(back);
+            sb.writeInt8(1);
+            sb.writeCPixel(st, back);
         } else if(2 <= map.size() && map.size() <= 16) {
             auto fieldWidth = Tools::StreamBitsPack::Field::Val1;
 
@@ -574,10 +601,10 @@ namespace LTSM {
                 fieldWidth = Tools::StreamBitsPack::Field::Val2;
             }
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, palsz: {}, packed: {}",
-                               NS_FuncNameV, jobId, reg + top, map.size(), static_cast<int>(fieldWidth));
+            Application::debug(DebugType::Enc, "{}: region: {}, palsz: {}, packed: {}",
+                               NS_FuncNameV, reg + top, map.size(), static_cast<int>(fieldWidth));
 
-            sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
+            writeRegionToPacked(sb, st, reg, fb, fieldWidth, map);
         } else {
             auto rleList = fb.FrameBuffer::toRLE(reg);
             // rle plain size
@@ -597,38 +624,38 @@ namespace LTSM {
             const size_t rawLength = 1 + 3 * reg.width * reg.height;
 
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength) {
-                Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, length: {}, rle plain",
-                                   NS_FuncNameV, jobId, reg + top, rleList.size());
+                Application::debug(DebugType::Enc, "{}: region: {}, length: {}, rle plain",
+                                   NS_FuncNameV, reg + top, rleList.size());
 
-                sendRegionPlain(& wrap, reg, fb, rleList);
+                writeRegionToPlain(sb, st, reg, fb, rleList);
             } else if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength) {
-                Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, pal size: {}, length: {}, rle palette",
-                                   NS_FuncNameV, jobId, reg + top, map.size(), rleList.size());
+                Application::debug(DebugType::Enc, "{}: region: {}, pal size: {}, length: {}, rle palette",
+                                   NS_FuncNameV, reg + top, map.size(), rleList.size());
 
-                sendRegionPalette(& wrap, reg, fb, map, rleList);
+                writeRegionToPalette(sb, st, reg, fb, map, rleList);
             } else {
-                Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, raw",
-                                   NS_FuncNameV, jobId, reg + top);
+                Application::debug(DebugType::Enc, "{}: region: {}, raw",
+                                   NS_FuncNameV, reg + top);
 
-                sendRegionRaw(& wrap, reg, fb);
+                writeRegionToRaw(sb, st, reg, fb);
             }
         }
 
-        return std::make_pair(reg + top, std::move(bb));
+        return std::move(sb.rawbuf());
     }
 
-    void RFB::EncodingTRLE::sendRegionPacked(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId,
-            const Tools::StreamBitsPack::Field & field, const PixelMapPalette & pal) {
+    void RFB::EncodingTRLE::writeRegionToPacked(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
+            const Tools::StreamBitsPack::Field & field, const PixelMapPalette & pal) const {
         // subencoding type: packed palette
-        st->sendInt8(pal.size());
+        sb.writeInt8(pal.size());
 
         // send palette
         for(const auto & pair : pal) {
-            st->sendCPixel(pair.first);
+            sb.writeCPixel(st, pair.first);
         }
 
         const size_t rez = (reg.width * reg.height) >> 2;
-        Tools::StreamBitsPack sb(rez ? rez : 32);
+        Tools::StreamBitsPack sbp(rez ? rez : 32);
 
         // send packed rows
         for(uint16_t py = 0; py < reg.height; ++py) {
@@ -639,41 +666,41 @@ namespace LTSM {
                 auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
                 auto index = pal.findColorIndex(pix);
                 assertm(0 <= index, "palette color not found");
-                sb.pushValue(index, field);
+                sbp.pushValue(index, field);
             }
 
-            sb.pushAlign();
+            sbp.pushAlign();
         }
 
-        st->sendData(sb.toVector());
+        sb.write(sbp.toVector());
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto & vec = sb.toVector();
+            auto & vec = sbp.toVector();
             std::string str = Tools::hexString(vec, 2);
-            Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", NS_FuncNameV, jobId, str);
+            Application::debug(DebugType::Enc, "{}: packed stream: {}", NS_FuncNameV, str);
         }
     }
 
-    void RFB::EncodingTRLE::sendRegionPlain(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
-                                            const PixelLengthList & rle) {
+    void RFB::EncodingTRLE::writeRegionToPlain(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
+                                            const PixelLengthList & rle) const {
         // subencoding type: rle plain
-        st->sendInt8(128);
+        sb.writeInt8(128);
 
         // send rle content
         for(const auto & pair : rle) {
-            st->sendCPixel(pair.pixel());
-            st->sendRunLength(pair.length());
+            sb.writeCPixel(st, pair.pixel());
+            sb.writeRunLength(pair.length());
         }
     }
 
-    void RFB::EncodingTRLE::sendRegionPalette(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
-            const PixelMapPalette & pal, const PixelLengthList & rle) {
+    void RFB::EncodingTRLE::writeRegionToPalette(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
+            const PixelMapPalette & pal, const PixelLengthList & rle) const {
         // subencoding type: rle palette
-        st->sendInt8(pal.size() + 128);
+        sb.writeInt8(pal.size() + 128);
 
         // send palette
         for(const auto & pair : pal) {
-            st->sendCPixel(pair.first);
+            sb.writeCPixel(st, pair.first);
         }
 
         // send rle indexes
@@ -682,17 +709,17 @@ namespace LTSM {
             assertm(0 <= index, "palette color not found");
 
             if(1 == pair.length()) {
-                st->sendInt8(index);
+                sb.writeInt8(index);
             } else {
-                st->sendInt8(index + 128);
-                st->sendRunLength(pair.length());
+                sb.writeInt8(index + 128);
+                sb.writeRunLength(pair.length());
             }
         }
     }
 
-    void RFB::EncodingTRLE::sendRegionRaw(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb) {
+    void RFB::EncodingTRLE::writeRegionToRaw(EncodePacket& sb, const EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb) const {
         // subencoding type: raw
-        st->sendInt8(0);
+        sb.writeInt8(0);
 
         // send pixels
         for(uint16_t py = 0; py < reg.height; ++py) {
@@ -701,9 +728,47 @@ namespace LTSM {
             for(uint16_t px = 0; px < reg.width; ++px) {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
                 auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
-                st->sendCPixel(pix);
+                sb.writeCPixel(st, pix);
             }
         }
+    }
+
+    // EncodingZRLE
+    RFB::FrameBufferPackets RFB::EncodingZRLE::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
+        const XCB::Region & reg0 = fb.region();
+
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
+                           getTypeName(), reg0);
+
+        const XCB::Size bsz(64, 64);
+        const XCB::Point top(reg0.x, reg0.y);
+        auto regions = reg0.divideBlocks(bsz);
+
+        auto runJob = std::bind(&EncodingZRLE::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
+
+        // move job to thread pool
+        for(auto & reg : regions) {
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
+        }
+
+        // and wait jobs
+        for(auto & job : jobs_) {
+            auto trle = job.get();
+            // skipped header (12 bytes)
+            auto header = std::span(trle.data(), HEADER_REGION_SIZE);
+            StreamBuf sb(HEADER_REGION_SIZE + zlib_->deflateBound(trle.size()));
+            // make encoder region packet
+            sb.write(header);
+            auto zip = zlib_->deflateData(std::span(trle).subspan(HEADER_REGION_SIZE), Z_SYNC_FLUSH);
+            sb.writeIntBE32(zip.size());
+            sb.write(zip);
+
+            packets.emplace_back(std::move(sb.rawbuf()));
+        }
+
+        jobs_.clear();
+        return packets;
     }
 
     // EncodingZlib
@@ -715,34 +780,43 @@ namespace LTSM {
         zlib_ = std::make_unique<ZLib::DeflateBase>(zlevel);
     }
 
-    void RFB::EncodingZlib::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingZlib::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
                            getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
-        // regions counts
-        st->sendIntBE16(1);
-        int jobId = 1;
+
         // single thread: zlib stream spec
-        auto job = sendRegion(st, top, reg0 - top, fb, jobId);
-        st->sendHeader(getType(), job.first);
-        st->sendIntBE32(job.second.size());
-        st->sendRaw(job.second.data(), job.second.size());
-        st->sendFlush();
+        auto buf = writeRegionTo(st, top, fb, reg0 - top);
+
+        FrameBufferPackets packets;
+        packets.emplace_back(std::move(buf));
+
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        BinaryBuf buf;
-        buf.reserve(fb.pitchSize() * fb.height());
-        EncoderWrapper wrap(& buf, st);
+    RFB::EncodingRet RFB::EncodingZlib::writeRegionTo(const EncoderStream* st, const XCB::Point & top,
+            const FrameBuffer & fb, XCB::Region reg) const {
 
-        sendRawRegionPixels(& wrap, st, reg, fb);
-        auto zip = zlib_->deflateData(buf, Z_SYNC_FLUSH);
+        BinaryBuf bb;
 
-        return std::make_pair(reg + top, BinaryBuf(std::move(zip)));
+	if(st->isDisplaySize(fb.region()) &&
+	    st->serverFormat() == st->clientFormat()) {
+    	    bb = zlib_->deflateData(fb.span(), Z_SYNC_FLUSH);
+	} else {
+            bb = EncodePacket::getRawRegionPixels(st, reg, fb);
+            bb = zlib_->deflateData(bb, Z_SYNC_FLUSH);
+        }
+
+        // make encoder region packet
+        EncodePacket sb(bb.size(), true /* type v2 */);
+        sb.writeHeader(getType(), reg + top);
+        sb.writeData(bb);
+        sb.writeDataSize(bb.size());
+
+        return std::move(sb.rawbuf());
     }
 
     bool RFB::EncodingZlib::setEncodingOptions(const std::forward_list<std::string> & encopts) {
@@ -775,9 +849,8 @@ namespace LTSM {
         return fullscreenUpdate;
     }
 
-#ifdef LTSM_ENCODING
     /// EncodingLZ4
-    void RFB::EncodingLZ4::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingLZ4::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
@@ -787,9 +860,9 @@ namespace LTSM {
         XCB::Size bsz;
         const size_t blocksz = 256 * 256;
 
-        if(st->displaySize() == fb.region().toSize()) {
-            bsz = 1 < threads ?
-                  XCB::Size(fb.width(), fb.height() / threads) :
+        if(st->isDisplaySize(fb.region())) {
+            bsz = 1 < st->encodingThreads() ?
+                  XCB::Size(fb.width(), fb.height() / st->encodingThreads()) :
                   fb.region().toSize();
         } else if(fb.width() * fb.height() < blocksz) {
             // one rect
@@ -802,31 +875,25 @@ namespace LTSM {
 
         const XCB::Point top(reg0.x, reg0.y);
         auto regions = reg0.divideBlocks(bsz);
-        // regions counts
-        st->sendIntBE16(regions.size());
-        int jobId = 1;
 
-        ParallelsJobs<EncodingRet> jobs(threads);
+        auto runJob = std::bind(&EncodingLZ4::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
 
+        // move job to thread pool
         for(auto & reg : regions) {
-            jobs.addJob(make_async_job(&EncodingLZ4::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
         }
 
-        // wait jobs
-        for(auto & job : jobs.jobList()) {
-            auto ret = job.get();
-            st->sendHeader(getType(), ret.first);
-            // ltsm lz4 format
-            st->sendIntBE32(ret.second.size());
-            st->sendData(ret.second);
+        // and wait jobs
+        for(auto & job : jobs_) {
+            packets.emplace_back(job.get());
         }
 
-        st->sendFlush();
+        jobs_.clear();
+        return packets;
     }
 
-    BinaryBuf lz4CompressFast(std::span<const uint8_t> buf) {
-        BinaryBuf res;
-        res.resize(LZ4_compressBound(buf.size()));
+    int lz4CompressFastTo(std::span<const uint8_t> buf, std::span<uint8_t> res) {
         const int acceleration = 1;
         int ret = LZ4_compress_fast((const char*) buf.data(), (char*) res.data(), buf.size(), res.size(), acceleration);
 
@@ -835,25 +902,36 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        res.resize(ret);
-        return res;
+        return ret;
     }
 
-    RFB::EncodingRet RFB::EncodingLZ4::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
+    RFB::EncodingRet RFB::EncodingLZ4::writeRegionTo(const EncoderStream* st, const XCB::Point & top,
+            const FrameBuffer & fb, XCB::Region reg) const {
+
 
         if(fb.width() == reg.width) {
             auto buf = std::span{ fb.pitchData(reg.y),
-                                  fb.pitchSize()* reg.height };
-            BinaryBuf bb = lz4CompressFast(buf);
-            return std::make_pair(reg + top, std::move(bb));
+                                  fb.pitchSize() * reg.height };
+            return writeCompressPacket(buf, reg + top);
         }
-
+        
         auto fb2 = fb.copyRegion(reg);
         auto buf = std::span{ fb2.pitchData(0),
-                              fb2.pitchSize()* reg.height };
-        BinaryBuf bb = lz4CompressFast(buf);
-        return std::make_pair(reg + top, std::move(bb));
+                              fb2.pitchSize() * reg.height };
+        return writeCompressPacket(buf, reg + top);
+    }
+
+    RFB::EncodingRet RFB::EncodingLZ4::writeCompressPacket(std::span<const uint8_t> buf, XCB::Region reg) const {
+        size_t lz4Len = LZ4_compressBound(buf.size());
+        EncodePacket sb(lz4Len, true /* type v2 */);
+
+        sb.writeZero(lz4Len);
+        lz4Len = lz4CompressFastTo(buf, sb.encodeData());
+
+        sb.writeHeader(getType(), reg);
+        sb.writeDataSize(lz4Len);
+
+        return std::move(sb.rawbuf());
     }
 
     /// EncodingTJPG
@@ -917,7 +995,7 @@ namespace LTSM {
         return fullscreenUpdate;
     }
 
-    void RFB::EncodingTJPG::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingTJPG::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
@@ -927,9 +1005,9 @@ namespace LTSM {
         XCB::Size bsz;
         const size_t blocksz = 256 * 256;
 
-        if(st->displaySize() == fb.region().toSize()) {
-            bsz = 1 < threads ?
-                  XCB::Size(fb.width(), fb.height() / threads) :
+        if(st->isDisplaySize(fb.region())) {
+            bsz = 1 < st->encodingThreads() ?
+                  XCB::Size(fb.width(), fb.height() / st->encodingThreads()) :
                   fb.region().toSize();
         } else if(fb.width() * fb.height() < blocksz) {
             // one rect
@@ -942,30 +1020,25 @@ namespace LTSM {
 
         const XCB::Point top(reg0.x, reg0.y);
         auto regions = reg0.divideBlocks(bsz);
-        // regions counts
-        st->sendIntBE16(regions.size());
-        int jobId = 1;
 
-        ParallelsJobs<EncodingRet> jobs(threads);
+        auto runJob = std::bind(&EncodingTJPG::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
 
+        // move job to thread pool
         for(auto & reg : regions) {
-            jobs.addJob(make_async_job(&EncodingTJPG::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
         }
 
-        // wait jobs
-        for(auto & job : jobs.jobList()) {
-            auto ret = job.get();
-            st->sendHeader(getType(), ret.first);
-            // pixels
-            st->sendIntBE32(ret.second.size());
-            st->sendData(ret.second);
+        // and wait jobs
+        for(auto & job : jobs_) {
+            packets.emplace_back(job.get());
         }
 
-        st->sendFlush();
+        jobs_.clear();
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingTJPG::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
+    RFB::EncodingRet RFB::EncodingTJPG::writeRegionTo(const EncoderStream* st, const XCB::Point & top, const FrameBuffer & fb, XCB::Region reg) const {
         std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitCompress(), tjDestroy };
 
         if(! jpeg) {
@@ -980,8 +1053,11 @@ namespace LTSM {
 
         long unsigned int jpegSize = tjBufSize(reg.width, reg.height, jpegSamp);
         // thread buffer
-        auto bb = BinaryBuf(jpegSize);
-        unsigned char* jpegBuf = bb.data();
+        EncodePacket sb(jpegSize, true /* type v2 */);
+        sb.writeZero(jpegSize);
+
+        auto span = sb.encodeData();
+        auto jpegBuf = span.data();
         int ret = 0;
 
         if(fb.pixelFormat().bitsPerPixel() != 24) {
@@ -1010,12 +1086,14 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        bb.resize(jpegSize);
-        return std::make_pair(reg + top, std::move(bb));
+        sb.writeHeader(getType(), reg + top);
+        sb.writeDataSize(jpegSize);
+
+        return std::move(sb.rawbuf());
     }
 
     /// EncodingQOI
-    void RFB::EncodingQOI::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
+    RFB::FrameBufferPackets RFB::EncodingQOI::getFrameBufferPackets(const EncoderStream* st, const FrameBuffer& fb) const {
         const XCB::Region & reg0 = fb.region();
 
         Application::debug(DebugType::Enc, "{}: type: {}, region: {}", NS_FuncNameV,
@@ -1025,9 +1103,9 @@ namespace LTSM {
         XCB::Size bsz;
         const size_t blocksz = 256 * 256;
 
-        if(st->displaySize() == fb.region().toSize()) {
-            bsz = 1 < threads ?
-                  XCB::Size(fb.width(), fb.height() / threads) :
+        if(st->isDisplaySize(fb.region())) {
+            bsz = 1 < st->encodingThreads() ?
+                  XCB::Size(fb.width(), fb.height() / st->encodingThreads()) :
                   fb.region().toSize();
         } else if(fb.width() * fb.height() < blocksz) {
             // one rect
@@ -1040,39 +1118,32 @@ namespace LTSM {
 
         const XCB::Point top(reg0.x, reg0.y);
         auto regions = reg0.divideBlocks(bsz);
-        // regions counts
-        st->sendIntBE16(regions.size());
-        int jobId = 1;
 
-        ParallelsJobs<EncodingRet> jobs(threads);
+        auto runJob = std::bind(&EncodingQOI::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+        FrameBufferPackets packets;
 
+        // move job to thread pool
         for(auto & reg : regions) {
-            jobs.addJob(make_async_job(&EncodingQOI::sendRegion, this, st, top, reg - top, fb, jobId++));
+            jobs_.emplace_back(st->postEncoderJob(std::move(runJob), reg - top));
         }
 
-        // wait jobs
-        for(auto & job : jobs.jobList()) {
-            auto ret = job.get();
-            st->sendHeader(getType(), ret.first);
-
-            if(isZQOI()) {
-                BinaryBuf bb = lz4CompressFast(ret.second);
-                st->sendIntBE32(bb.size());
-                st->sendData(bb);
-            } else {
-                // encode buf
-                st->sendIntBE32(ret.second.size());
-                st->sendData(ret.second);
-            }
+        // and wait jobs
+        for(auto & job : jobs_) {
+            packets.emplace_back(job.get());
         }
 
-        st->sendFlush();
+        jobs_.clear();
+        return packets;
     }
 
-    RFB::EncodingRet RFB::EncodingQOI::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
-            const FrameBuffer & fb, int jobId) {
-        BinaryBuf bb = encodeBGRx(fb, reg, st->clientFormat());
-        return std::make_pair(reg + top, std::move(bb));
+    RFB::EncodingRet RFB::EncodingQOI::writeRegionTo(const EncoderStream* st, const XCB::Point & top, const FrameBuffer & fb, XCB::Region reg) const {
+
+        EncodePacket sb(reg.width * reg.height * 4 / 3, true /* type v2 */);
+        writeEncodeBGRx(fb, reg, st->clientFormat(), sb);
+        sb.writeHeader(getType(), reg + top);
+        sb.writeDataSize();
+
+        return std::move(sb.rawbuf());
     }
 
     namespace QOI {
@@ -1090,9 +1161,7 @@ namespace LTSM {
         }
     }
 
-    BinaryBuf RFB::EncodingQOI::encodeBGRx(const FrameBuffer & fb, const XCB::Region & reg, const PixelFormat & clientPf) const {
-        StreamBuf sb(reg.height * reg.width * 8 / 3);
-
+    void RFB::EncodingQOI::writeEncodeBGRx(const FrameBuffer & fb, const XCB::Region & reg, const PixelFormat & clientPf, EncodePacket & sb) const {
         std::array<int64_t, 64> hashes;
         hashes.fill(-1);
 
@@ -1183,10 +1252,24 @@ namespace LTSM {
 
         // padding
         const std::array<uint8_t, 8> qoiPadding{0, 0, 0, 0, 0, 0, 0, 1};
-        sb.write(qoiPadding.data(), qoiPadding.size());
-
-        return sb.rawbuf();
+        sb.write(qoiPadding);
     }
 
-#endif
+    /// EncodingQOI
+    RFB::EncodingRet RFB::EncodingZQOI::writeRegionTo(const EncoderStream* st, const XCB::Point & top, const FrameBuffer & fb, XCB::Region reg) const {
+
+        EncodePacket bb(reg.width * reg.height * 4 / 3);
+        writeEncodeBGRx(fb, reg, st->clientFormat(), bb);
+
+        size_t lz4Len = LZ4_compressBound(bb.last());
+        EncodePacket sb(lz4Len, true /* type v2 */);
+
+        sb.writeZero(lz4Len);
+        lz4Len = lz4CompressFastTo(bb.rawbuf(), sb.encodeData());
+
+        sb.writeHeader(getType(), reg + top);
+        sb.writeDataSize(lz4Len);
+
+        return std::move(sb.rawbuf());
+    }
 }

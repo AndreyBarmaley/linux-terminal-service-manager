@@ -2054,8 +2054,8 @@ namespace LTSM {
         }
     }
 
-    int XCB::Connector::getFd(void) {
-        return xcb_get_file_descriptor(_conn.get());
+    int XCB::Connector::getFd(void) const {
+        return _conn ? xcb_get_file_descriptor(_conn.get()) : -1;
     }
 
     const char* XCB::Connector::errorString(int err) {
@@ -2192,7 +2192,7 @@ namespace LTSM {
     }
 
     int XCB::Connector::hasError(void) const {
-        return xcb_connection_has_error(_conn.get());
+        return _conn ? xcb_connection_has_error(_conn.get()) : -1;
     }
 
     bool XCB::Connector::setWindowGeometry(xcb_window_t win, const Region & geom) {
@@ -3171,7 +3171,7 @@ namespace LTSM {
         return false;
     }
 
-    bool XCB::RootDisplay::rootDamageSubtrack(const Region & reg) {
+    bool XCB::RootDisplay::rootDamageSubtrack(const Region & reg) const {
         if(_modWinDamage && _modWinDamage->subtrackRegion(reg)) {
             xcb_flush(_conn.get());
             return true;

@@ -30,6 +30,7 @@
 #include <filesystem>
 #include <string_view>
 #include <forward_list>
+#include <unordered_set>
 
 #include <boost/asio.hpp>
 
@@ -141,7 +142,7 @@ namespace LTSM::Manager {
         EnvList getEnvList(void);
     };
 
-    enum class SessionMode : int { Started = 0, Connected = 1, Disconnected = 2, Login = 3, Shutdown = 4 };
+    enum class SessionMode : int { Shutdown = 0, Login = 1, Started = 2, Connected = 3, Disconnected = 4 };
     enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
 
     /// Flags
@@ -277,7 +278,7 @@ namespace LTSM::Manager {
         uint16_t height = 0;
         uint8_t depth = 0;
 
-        std::atomic<SessionMode> mode{ SessionMode::Login };
+        std::atomic<SessionMode> mode{ SessionMode::Shutdown };
         SessionPolicy policy = SessionPolicy::AuthTake;
 
         inline bool checkStatus(uint64_t st) const {
@@ -379,7 +380,7 @@ namespace LTSM::Manager {
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::list<pid_t> childs_;
+        std::unordered_set<int> child_pids_;
         std::atomic<bool> loginsDisable = false;
 
 #ifdef LTSM_WITH_AUDIT
@@ -427,7 +428,7 @@ namespace LTSM::Manager {
       private: /* virtual dbus methods */
         int32_t busGetServiceVersion(void) override;
         void busShutdownService(void) override;
-        int32_t busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
+        int32_t busStartLoginSession(const int32_t & connectorId, const uint16_t& width, const uint16_t& height, const uint8_t & depth,
                                      const std::string & remoteAddr, const std::string & connType) override;
         int32_t busStartUserSession(const int32_t & oldDisplay, const int32_t & connectorId,
                                     const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;

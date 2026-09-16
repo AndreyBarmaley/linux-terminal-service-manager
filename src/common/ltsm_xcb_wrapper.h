@@ -68,6 +68,10 @@ namespace LTSM {
     namespace XCB {
         using ConnectionShared = std::shared_ptr<xcb_connection_t>;
 
+        struct Rectangle : Region {
+            Rectangle(const xcb_rectangle_t & rt) : Region(rt.x, rt.y, rt.width, rt.height) {}
+        };
+
         struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)> {
             explicit GenericError(xcb_generic_error_t* err = nullptr)
                 : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>(err, std::free) {}
@@ -625,7 +629,7 @@ namespace LTSM {
             /// exception: xcb_error
             Connector(int displayNum, const AuthCookie* = nullptr);
 
-            int getFd(void);
+            int getFd(void) const;
             bool connectorDisplayConnect(int displayNum, const AuthCookie* = nullptr);
 
             size_t depthFromBpp(size_t bitsPerPixel) const;
@@ -750,7 +754,7 @@ namespace LTSM {
 
             bool rootDamageAddRegion(const Region &);
             bool rootDamageAddRegions(const xcb_rectangle_t*, size_t);
-            bool rootDamageSubtrack(const Region &);
+            bool rootDamageSubtrack(const Region &) const;
 
             GenericEvent pollEvent(void);
             Size updateGeometrySize(void) const;

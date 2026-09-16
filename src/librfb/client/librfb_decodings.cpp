@@ -30,16 +30,16 @@
 #include "librfb_decodings.h"
 #include "ltsm_tools.h"
 
-#ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
 #include "lz4.h"
 #endif
 #ifdef LTSM_DECODING_TJPG
 #include "turbojpeg.h"
 #endif
-#endif
 
 #include "SDL.h"
+
+using namespace boost;
 
 namespace LTSM {
     // AsioDecoderStream
@@ -65,25 +65,25 @@ namespace LTSM {
     uint16_t RFB::DecoderStream::recvIntLE16(void) const {
         uint16_t v;
         recvRaw(& v, 2);
-        return boost::endian::little_to_native(v);
+        return endian::little_to_native(v);
     }
 
     uint32_t RFB::DecoderStream::recvIntLE32(void) const {
         uint32_t v;
         recvRaw(& v, 4);
-        return boost::endian::little_to_native(v);
+        return endian::little_to_native(v);
     }
 
     uint16_t RFB::DecoderStream::recvIntBE16(void) const {
         uint16_t v;
         recvRaw(& v, 2);
-        return boost::endian::big_to_native(v);
+        return endian::big_to_native(v);
     }
 
     uint32_t RFB::DecoderStream::recvIntBE32(void) const {
         uint32_t v;
         recvRaw(& v, 4);
-        return boost::endian::big_to_native(v);
+        return endian::big_to_native(v);
     }
 
     uint32_t RFB::DecoderStream::recvPixel(const PixelFormat & clientPf) const {
@@ -480,7 +480,6 @@ namespace LTSM {
         rend.updateRawPixels(reg, std::move(pixels), pitch, rend.serverFormat());
     }
 
-#ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
     void RFB::DecodingLZ4::updateRegionBuf(std::vector<uint8_t> && buf, const DecoderRender & rend, const XCB::Region & reg) {
@@ -706,5 +705,4 @@ namespace LTSM {
 
         return res;
     }
-#endif // LTSM_DECODING
 }

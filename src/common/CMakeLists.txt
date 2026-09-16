@@ -13,6 +13,13 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     target_link_options(${CUR_TARGET} PRIVATE --coverage)
 endif()
 
+if(LTSM_BUILD_SANITIZE)
+    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+    target_compile_options(${CUR_TARGET} PRIVATE -fsanitize=address)
+    target_link_options(${CUR_TARGET} PRIVATE -fsanitize=address)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_SANITIZE)
+endif()
+
 target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)
 
 find_package(spdlog CONFIG REQUIRED)
@@ -24,7 +31,7 @@ if(LTSM_WITH_BOOST)
 
     if(DEFINED ENV{LTSM_BOOST_ROOT} AND IS_DIRECTORY "$ENV{LTSM_BOOST_ROOT}/boost")
         set(BOOST_ROOT "$ENV{LTSM_BOOST_ROOT}" PARENT_SCOPE)
-        set(Boost_NO_SYSTEM_PATHS TRUE)
+        set(Boost_NO_SYSTEM_PATHS TRUE PARENT_SCOPE)
         target_include_directories(${CUR_TARGET} SYSTEM PRIVATE "$ENV{LTSM_BOOST_ROOT}")
     else()
         find_package(Boost REQUIRED CONFIG)
@@ -34,7 +41,6 @@ if(LTSM_WITH_BOOST)
             get_target_property(BOOST_INCLUDES Boost::headers INTERFACE_INCLUDE_DIRECTORIES)
             target_include_directories(${CUR_TARGET} SYSTEM PRIVATE ${BOOST_INCLUDES})
         endif()
-        message(STATUS "System Boost found: ${Boost_VERSION}")
     endif()
 endif()
 
@@ -42,7 +48,6 @@ target_sources(${CUR_TARGET} PRIVATE
     ltsm_application.cpp
     ltsm_tools.cpp
     ltsm_streambuf.cpp
-    ltsm_sockets.cpp
     ltsm_framebuffer.cpp
     ltsm_xcb_types.cpp)
 
@@ -104,25 +109,6 @@ if(LTSM_WITH_OPENSSL)
     else()
         set(LTSM_WITH_OPENSSL OFF)
         message(STATUS "OpenSSL not found")
-    endif()
-endif()
-
-if(LTSM_WITH_GNUTLS)
-    find_package(GnuTLS REQUIRED)
-    if(GnuTLS_FOUND)
-        target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_GNUTLS)
-        target_compile_definitions(${CUR_TARGET} PRIVATE ${GNUTLS_DEFINITIONS})
-        target_include_directories(${CUR_TARGET} PRIVATE ${GNUTLS_INCLUDE_DIR})
-        target_link_libraries(${CUR_TARGET} PRIVATE ${GNUTLS_LIBRARIES})
-
-        find_library(GnuTLSXX_LIBRARY gnutlsxx)
-
-        if(GnuTLSXX_LIBRARY)
-            target_link_libraries(${CUR_TARGET} PRIVATE ${GnuTLSXX_LIBRARY})
-        endif()
-    else()
-        set(LTSM_WITH_GNUTLS OFF)
-        message(STATUS "GnuTLS not found")
     endif()
 endif()
 

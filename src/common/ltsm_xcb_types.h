@@ -114,6 +114,7 @@ namespace LTSM {
             Region() = default;
             ~Region() = default;
 
+            explicit Region(const Size & sz) : Point(0, 0), Size(sz) {}
             Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 
@@ -147,8 +148,8 @@ namespace LTSM {
             static bool intersects(const Region &, const Region &);
             static bool intersection(const Region &, const Region &, Region* res);
 
-            std::list<Region> divideBlocks(const Size &) const;
-            std::list<Region> divideCounts(uint16_t cols, uint16_t rows) const;
+            std::vector<Region> divideBlocks(const Size &) const;
+            std::vector<Region> divideCounts(uint16_t cols, uint16_t rows) const;
         };
 
         inline Region operator+ (const Region & reg, const Point & pt) {

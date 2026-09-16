@@ -34,7 +34,7 @@
 #include "ltsm_async_socket.h"
 
 namespace LTSM {
-    struct FuseSession;
+    class FuseSession;
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
     using FuseSessionPtr = std::unique_ptr<FuseSession>;

@@ -32,7 +32,7 @@
 
 namespace LTSM {
     /* BinaryBuf */
-    BinaryBuf::BinaryBuf(const std::vector<uint8_t>& v) : std::vector<uint8_t>(v) {
+    BinaryBuf::BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {
     }
 
     BinaryBuf::BinaryBuf(std::vector<uint8_t> && v) noexcept : std::vector<uint8_t>(std::move(v)) {
@@ -54,21 +54,6 @@ namespace LTSM {
 
     std::string BinaryBuf::toString(void) const {
         return std::string(data(), data() + size());
-    }
-
-    BinaryBuf & BinaryBuf::append(std::string_view s) {
-        insert(end(), s.begin(), s.end());
-        return *this;
-    }
-
-    BinaryBuf & BinaryBuf::append(const uint8_t* ptr, size_t len) {
-        insert(end(), ptr, ptr + len);
-        return *this;
-    }
-
-    BinaryBuf & BinaryBuf::append(const std::vector<uint8_t> & b) {
-        insert(end(), b.begin(), b.end());
-        return *this;
     }
 
     BinaryBuf BinaryBuf::copy(void) const {
@@ -264,21 +249,6 @@ namespace LTSM {
             writeIntLE64(v);
         }
 
-        return *this;
-    }
-
-    MemoryStream & MemoryStream::write(const void* ptr, size_t len) {
-        putRaw(ptr, len);
-        return *this;
-    }
-
-    MemoryStream & MemoryStream::write(std::string_view v) {
-        putRaw(v.data(), v.size());
-        return *this;
-    }
-
-    MemoryStream & MemoryStream::write(const std::vector<uint8_t> & v) {
-        putRaw(v.data(), v.size());
         return *this;
     }
 

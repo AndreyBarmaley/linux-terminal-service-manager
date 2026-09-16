@@ -31,9 +31,7 @@
 #include "ltsm_streambuf.h"
 #include "ltsm_boost_socket.h"
 
-#ifdef LTSM_WITH_BOOST
 #include <boost/asio/post.hpp>
-#endif
 
 #ifdef LTSM_DECODING_TJPG
 #include "turbojpeg.h"
@@ -183,7 +181,6 @@ namespace LTSM {
                 zlib_{std::make_unique<ZLib::InflateBase>()} {}
         };
 
-#ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_LZ4
         /// DecodingLZ4
         class DecodingLZ4 : public DecodingBase {
@@ -232,7 +229,6 @@ namespace LTSM {
                 return type() == ENCODING_LTSM_ZQOI;
             }
         };
-#endif
     }
 }
 

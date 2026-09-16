@@ -25,18 +25,18 @@
 
 namespace LTSM::Connector {
     XCB::Region RenderPrimitive::xcbRegion(void) const {
-        return tupleRegionToXcbRegion(_region);
+        return tupleRegionToXcbRegion(region_);
     }
 
     Color RenderColored::toColor(void) const {
-        return tupleColorToColor(_color);
+        return tupleColorToColor(color_);
     }
 
     void RenderRect::renderTo(FrameBuffer & fb) const {
         XCB::Region section;
 
         if(XCB::Region::intersection(fb.region(), xcbRegion(), & section)) {
-            if(_fill) {
+            if(fill_) {
                 fb.fillColor(section - fb.region().topLeft(), toColor());
             } else {
                 fb.drawRect(section - fb.region().topLeft(), toColor());
@@ -48,7 +48,7 @@ namespace LTSM::Connector {
         const XCB::Region reg = xcbRegion();
 
         if(XCB::Region::intersects(fb.region(), reg)) {
-            fb.renderText(_text, toColor(), reg.topLeft() - fb.region().topLeft());
+            fb.renderText(text_, toColor(), reg.topLeft() - fb.region().topLeft());
         }
     }
 }

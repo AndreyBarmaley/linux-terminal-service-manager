@@ -25,7 +25,6 @@
 #include <sys/stat.h>
 
 #include <poll.h>
-#include <signal.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -40,6 +39,8 @@
 #include <systemd/sd-daemon.h>
 #endif
 
+#include <boost/asio/experimental/awaitable_operators.hpp>
+
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_connector.h"
@@ -53,6 +54,7 @@
 #include "ltsm_render_primitives.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM::Connector {
     //
@@ -67,8 +69,7 @@ namespace LTSM::Connector {
                   Tools::join(proto, "|") << ">" << std::endl;
     }
 
-    int autoDetectType(void) {
-        auto fd = fileno(stdin);
+    int autoDetectType(int fd) {
         struct pollfd fds = {};
         fds.fd = fd;
         fds.events = POLLIN;
@@ -103,33 +104,53 @@ namespace LTSM::Connector {
     }
 #endif
 
+    BoostContext::BoostContext(uint16_t concurency)
+        : concurency_{std::min(static_cast<uint16_t>(std::thread::hardware_concurrency()), concurency)}, ioc_{concurency_} {
+    }
+
+    void BoostContext::run() {
+        if(1 < concurency()) {
+            Application::info("{}: use threads: {}", NS_FuncNameV, concurency());
+            boost::asio::thread_pool thread_pool{concurency()};
+
+            for(auto it = 0; it < concurency(); ++it) {
+                asio::post(thread_pool, [this](){ ioc_.run(); });
+            }
+
+            thread_pool.join();
+        } else {
+            ioc_.run();
+        }
+    }
+
     /* DBusProxy */
     DBusProxy::DBusProxy(const ConnectorType & type, const std::filesystem::path & confile, bool debug)
-        : ApplicationJsonConfig("ltsm_connector", confile),
+        : ApplicationJsonConfig("ltsm_connector", confile), BoostContext(config().getInteger("encoding:threads", 2)),
 #ifdef SDBUS_2_0_API
-        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
+        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
-        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
+        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
+        timer_idle_session_{ioc()}
     {
-        _remoteaddr.assign("local");
+        remoteAddr_.assign("local");
 
         switch(type) {
             case ConnectorType::RDP:
-                _conntype = "rdp";
+                connType_ = "rdp";
                 break;
 
             case ConnectorType::VNC:
-                _conntype = "vnc";
+                connType_ = "vnc";
                 break;
 
             case ConnectorType::LTSM:
-                _conntype = "ltsm";
+                connType_ = "ltsm";
                 break;
         }
 
         if(auto env = std::getenv("REMOTE_ADDR")) {
-            _remoteaddr.assign(env);
+            remoteAddr_.assign(env);
         }
 
         if(debug) {
@@ -137,8 +158,8 @@ namespace LTSM::Connector {
         }
 
 #ifdef LTSM_WITH_AUDIT
-        auditLog = std::make_unique<AuditConnector>();
-        auditLog->auditRemoteConnected(_remoteaddr);
+        auditLog_ = std::make_unique<AuditConnector>();
+        auditLog_->auditRemoteConnected(remoteAddr_);
 #endif
 
         registerProxy();
@@ -154,55 +175,87 @@ namespace LTSM::Connector {
     }
 
     DBusProxy::~DBusProxy() {
+        try {
 #ifdef LTSM_WITH_AUDIT
-        auditLog->auditRemoteDisconnected(_remoteaddr);
+            auditLog_->auditRemoteDisconnected(remoteAddr_);
 #endif
-        unregisterProxy();
+            unregisterProxy();
+        } catch(const std::exception&) {
+        }
+    }
+
+    void DBusProxy::asioStop(void) {
+        timer_idle_session_.cancel();
+    }
+
+    const std::string & DBusProxy::remoteAddress(void) const {
+        return remoteAddr_;
     }
 
     const std::string & DBusProxy::connectorType(void) const {
-        return _conntype;
+        return connType_;
     }
 
-    bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
-        std::string xauthFile = busDisplayAuthFile(screen);
+    asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
+        if(std::filesystem::is_socket(file)) {
+            co_return;
+        }
+
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_pause{ex};
+
+        while(! std::filesystem::is_socket(file)) {
+            tm_pause.expires_after(100ms);
+            co_await tm_pause.async_wait(asio::use_awaitable);
+        }
+
+        asio::local::stream_protocol::socket sock{ex};
+        co_await sock.async_connect(asio::local::stream_protocol::endpoint{file.string()}, asio::use_awaitable);
+
+        co_return;
+    }
+
+    asio::awaitable<void> waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_deadline{ex, deadline_ms};
+
+        using namespace asio::experimental::awaitable_operators;
+        auto results = co_await (waitSocketConnectAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
+
+        if(results.index() == 0) {
+            tm_deadline.cancel();
+            co_return;
+        }
+
+        Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+        throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
+    }
+
+    asio::awaitable<void> DBusProxy::xcbConnectAwait(int screen, const std::string & xauthFile, XCB::RootDisplay & xcbDisplay) {
         Application::info("{}: display: {}, xauthfile: {}", NS_FuncNameV, screen, xauthFile);
+
+        const uint32_t deadline_ms = configGetInteger("session:timeout", 5000);
+        auto socket_path = Tools::x11UnixPath(screen);
+
+        co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
-        const uint32_t sessTimeout = configGetInteger("session:timeout", 5000);
+        xcbDisplay.displayReconnect(screen);
 
-        // wait display starting
-        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(sessTimeout, 100, [ &socketPath ]() {
-            return Tools::checkUnixSocket(socketPath);
-        });
-
-        if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", NS_FuncNameV, socketPath);
-            return false;
-        }
-
-        try {
-            xcbDisplay.displayReconnect(screen);
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            return false;
-        }
-
-        _xcbDisplayNum = screen;
-        return true;
+        xcbDisplayNum_ = screen;
+        co_return;
     }
 
     int DBusProxy::displayNum(void) const {
-        return _xcbDisplayNum;
+        return xcbDisplayNum_;
     }
 
     void DBusProxy::xcbDisableMessages(bool f) {
-        _xcbDisable = f;
+        xcbDisable_ = f;
     }
 
     bool DBusProxy::xcbAllowMessages(void) const {
-        return ! _xcbDisable;
+        return ! xcbDisable_;
     }
 
     std::string DBusProxy::checkFileOption(const std::string & param) const {
@@ -222,13 +275,13 @@ namespace LTSM::Connector {
         if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
-            for(const auto & ptr : _renderPrimitives) {
+            for(const auto & ptr : renderPrimitives_) {
                 if(auto prim = ptr.get()) {
                     serverScreenUpdateRequest(prim->xcbRegion());
                 }
             }
 
-            _renderPrimitives.clear();
+            renderPrimitives_.clear();
         }
     }
 
@@ -237,7 +290,7 @@ namespace LTSM::Connector {
         if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
 
-            _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
+            renderPrimitives_.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
     }
@@ -250,7 +303,7 @@ namespace LTSM::Connector {
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
                                      _systemfont.width * text.size(), _systemfont.height);
 
-            _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rect, color));
+            renderPrimitives_.emplace_back(std::make_unique<RenderText>(text, rect, color));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
     }
@@ -260,25 +313,48 @@ namespace LTSM::Connector {
             Application::debug(DebugType::Dbus, "{}: display: {}",
                                NS_FuncNameV, display);
 
-            std::thread([this, display]() {
+            asio::dispatch(ioc(), [this, display]() {
                 this->busConnectorAlive(display);
-            }).detach();
+            });
         }
     }
 
     void DBusProxy::renderPrimitivesToFB(FrameBuffer & fb) const {
-        for(const auto & ptr : _renderPrimitives) {
+        for(const auto & ptr : renderPrimitives_) {
             if(auto prim = static_cast<const RenderRect*>(ptr.get())) {
                 prim->renderTo(fb);
             }
         }
     }
 
-    void DBusProxy::checkIdleTimeout(void) {
-        if(_idleTimeoutSec &&
-           _idleTimeoutSec < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - _idleSessionTp).count()) {
+    void DBusProxy::checkIdleTimeoutCb(const boost::system::error_code & ec) {
+        if(ec) {
+            return;
+        }
+
+        if(idleSessionActive_) {
             busSessionIdleTimeout(displayNum());
-            _idleSessionTp = std::chrono::steady_clock::now();
+        }
+
+        idleSessionActive_ = true;
+
+        timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
+        timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
+    }
+
+    void DBusProxy::idleSessionReset(void) {
+        idleSessionActive_ = false;
+    }
+
+    void DBusProxy::setIdleTimeoutSec(uint32_t sec) {
+        timer_idle_session_.cancel();
+
+        idleTimeoutSec_ = sec;
+        idleSessionActive_ = true;
+
+        if(sec) {
+            timer_idle_session_.expires_after(std::chrono::seconds(idleTimeoutSec_));
+            timer_idle_session_.async_wait(std::bind(&DBusProxy::checkIdleTimeoutCb, this, std::placeholders::_1));
         }
     }
 
@@ -306,49 +382,48 @@ namespace LTSM::Connector {
         Application::setDebugTarget(DebugTarget::Syslog, "ltsm_connector");
         Application::setDebugLevel(DebugLevel::Info);
 
-        // signals
-        signal(SIGPIPE, SIG_IGN);
+        const int fd = dup(STDIN_FILENO);
         std::unique_ptr<DBusProxy> connector;
 
 #ifdef LTSM_WITH_RDP
 
         // protocol up
         if(type == "auto") {
-            if(int first = autoDetectType(); first == 0x03) {
-                connector = std::make_unique<ConnectorRdp>(confile, debug);
+            if(int first = autoDetectType(fd); first == 0x03) {
+                connector = std::make_unique<ConnectorRdp>(confile, fd, debug);
             }
         } else if(type == "rdp") {
-            connector = std::make_unique<ConnectorRdp>(confile, debug);
+            connector = std::make_unique<ConnectorRdp>(confile, fd, debug);
         }
 
 #endif
 
         if(! connector) {
-            connector = std::make_unique<ConnectorLtsm>(confile, debug);
+            auto conn = std::make_unique<ConnectorLtsm>(confile, debug);
+            conn->assignSocketFd(fd);
+            connector = std::move(conn);
         }
 
-        int res = 0;
-
-        try {
 #ifdef LTSM_WITH_SYSTEMD
-            sd_notify(0, "READY=1");
+        sd_notify(0, "READY=1");
 #endif
-            res = connector->communication();
-#ifdef LTSM_WITH_SYSTEMD
-            sd_notify(0, "STOPPING=1");
-#endif
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            // terminated connection: exit normal
-            res = EXIT_SUCCESS;
-        }
+        int res = connector->start();
 
+#ifdef LTSM_WITH_SYSTEMD
+        sd_notify(0, "STOPPING=1");
+#endif
         return res;
     }
 
 } // namespace LTSM::Connector
 
 using namespace LTSM;
+
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_connector.log";
+}
+#endif
 
 int main(int argc, const char** argv) {
     try {

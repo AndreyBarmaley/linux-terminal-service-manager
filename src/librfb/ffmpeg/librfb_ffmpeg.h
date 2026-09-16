@@ -24,7 +24,6 @@
 #ifndef _LIBRFB_FFMPEG_
 #define _LIBRFB_FFMPEG_
 
-#include <mutex>
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -126,20 +125,20 @@ namespace LTSM {
             const AVCodec* codec = nullptr;
 #endif
 
-            std::mutex lockUpdate;
             std::chrono::steady_clock::time_point updatePoint;
 
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
             int fps = 16;
             // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
-            int64_t pts = 0;
+            mutable int64_t pts = 0;
+            uint16_t threads = 0;
 
           protected:
             void initContext(const XCB::Size &, const PixelFormat &);
 
           public:
             void resizedEvent(const XCB::Size &) override;
-            void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            FrameBufferPackets getFrameBufferPackets(const EncoderStream*, const FrameBuffer&) const override;
 
             explicit EncodingFFmpeg(int type = ENCODING_LTSM_H264);
             ~EncodingFFmpeg() = default;

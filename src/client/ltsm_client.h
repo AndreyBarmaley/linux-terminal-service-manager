@@ -43,7 +43,7 @@
 #include "librfb_winclient.h"
 #endif
 
-#define LTSM_CLIENT_VERSION 20260510
+#define LTSM_CLIENT_VERSION 20260610
 
 namespace LTSM {
     struct ColorCursor {
@@ -53,8 +53,8 @@ namespace LTSM {
     };
 
     class BoostContext {
-        const int concurency_ = 4;
-        boost::asio::io_context ioc_{concurency_};
+        const int concurency_ = 1;
+        boost::asio::io_context ioc_;
 
       protected:
         inline boost::asio::io_context & ioc(void) { return ioc_; }
@@ -62,7 +62,7 @@ namespace LTSM {
         boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 
       public:
-        BoostContext() = default;
+        explicit BoostContext(int concurency) : concurency_{concurency}, ioc_{concurency} {}
         ~BoostContext() = default;
     };
 
@@ -116,7 +116,7 @@ namespace LTSM {
         //        BinaryBuf clipboardBufLocal;
         //        std::mutex clipboardLock;
 
-        XCB::Size primarySize;
+        XCB::Size primarySize_;
 
         bool ltsmSupport = true;
         bool windowAccel = true;
@@ -163,38 +163,38 @@ namespace LTSM {
         boost::asio::awaitable<void> windowResizedEvent(const XCB::Size &);
         boost::asio::awaitable<void> sdlEventsLoop(void);
         boost::asio::awaitable<bool> sdlEventProcessing(void);
-        boost::asio::awaitable<void> sdlMouseMotion(SDL_Event &&);
-        boost::asio::awaitable<void> sdlMouseButton(SDL_Event &&);
-        boost::asio::awaitable<void> sdlMouseWheel(SDL_Event &&);
-        boost::asio::awaitable<void> sdlWindowEvent(SDL_Event &&);
-        boost::asio::awaitable<void> sdlKeyboardEvent(SDL_Event &&);
-        boost::asio::awaitable<void> sdlDropCompleteEvent(SDL_Event &&);
-        boost::asio::awaitable<void> sdlUserEvent(SDL_Event &&);
+        boost::asio::awaitable<void> sdlMouseMotion(const SDL_Event &);
+        boost::asio::awaitable<void> sdlMouseButton(const SDL_Event &);
+        boost::asio::awaitable<void> sdlMouseWheel(const SDL_Event &);
+        boost::asio::awaitable<void> sdlWindowEvent(const SDL_Event &);
+        boost::asio::awaitable<void> sdlKeyboardEvent(const SDL_Event &);
+        boost::asio::awaitable<void> sdlDropCompleteEvent(const SDL_Event &);
+        boost::asio::awaitable<void> sdlUserEvent(const SDL_Event &);
         boost::asio::awaitable<bool> sdlWindowInit(const XCB::Size &);
 
         void stop(void);
 
       public:
-        ClientApp(int argc, char** argv);
+        ClientApp(int threads, int argc, char** argv);
 
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                                 const std::vector<RFB::ScreenInfo> &) override;
         void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
         //void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
-        void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
+        void clientRecvRichCursorEvent(const XCB::Point&, const XCB::Size&, std::vector<uint8_t> && pixels,
                                        std::vector<uint8_t> && mask) override;
-        void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
+        void clientRecvLtsmCursorEvent(const XCB::Point&, const XCB::Size&, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
         void clientRecvBellEvent(void) override;
 
 #ifdef __UNIX__
         void xcbXkbGroupChangedEvent(int) override;
 #endif
         void clientRecvLtsmHandshakeEvent(int flags) override;
-        void systemLoginSuccess(const JsonObject &) override;
+        void systemLoginSuccessEvent(const JsonObject &) override;
 
         const char* pkcs11Library(void) const override;
-        bool createChannelAllow(const Channel::ConnectorType &, const std::string &,
+        bool allowCreateChannel(const Channel::ConnectorType &, const std::string &,
                                 const Channel::ConnectorMode &) const override;
         bool clientLtsmSupported(void) const override {
             return ltsmSupport;

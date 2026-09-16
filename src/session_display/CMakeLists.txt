@@ -7,6 +7,8 @@ target_compile_options(${CUR_TARGET} PUBLIC "-Wno-narrowing")
 # pkg_search_module(URING REQUIRED liburing)
 # target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_ASIO_HAS_IO_URING)
 
+target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_PROCESS_USE_STD_FS)
+
 if(NOT DEFINED BOOST_ROOT)
     find_package(Boost REQUIRED CONFIG)
     if(Boost_VERSION VERSION_GREATER "1.85.0")
@@ -16,3 +18,6 @@ if(NOT DEFINED BOOST_ROOT)
         endif()
     endif()
 endif()
+
+target_include_directories(${CUR_TARGET} PRIVATE ${URING_INCLUDE_DIR})
+target_link_libraries(${CUR_TARGET} PRIVATE ${URING_LIBRARIES})

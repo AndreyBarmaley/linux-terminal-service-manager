@@ -53,10 +53,10 @@ namespace LTSM::Connector {
     }
 
     struct RenderPrimitive {
-        const RenderType _type;
-        TupleRegion _region;
+        const RenderType type_;
+        TupleRegion region_;
 
-        RenderPrimitive(const RenderType & rt, const TupleRegion & tr) : _type(rt), _region(tr) {}
+        RenderPrimitive(const RenderType & rt, const TupleRegion & tr) : type_(rt), region_(tr) {}
         virtual ~RenderPrimitive() {}
 
         XCB::Region xcbRegion(void) const;
@@ -64,28 +64,28 @@ namespace LTSM::Connector {
     };
 
     struct RenderColored : RenderPrimitive {
-        TupleColor _color;
+        TupleColor color_;
 
         RenderColored(const RenderType & rt, const TupleRegion & tr, const TupleColor & col)
-            : RenderPrimitive(rt, tr), _color(col) {}
+            : RenderPrimitive(rt, tr), color_(col) {}
 
         Color toColor(void) const;
     };
 
     struct RenderRect : RenderColored {
-        bool _fill;
+        bool fill_;
 
         RenderRect(const TupleRegion & tr, const TupleColor & col, bool f)
-            : RenderColored(RenderType::RenderRect, tr, col), _fill(f) {}
+            : RenderColored(RenderType::RenderRect, tr, col), fill_(f) {}
 
         void renderTo(FrameBuffer &) const;
     };
 
     struct RenderText : RenderColored {
-        std::string _text;
+        std::string text_;
 
         RenderText(const std::string & str, const TupleRegion & tr, const TupleColor & col)
-            : RenderColored(RenderType::RenderText, tr, col), _text(str) {}
+            : RenderColored(RenderType::RenderText, tr, col), text_(str) {}
 
         void renderTo(FrameBuffer &) const;
     };

@@ -35,6 +35,10 @@ namespace LTSM {
         explicit rfb_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
+    struct encoding_context_error : public rfb_error {
+        explicit encoding_context_error(std::string_view what) : rfb_error(view2string(what)) {}
+    };
+
     namespace RFB {
         // RFB protocol constant
         const int VERSION_MAJOR = 3;

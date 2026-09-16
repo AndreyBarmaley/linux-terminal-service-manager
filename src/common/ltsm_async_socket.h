@@ -116,6 +116,7 @@ class AsyncSocketBase {
 
     virtual void closeSocket(void) = 0;
 
+    virtual size_t sync_recv_available(void) const = 0;
     virtual void sync_recv_buf(void* ptr, size_t len) const = 0;
     virtual void sync_send_buf(const void* ptr, size_t len) const = 0;
 
@@ -182,12 +183,24 @@ class AsyncSocketBase {
     // SEND
     virtual boost::asio::awaitable<void> async_send_buf(const boost::asio::const_buffer& buf) const = 0;
     virtual boost::asio::awaitable<void> async_send_buffers(std::initializer_list<boost::asio::const_buffer>) const = 0;
+    virtual boost::asio::awaitable<void> async_send_buffers(std::vector<boost::asio::const_buffer>&&) const = 0;
 
     // async_send_values(val1, val2, ... valX)
     template <typename... Values>
     [[nodiscard]] boost::asio::awaitable<void> async_send_values(const Values&... vals) const {
         auto list = {value_to_const_buffer(vals)...};
         co_await async_send_buffers(list);
+    }
+
+    template <typename Iterator>
+    [[nodiscard]] boost::asio::awaitable<void> async_send_sequence(Iterator beg, Iterator end) const {
+        std::vector<boost::asio::const_buffer> buffers;
+    
+        for (auto it = beg; it != end; ++it) {
+            buffers.push_back(value_to_const_buffer(*it));
+        }
+    
+        co_await async_send_buffers(std::move(buffers));
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_byte(uint8_t val) const {
@@ -263,6 +276,11 @@ class AsyncSocket : public AsyncSocketBase {
     }
 
     [[nodiscard]] boost::asio::awaitable<void> async_send_buffers(
+        std::vector<boost::asio::const_buffer>&& buffers) const final {
+        co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), std::move(buffers), boost::asio::transfer_all(), boost::asio::use_awaitable);
+    }
+
+    [[nodiscard]] boost::asio::awaitable<void> async_send_buffers(
         std::initializer_list<boost::asio::const_buffer> list) const final {
         co_await boost::asio::async_write(const_cast<AsyncSocket&>(*this).socket(), list, boost::asio::transfer_all(), boost::asio::use_awaitable);
     }
@@ -286,6 +304,11 @@ class AsyncTcpStream : public AsyncSocket<AsioTcpSocket> {
 
     AsioTcpSocket& socket(void) override { return sock_; }
 
+    size_t sync_recv_available(void) const final {
+        return sock_.available();
+    }
+
+
     void closeSocket(void) override {
         if (sock_.is_open()) {
             boost::system::error_code ec;
@@ -306,6 +329,11 @@ class AsyncLocalStream : public AsyncSocket<AsioLocalSocket> {
     explicit AsyncLocalStream(AsioLocalSocket&& sock) : sock_{std::move(sock)} {}
 
     AsioLocalSocket& socket(void) override { return sock_; }
+
+    size_t sync_recv_available(void) const final {
+        return sock_.available();
+    }
+
 
     void closeSocket(void) override {
         if (sock_.is_open()) {

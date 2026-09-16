@@ -29,11 +29,6 @@
 #include <sys/socket.h>
 #endif
 
-#ifdef LTSM_WITH_GNUTLS
-#include "gnutls/x509.h"
-#include <gnutls/gnutls.h>
-#endif
-
 #include <bit>
 #include <ctime>
 #include <cstdio>
@@ -53,11 +48,13 @@
 #include <filesystem>
 
 #ifdef LTSM_WITH_OPENSSL
+#include <openssl/ssl.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
 #endif
 
 #include "ltsm_tools.h"
-#include "ltsm_sockets.h"
 #include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
@@ -312,7 +309,7 @@ namespace LTSM {
                 struct sockaddr_un sockaddr;
                 std::memset(&sockaddr, 0, sizeof(struct sockaddr_un));
                 sockaddr.sun_family = AF_UNIX;
-                const auto & native = path.native();
+                const auto & native = path.string();
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1) {
                     Application::warning("{}: unix path is long, truncated to size: {}", NS_FuncNameV, sizeof(sockaddr.sun_path) - 1);
@@ -359,11 +356,7 @@ namespace LTSM {
                 res.splice(res.end(), readDir(entry.path(), true));
             }
 
-#ifdef __WIN32__
             res.emplace_back(entry.path().string());
-#else
-            res.emplace_back(entry.path().native());
-#endif
         }
 
         return res;
@@ -610,7 +603,7 @@ namespace LTSM {
 
             if(! err) {
                 auto tz = path.parent_path().filename() / path.filename();
-                str.append(tz.native());
+                str.append(tz.string());
             }
         } else {
             time_t ts = 0;
@@ -945,6 +938,72 @@ namespace LTSM {
 
         res.resize(out_len + final_len);
         return res;
+    }
+
+    std::span<const char> OpenSSL::BIO_buf::span(void) const {
+        char* ptr = nullptr;
+        size_t len = BIO_get_mem_data(bio_.get(), &ptr);
+        return {ptr, len};
+    }
+
+    OpenSSL::BIO_buf OpenSSL::generateDH2048(void) {
+        std::unique_ptr<EVP_PKEY_CTX, void(*)(EVP_PKEY_CTX*)> pkey_ctx{
+            EVP_PKEY_CTX_new_from_name(nullptr, "DH", nullptr), EVP_PKEY_CTX_free};
+
+        if(! pkey_ctx) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_CTX_new_from_name");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        if(1 != EVP_PKEY_paramgen_init(pkey_ctx.get())) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_paramgen_init");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+    
+        if(1 != EVP_PKEY_CTX_set_group_name(pkey_ctx.get(), "ffdhe2048")) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_CTX_set_group_name");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        EVP_PKEY* raw_pkey = nullptr;
+
+        if(1 != EVP_PKEY_generate(pkey_ctx.get(), &raw_pkey)) {
+            Application::error("{}: {} failed", NS_FuncNameV, "EVP_PKEY_generate");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        std::unique_ptr<EVP_PKEY, void(*)(EVP_PKEY*)> pkey{
+            raw_pkey, EVP_PKEY_free };
+        BIO_buf buf;
+
+        if (PEM_write_bio_Parameters(buf.get(), pkey.get()) != 1) {
+            Application::error("{}: {} failed", NS_FuncNameV, "PEM_write_bio_Parameters");
+            throw std::runtime_error(NS_FuncNameS);
+        }
+
+        return buf;
+    }
+
+    std::string OpenSSL::streamDescription(SSL* ssl) {
+        std::ostringstream desc;
+        desc << "(" << SSL_get_version(ssl) << ")";
+
+        if(int group_nid = SSL_get_negotiated_group(ssl); group_nid != NID_undef) {
+            if(auto group_name = OBJ_nid2sn(group_nid)) {
+                desc << "-(" << group_name << ")";
+            }
+        }
+
+        const SSL_CIPHER* cipher = SSL_get_current_cipher(ssl);
+        if (cipher) {
+        // const char* cipher_name = SSL_CIPHER_standard_name(cipher);
+
+            if(auto cipher_name = SSL_get_cipher_name(ssl)) {
+                desc << "-(" << cipher_name << ")";
+            }
+        }
+
+        return desc.str();    
     }
 #endif
 } // LTSM

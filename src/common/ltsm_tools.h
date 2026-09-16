@@ -54,8 +54,14 @@
 #include <filesystem>
 #include <functional>
 
+#include <boost/crc.hpp>
+
 #include "ltsm_compat.h"
 #include "ltsm_streambuf.h"
+
+#ifdef LTSM_WITH_OPENSSL
+#include <openssl/bio.h>
+#endif
 
 #include <cassert>
 // Use (void) to silence unused warnings.
@@ -234,7 +240,11 @@ namespace LTSM {
         std::string hex(int value, int width = 8);
 
         template<typename Iterator>
-        uint32_t rangeCrc32b(Iterator it1, Iterator it2, const uint32_t magic = 0xEDB88320) {
+        uint32_t rangeCrc32b(Iterator it1, Iterator it2) {
+            boost::crc_32_type result;
+            result.process_block(std::addressof(*it1), std::addressof(*it2));
+            return result.checksum();
+/*
             uint32_t res = std::accumulate(it1, it2, 0xFFFFFFFF, [ = ](uint64_t crc, auto val) {
                 crc ^= static_cast<uint32_t>(val);
                 for(int bit = 0; bit < 8; ++bit) {
@@ -244,6 +254,7 @@ namespace LTSM {
                 return crc;
             });
             return ~res;
+*/
         }
 
         inline uint32_t crc32b(std::span<const uint8_t> cont) {
@@ -294,11 +305,11 @@ namespace LTSM {
 
         // Timeout
         template<typename TimeType = std::chrono::milliseconds>
-        struct Timeout {
+        struct TimePoint {
             std::chrono::steady_clock::time_point tp;
             TimeType dt;
 
-            explicit Timeout(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val) {
+            explicit TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val) {
             }
 
             bool check(void) {
@@ -310,95 +321,6 @@ namespace LTSM {
                 }
 
                 return false;
-            }
-        };
-
-        // BaseTimer
-        class BaseTimer {
-          protected:
-            std::thread thread;
-            std::atomic<bool> processed{false};
-
-          public:
-            BaseTimer() = default;
-            virtual ~BaseTimer() {
-                stop(true);
-            }
-
-            std::thread::id getId(void) const {
-                return thread.get_id();
-            }
-
-            void stop(bool wait = false) {
-                processed = false;
-
-                if(wait && thread.joinable()) {
-                    thread.join();
-                }
-            }
-
-            // usage:
-            // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, repeat, [=](){ func(param1, param2, param3); });
-            // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, repeat, func, param1, param2, param3);
-            //
-            template <class TimeType = std::chrono::milliseconds, class Func>
-            static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func && call) {
-                auto ptr = std::make_unique<BaseTimer>();
-                ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::forward<Func>(call)]() {
-                    timer->processed = true;
-                    auto start = std::chrono::steady_clock::now();
-
-                    while(timer->processed) {
-                        std::this_thread::sleep_for(TimeType(1));
-                        auto cur = std::chrono::steady_clock::now();
-
-                        if(TimeType(delay) <= cur - start) {
-                            if(! timer->processed) {
-                                break;
-                            }
-
-                            call();
-
-                            if(repeat) {
-                                start = std::chrono::steady_clock::now();
-                            } else {
-                                timer->processed = false;
-                            }
-                        }
-                    }
-                });
-
-                return ptr;
-            }
-
-            template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
-            static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func && call, Args && ... args) {
-                auto ptr = std::make_unique<BaseTimer>();
-                ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
-                call = std::forward<Func>(call), args = std::make_tuple(std::forward<Args>(args)...)]() {
-                    timer->processed = true;
-                    auto start = std::chrono::steady_clock::now();
-
-                    while(timer->processed) {
-                        std::this_thread::sleep_for(TimeType(1));
-
-                        if(TimeType(delay) <= std::chrono::steady_clock::now() - start) {
-                            if(! timer->processed) {
-                                break;
-                            }
-
-                            std::apply(call, args);
-
-                            if(repeat) {
-                                start = std::chrono::steady_clock::now();
-                            } else {
-                                timer->processed = false;
-                            }
-                        }
-                    }
-                });
-
-                return ptr;
             }
         };
 
@@ -421,31 +343,30 @@ namespace LTSM {
 
             return false;
         }
-
-        template<typename TimeType = std::chrono::milliseconds>
-        struct TimePoint {
-            std::chrono::steady_clock::time_point tp;
-            TimeType dt;
-
-            explicit TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val) {
-            }
-
-            bool check(void) {
-                auto now = std::chrono::steady_clock::now();
-
-                if(dt < now - tp) {
-                    tp = now;
-                    return true;
-                }
-
-                return false;
-            }
-        };
     }
 
 #ifdef LTSM_WITH_OPENSSL
     namespace OpenSSL {
+        class BIO_buf {
+            std::unique_ptr<BIO, void(*)(BIO*)> bio_{ BIO_new(BIO_s_mem()), [](BIO* b) { if (b) BIO_free(b); } };
+
+        public:
+            BIO_buf() = default;
+            ~BIO_buf() = default;
+
+            BIO_buf(const BIO_buf&) = delete;
+            BIO_buf& operator=(const BIO_buf&) = delete;
+
+            BIO_buf(BIO_buf&&) = default;
+            BIO_buf& operator=(BIO_buf&&) = default;
+
+            std::span<const char> span(void) const;
+            BIO* get(void) { return bio_.get(); }
+        };
+
         std::vector<uint8_t> encryptDES(std::span<const uint8_t> data, std::string_view pass);
+        BIO_buf generateDH2048(void);
+        std::string streamDescription(SSL*);
     }
 #endif
 }

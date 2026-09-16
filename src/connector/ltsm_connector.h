@@ -29,6 +29,8 @@
 #include <atomic>
 #include <string>
 
+#include <boost/asio.hpp>
+
 #include "ltsm_global.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
@@ -54,24 +56,41 @@ namespace LTSM::Connector {
     };
 #endif
 
-    class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
+    class BoostContext {
+        const uint16_t concurency_ = 1;
+        boost::asio::io_context ioc_;
+        
       protected:
-        std::list<RenderPrimitivePtr> _renderPrimitives;
+        inline boost::asio::io_context & ioc(void) { return ioc_; }
+        inline uint16_t concurency(void) const { return concurency_; }
+        boost::asio::any_io_executor get_executor(void) { return ioc_.get_executor(); }
 
-        std::string _conntype;
-        std::string _remoteaddr;
+      public:
+        explicit BoostContext(uint16_t concurency);
+        ~BoostContext() = default;
 
-        std::atomic<int> _xcbDisplayNum{0};
-        std::atomic<bool> _xcbDisable{true};
+        void run(void);
+    };
 
-        std::chrono::time_point<std::chrono::steady_clock> _idleSessionTp;
-        uint32_t _idleTimeoutSec = 0;
+    class DBusProxy : public ApplicationJsonConfig, public BoostContext, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
+        boost::asio::steady_timer timer_idle_session_;
+
+        std::list<RenderPrimitivePtr> renderPrimitives_;
+        std::string connType_;
+        std::string remoteAddr_;
+
+        std::atomic<int> xcbDisplayNum_{0};
+        std::atomic<bool> xcbDisable_{true};
+        std::atomic<bool> idleSessionActive_{false};
+
+        uint32_t idleTimeoutSec_{0};
 
 #ifdef LTSM_WITH_AUDIT
-        std::unique_ptr<AuditConnector> auditLog;
+        std::unique_ptr<AuditConnector> auditLog_;
 #endif
-
       private:
+        void checkIdleTimeoutCb(const boost::system::error_code &);
+
         // dbus virtual signals
         void onLoginFailure(const int32_t & display, const std::string & msg) override {}
 
@@ -109,7 +128,11 @@ namespace LTSM::Connector {
 
         void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
 
-      protected:
+    protected:
+        void asioStop(void);
+        void setIdleTimeoutSec(uint32_t);
+        void idleSessionReset(void);
+
         // dbus virtual signals
         void onPingConnector(const int32_t & display) override;
         void onClearRenderPrimitives(const int32_t & display) override;
@@ -124,20 +147,19 @@ namespace LTSM::Connector {
         virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
         int displayNum(void) const;
-        bool xcbConnect(int screen, XCB::RootDisplay &);
-        void xcbDisableMessages(bool f);
-        bool xcbAllowMessages(void) const;
+        boost::asio::awaitable<void> xcbConnectAwait(int screen, const std::string & xauthFile, XCB::RootDisplay &);
 
       public:
         DBusProxy(const ConnectorType &, const std::filesystem::path & confile, bool debug);
         virtual ~DBusProxy();
 
-        virtual int communication(void) = 0;
+        virtual int start(void) = 0;
+        void xcbDisableMessages(bool f);
+        bool xcbAllowMessages(void) const;
 
         std::string checkFileOption(const std::string &) const;
         const std::string & connectorType(void) const;
-
-        void checkIdleTimeout(void);
+        const std::string & remoteAddress(void) const;
     };
 
     /* Connector::startService */

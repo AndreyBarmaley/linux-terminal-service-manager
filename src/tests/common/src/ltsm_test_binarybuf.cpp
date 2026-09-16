@@ -43,7 +43,7 @@ TEST(BinaryBufTest, AppendMethods) {
     BinaryBuf buf;
 
     uint8_t raw_data[] = {0x01, 0x02};
-    buf.append(raw_data, 2);
+    buf.append(std::span{raw_data, 2});
     EXPECT_EQ(buf.size(), 2);
 
     std::vector<uint8_t> vec_data = {0x03, 0x04};
@@ -54,10 +54,7 @@ TEST(BinaryBufTest, AppendMethods) {
     buf.append(str_data);
     EXPECT_EQ(buf.size(), 6);
 
-    buf.append({0x07}).append({0x08});
-    EXPECT_EQ(buf.size(), 8);
-
-    uint8_t expected[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    uint8_t expected[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
     for (size_t i = 0; i < buf.size(); ++i) {
         EXPECT_EQ(buf.data()[i], expected[i]);
     }

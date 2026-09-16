@@ -7,5 +7,4 @@ find_path(PAM_INCLUDE_PATH NAMES security/pam_appl.h pam_appl.h)
 target_sources(${CUR_TARGET} PRIVATE ltsm_service.cpp)
 target_include_directories(${CUR_TARGET} PRIVATE ${PAM_INCLUDE_PATH})
 target_link_libraries(${CUR_TARGET} PRIVATE ${PAM_LIBRARIES} ${PAM_MISC_LIBRARIES} stdc++)
-target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_BOOST)
 

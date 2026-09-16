@@ -99,23 +99,9 @@ namespace LTSM {
             rfbsec.passwdFile = password;
             rfbsec.tlsAnonMode = true;
 
-            bool handshake = false;
-
             try {
-                handshake = co_await rfbHandshakeAwait(rfbsec);
-            } catch(const system::system_error& err) {
-                if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                    Application::error("{}: system error: {}, code: {}", "rfbHandshakeAwait", ec.message(), ec.value());
-                }
-                co_return;
-            }
-
-            if(! handshake) {
-                co_return;
-            }
-
-            try {
-                co_await asio::co_spawn(ioc(), rfbMessagesLoopAwait(), asio::use_awaitable);
+                co_await rfbHandshakeAwait(rfbsec);
+                co_await rfbMessagesLoopAwait();
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
@@ -195,17 +181,19 @@ namespace LTSM {
         return 0;
     }
 
-    std::vector<uint8_t> Vnc2Image::extClipboardLocalData(uint16_t type) const {
-        return {};
+    boost::asio::awaitable<clipboard_buf> Vnc2Image::extClipboardLocalDataAwait(uint16_t type) {
+        co_return clipboard_buf{};
     }
 
-    void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type) {
+    boost::asio::awaitable<void> Vnc2Image::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
+        co_return;
     }
 
-    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
+    boost::asio::awaitable<void> Vnc2Image::extClipboardRemoteTypesAwait(uint16_t type) {
+        co_return;
     }
 
-    void Vnc2Image::extClipboardSendEvent(std::vector<uint8_t> &&) {
+    void Vnc2Image::extClipboardSendBuf(std::vector<uint8_t>&&) const {
     }
 }
 

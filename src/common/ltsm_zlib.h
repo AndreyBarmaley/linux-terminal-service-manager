@@ -84,6 +84,8 @@ namespace LTSM::ZLib {
         DeflateBase(DeflateBase &&) noexcept = delete;
         DeflateBase & operator=(DeflateBase &&) noexcept = delete;
 
+        size_t deflateBound(size_t) const;
+
         std::vector<uint8_t> deflateData(std::span<const uint8_t> cont, int flushPolicy = Z_SYNC_FLUSH);
         void reset(void);
 

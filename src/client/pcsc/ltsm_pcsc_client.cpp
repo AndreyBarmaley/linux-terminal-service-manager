@@ -27,6 +27,11 @@
 #include <filesystem>
 #include <forward_list>
 
+#ifdef __WIN32__
+#include <winsock2.h>
+#include <windows.h>
+#endif
+
 #ifdef __UNIX__
 #include "pcsclite.h"
 #endif
@@ -125,22 +130,11 @@ namespace PcscLite {
     }
 }
 
-namespace LTSM {
-    namespace Channel {
-        namespace Connector {
-            // channel_system.cpp
-            void loopWriter(ConnectorBase*, Remote2Local*);
-            void loopReader(ConnectorBase*, Local2Remote*);
-        }
-    }
-
-}
-
 using namespace std::chrono_literals;
 
 // createClientPcscConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscConnector(uint8_t channel,
-        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
+std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscConnector(CID channel,
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
 
@@ -153,27 +147,10 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscCon
 }
 
 /// ConnectorClientPcsc
-LTSM::Channel::ConnectorClientPcsc::ConnectorClientPcsc(uint8_t ch, const std::string & url, const ConnectorMode & mod,
-        const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
-    Application::info("{}: channelId: {}", NS_FuncNameV, cid);
-    // start threads
-    setRunning(true);
-}
-
-LTSM::Channel::ConnectorClientPcsc::~ConnectorClientPcsc() {
-    setRunning(false);
-}
-
-int LTSM::Channel::ConnectorClientPcsc::error(void) const {
-    return 0;
-}
-
-uint8_t LTSM::Channel::ConnectorClientPcsc::channel(void) const {
-    return cid;
-}
-
-void LTSM::Channel::ConnectorClientPcsc::setSpeed(const Channel::Speed & speed) {
+LTSM::Channel::ConnectorClientPcsc::ConnectorClientPcsc(CID channel, const std::string & url, const ConnectorMode & mod,
+        const Opts & chOpts, ChannelBase & srv)
+    : ConnectorBase(channel, mod, chOpts, srv) {
+    Application::info("{}: channelId: {}", NS_FuncNameV, channel);
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) {
@@ -255,7 +232,7 @@ bool LTSM::Channel::ConnectorClientPcsc::pcscOpInit(const StreamBufRef & sb) {
     reply.writeIntLE16(0);
     // proto ver
     reply.writeIntLE16(PcscOp::ProtoVer);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 
     return true;
 
@@ -338,7 +315,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteEstablishContext(const StreamBu
     // reply
     StreamBuf reply(16);
     reply.writeIntLE64(hContext).writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteReleaseContext(const StreamBufRef & sb) {
@@ -359,7 +336,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteReleaseContext(const StreamBufR
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
@@ -423,7 +400,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteListReaders(const StreamBufRef 
         reply.writeIntLE32(reader.size()).write(reader);
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteConnect(const StreamBufRef & sb) {
@@ -460,7 +437,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteConnect(const StreamBufRef & sb
     // reply
     StreamBuf reply(16);
     reply.writeIntLE64(hCard).writeIntLE32(activeProtocol).writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteReconnect(const StreamBufRef & sb) {
@@ -486,7 +463,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteReconnect(const StreamBufRef & 
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(activeProtocol).writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteDisconnect(const StreamBufRef & sb) {
@@ -509,7 +486,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteDisconnect(const StreamBufRef &
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteBeginTransaction(const StreamBufRef & sb) {
@@ -531,7 +508,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteBeginTransaction(const StreamBu
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteEndTransaction(const StreamBufRef & sb) {
@@ -554,7 +531,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteEndTransaction(const StreamBufR
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteTransmit(const StreamBufRef & sb) {
@@ -578,7 +555,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteTransmit(const StreamBufRef & s
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#018x}, dwProtocol: {}, pciLength: {}, send size: {}, recv size: {}",
                        NS_FuncNameV, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
 
-    std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
+    if(0 == recvLength) {
+        recvLength = MAX_BUFFER_SIZE_EXTENDED;
+    }
+
+    std::vector<BYTE> recvBuffer(recvLength);
     uint32_t ret = SCardTransmit(hCard, & ioSendPci, sendBuffer.data(), sendBuffer.size(),
                                  & ioRecvPci, recvBuffer.data(), & recvLength);
 
@@ -594,10 +575,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteTransmit(const StreamBufRef & s
     reply.writeIntLE32(ioRecvPci.dwProtocol).writeIntLE32(ioRecvPci.cbPciLength).writeIntLE32(recvLength).writeIntLE32(ret);
 
     if(recvLength) {
-        reply.write(recvBuffer.data(), recvLength);
+        reply.write(std::span{recvBuffer.data(), recvLength});
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteStatus(const StreamBufRef & sb) {
@@ -632,9 +613,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteStatus(const StreamBufRef & sb)
 
     reply.writeIntLE32(state).writeIntLE32(protocol).
         writeIntLE32(readerNameLen).writeIntLE32(atrLen).writeIntLE32(ret);
-    reply.write(readerName, readerNameLen).write(atrBuf, atrLen);
+    reply.write(std::span{readerName, readerNameLen}).write(std::span{atrBuf, atrLen});
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetStatusChange(const StreamBufRef & sb) {
@@ -715,11 +696,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetStatusChange(const StreamBuf
         }
 
         if(state.cbAtr) {
-            reply.write(state.rgbAtr, state.cbAtr);
+            reply.write(std::span{state.rgbAtr, state.cbAtr});
         }
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteControl(const StreamBufRef & sb) {
@@ -755,10 +736,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteControl(const StreamBufRef & sb
     reply.writeIntLE32(bytesReturned).writeIntLE32(ret);
 
     if(bytesReturned) {
-        reply.write(recvBuffer.data(), bytesReturned);
+        reply.write(std::span{recvBuffer.data(), bytesReturned});
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteCancel(const StreamBufRef & sb) {
@@ -779,7 +760,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteCancel(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetAttrib(const StreamBufRef & sb) {
@@ -805,10 +786,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteGetAttrib(const StreamBufRef & 
     reply.writeIntLE32(attrLen).writeIntLE32(ret);
 
     if(attrLen) {
-        reply.write(attrBuf.data(), attrLen);
+        reply.write(std::span{attrBuf.data(), attrLen});
     }
 
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscLiteSetAttrib(const StreamBufRef & sb) {
@@ -838,5 +819,5 @@ void LTSM::Channel::ConnectorClientPcsc::pcscLiteSetAttrib(const StreamBufRef & 
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmChannelData(cid, std::move(reply.rawbuf()));
+    connectorOwner()->sendLtsmChannelData(channel(), std::move(reply.rawbuf()));
 }

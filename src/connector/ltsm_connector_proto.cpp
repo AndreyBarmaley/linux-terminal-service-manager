@@ -30,37 +30,145 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_channels.h"
 
+using namespace boost;
 using namespace std::chrono_literals;
 
 namespace LTSM::Connector {
     /* ConnectorLtsm */
+    ConnectorLtsm::ConnectorLtsm(const std::filesystem::path & confile, bool debug)
+        : DBusProxy(ConnectorType::LTSM, confile, debug)
+        , RFB::X11Server(ioc())
+        , transfer_strand_{get_executor()} {}
+
     ConnectorLtsm::~ConnectorLtsm() {
-        try {
-            rfbMessagesShutdown();
-            xcbDisableMessages(true);
-
-            if(0 < displayNum()) {
-                busConnectorTerminated(displayNum(), getpid());
-                clientDisconnectedEvent(displayNum());
-                Application::info("{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
-            }
-
-        } catch(const std::exception & err) {
-            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
-        }
+        stop();
     }
 
-    int ConnectorLtsm::communication(void) {
+    int ConnectorLtsm::start(void) {
         if(0 >= busGetServiceVersion()) {
             Application::error("{}: bus service failure", NS_FuncNameV);
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: remote addr: {}", NS_FuncNameV, _remoteaddr);
+        Application::info("{}: remote addr: {}", NS_FuncNameV, remoteAddress());
 
-        _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
+        x11NoDamage_ = config().getBoolean("vnc:xcb:nodamage", false);
+        asio::co_spawn(DBusProxy::ioc(), rfbCommunicationAwait(), asio::detached);
 
-        return rfbCommunication();
+        BoostContext::run();
+        return 0;
+    }
+
+    void ConnectorLtsm::stop(void) noexcept {
+        std::call_once(stop_flag_, [this](){
+            asioStop();
+        });
+    }
+
+    void ConnectorLtsm::asioStop(void) noexcept {
+        try {
+            if(0 < displayNum()) {
+                busConnectorTerminated(displayNum(), getpid());
+                clientDisconnectedEvent(displayNum());
+            }
+
+            X11Server::rfbStop();
+            DBusProxy::asioStop();
+            ioc().stop();
+
+            Application::debug(DebugType::App, "{}: connector shutdown, display: {}", NS_FuncNameV, displayNum());
+        } catch(const std::exception & err) {
+            Application::warning("{}: connector error: {}", NS_FuncNameV, err.what());
+        }
+    }
+
+    uint16_t ConnectorLtsm::encodingThreads(void) const {
+        return concurency();
+    }
+
+    std::future<BinaryBuf> ConnectorLtsm::postEncoderJob(RFB::PostEncoderJobCb && func, XCB::Region reg) const {
+        std::promise<BinaryBuf> prom;
+        auto ret = prom.get_future();
+        if(1 < concurency()) {
+            // job background
+            boost::asio::post(const_cast<ConnectorLtsm&>(*this).ioc(), [promise=std::move(prom), job=std::move(func), reg]() mutable {
+                try {
+                    promise.set_value(job(reg));
+                } catch(const std::exception&) {
+                    promise.set_exception_at_thread_exit(std::current_exception());
+                }
+            });
+        } else {
+            try {
+                prom.set_value(func(reg));
+            } catch(const std::exception&) {
+                prom.set_exception_at_thread_exit(std::current_exception());
+            }
+        }
+        return ret;
+    }
+
+    asio::awaitable<void> ConnectorLtsm::onLoginSuccessAwait(std::string userName, uint32_t userUid) {
+        xcbDisableMessages(true);
+        switch_mode_ = true;
+
+        co_await waitUpdateProcessAwait();
+
+        int oldDisplay = displayNum();
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, remoteAddress(), connectorType());
+
+        if(newDisplay < 0) {
+            Application::error("{}: {} failed", NS_FuncNameV, "busStartUserSession");
+            throw proto_error(NS_FuncNameS);
+        }
+
+        if(newDisplay != oldDisplay) {
+            auto xauthFile = busDisplayAuthFile(newDisplay);
+            co_await xcbConnectAwait(newDisplay, xauthFile, *this);
+            // send later
+            asio::post(ioc(), std::bind(&ConnectorLtsm::busShutdownDisplay, this, oldDisplay));
+        }
+
+        co_await xcbShmInit(userUid);
+        const auto clientRegion = getClientRegion();
+
+        if(RootDisplay::size() != clientRegion.toSize()) {
+            Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
+                                 clientRegion.toSize(), displayNum());
+
+            if(RootDisplay::setRandrScreenSize(clientRegion)) {
+                Application::info("{}: change session size: {}, display: {}",
+                        NS_FuncNameV, clientRegion.toSize(), displayNum());
+            }
+        }
+
+        switch_mode_ = false;
+        xcbDisableMessages(false);
+
+        // full update
+        X11Server::serverScreenUpdateRequest();
+
+        auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
+
+        setIdleTimeoutSec(json.getInteger("session:idle:timeout", 0));
+        userSession_ = true;
+
+        busConnectorConnected(newDisplay, getpid());
+        busSetSessionEncodings(newDisplay, getClientEncodings().toVector());
+
+        co_await asio::dispatch(rfb_strand(), asio::use_awaitable);
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::LoginSuccess);
+        jos.push("action", true);
+
+        auto buf = jos.flush();
+        co_await sendLtsmChannelAwait(ChannelTypeSystem, std::span{reinterpret_cast<const uint8_t*>(buf.data()), buf.size()});
+
+        co_return;
+    }
+
+    void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region& reg) {
+        X11Server::serverScreenUpdateRequest(reg);
     }
 
     void ConnectorLtsm::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
@@ -68,86 +176,42 @@ namespace LTSM::Connector {
             return;
         }
 
-        xcbDisableMessages(true);
-        waitUpdateProcess();
-        _shmUid = userUid;
         Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", NS_FuncNameV, display,
                             userName, userUid);
-        int oldDisplay = displayNum();
-        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
-        if(newDisplay < 0) {
-            Application::error("{}: {} failed", NS_FuncNameV, "user session request");
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        if(newDisplay != oldDisplay) {
-            // wait xcb old operations ended
-            std::this_thread::sleep_for(100ms);
-
-            if(! xcbConnect(newDisplay, *this)) {
-                Application::error("{}: {} failed", NS_FuncNameV, "xcb connect");
-                throw std::runtime_error(NS_FuncNameS);
+        asio::co_spawn(xcb_strand(), onLoginSuccessAwait(userName, userUid), [this](std::exception_ptr ptr){
+            if(ptr) {
+                try {
+                    std::rethrow_exception(ptr); 
+                } catch (const std::exception& err) {
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+                    asio::post(ioc(), std::bind(&ConnectorLtsm::stop, this));
+                }
             }
-
-            busShutdownDisplay(oldDisplay);
-        }
-
-        xcbShmInit(_shmUid);
-        xcbDisableMessages(false);
-        auto & clientRegion = getClientRegion();
-
-        // fix new session size
-        if(xcbDisplay()->size() != clientRegion.toSize()) {
-            Application::warning("{}: remote request desktop size: {}, display: {}", NS_FuncNameV,
-                                 clientRegion.toSize(), displayNum());
-
-            if(0 < xcbDisplay()->setRandrScreenSize(clientRegion)) {
-                Application::info("{}: change session size: {}, display: {}",
-                        NS_FuncNameV, clientRegion.toSize(), displayNum());
-            }
-        } else {
-            // full update
-            if(! _x11NoDamage) {
-                X11Server::serverScreenUpdateRequest();
-            }
-        }
-
-        auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
-
-        _idleTimeoutSec = json.getInteger("session:idle:timeout", 0);
-        _idleSessionTp = std::chrono::steady_clock::now();
-        _userSession = true;
-
-        busConnectorConnected(newDisplay, getpid());
-        busSetSessionEncodings(newDisplay, getClientEncodings().toVector());
-
-        std::thread([this]() {
-            JsonObjectStream jos;
-            jos.push("cmd", SystemCommand::LoginSuccess);
-            jos.push("action", true);
-            static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
-        }).detach();
+        });
     }
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
+            if(switch_mode_) {
+                Application::info("{}: display: {}, switch mode, skipped...", NS_FuncNameV, display);
+                return;
+            }
+
             Application::notice("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            xcbDisableMessages(true);
-            waitUpdateProcess();
-            rfbMessagesShutdown();
+            asio::post(ioc(), std::bind(&ConnectorLtsm::stop, this));
         }
     }
 
     void ConnectorLtsm::onSendBellSignal(const int32_t & display) {
         if(display == displayNum()) {
             Application::info("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            std::thread([this] { this->sendBellEvent(); }).detach();
+            asio::co_spawn(ioc(), sendBellEventAwait(), asio::detached);
         }
     }
 
     const PixelFormat & ConnectorLtsm::serverFormat(void) const {
-        return _serverPf;
+        return serverPf_;
     }
 
     void ConnectorLtsm::serverFrameBufferModifyEvent(FrameBuffer & fb) const {
@@ -164,56 +228,49 @@ namespace LTSM::Connector {
                 }
 
                 try {
-                    _keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
+                    keymap_.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
                 } catch(const std::exception &) { }
             }
         }
     }
 
-    void ConnectorLtsm::serverHandshakeVersionEvent(void) {
-        // Xvfb: session request
-        int screen = busStartLoginSession(getpid(), 24, _remoteaddr, "ltsm");
+    asio::awaitable<void> ConnectorLtsm::connectorHandshakeVersionAwait(void) {
+        // session request
+        const uint16_t width = 0;
+        const uint16_t height = 0;
+        const uint8_t depth = 24;
+        int screen = busStartLoginSession(getpid(), width, height, depth, remoteAddress(), "ltsm");
 
         if(screen <= 0) {
-            Application::error("{}: login session request: failure", NS_FuncNameV);
+            Application::error("{}: {} failed", NS_FuncNameV, "login session request");
             throw proto_error(NS_FuncNameS);
         }
 
         Application::info("{}: login session request success, display: {}", NS_FuncNameV, screen);
+        auto xauthFile = busDisplayAuthFile(screen);
 
-        if(! xcbConnect(screen, *this)) {
-            Application::error("{}: xcb connect: failed", NS_FuncNameV);
-            throw proto_error(NS_FuncNameS);
-        }
-
-        const xcb_visualtype_t* visual = xcbDisplay()->visual();
+        co_await xcbConnectAwait(screen, xauthFile, *this);
+        const xcb_visualtype_t* visual = RootDisplay::visual();
 
         if(! visual) {
             Application::error("{}: xcb visual empty", NS_FuncNameV);
             throw proto_error(NS_FuncNameS);
         }
 
-        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", NS_FuncNameV, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", NS_FuncNameV, RootDisplay::getMaxRequest());
         // init server format
-        _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        serverPf_ = PixelFormat(RootDisplay::bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // load keymap
         if(config().hasKey("vnc:keymap:file")) {
             loadKeymap(config().getString("vnc:keymap:file"));
         }
+
+        co_return;
     }
 
     std::forward_list<std::string> ConnectorLtsm::serverDisabledEncodings(void) const {
-        return config().getStdListForward<std::string>("vnc:encoding:blacklist");
-    }
-
-    void ConnectorLtsm::serverEncodingSelectedEvent(void) {
-        setEncodingThreads(config().getInteger("vnc:encoding:threads", 2));
-        setEncodingDebug(config().getInteger("vnc:encoding:debug", 0));
-    }
-
-    void ConnectorLtsm::serverMainLoopEvent(void) {
-        checkIdleTimeout();
+        return config().getStdListForward<std::string>("encoding:blacklist");
     }
 
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz) {
@@ -222,7 +279,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::serverEncodingsEvent(void) {
         if(isClientLtsmSupported()) {
-            sendEncodingLtsmSupported();
+            asio::co_spawn(rfb_strand(), sendEncodingLtsmSupportedAwait(), asio::detached);
         }
     }
 
@@ -230,11 +287,15 @@ namespace LTSM::Connector {
 #ifdef LTSM_WITH_GSSAPI
 
         if(auto info = ServerEncoder::authInfo(); ! info.first.empty()) {
-            const auto & login = info.first;
-            helperSetSessionLoginPassword(displayNum(), login, "", false);
-            // not so fast
-            std::this_thread::sleep_for(50ms);
-            busSetAuthenticateToken(displayNum(), login);
+            asio::co_spawn(ioc(), [this,login=info.first]() -> asio::awaitable<void> {
+                helperSetSessionLoginPassword(displayNum(), login, "", false);
+                // not so fast
+                auto ex = co_await asio::this_coro::executor;
+                asio::steady_timer tm_delay{ex, 200ms};
+                co_await tm_delay.async_wait(asio::use_awaitable);
+                busSetAuthenticateToken(displayNum(), login);
+                co_return;
+            }, asio::detached);
         }
 
 #endif
@@ -279,7 +340,7 @@ namespace LTSM::Connector {
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
+                Application::warning("{}: {} failed, code: {}, error: {}, path: `{}'",
                                 NS_FuncNameV, "is_regular_file", err.value(), err.message(), keytab);
                 secInfo.authKrb5 = false;
             }
@@ -300,21 +361,14 @@ namespace LTSM::Connector {
         return DBusProxy::xcbAllowMessages();
     }
 
-    void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region & reg) {
-        if(xcbAllowMessages() && ! _x11NoDamage) {
-            X11Server::serverScreenUpdateRequest(reg);
-        }
-    }
-
     uint32_t ConnectorLtsm::frameRateOption(void) const {
         constexpr uint32_t minFps = 5;
         constexpr uint32_t maxFps = 20;
-        return std::clamp(_frameRate, minFps, maxFps);
+        return std::clamp(frameRate_, minFps, maxFps);
     }
 
     bool ConnectorLtsm::xcbNoDamageOption(void) const {
-        return isClientLtsmSupported() ?
-               static_cast<bool>(_x11NoDamage) : false;
+        return isClientLtsmSupported() && x11NoDamage_;
     }
 
     void ConnectorLtsm::xcbDisableMessages(bool f) {
@@ -322,25 +376,25 @@ namespace LTSM::Connector {
     }
 
     int ConnectorLtsm::rfbUserKeycode(uint32_t keysym) const {
-        auto it = _keymap.find(keysym);
-        return it != _keymap.end() ? it->second : 0;
+        auto it = keymap_.find(keysym);
+        return it != keymap_.end() ? it->second : 0;
     }
 
     void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
         X11Server::serverRecvKeyEvent(pressed, keycode, scancode);
-        _idleSessionTp = std::chrono::steady_clock::now();
+        idleSessionReset();
     }
 
     void ConnectorLtsm::serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) {
         X11Server::serverRecvPointerEvent(mask, posx, posy);
-        _idleSessionTp = std::chrono::steady_clock::now();
+        idleSessionReset();
     }
 
     bool ConnectorLtsm::isUserSession(void) const {
-        return _userSession;
+        return userSession_;
     }
 
-    void ConnectorLtsm::systemClientVariables(const JsonObject & jo) {
+    void ConnectorLtsm::systemClientVariablesEvent(const JsonObject & jo) {
         Application::debug(DebugType::App, "{}: count: {}", NS_FuncNameV, jo.size());
 
         if(auto env = jo.getObject("environments")) {
@@ -355,43 +409,46 @@ namespace LTSM::Connector {
                 return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
             });
 
-            std::thread([group = std::distance(names.begin(), it), display = xcbDisplay()]() {
-                if(auto xkb = static_cast<const XCB::ModuleXkb*>(display->getExtension(XCB::Module::XKB))) {
+            asio::co_spawn(xcb_strand(), [this, group = std::distance(names.begin(), it)]() -> asio::awaitable<void> {
+                if(auto xkb = static_cast<const XCB::ModuleXkb*>(RootDisplay::getExtension(XCB::Module::XKB))) {
                     // wait pause for apply layouts
-                    std::this_thread::sleep_for(200ms);
+                    auto ex = co_await asio::this_coro::executor;
+                    asio::steady_timer tm_delay{ex, 200ms};
+                    co_await tm_delay.async_wait(asio::use_awaitable);
                     xkb->switchLayoutGroup(group);
                 }
-            }).detach();
+                co_return;
+            }, asio::detached);
         }
 
         if(auto opts = jo.getObject("options")) {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
-            _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
-            _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
-            _frameRate = opts->getInteger("frame:rate", _frameRate);
+            [[maybe_unused]] int clientVersion = opts->getInteger("ltsm:client", 0);
+            x11NoDamage_ = opts->getBoolean("x11:nodamage", x11NoDamage_);
+            frameRate_ = opts->getInteger("frame:rate", frameRate_);
 
             setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"), frameRateOption());
 
-            if(_x11NoDamage && ! XCB::RootDisplay::hasError()) {
+            if(x11NoDamage_ && ! XCB::RootDisplay::hasError()) {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
             }
         }
     }
 
-    void ConnectorLtsm::systemCursorFailed(const JsonObject & jo) {
+    void ConnectorLtsm::systemCursorFailedEvent(const JsonObject & jo) {
         auto cursorId = jo.getInteger("cursor");
 
         if(cursorId) {
             Application::debug(DebugType::App, "{}: cursor id: {:#010x}", NS_FuncNameV, cursorId);
-            cursorFailed(cursorId);
+            cursorRequest(cursorId);
         }
     }
 
-    void ConnectorLtsm::systemKeyboardChange(const JsonObject & jo) {
+    void ConnectorLtsm::systemKeyboardChangeEvent(const JsonObject & jo) {
         auto layout = jo.getString("layout");
 
         if(xcbAllowMessages()) {
-            if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(RootDisplay::getExtension(XCB::Module::XKB))) {
                 Application::debug(DebugType::App, "{}: layout: {}", NS_FuncNameV, layout);
                 auto names = xkb->getNames();
                 auto it = std::ranges::find_if(names, [&](auto & str) {
@@ -409,83 +466,91 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::systemTransferFiles(const JsonObject & jo) {
-        if(isUserSession()) {
-            auto fa = jo.getArray("files");
-
-            if(! fa) {
-                Application::error("{}: incorrect format message", NS_FuncNameV);
-                return;
-            }
-
-            Application::debug(DebugType::App, "{}: files count: {}", NS_FuncNameV, fa->size());
-
-            // check transfer disabled
-            if(config().getBoolean("transfer:file:disabled", false)) {
-                Application::error("{}: administrative disable", NS_FuncNameV);
-                busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
-                              NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
-                return;
-            }
-
-            size_t fmax = 0;
-            size_t prettyMb = 0;
-
-            if(config().hasKey("transfer:file:max")) {
-                fmax = config().getInteger("transfer:file:max");
-                prettyMb = fmax / (1024 * 1024);
-            }
-
-            for(int it = 0; it < fa->size(); ++it) {
-                auto jo2 = fa->getObject(it);
-
-                if(! jo2) {
-                    continue;
-                }
-
-                std::string fname = jo2->getString("file");
-                size_t fsize = jo2->getInteger("size");
-
-                if(std::ranges::any_of(_transferPlanned, [&](auto & st) { return fname == std::get<0>(st); })) {
-                    Application::warning("{}: found planned and skipped, file: {}", NS_FuncNameV, fname);
-                    continue;
-                }
-
-                // check max size
-                if(fmax && fsize > fmax) {
-                    Application::warning("{}: file size exceeds and skipped, file: {}", NS_FuncNameV, fname);
-                    busSendNotify(displayNum(), "Transfer Skipped",
-                                  fmt::format("the file size exceeds, the allowed limit: {}M, file: {}", prettyMb, fname),
-                                  NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
-                    continue;
-                }
-
-                // add planned transfer
-                std::scoped_lock<std::mutex> guard{_lockTransfer};
-                _transferPlanned.emplace_back(std::move(fname), fsize);
-            }
-
-            size_t freeChannels = countFreeChannels();
-
-            if(_transferPlanned.empty()) {
-                Application::warning("{}: file list empty", NS_FuncNameV);
-            } else if(! freeChannels) {
-                Application::warning("{}: no free channels", NS_FuncNameV);
-            } else {
-                std::scoped_lock<std::mutex> guard{_lockTransfer};
-
-                if(_transferPlanned.size() <= freeChannels) {
-                    // send request to manager
-                    busTransferFilesRequest(displayNum(), {_transferPlanned.begin(), _transferPlanned.end() });
-                } else {
-                    // transfer background
-                    std::thread(& ConnectorLtsm::transferFilesPartial, this, _transferPlanned).detach();
-                }
-            }
+    void ConnectorLtsm::systemTransferFilesEvent(const JsonObject & jo) {
+        if(! isUserSession()) {
+            Application::error("{}: not user session", NS_FuncNameV);
+            return;
         }
+
+        asio::co_spawn(transfer_strand_, systemTransferFilesAwait(jo), asio::detached);
     }
 
-    void ConnectorLtsm::transferFilesPartial(std::list<TupleFileSize> files) {
+    asio::awaitable<void> ConnectorLtsm::systemTransferFilesAwait(JsonObject jo) {
+        auto fa = jo.getArray("files");
+        if(! fa) {
+            Application::error("{}: incorrect format message", NS_FuncNameV);
+            co_return;
+        }
+
+        Application::debug(DebugType::App, "{}: files count: {}", NS_FuncNameV, fa->size());
+
+        // check transfer disabled
+        if(config().getBoolean("transfer:file:disabled", false)) {
+            Application::error("{}: administrative disable", NS_FuncNameV);
+            busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
+                          NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+            co_return;
+        }
+
+        size_t fmax = 0;
+        size_t prettyMb = 0;
+
+        if(config().hasKey("transfer:file:max")) {
+            fmax = config().getInteger("transfer:file:max");
+            prettyMb = fmax / (1024 * 1024);
+        }
+
+        for(int it = 0; it < fa->size(); ++it) {
+            auto jo2 = fa->getObject(it);
+
+            if(! jo2) {
+                continue;
+            }
+
+            std::string fname = jo2->getString("file");
+            size_t fsize = jo2->getInteger("size");
+
+            if(std::ranges::any_of(transferPlanned_, [&](auto & st) { return fname == std::get<0>(st); })) {
+                Application::warning("{}: found planned and skipped, file: {}", NS_FuncNameV, fname);
+                continue;
+            }
+
+            // check max size
+            if(fmax && fsize > fmax) {
+                Application::warning("{}: file size exceeds and skipped, file: {}", NS_FuncNameV, fname);
+                busSendNotify(displayNum(), "Transfer Skipped",
+                              fmt::format("the file size exceeds, the allowed limit: {}M, file: {}", prettyMb, fname),
+                              NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+                continue;
+            }
+
+            // add planned transfer
+            transferPlanned_.emplace_back(std::move(fname), fsize);
+        }
+
+        size_t freeChannels = countFreeChannels();
+
+        if(transferPlanned_.empty()) {
+            Application::warning("{}: file list empty", NS_FuncNameV);
+        } else if(! freeChannels) {
+            Application::warning("{}: no free channels", NS_FuncNameV);
+        } else {
+            if(transferPlanned_.size() <= freeChannels) {
+                // send request to manager
+                busTransferFilesRequest(displayNum(), {transferPlanned_.begin(), transferPlanned_.end() });
+            } else {
+                // transfer background
+                co_await transferFilesPartial(std::move(transferPlanned_));
+            }
+        }
+
+        co_return;
+    }
+
+    asio::awaitable<void> ConnectorLtsm::transferFilesPartial(std::list<TupleFileSize>&& files) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer timer(ex, std::chrono::seconds(1));
+
         size_t freeChannels = countFreeChannels() / 3;
         using TimePointSeconds = Tools::TimePoint<std::chrono::seconds>;
         std::unique_ptr<TimePointSeconds> partial;
@@ -514,8 +579,9 @@ namespace LTSM::Connector {
                 it1 = it2;
             }
 
-            std::this_thread::sleep_for(1s);
+            co_await timer.async_wait(asio::use_awaitable);
         }
+        co_return;
     }
 
     void ConnectorLtsm::onTransferAllow(const int32_t & display, const std::string & filepath, const std::string & tmpfile,
@@ -526,29 +592,33 @@ namespace LTSM::Connector {
         Application::debug(DebugType::App, "{}: display: {}", NS_FuncNameV, display);
 
         if(display == displayNum()) {
-            std::scoped_lock<std::mutex> guard{_lockTransfer};
-            auto it = std::ranges::find_if(_transferPlanned, [&](auto & st) {
-                return filepath == std::get<0>(st);
-            });
-
-            if(it == _transferPlanned.end()) {
-                Application::error("{}: transfer not found, file: {}", NS_FuncNameV, filepath);
-                return;
-            }
-
-            // transfer not canceled
-            if(! dstdir.empty() && ! tmpfile.empty()) {
-                // create file transfer channel
-                createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
-                              Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
-                              Channel::Opts{Channel::Speed::Slow, 0});
-                auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
-                busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile);
-            }
-
-            // remove planned
-            _transferPlanned.erase(it);
+            asio::co_spawn(transfer_strand_, onTransferAllowAwait(filepath, tmpfile, dstdir), asio::detached);
         }
+    }
+
+    asio::awaitable<void> ConnectorLtsm::onTransferAllowAwait(std::string filepath, std::string tmpfile, std::string dstdir) {
+        auto it = std::ranges::find_if(transferPlanned_, [&](auto & st) {
+            return filepath == std::get<0>(st);
+        });
+
+        if(it == transferPlanned_.end()) {
+            Application::error("{}: transfer not found, file: {}", NS_FuncNameV, filepath);
+            co_return;
+        }
+
+        // transfer not canceled
+        if(! dstdir.empty() && ! tmpfile.empty()) {
+            // create file transfer channel
+            createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
+                          Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
+                          Channel::Opts{Channel::Speed::Slow, 0});
+            auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
+            busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile);
+        }
+
+        // remove planned
+        transferPlanned_.erase(it);
+        co_return;
     }
 
     void ConnectorLtsm::onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
@@ -569,14 +639,19 @@ namespace LTSM::Connector {
                                          const std::string & server, const std::string & smode, const std::string & speed, const uint8_t & limit,
                                          const uint32_t & flags) {
         if(display == displayNum()) {
-            createListener(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), limit,
-                           Channel::Opts{Channel::connectorSpeed(speed), (int) flags});
+            asio::co_spawn(chan_strand(), 
+                createListenerAwait(
+                    Channel::UrlMode(client, cmode),
+                    Channel::UrlMode(server, smode),
+                    Channel::Opts{Channel::connectorSpeed(speed), (int) flags},
+                    limit),
+                asio::detached);
         }
     }
 
     void ConnectorLtsm::onDestroyListener(const int32_t & display, const std::string & client, const std::string & server) {
         if(display == displayNum()) {
-            destroyListener(client, server);
+            asio::co_spawn(chan_strand(), destroyListenerAwait(server), asio::detached);
         }
     }
 
@@ -591,31 +666,24 @@ namespace LTSM::Connector {
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", false);
         jos.push("error", msg);
-        static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
+        sendLtsmChannelData(ChannelTypeSystem, jos.flush());
     }
 
-    void ConnectorLtsm::systemChannelError(const JsonObject & jo) {
+    void ConnectorLtsm::systemChannelErrorEvent(const JsonObject & jo) {
         auto channel = jo.getInteger("id");
         auto code = jo.getInteger("code");
         auto err = jo.getString("error");
         Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'",
                  NS_FuncNameV, channel, displayNum(), code, err);
 
-        if(isUserSession())
+        if(isUserSession()) {
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
                           NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+        }
     }
 
     bool ConnectorLtsm::noVncMode(void) const {
-        return _remoteaddr == "127.0.0.1" &&
+        return remoteAddress() == "127.0.0.1" &&
                config().getBoolean("vnc:novnc:allow", false);
-    }
-
-    std::string ConnectorLtsm::remoteClientAddress(void) const {
-        return _remoteaddr;
-    }
-
-    int ConnectorLtsm::remoteClientVersion(void) const {
-        return _ltsmClientVersion;
     }
 }

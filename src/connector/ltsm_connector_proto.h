@@ -25,9 +25,6 @@
 #define _LTSM_CONNECTOR_PROTO_
 
 #include <list>
-#include <array>
-#include <memory>
-#include <atomic>
 #include <exception>
 #include <unordered_map>
 
@@ -41,24 +38,25 @@ namespace LTSM::Connector {
 
     using TupleFileSize = sdbus::Struct<std::string, uint32_t>;
 
-    class ConnectorLtsm : public DBusProxy, protected RFB::X11Server {
-        PixelFormat _serverPf;
-        std::unordered_map<uint32_t, int> _keymap;
+    class ConnectorLtsm : public DBusProxy, public RFB::X11Server {
+        boost::asio::strand<boost::asio::any_io_executor> transfer_strand_;
 
-        std::list<TupleFileSize> _transferPlanned;
-        std::mutex _lockTransfer;
+        PixelFormat serverPf_;
+        std::unordered_map<uint32_t, int> keymap_;
+        std::list<TupleFileSize> transferPlanned_;
 
-        uint32_t _frameRate{0};
-        bool _userSession{false};
-        bool _x11NoDamage{false};
+        std::atomic<bool> switch_mode_{false};
 
-        //std::chrono::time_point<std::chrono::steady_clock> _idleSession;
-        //uint32_t _idleTimeoutSec = 0;
+        uint32_t frameRate_{16};
+        bool userSession_{false};
+        bool x11NoDamage_{false};
 
-        uid_t _shmUid = 0;
-        int _ltsmClientVersion = 0;
+        std::once_flag stop_flag_;
 
       protected:
+        void stop(void) noexcept final;
+        void asioStop(void) noexcept;
+
         // rfb server encoding
         const PixelFormat & serverFormat(void) const override;
         void serverFrameBufferModifyEvent(FrameBuffer &) const override;
@@ -77,6 +75,7 @@ namespace LTSM::Connector {
 
         void serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) override;
         void serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
+        void serverScreenUpdateRequest(const XCB::Region&) override;
 
         // dbus virtual signals
         void onLoginSuccess(const int32_t & display, const std::string & userName,
@@ -85,8 +84,6 @@ namespace LTSM::Connector {
         void onSendBellSignal(const int32_t & display) override;
 
         // connector
-        void serverScreenUpdateRequest(const XCB::Region &) override;
-
         void onLoginFailure(const int32_t & display, const std::string & msg) override;
         void onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
                              const std::string & server, const std::string & smode, const std::string & speed) override;
@@ -100,35 +97,37 @@ namespace LTSM::Connector {
                                const std::string & server) override;
         void onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug) override;
 
-        void serverHandshakeVersionEvent(void) override;
-        void serverEncodingSelectedEvent(void) override;
+        boost::asio::awaitable<void> connectorHandshakeVersionAwait(void) override;
         void serverSecurityInitEvent(void) override;
         void serverConnectedEvent(void) override;
-        void serverMainLoopEvent(void) override;
         void serverDisplayResizedEvent(const XCB::Size &) override;
         void serverEncodingsEvent(void) override;
 
-        // rfb channel client
+        // rfb channel listenet
         bool isUserSession(void) const override;
-        void systemChannelError(const JsonObject &) override;
-        void systemTransferFiles(const JsonObject &) override;
-        void systemClientVariables(const JsonObject &) override;
-        void systemKeyboardChange(const JsonObject &) override;
-        void systemCursorFailed(const JsonObject & jo) override;
-
+        void systemChannelErrorEvent(const JsonObject &) override;
+        void systemTransferFilesEvent(const JsonObject &) override;
+        void systemClientVariablesEvent(const JsonObject &) override;
+        void systemKeyboardChangeEvent(const JsonObject &) override;
+        void systemCursorFailedEvent(const JsonObject & jo) override;
         bool noVncMode(void) const override;
-        int remoteClientVersion(void) const override;
-        std::string remoteClientAddress(void) const override;
 
       protected:
         void loadKeymap(const std::string & file);
-        void transferFilesPartial(std::list<TupleFileSize> files);
+
+        boost::asio::awaitable<void> systemTransferFilesAwait(JsonObject jo);
+        boost::asio::awaitable<void> transferFilesPartial(std::list<TupleFileSize>&&);
+        boost::asio::awaitable<void> onLoginSuccessAwait(std::string userName, uint32_t userUid);
+        boost::asio::awaitable<void> onTransferAllowAwait(std::string filepath, std::string tmpfile, std::string dstdir);
 
       public:
-        ConnectorLtsm(const std::filesystem::path & confile, bool debug) : DBusProxy(ConnectorType::LTSM, confile, debug) {}
+        ConnectorLtsm(const std::filesystem::path & confile, bool debug);
         ~ConnectorLtsm();
 
-        int communication(void) override;
+        int start(void) final;
+
+        uint16_t encodingThreads(void) const override;
+        std::future<BinaryBuf> postEncoderJob(RFB::PostEncoderJobCb &&, XCB::Region) const override;
     };
 }
 

@@ -23,6 +23,7 @@
 
 #include <chrono>
 #include <thread>
+#include <csignal>
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
@@ -30,71 +31,143 @@
 #include <filesystem>
 
 #if BOOST_VERSION >= 108700
-#include <boost/process/v1/environment.hpp>
-#else
-#include <boost/process.hpp>
+#include <boost/process/popen.hpp>
 #include <boost/process/environment.hpp>
+#else
+#include <boost/process/v2/popen.hpp>
+#include <boost/process/v2/environment.hpp>
 #endif
+
+#include <boost/asio/experimental/awaitable_operators.hpp>
 
 #include "ltsm_zlib.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_sdbus_proxy.h"
-#include "ltsm_byte_stream.h"
 #include "ltsm_display_session.h"
 
 using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM::DisplaySession {
-    std::vector<uint8_t> readXauthFile(const std::filesystem::path & xauthFilePath, int displayNum) {
-        std::ifstream ifs(xauthFilePath);
-        byte::istream bs(ifs);
 
-        while(ifs) {
-            // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
-            if(auto ver = bs.read_be16(); ver != 0x0100) {
-                Application::error("{}: invalid xauth format, ver: {:#06x}", NS_FuncNameV, ver);
-                throw std::runtime_error(NS_FuncNameS);
+    bp::process_stdio SessionProcess::createRedirect(const std::string& cmd) {
+        const auto filename = std::filesystem::path(cmd).filename();
+        auto log_dir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
+
+        if(auto home = getenv("HOME")) {
+            log_dir = std::filesystem::path{home} / ".ltsm" / "log";
+        }
+
+        if(! std::filesystem::is_directory(log_dir)) {
+            std::filesystem::create_directories(log_dir);
+        }
+
+        auto log_file_out = log_dir / filename;
+        log_file_out.replace_extension(".out");
+
+        auto log_file_err = log_dir / filename;
+        log_file_err.replace_extension(".err");
+
+        return bp::process_stdio{ .in = nullptr, .out = log_file_out, .err = log_file_err };
+    }
+
+    asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
+        if(std::filesystem::is_socket(file)) {
+            co_return;
+        }
+
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_pause{ex};
+
+        while(! std::filesystem::is_socket(file)) {
+            tm_pause.expires_after(100ms);
+            co_await tm_pause.async_wait(asio::use_awaitable);
+        }
+
+        asio::local::stream_protocol::socket sock{ex};
+        co_await sock.async_connect(asio::local::stream_protocol::endpoint{file.string()}, asio::use_awaitable);
+
+        co_return;
+    }
+
+    asio::awaitable<void> waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_deadline{ex, deadline_ms};
+
+        using namespace asio::experimental::awaitable_operators;
+        auto results = co_await(waitSocketConnectAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
+
+        if(results.index() == 0) {
+            tm_deadline.cancel();
+            co_return;
+        }
+
+        Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+        throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
+    }
+
+    template<typename Buffer>
+    asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
+        auto ex = co_await asio::this_coro::executor;
+
+        int fd = open(file.c_str(), O_RDONLY | O_NONBLOCK);
+
+        if(fd < 0) {
+            if(errno == ENOENT) {
+                throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory), file.string());
             }
 
-            auto len = bs.read_be16();
-            auto host = bs.read_string(len);
+            throw std::system_error(errno,  std::generic_category(),  file.string());
+        }
 
-            len = bs.read_be16();
-            auto display = bs.read_string(len);
+        asio::posix::stream_descriptor sd{ex, fd};
 
-            len = bs.read_be16();
-            auto magic = bs.read_string(len);
+        Buffer content;
+        auto buffer = asio::dynamic_buffer(content);
 
-            len = bs.read_be16();
-            auto cookie = bs.read_bytes(len);
-
-            if(display == std::to_string(displayNum)) {
-                Application::debug(DebugType::App, "{}: {} found, display {}",
-                                   NS_FuncNameV, "xcb cookie", displayNum);
-                return cookie;
+        try {
+            co_await asio::async_read(sd, buffer, asio::use_awaitable);
+        } catch(const system::system_error& err) {
+            if(err.code() != asio::error::eof) {
+                throw;
             }
         }
 
-        Application::error("{}: {} found, display: {}",
-                           NS_FuncNameV, "xcb cookie not", displayNum);
-
-        throw std::runtime_error(NS_FuncNameS);
+        co_return content;
     }
 
-    bool waitX11DisplayStarting(int displayNum, const XCB::AuthCookie & mcookie, uint32_t ms) {
-        return Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [displayNum, auth = std::addressof(mcookie)]() {
-            if(Tools::checkUnixSocket(Tools::x11UnixPath(displayNum))) {
-                try {
-                    if(auto res = std::make_unique<XCB::Connector>(displayNum, auth)) {
-                        return 0 == res->hasError();
-                    }
-                } catch(const std::exception &) {
-                }
-            }
+    asio::awaitable<void> waitFileAwait(std::filesystem::path file) {
+        if(std::filesystem::is_regular_file(file)) {
+            co_return;
+        }
 
-            return false;
-        });
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_pause{ex};
+
+        while(! std::filesystem::is_regular_file(file) ||
+              0 == std::filesystem::file_size(file)) {
+            tm_pause.expires_after(100ms);
+            co_await tm_pause.async_wait(asio::use_awaitable);
+        }
+
+        co_return;
+    }
+
+    asio::awaitable<void> waitFileTimeoutAwait(std::filesystem::path file, std::chrono::milliseconds deadline_ms) {
+        auto ex = co_await asio::this_coro::executor;
+        asio::steady_timer tm_deadline{ex, deadline_ms};
+
+        using namespace asio::experimental::awaitable_operators;
+        auto results = co_await(waitFileAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
+
+        if(results.index() == 0) {
+            tm_deadline.cancel();
+            co_return;
+        }
+
+        Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+        throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
     }
 
     void clearSessionDbusAddress(int displayNum) {
@@ -102,31 +175,6 @@ namespace LTSM::DisplaySession {
             auto dbusPath = std::filesystem::path{env} / "ltsm" / fmt::format("dbus_session_{}", displayNum);
             std::filesystem::remove(dbusPath);
         }
-    }
-
-    std::string waitSessionDbusAddress(int displayNum, uint32_t ms) {
-        if(auto env = getenv("XDG_RUNTIME_DIR")) {
-            // ltsm path from /etc/ltsm/xclients
-            auto dbusPath = std::filesystem::path{env} / "ltsm" / fmt::format("dbus_session_{}", displayNum);
-            std::string res;
-
-            Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [&dbusPath, &res]() {
-                try {
-                    if(std::filesystem::is_regular_file(dbusPath)) {
-                        res = Tools::fileToString(dbusPath);
-                        return ! res.empty();
-                    }
-                } catch(const std::exception &) {
-                }
-
-                return false;
-            });
-
-            return res;
-        }
-
-        Application::error("{}: {} not found", NS_FuncNameV, "XDG_RUNTIME_DIR");
-        return "";
     }
 
     // FreedesktopNotifications
@@ -180,61 +228,76 @@ namespace LTSM::DisplaySession {
         }
     };
 
-    X11Session::X11Session(int displayNum, const char* xauthFile, bool debug)
-        : ApplicationJsonConfig("ltsm_session_display"),
-          xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
+    asio::awaitable<BinaryBuf> readXauthFileAwait(std::filesystem::path xauth_file, int display_num) {
+        auto buf = co_await readFileAwait<BinaryBuf>(xauth_file);
+        StreamBufRef sb(buf.data(), buf.size());
 
-        if(debug) {
-            setDebugLevel(DebugLevel::Debug);
+        while(sb.last()) {
+            // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
+            if(auto ver = sb.readIntBE16(); ver != 0x0100) {
+                Application::error("{}: invalid xauth format, ver: {:#06x}", NS_FuncNameV, ver);
+                throw std::runtime_error(NS_FuncNameS);
+            }
+
+            auto len = sb.readIntBE16();
+            auto host = sb.readString(len);
+
+            len = sb.readIntBE16();
+            auto display = sb.readString(len);
+
+            len = sb.readIntBE16();
+            auto magic = sb.readString(len);
+
+            len = sb.readIntBE16();
+            auto cookie = sb.read(len);
+
+            if(display == std::to_string(display_num)) {
+                Application::debug(DebugType::App, "{}: {} found, display {}",
+                                   NS_FuncNameV, "xcb cookie", display_num);
+                co_return cookie;
+            }
         }
 
-        if(! startX11Display()) {
-            throw std::runtime_error(NS_FuncNameS);
-        }
+        Application::error("{}: {} found, display: {}",
+                           NS_FuncNameV, "xcb cookie not", display_num);
 
-        const uint32_t x11Timeout = configGetInteger("xvfb:timeout", 3500);
-
-        if(! waitX11DisplayStarting(display_num_, mcookie_, x11Timeout)) {
-            Application::error("{}: {} failed", NS_FuncNameV, "X11 connect");
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        clearSessionDbusAddress(display_num_);
-
-        if(! startX11Session()) {
-            Application::error("{}: {} failed", NS_FuncNameV, "X11 session");
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        dbus_address_ = waitSessionDbusAddress(display_num_, x11Timeout);
-
-        if(dbus_address_.empty()) {
-            Application::error("{}: {} failed", NS_FuncNameV, "dbus session");
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        setenv("DBUS_SESSION_BUS_ADDRESS", dbus_address_.c_str(), 1);
-
-#ifdef SDBUS_2_0_API
-        dbus_conn_ = sdbus::createSessionBusConnection(sdbus::ServiceName {dbus_session_display_name});
-#else
-        dbus_conn_ = sdbus::createSessionBusConnection(dbus_session_display_name);
-#endif
+        throw std::runtime_error(NS_FuncNameS);
     }
 
-    bool X11Session::startX11Display(void) {
-        default_width_ = configGetInteger("default:width", 1280);
-        default_height_ = configGetInteger("default:height", 1024);
-        default_depth_ = configGetInteger("default:depth", 24);
+    asio::awaitable<X11Display> startDisplayAwait(const ApplicationJsonConfig & json, int displayNum, const char* xauthFile) {
+        X11Display res;
 
-        if(default_depth_ == 32) {
-            // xorg supported: 30, 24, 16, 15, 8
-            default_depth_ = 30;
+        res.xauth_file_ = xauthFile;
+        res.display_num_ = displayNum;
+        res.mcookie_ = co_await readXauthFileAwait(xauthFile, displayNum);
+
+        res.default_width_ = json.configGetInteger("default:width", 1280);
+        res.default_height_ = json.configGetInteger("default:height", 1024);
+        res.default_depth_ = json.configGetInteger("default:depth", 24);
+
+        if(auto val = getenv("SESSION_SIZE")) {
+            size_t idx;
+            res.default_width_ = std::stoi(val, &idx);
+            res.default_height_ = std::stoi(val + idx + 1);
+            Application::info("{}: client request session size: {}", NS_FuncNameV, XCB::Size(res.default_width_, res.default_height_));
         }
 
-        if(default_depth_ != 15 && default_depth_ != 16 && default_depth_ != 30) {
-            default_depth_ = 24;
-            Application::warning("{}: {} failed, used {}", NS_FuncNameV, "default:depth", default_depth_);
+        switch(res.default_depth_) {
+            case 32:
+                // xorg supported: 30, 24, 16, 15, 8
+                res.default_depth_ = 30;
+                break;
+
+            case 30:
+            case 24:
+            case 16:
+            case 15:
+                break;
+
+            default:
+                Application::warning("{}: {} failed: {}", NS_FuncNameV, "default:depth", res.default_depth_);
+                res.default_depth_ = 24;
+                break;
         }
 
         std::string xorgBin;
@@ -244,8 +307,8 @@ namespace LTSM::DisplaySession {
         const char* ltsmXorg = "/usr/bin/Xorg";
         const char* ltsmXvfb = "/usr/bin/Xvfb";
 
-        if(configHasKey("xvfb:path")) {
-            xorgBin = configGetString("xvfb:path");
+        if(json.configHasKey("xvfb:path")) {
+            xorgBin = json.configGetString("xvfb:path");
         } else if(std::filesystem::exists(ltsmXorg) && std::filesystem::exists(ltsmX11)) {
             xorgBin.assign(ltsmXorg);
         } else {
@@ -254,13 +317,13 @@ namespace LTSM::DisplaySession {
 
         if(! std::filesystem::exists(xorgBin)) {
             Application::error("{}: path not found: `{}'", NS_FuncNameV, xorgBin);
-            return false;
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         const bool useXorg = std::filesystem::path(xorgBin).filename() == "Xorg";
 
         // xorg args
-        if(auto ja = config().getArray("xvfb:args")) {
+        if(auto ja = json.config().getArray("xvfb:args")) {
             xorgArgs = ja->toStdVector<std::string>();
         } else {
             // default options for Xvfb/Xorg
@@ -295,86 +358,165 @@ namespace LTSM::DisplaySession {
         }
 
         for(auto & str : xorgArgs) {
-            str = Tools::replace(str, "%{width}", default_width_);
-            str = Tools::replace(str, "%{height}", default_height_);
-            str = Tools::replace(str, "%{depth}", default_depth_);
-            str = Tools::replace(str, "%{display}", display_num_);
-            str = Tools::replace(str, "%{authfile}", xauth_file_);
+            str = Tools::replace(str, "%{width}", res.default_width_);
+            str = Tools::replace(str, "%{height}", res.default_height_);
+            str = Tools::replace(str, "%{depth}", res.default_depth_);
+            str = Tools::replace(str, "%{display}", res.display_num_);
+            str = Tools::replace(str, "%{authfile}", res.xauth_file_);
         }
 
-        // start Xorg
-        ps_xorg_ = SessionProcess(xorgBin, xorgArgs);
+        auto ex = co_await asio::this_coro::executor;
 
-        return true;
+        // start Xorg
+        res.ps_xorg_ = std::make_shared<bp::process>(ex, xorgBin, std::move(xorgArgs), SessionProcess::createRedirect(xorgBin));
+
+        // wait started
+        const uint32_t deadline_ms = json.configGetInteger("xvfb:timeout", 3500);
+        auto socket_path = Tools::x11UnixPath(res.display_num_);
+
+        co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
+        Application::info("{}: cmd: {}, pid: {}, display: {}, socket: {}",
+                          NS_FuncNameV, xorgBin, res.ps_xorg_->id(), displayNum, socket_path);
+
+        if(useXorg) {
+            // xrandr job
+            asio::co_spawn(ex, [display=res.display_num_,dsz=XCB::Size(res.default_width_, res.default_height_)]() -> asio::awaitable<void> {
+                int attempts = 5;
+                auto ex = co_await asio::this_coro::executor;
+                asio::steady_timer tm_pause{ex};
+                while(0 < attempts--) {
+                    tm_pause.expires_after(100ms);
+                    co_await tm_pause.async_wait(asio::use_awaitable);
+                    try {
+                        if(XCB::RootDisplay(display).setRandrScreenSize(dsz)) {
+                            break;
+                        }
+                    } catch(const std::exception&) {
+                    }
+                }
+                co_return;
+            }, asio::detached);
+        }
+
+        co_return res;
     }
 
-    bool X11Session::startX11Session(void) {
+    asio::awaitable<std::string> waitSessionDbusAddressAwait(int displayNum, uint32_t deadline_ms) {
+        if(auto env = getenv("XDG_RUNTIME_DIR")) {
+            // ltsm path from /etc/ltsm/xclients
+            auto dbusPath = std::filesystem::path{env} / "ltsm" / fmt::format("dbus_session_{}", displayNum);
+            std::string res;
+
+            co_await waitFileTimeoutAwait(dbusPath, std::chrono::milliseconds(deadline_ms));
+            auto dbusAddress = co_await readFileAwait<std::string>(dbusPath);
+            // remove endl
+            dbusAddress.erase(
+            std::find_if(dbusAddress.rbegin(), dbusAddress.rend(), [](auto ch) {
+                return std::isprint(ch);
+            }).base(), dbusAddress.end());
+            co_return dbusAddress;
+        }
+
+        Application::error("{}: env not found: {}", NS_FuncNameV, "XDG_RUNTIME_DIR");
+        throw std::runtime_error(NS_FuncNameS);
+    }
+
+    asio::awaitable<X11SessionBase> startSessionAwait(const ApplicationJsonConfig & json, int displayNum) {
         // session bin
-        std::string sessionBin = configGetString("session:path");
+        std::string sessionBin = json.configGetString("session:path");
         ArgsList sessionArgs;
 
-        bp::environment sessionEnvs = boost::this_process::environment();
+        std::unordered_map<bp::environment::key, bp::environment::value> sessionEnvs;
+
+        for(const auto& kv : bp::environment::current()) {
+            sessionEnvs[kv.key()] = kv.value();
+        }
 
         if(! std::filesystem::exists(sessionBin)) {
             Application::error("{}: path not found: `{}'", NS_FuncNameV, sessionBin);
-            return false;
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         // session args
-        if(auto ja = config().getArray("session:args")) {
+        if(auto ja = json.config().getArray("session:args")) {
             sessionArgs = ja->toStdVector<std::string>();
         }
 
         auto xresources = std::filesystem::path{getenv("HOME")} / ".ltsm" / ".Xresources";
         std::filesystem::remove(xresources);
+        X11SessionBase res;
 
         if(getenv("LTSM_LOGIN_MODE")) {
+            res.login_mode_ = true;
+
             // helper login
-            auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/ltsm_helper");
+            auto helperBin = json.configGetString("helper:path", "/usr/libexec/ltsm/ltsm_helper");
 
             if(! std::filesystem::exists(helperBin)) {
                 Application::error("{}: path not found: `{}'", NS_FuncNameV, helperBin);
-                return false;
+                throw std::runtime_error(NS_FuncNameS);
             }
 
             sessionEnvs["XSESSION"] = helperBin;
         } else if(auto env = getenv("LTSM_CLIENT_OPTS")) {
-            try {
-                auto content = Tools::zlibUncompress(Tools::base64Decode(env));
-                auto jo = JsonContentString(std::string_view{(const char*) content.data(), content.size()}).toObject();
+            auto content = Tools::zlibUncompress(Tools::base64Decode(env));
+            auto jo = JsonContentString(std::string_view{(const char*) content.data(), content.size()}).toObject();
 
-                // set session dpi
-                if(auto dpi = jo.getInteger("x11:dpi", 0); 0 < dpi) {
-                    std::ofstream ofs(xresources, std::ios::trunc);
-                    ofs << "Xft.dpi: " << dpi << std::endl;
-                }
-            } catch(const std::exception & err) {
-                Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
+            // set session dpi
+            if(auto dpi = jo.getInteger("x11:dpi", 0); 0 < dpi) {
+                std::ofstream ofs(xresources, std::ios::trunc);
+                ofs << "Xft.dpi: " << dpi << std::endl;
             }
         }
 
-        // start Session
-        ps_sess_ = SessionProcess(sessionBin, sessionArgs, sessionEnvs);
+        auto ex = co_await asio::this_coro::executor;
 
-        return true;
+        // start Session
+        res.ps_sess_ = std::make_shared<bp::process>(ex, sessionBin, std::move(sessionArgs),
+                       bp::process_environment{sessionEnvs}, SessionProcess::createRedirect(sessionBin));
+
+        // wait dbus
+        const uint32_t deadline_ms = json.configGetInteger("xvfb:timeout", 3500);
+        res.dbus_address_ = co_await waitSessionDbusAddressAwait(displayNum, deadline_ms);
+
+        Application::info("{}: cmd: {}, pid: {}, display: {}, dbus address: `{}'",
+                          NS_FuncNameV, sessionBin, res.ps_sess_->id(), displayNum, res.dbus_address_);
+
+        co_return res;
     }
 
+    X11Session::X11Session(ApplicationJsonConfig&& config, X11Display&& xorg, X11SessionBase&& sess, bool debug)
+        : ApplicationJsonConfig(std::move(config)), X11Display(std::move(xorg)), X11SessionBase(std::move(sess)) {
+
+        Application::setDebugTarget(DebugTarget::Syslog, "ltsm_session_display");
+
+        if(debug) {
+            Application::setDebugLevel(DebugLevel::Debug);
+        }
+
+        setenv("DBUS_SESSION_BUS_ADDRESS", dbus_address_.c_str(), 1);
+
+#ifdef SDBUS_2_0_API
+        dbus_conn_ = sdbus::createSessionBusConnection(sdbus::ServiceName {dbus_session_display_name});
+#else
+        dbus_conn_ = sdbus::createSessionBusConnection(dbus_session_display_name);
+#endif
+    }
 
     // DBusAdaptor
-    DBusAdaptor::DBusAdaptor(int displayNum, const char* xauthFile, bool debug)
-        : X11Session(displayNum, xauthFile, debug),
+    DBusAdaptor::DBusAdaptor(asio::io_context& ioc, ApplicationJsonConfig&& config, X11Display&& xorg, X11SessionBase&& sess, bool debug)
+        : X11Session(std::move(config), std::move(xorg), std::move(sess), debug),
 #ifdef SDBUS_2_0_API
           AdaptorInterfaces(*dbus_conn_, sdbus::ObjectPath {dbus_session_display_path}),
 #else
           AdaptorInterfaces(*dbus_conn_, dbus_session_display_path),
 #endif
-          started_(std::chrono::system_clock::now()), signals_ {ioc_}, timer_childs_ {ioc_} {
+          started_(std::chrono::system_clock::now()), ioc_ {ioc} {
         registerAdaptor();
     }
 
     DBusAdaptor::~DBusAdaptor() {
         unregisterAdaptor();
-        stop();
     }
 
     int32_t DBusAdaptor::getVersion(void) {
@@ -383,7 +525,9 @@ namespace LTSM::DisplaySession {
 
     void DBusAdaptor::serviceShutdown(void) {
         Application::debug(DebugType::Dbus, "{}: pid: {}", NS_FuncNameV, getpid());
-        stop();
+        asio::post(ioc_, [self = shared_from_this()]() {
+            self->stop();
+        });
     }
 
     void DBusAdaptor::setDebug(const std::string & level) {
@@ -405,18 +549,49 @@ namespace LTSM::DisplaySession {
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", NS_FuncNameV, cmd, Tools::join(args, ", "));
 
-        bp::environment env = boost::this_process::environment();
+        std::unordered_map<bp::environment::key, bp::environment::value> p_envs;
+
+        for(const auto& kv : bp::environment::current()) {
+            p_envs[kv.key()] = kv.value();
+        }
 
         for(auto & str : envs) {
             if(auto pos = str.find("="); pos != std::string::npos) {
-                env[str.substr(0, pos)] = str.substr(pos + 1);
+                p_envs[str.substr(0, pos)] = str.substr(pos + 1);
             }
         }
 
         try {
-            std::scoped_lock guard{ lock_childs_ };
-            childs_.emplace_back(bp::child(cmd, args, envs));
-            return childs_.back().id();
+            auto proc = bp::popen(ioc_, cmd, args, bp::process_environment{p_envs});
+            auto pid = proc.id();
+
+            Application::debug(DebugType::Dbus, "{}: running cmd: {}, pid: {}", NS_FuncNameV, cmd, pid);
+            child_pids_.insert(pid);
+
+            asio::co_spawn(ioc_, [self = shared_from_this(), proc = std::move(proc), cmd, pid]() mutable -> asio::awaitable<void> {
+                StdoutBuf res;
+
+                try {
+                    co_await asio::async_read(proc, asio::dynamic_buffer(res), asio::use_awaitable);
+                } catch(const system::system_error& err) {
+                    if(auto ec = err.code(); ec != asio::error::eof) {
+                        Application::error("{}: system error: {}, code: {}", "runSessionCommandAsync", ec.message(), ec.value());
+                        self->child_pids_.erase(pid);
+                        self->emitRunSessionCommandAsyncComplete(pid, false, 0, {});
+                        co_return;
+                    }
+                }
+
+                int exit_code = co_await proc.async_wait(asio::use_awaitable);
+                Application::debug(DebugType::Dbus, "{}: {} exited, pid: {}, code: {}", "WaitProcess", cmd, proc.id(), exit_code);
+
+                self->child_pids_.erase(pid);
+                self->emitRunSessionCommandAsyncComplete(pid, true, exit_code, std::move(res));
+
+                co_return;
+            }, asio::detached);
+
+            return pid;
 
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -428,23 +603,35 @@ namespace LTSM::DisplaySession {
     StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", NS_FuncNameV, cmd, Tools::join(args, ", "));
 
-        bp::environment env = boost::this_process::environment();
+        std::unordered_map<bp::environment::key, bp::environment::value> p_envs;
+
+        for(const auto& kv : bp::environment::current()) {
+            p_envs[kv.key()] = kv.value();
+        }
 
         for(auto & str : envs) {
             if(auto pos = str.find("="); pos != std::string::npos) {
-                env[str.substr(0, pos)] = str.substr(pos + 1);
+                p_envs[str.substr(0, pos)] = str.substr(pos + 1);
             }
         }
 
         try {
-            bp::ipstream ips;
-            auto proc = bp::child(cmd, args, env, bp::std_out > ips);
+            auto proc = bp::popen(ioc_, cmd, args, bp::process_environment{p_envs});
 
-            StdoutBuf res{std::istreambuf_iterator<char>(ips),
-                          std::istreambuf_iterator<char>()};
+            Application::debug(DebugType::Dbus, "{}: running cmd: {}, pid: {}", NS_FuncNameV, cmd, proc.id());
+            StdoutBuf res;
 
-            proc.wait();
-            return StatusStdout{proc.exit_code(), std::move(res)};
+            system::error_code ec;
+            asio::read(proc, asio::dynamic_buffer(res), ec);
+
+            if(ec && ec != asio::error::eof) {
+                throw system::system_error(ec);
+            }
+
+            int exit_code = proc.wait();
+            Application::debug(DebugType::Dbus, "{}: {} exited, pid: {}, code: {}", "WaitProcess", cmd, proc.id(), exit_code);
+
+            return StatusStdout{exit_code, std::move(res)};
 
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
@@ -460,7 +647,7 @@ namespace LTSM::DisplaySession {
 
     void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
         Application::debug(DebugType::Dbus, "{}: layout: {}", NS_FuncNameV, layout);
-        runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
+        [[maybe_unused]] auto stdout = runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
     }
 
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
@@ -475,115 +662,140 @@ namespace LTSM::DisplaySession {
         FreedesktopNotifications().notifyError(summary, body, 2000 /* ms */);
     }
 
-    void DBusAdaptor::timerChildsAliveCheck(const boost::system::error_code& ec) {
-        if(ec) {
-            return;
-        }
-
-        // xorg stopped
-        if(ps_xorg_.isValid() && ! ps_xorg_.isRunning()) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", NS_FuncNameV, "xorg", ps_xorg_.pid());
-            boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
-            return;
-        }
-
-        // session stopped
-        if(ps_sess_.isValid() && ! ps_sess_.isRunning()) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", NS_FuncNameV, "session", ps_sess_.pid());
-            boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
-            return;
-        }
-
-        auto removeChildsEnded = [this]() {
-            std::scoped_lock guard{ lock_childs_ };
-            auto ended = std::ranges::remove_if(childs_, [](auto & ps) {
-                return ! ps.valid() || ! ps.running();
-            });
-
-            if(! ended.empty()) {
-                std::error_code ec;
-
-                for(auto & ps : ended) {
-                    ps.wait(ec);
-                }
-
-                childs_.erase(ended.begin(), ended.end());
-            }
-        };
-
-        removeChildsEnded();
-
-        timer_childs_.expires_after(dur_childs_);
-        timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
-    }
-
     void DBusAdaptor::stop(void) noexcept {
-        dbus_conn_->leaveEventLoop();
-
-        boost::system::error_code ec;
-        signals_.cancel(ec);
-
-        timer_childs_.cancel();
-
-        if(ps_xorg_.isRunning()) {
-            kill(ps_xorg_.pid(), SIGTERM);
-        }
-
-        if(ps_sess_.isRunning()) {
-            kill(ps_sess_.pid(), SIGTERM);
-        }
-
-        std::scoped_lock guard{ lock_childs_ };
-
-        for(auto & ps : childs_) {
-            if(ps.valid() && ps.running()) {
-                kill(ps.id(), SIGTERM);
-                ps.wait();
+        std::call_once(stop_flag_, [this]() {
+            try {
+                stopContexts();
+            } catch(const std::exception &) {
             }
-        }
-
-        childs_.clear();
+        });
     }
 
-    int DBusAdaptor::start(void) {
+    void DBusAdaptor::stopContexts(void) {
+        dbus_conn_->leaveEventLoop();
+        signals_cancel_.emit(asio::cancellation_type::terminal);
 
+        // part1: request exit
+        if(ps_sess_ && ps_sess_->running()) {
+            ps_sess_->request_exit();
+        }
+
+        if(ps_xorg_ && ps_xorg_->running()) {
+            ps_xorg_->request_exit();
+        }
+
+        for(auto pid : child_pids_) {
+            kill(pid, SIGTERM);
+        }
+
+        child_pids_.clear();
+
+        if(sdbus_job_.joinable()) {
+            sdbus_job_.join();
+        }
+
+        Application::notice("{}: Display session shutdown", NS_FuncNameV);
+    }
+
+    asio::awaitable<void> DBusAdaptor::signalsHandler(void) {
+        asio::signal_set signals{ioc_, SIGTERM, SIGINT};
+
+        try {
+            for(;;) {
+                int signal = co_await signals.async_wait(asio::use_awaitable);
+
+                if(signal == SIGTERM || signal == SIGINT) {
+                    Application::info("{}: signal shutdown...", NS_FuncNameV);
+                    asio::post(ioc_, [self = shared_from_this()]() {
+                        self->stop();
+                    });
+                    co_return;
+                }
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            }
+        }
+    }
+
+    asio::awaitable<void> DBusAdaptor::start(void) {
         Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
                           getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
 
-        signals_.add(SIGTERM);
-        signals_.add(SIGINT);
+        auto self = shared_from_this();
 
-        signals_.async_wait([this](const boost::system::error_code & ec, int signal) {
-            // skip canceled
-            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
-                this->stop();
-            }
-        });
+        asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
+            auto& proc = self->ps_xorg_;
+            auto mode = (self->login_mode_ ? "LOGIN" : "SESSION");
+            auto exit_code = co_await proc->async_wait(asio::use_awaitable);
+            Application::info("{}[{}]: {} exited, pid: {}, code: {}, service shutdown...",
+                                "WaitProcess", mode, "xorg", proc->id(), exit_code);
+            proc->detach();
+            std::raise(SIGTERM);
+            co_return;
+        }, asio::detached);
 
-        timer_childs_.expires_after(dur_childs_);
-        timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
+        asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
+            auto& proc = self->ps_sess_;
+            auto mode = (self->login_mode_ ? "LOGIN" : "SESSION");
+            auto exit_code = co_await proc->async_wait(asio::use_awaitable);
+            Application::info("{}[{}]: {} exited, pid: {}, code: {}, service shutdown...",
+                                "WaitProcess", mode, "session", proc->id(), exit_code);
+            proc->detach();
+            std::raise(SIGTERM);
+            co_return;
+        }, asio::detached);
 
-        auto sdbus_job = std::thread([this]() {
-           try {
-                dbus_conn_->enterEventLoop();
+        asio::co_spawn(ioc_, [self]() -> asio::awaitable<void> {
+            co_await self->signalsHandler();
+            co_return;
+        }, asio::bind_cancellation_slot(signals_cancel_.slot(), asio::detached));
+
+        sdbus_job_ = std::thread([self]() {
+            try {
+                self->dbus_conn_->enterEventLoop();
             } catch(const sdbus::Error& err) {
                 Application::error("{}: failed, sdbus error: {}", NS_FuncNameV, err.getName());
-                boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
+                std::raise(SIGTERM);
             }
         });
 
-        ioc_.run();
+        co_return;
+    }
 
-        dbus_conn_->leaveEventLoop();
-        sdbus_job.join();
+    asio::awaitable<void> startDisplaySessionAwait(asio::io_context& ioc, int displayNum, const char* xauthFile, bool debug) {
+        try {
+            auto json = ApplicationJsonConfig("ltsm_session_display");
+            auto starter = co_await startDisplayAwait(json, displayNum, xauthFile);
 
-        Application::notice("{}: Display session shutdown", NS_FuncNameV);
+            clearSessionDbusAddress(displayNum);
 
+            auto session = co_await startSessionAwait(json, displayNum);
+            auto adaptor = std::make_shared<DBusAdaptor>(ioc, std::move(json), std::move(starter), std::move(session), debug);
+
+            co_await adaptor->start();
+
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        }
+    }
+
+    int startDisplaySession(int displayNum, const char* xauthFile, bool debug) {
+        asio::io_context ioc;
+        asio::co_spawn(ioc, startDisplaySessionAwait(ioc, displayNum, xauthFile, debug), asio::detached);
+        ioc.run();
         return EXIT_SUCCESS;
     }
 }
 
 using namespace LTSM;
+
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_display.log";
+}
+#endif
 
 int main(int argc, char** argv) {
     const char* displayAddr = nullptr;
@@ -639,7 +851,7 @@ int main(int argc, char** argv) {
 
     try {
         int displayNum = std::stoi(displayAddr + 1);
-        return DisplaySession::DBusAdaptor(displayNum, xauthFile, debug).start();
+        return DisplaySession::startDisplaySession(displayNum, xauthFile, debug);
     } catch(const sdbus::Error & err) {
         Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {

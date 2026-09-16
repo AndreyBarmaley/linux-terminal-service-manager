@@ -25,7 +25,6 @@
 #define _LTSM_CONNECTOR_X11VNC_
 
 #include <unordered_map>
-#include <memory>
 #include <atomic>
 
 #include "librfb_x11server.h"
@@ -34,17 +33,18 @@ namespace LTSM {
     namespace Connector {
         /* Connector::VNC */
         class X11VNC : public RFB::X11Server {
-            std::unordered_map<uint32_t, int> keymap;
+            [[maybe_unused]] boost::asio::io_context& ioc_;
+            std::unordered_map<uint32_t, int> keymap_;
 
-            const JsonObject* _config = nullptr;
-            std::string _remoteaddr;
+            const JsonObject* config_ = nullptr;
+            std::string remoteaddr_;
 
-            PixelFormat _pf;
-
-            std::atomic<int> _display{0};
-            std::atomic<bool> _xcbDisable{true};
+            PixelFormat pf_;
+            std::atomic<bool> xcb_disable_{true};
 
           protected:
+            void stop(void) noexcept final;
+
             // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
             std::forward_list<std::string> serverDisabledEncodings(void) const override;
@@ -58,16 +58,26 @@ namespace LTSM {
             RFB::SecurityInfo rfbSecurityInfo(void) const override;
             int rfbUserKeycode(uint32_t) const override;
 
-            void serverHandshakeVersionEvent(void) override;
+            void systemClientVariablesEvent(const JsonObject &) override { /* empty */ }
+            void systemKeyboardChangeEvent(const LTSM::JsonObject&) override { /* empty */ }
+            void systemTransferFilesEvent(const JsonObject &) override { /* empty */ }
+            void systemCursorFailedEvent(const JsonObject &) override { /* empty */ }
+
+            boost::asio::awaitable<void> connectorHandshakeVersionAwait(void) override;
+
             uint32_t frameRateOption(void) const override {
                 return 16;
             }
 
-            bool xcbConnect(void);
+            boost::asio::awaitable<bool> xcbConnect(void);
+
             bool loadKeymap(void);
 
           public:
-            X11VNC(const JsonObject & jo);
+            X11VNC(boost::asio::io_context &, const JsonObject & jo);
+
+            uint16_t encodingThreads(void) const override;
+            std::future<BinaryBuf> postEncoderJob(RFB::PostEncoderJobCb &&, XCB::Region reg) const override;
         };
     }
 }

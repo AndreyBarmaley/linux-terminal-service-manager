@@ -41,7 +41,6 @@
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
-#include <unordered_set>
 
 #ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
@@ -55,7 +54,6 @@
 #include "ltsm_tools.h"
 #include "ltsm_pkcs11.h"
 #include "ltsm_global.h"
-#include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
 #include "ltsm_byte_stream.h"
@@ -1095,13 +1093,13 @@ namespace LTSM::Manager {
         timer_ended_.cancel();
         timer_alive_.cancel();
 
-        for(const auto & pid: childs_) {
+        for(const auto & pid: child_pids_) {
             kill(pid, SIGTERM);
         }
-        for(const auto & pid: childs_) {
+        for(const auto & pid: child_pids_) {
             waitpid(pid, nullptr, 0);
         }
-        childs_.clear();
+        child_pids_.clear();
 
         inotifyWatchStop();
         work_guard_.reset();
@@ -1235,7 +1233,7 @@ namespace LTSM::Manager {
             return;
         }
 
-        std::erase_if(childs_, [this](auto & pid)
+        std::erase_if(child_pids_, [this](auto & pid)
         {
             int status;
             int ret = waitpid(pid, &status, WNOHANG);
@@ -1578,17 +1576,27 @@ namespace LTSM::Manager {
         return nullptr;
     }
 
-    int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
-            const std::string & remoteAddr, const std::string & connType) {
+    int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint16_t& width, const uint16_t& height,
+            const uint8_t & depth, const std::string & remoteAddr, const std::string & connType) {
         Application::debug(DebugType::Dbus, "{}: login request, remote: {}, type: {}",
                            NS_FuncNameV, remoteAddr, connType);
 
-        auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
+        EnvironmentsMap envs;
+
+        if(width && height) {
+            envs.emplace("SESSION_SIZE", fmt::format("{}x{}", width, height));
+        }
+
+        if(depth) {
+            envs.emplace("SESSION_DEPTH", std::to_string(static_cast<int>(depth)));
+        }
+
+        auto sess = runNewDisplaySession(ltsm_user_conn, "", std::move(envs), {});
 
         if(sess) {
-            // registered xvfb job
+            // registered DisplaySession job
             asio::post(childs_guard_, [this, pid = sess->pid1](){
-                childs_.emplace_back(pid);
+                child_pids_.emplace(pid);
             });
         } else {
             return -1;
@@ -1672,9 +1680,9 @@ namespace LTSM::Manager {
                 std::move(loginSess->environments), std::move(loginSess->options));
 
         if(newSess) {
-            // registered xvfb job
+            // registered DisplaySession job
             asio::post(childs_guard_, [this, pid = newSess->pid1](){
-                childs_.emplace_back(pid);
+                child_pids_.emplace(pid);
             });
         } else {        
             return -1;
@@ -1762,7 +1770,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busShutdownDisplay(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
+        Application::notice("{}: display: {}", NS_FuncNameV, display);
 
         if(auto ptr = findDisplaySession(display)) {
             displayShutdownAsync(std::move(ptr), true);
@@ -1857,8 +1865,9 @@ namespace LTSM::Manager {
             xvfb->connectorId = connectorId;
             xvfb->tpOnline = std::chrono::system_clock::now();
             xvfb->onlineTimeLimitSec = configGetInteger("session:online:timeout", 0);
-            xvfb->mode = SessionMode::Connected;
-
+            if(xvfb->mode != SessionMode::Login) {
+                xvfb->mode = SessionMode::Connected;
+            }
 #ifdef LTSM_WITH_AUDIT
             auditLog->auditUserConnected(xvfb->displayAddr);
 #endif
@@ -1870,7 +1879,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busConnectorTerminated(const int32_t & display, const int32_t & connectorId) {
-        Application::debug(DebugType::Dbus, "{}: display: {}", NS_FuncNameV, display);
+        Application::notice("{}: display: {}", NS_FuncNameV, display);
 
         auto ptr = findDisplaySession(display);
 
@@ -2314,6 +2323,8 @@ namespace LTSM::Manager {
                 emitLoginFailure(xvfb->displayNum, fmt::format("session busy, from: {}", userSess->remoteAddr));
                 return false;
             } else if(userSess->policy == SessionPolicy::AuthTake) {
+                Application::warning("{}: disconnect session, policy: {}, user: {}, session display: {}, from: {}, display: {}",
+                                   NS_FuncNameV, "authtake", login, userSess->displayNum, userSess->remoteAddr, xvfb->displayNum);
                 // shutdown prev connect
                 emitShutdownConnector(userSess->displayNum);
                 // wait session: changes connected
@@ -2477,8 +2488,8 @@ namespace LTSM::Manager {
         auto fuse = xvfb->options.find("redirect:fuse");
 
         // wait new session started
-        if(xvfb->sessionOnlinedSec() < 2s) {
-            waitAsioCallable(ioc_, 2000, 500, [xvfb](){ return 2s <= xvfb->sessionOnlinedSec(); });
+        if(xvfb->sessionOnlinedSec() < 1s) {
+            waitAsioCallable(ioc_, 1500, 100, [xvfb](){ return 1s <= xvfb->sessionOnlinedSec(); });
         }
 
         try {
@@ -2597,7 +2608,15 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        return waitFileSetPermission(ioc_, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+        if(waitFileSetPermission(ioc_, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)) {
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), printerSocket);
+            return true;
+        }
+
+        Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", printerSocket);
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+        return false;
     }
 
     bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2642,17 +2661,13 @@ namespace LTSM::Manager {
         if(waitFileSetPermission(ioc_, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)){
             Application::info("{}: display: {}, user: {}, socket: `{}'",
                           NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), audioSocket);
-
             if(xvfb->dbusAudioChannelConnect(audioSocket)) {
                 return true;
             }
-
-            // destroy channel
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket.string());
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Audio, "");
-            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
+        } else {
+            Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", audioSocket);
         }
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
         return false;
     }
 
@@ -2708,8 +2723,16 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        return waitFileSetPermission(ioc_, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
-                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+        if(waitFileSetPermission(ioc_, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)) {
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), saneSocket);
+            return true;
+        }
+
+        Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", saneSocket);
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+        return false;
     }
 
     bool DBusAdaptor::startPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2758,13 +2781,10 @@ namespace LTSM::Manager {
             if(xvfb->dbusPcscChannelConnect(pcscSocket)) {
                 return true;
             }
-
-            // destroy channel
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket.string());
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Pcsc, "");
-            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
+        } else {
+            Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", pcscSocket);
         }
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
         return false;
     }
 
@@ -2812,7 +2832,15 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
-        return waitFileSetPermission(ioc_, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR);
+        if(waitFileSetPermission(ioc_, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR)) {
+            Application::info("{}: display: {}, user: {}, socket: `{}'",
+                          NS_FuncNameV, xvfb->displayNum, xvfb->userInfo->user(), pkcs11Socket);
+            return true;
+        }
+
+        Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", pkcs11Socket);
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
+        return false;
     }
 
     void DBusAdaptor::stopPkcs11Listener(XvfbSessionPtr xvfb, const std::string & param) {
@@ -2888,14 +2916,11 @@ namespace LTSM::Manager {
                 xvfb->fusePoints.emplace_front(std::move(localPoint));
                 return true;
             }
-    
-            // destroy channel
-            auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, fuseSocket.string());
-            auto clientUrl = Channel::createUrl(Channel::ConnectorType::Fuse, "");
-            emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
-            return false;
+        } else {
+            Application::warning("{}: display: {}, {} failed, path: `{}'", NS_FuncNameV, xvfb->displayNum, "wait socket", fuseSocket);
         }
 
+        emitDestroyListener(xvfb->displayNum, clientUrl, serverUrl);
         return false;
     }
 
@@ -3180,6 +3205,12 @@ namespace LTSM::Manager {
         return EXIT_SUCCESS;
     }
 }
+
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_service.log";
+}
+#endif
 
 int main(int argc, const char** argv) {
     int res = 0;

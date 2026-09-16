@@ -118,13 +118,11 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_connector)
         set(CUR_TARGET ltsm_connector)
 
-        CommonDefaults(SDBUS JSON SYSTEMD SDL ENCODER ZLIB)
+        CommonDefaults(SDBUS JSON SYSTEMD SDL ENCODER ZLIB BOOST OPENSSL)
 
         set(LTSM_CONNECTOR_GSSAPI_AUTH ON CACHE BOOL "connector: kerberos auth")
-        set(LTSM_CONNECTOR_GNUTLS_SUPPORT ON CACHE BOOL "connector: tls support")
         set(LTSM_CONNECTOR_FFMPEG_SUPPORT ON CACHE BOOL "connector: ffmpeg decoder")
 
-        set(LTSM_WITH_GNUTLS ${LTSM_CONNECTOR_GNUTLS_SUPPORT})
         set(LTSM_WITH_GSSAPI ${LTSM_CONNECTOR_GSSAPI_AUTH})
         set(LTSM_WITH_FFMPEG ${LTSM_CONNECTOR_FFMPEG_SUPPORT})
 
@@ -344,7 +342,6 @@ if(LTSM_BUILD_TOOLS)
 
     add_executable(${CUR_TARGET})
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
-    target_compile_definitions(${CUR_TARGET} PRIVATE LTSM_WITH_BOOST)
 
     add_subdirectory(common ${CUR_TARGET}_common)
     add_subdirectory(channels ${CUR_TARGET}_channels)
@@ -357,7 +354,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_x11vnc)
     set(CUR_TARGET ltsm_x11vnc)
 
-    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB SDL)
+    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB SDL BOOST OPENSSL)
 
     add_executable(${CUR_TARGET} tools/x11vnc/ltsm_x11vnc.cpp tools/x11vnc/ltsm_connector_x11vnc.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
@@ -375,7 +372,6 @@ if(LTSM_BUILD_TOOLS)
     CommonDefaults(SDL BOOST)
 
     add_executable(${CUR_TARGET} tools/sdl2x11/ltsm_sdl2x11.cpp)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_BOOST)
 
     target_include_directories(${CUR_TARGET} PRIVATE common)
     add_subdirectory(common ${CUR_TARGET}_common)

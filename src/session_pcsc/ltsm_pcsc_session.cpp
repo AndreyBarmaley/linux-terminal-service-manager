@@ -32,7 +32,6 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
-#include "ltsm_sockets.h"
 #include "ltsm_pcsc_session.h"
 
 using namespace std::chrono_literals;
@@ -2082,6 +2081,12 @@ namespace LTSM {
         remote_.reset();
     }
 }
+
+#ifdef LTSM_WITH_SANITIZE
+extern "C" const char* __asan_default_options() {
+    return "log_path=/var/tmp/asan_ltsm_pcsc.log";
+}
+#endif
 
 int main(int argc, char** argv) {
     bool debug = false;
