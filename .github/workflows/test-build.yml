@@ -40,6 +40,7 @@ jobs:
             liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
             libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
             libaudit-dev libspdlog-dev libboost-dev libpipewire-0.3-dev libgmock-dev libgtest-dev libkrb5-dev
+        sudo sudo sed -i '764s/source\.size/source.size()/' /usr/include/boost/process/v2/environment.hpp
 
     - name: Configure
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
