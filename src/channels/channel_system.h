@@ -43,6 +43,7 @@
 #include <boost/container/flat_map.hpp>
 
 #include "ltsm_audio.h"
+#include "ltsm_async_socket.h"
 
 #ifdef LTSM_PKCS11_AUTH
 #include "ltsm_pkcs11_wrapper.h"
@@ -513,9 +514,25 @@ namespace LTSM {
         void recvLtsmEvent(CID, std::vector<uint8_t> &&);
 
         virtual boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const = 0;
-        // fixme remove
-        virtual void sendLtsmChannelData(CID, std::vector<uint8_t> &&) = 0;
-        virtual void sendLtsmChannelData(CID, std::string &&) = 0;
+
+        template <typename T>
+        void sendLtsmChannelData(CID channel, T&& buf) const {
+            // ltsm_async_socket.h
+            using DecayedT = std::decay_t<T>;
+            if constexpr (has_data_size_v<DecayedT>) {
+                if (buf.empty()) {
+                    return;
+                }
+                assert(0xFFFF >= buf.size());
+                boost::asio::co_spawn(strand_, [this, channel, buf = std::move(buf)]() -> boost::asio::awaitable<void> {
+                    auto bytes_span = std::span{reinterpret_cast<const uint8_t*>(buf.data()), buf.size()};
+                    co_await sendLtsmChannelAwait(channel, bytes_span);
+                    co_return;
+                }, boost::asio::detached);
+            } else {
+                static_assert(always_false_v<T>, "invalid value type for has_data_size");
+            }
+        }
 
         virtual bool serverSide(void) const = 0;
         virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const = 0;

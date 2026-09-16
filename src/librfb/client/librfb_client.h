@@ -121,9 +121,6 @@ namespace LTSM {
             bool isDecoderFFmpeg(void) const;
 
             boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const final;
-            // fixme remove
-            void sendLtsmChannelData(CID, std::vector<uint8_t>&&) override;
-            void sendLtsmChannelData(CID, std::string&&) override;
 
             static std::list<int> supportedEncodings(bool extclip = false);
 

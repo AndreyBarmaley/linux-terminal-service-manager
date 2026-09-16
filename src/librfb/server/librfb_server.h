@@ -173,9 +173,6 @@ namespace LTSM {
             void serverSelectEncodings(void);
 
             boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const final;
-            // fixme remove
-            void sendLtsmChannelData(CID, std::vector<uint8_t>&&) override final;
-            void sendLtsmChannelData(CID, std::string&&) override final;
 
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);

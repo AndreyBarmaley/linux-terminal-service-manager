@@ -160,7 +160,9 @@ namespace LTSM::Connector {
         JsonObjectStream jos;
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", true);
-        static_cast<ChannelBase*>(this)->sendLtsmChannelData(ChannelTypeSystem, jos.flush());
+
+        auto buf = jos.flush();
+        co_await sendLtsmChannelAwait(ChannelTypeSystem, std::span{reinterpret_cast<const uint8_t*>(buf.data()), buf.size()});
 
         co_return;
     }
@@ -664,7 +666,7 @@ namespace LTSM::Connector {
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", false);
         jos.push("error", msg);
-        static_cast<ChannelBase*>(this)->sendLtsmChannelData(ChannelTypeSystem, jos.flush());
+        sendLtsmChannelData(ChannelTypeSystem, jos.flush());
     }
 
     void ConnectorLtsm::systemChannelErrorEvent(const JsonObject & jo) {

@@ -1495,20 +1495,6 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ServerEncoder::sendLtsmChannelData(CID channel, std::vector<uint8_t>&& buf) {
-        asio::co_spawn(rfb_strand_, [this, channel, buf=std::move(buf)]() -> asio::awaitable<void> {
-	    co_await sendLtsmChannelAwait(channel, buf);
-	    co_return;
-	}, asio::detached);
-    }
-
-    void RFB::ServerEncoder::sendLtsmChannelData(CID channel, std::string&& buf) {
-        asio::co_spawn(rfb_strand_, [this, channel, buf=std::move(buf)]() -> asio::awaitable<void> {
-    	    co_await sendLtsmChannelAwait(channel, std::span{ (const uint8_t*) buf.data(), buf.size() });
-	    co_return;
-	}, asio::detached);
-    }
-
     std::pair<std::string, std::string> RFB::ServerEncoder::authInfo(void) const {
         return std::make_pair(clientAuthName_, clientAuthDomain_);
     }

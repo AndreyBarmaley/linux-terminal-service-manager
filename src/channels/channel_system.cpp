@@ -1195,10 +1195,9 @@ Channel::ConnectorFD_R::~ConnectorFD_R() {
     sd_.cancel();
     tm_delay_.cancel();
     read_cancel_.emit(asio::cancellation_type::terminal);
-    setConnectorStatus(ConnectorStatus::Error);
     // wait loop ended
     if(loop_running_.load()) {
-        Application::info("{}: wait ended", NS_FuncNameV);
+        Application::debug(DebugType::Channels, "{}: wait ended", NS_FuncNameV);
         while(loop_running_.load()) {
             std::this_thread::yield();
         }

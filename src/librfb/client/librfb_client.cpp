@@ -1128,26 +1128,6 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ClientDecoder::sendLtsmChannelData(CID channel, std::vector<uint8_t>&& buf) {
-        if(! buf.empty()) {
-            assert(0xFFFF >= buf.size());
-            asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
-                co_await sendLtsmChannelAwait(channel, buf);
-                co_return;
-            }, asio::detached);
-        }
-    }
-
-    void RFB::ClientDecoder::sendLtsmChannelData(CID channel, std::string&& buf) {
-        if(! buf.empty()) {
-            assert(0xFFFF >= buf.size());
-            asio::co_spawn(rfb_strand_, [this, channel, buf = std::move(buf)]() -> asio::awaitable<void> {
-                co_await sendLtsmChannelAwait(channel, std::span{(const uint8_t*) buf.data(), buf.size()});
-                co_return;
-            }, asio::detached);
-        }
-    }
-
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingUpdateRegionAwait(int type, const XCB::Region & reg) {
         co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
 
