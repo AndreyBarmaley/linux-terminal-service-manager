@@ -145,6 +145,11 @@ namespace LTSM {
             Opts chOpts;
             int serverFd = -1;
             CID channel = 0;
+
+            void setFdMode(int fd) {
+                serverFd = fd;
+                serverOpts.updateType(Channel::ConnectorType::Fd);
+            }
         };
 
         /// ConnectorBase
@@ -564,7 +569,7 @@ namespace LTSM {
             for(;;) {
                 auto sock = co_await acceptor.async_accept(boost::asio::use_awaitable);
                 auto job2 = job;
-                job2.serverFd = sock.release();
+                job2.setFdMode(sock.release());
                 plannedEmplaceSpawn(std::move(job2));
             }
         }

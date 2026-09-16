@@ -849,7 +849,7 @@ asio::ip::tcp::endpoint ChannelListener::createTcpEndpoint(const Channel::UrlMod
 }
 
 void ChannelListener::plannedEmplaceSpawn(Channel::Planned && job) {
-    Application::debug(DebugType::Channels, "{}: accept client, url: `{}', mode: {}, fd: {}",
+    Application::info("{}: accept client, url: `{}', mode: {}, fd: {}",
         NS_FuncNameV, job.clientOpts.url, Channel::Connector::modeString(job.clientOpts.mode), job.serverFd);
 
     asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [func=NS_FuncNameV](std::exception_ptr ptr) {
