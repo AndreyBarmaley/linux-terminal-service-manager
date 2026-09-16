@@ -60,7 +60,7 @@ TEST_F(AsyncSocketTest, ValueToConstBufferWithStdString) {
 
 TEST_F(AsyncSocketTest, AsyncRecvValuesFillsVariables) {
     EXPECT_CALL(mock_sock, async_recv_buffers(_))
-        .WillOnce(Invoke([](std::initializer_list<boost::asio::mutable_buffer> list) -> boost::asio::awaitable<void> {
+        .WillOnce([](std::initializer_list<boost::asio::mutable_buffer> list) -> boost::asio::awaitable<void> {
             auto it = list.begin();
             if (it != list.end()) {
                 *static_cast<uint16_t*>(it->data()) = 0x1234;
@@ -71,7 +71,7 @@ TEST_F(AsyncSocketTest, AsyncRecvValuesFillsVariables) {
             }
             
             co_return;
-        }));
+        });
 
     uint16_t out1 = 0;
     uint8_t  out2 = 0;

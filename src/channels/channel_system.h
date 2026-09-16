@@ -534,8 +534,13 @@ namespace LTSM {
             }
         }
 
-        virtual bool serverSide(void) const = 0;
-        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const = 0;
+        virtual bool serverSide(void) const {
+            return false;
+        }
+
+        virtual bool allowCreateChannel(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
+            return false;
+        }
     };
 
     class ChannelClient : public ChannelBase {
