@@ -479,11 +479,11 @@ namespace LTSM {
         void destroyChannel(CID);
 
 #ifdef __UNIX__
-        bool createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelSocket(CID, std::pair<std::string, uint16_t>, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelSocket(CID, std::pair<std::string, uint16_t>, const Channel::ConnectorMode &, const Channel::Opts &);
 #endif
-        bool createChannelFd(CID, int fd, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelFd(CID, int fd, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelAudio(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);

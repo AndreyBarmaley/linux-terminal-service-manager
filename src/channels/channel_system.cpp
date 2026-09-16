@@ -468,64 +468,35 @@ bool ChannelBase::createChannelPcsc(CID channel, const std::string & url, const 
 #endif
 }
 
-bool ChannelBase::createChannelFd(CID channel, int fd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelFd(CID channel, int fd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     Application::debug(DebugType::Channels, "{}: id: {}, fd: {}, mode: {}", NS_FuncNameV, channel, fd, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createFdConnector(channel, fd, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createFdConnector(channel, fd, mode, chOpts, *this));
 }
 
 #ifdef __UNIX__
-bool ChannelBase::createChannelUnix(CID channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
-    if(! allowCreateChannel(Channel::ConnectorType::Unix, path.native(), mode)) {
+void ChannelBase::createChannelUnix(CID channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+    if(! allowCreateChannel(Channel::ConnectorType::Unix, path.string(), mode)) {
         Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", path);
-        return false;
+        throw channel_error(NS_FuncNameS);
     }
 
     Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", NS_FuncNameV, channel, path, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createUnixConnector(channel, path, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createUnixConnector(channel, path, mode, chOpts, *this));
 }
 
-bool ChannelBase::createChannelSocket(CID channel, std::pair<std::string, uint16_t> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelSocket(CID channel, std::pair<std::string, uint16_t> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! allowCreateChannel(Channel::ConnectorType::Socket, ipAddrPort.first, mode)) {
         Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", ipAddrPort.first);
-        return false;
+        throw channel_error(NS_FuncNameS);
     }
-
-    Application::debug(DebugType::Channels, "{}: id: {}, addr: {}, port: {}, mode: {}", NS_FuncNameV, channel, ipAddrPort.first, ipAddrPort.second, Channel::Connector::modeString(mode));
 
     if(serverSide() && ! startsWith(ipAddrPort.first, "127.")) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "server side allow socket only for localhost", channel);
-        return false;
+        throw channel_error(NS_FuncNameS);
     }
 
-    if(0 > ipAddrPort.second) {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "incorrect connection info", channel);
-        return false;
-    }
-
-    try {
-        emplaceChannel(channel, Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    Application::debug(DebugType::Channels, "{}: id: {}, addr: {}, port: {}, mode: {}", NS_FuncNameV, channel, ipAddrPort.first, ipAddrPort.second, Channel::Connector::modeString(mode));
+    emplaceChannel(channel, Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
 }
 
 #endif // __UNIX__
@@ -548,28 +519,19 @@ bool ChannelBase::createChannelPkcs11(CID channel, const std::string & url, cons
 #endif
 }
 
-bool ChannelBase::createChannelFile(CID channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
+void ChannelBase::createChannelFile(CID channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #ifdef __WIN32__
-
     if(! allowCreateChannel(Channel::ConnectorType::File, path.string(), mode))
 #else
-    if(! allowCreateChannel(Channel::ConnectorType::File, path.native(), mode))
+    if(! allowCreateChannel(Channel::ConnectorType::File, path.string(), mode))
 #endif
     {
         Application::error("{}: {}, content: `{}'", NS_FuncNameV, "blocked", path);
-        return false;
+        throw channel_error(NS_FuncNameS);
     }
 
     Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", NS_FuncNameV, channel, path, Channel::Connector::modeString(mode));
-
-    try {
-        emplaceChannel(channel, Channel::createFileConnector(channel, path, mode, chOpts, *this));
-    } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-        return false;
-    }
-
-    return true;
+    emplaceChannel(channel, Channel::createFileConnector(channel, path, mode, chOpts, *this));
 }
 
 bool ChannelBase::createChannelCommand(CID channel, const std::string & runcmd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
@@ -759,39 +721,49 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
     }
 
     Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#010x}", NS_FuncNameV, channel, stype, smode, sspeed, flags);
-    bool success = false;
+    bool success = true;
 
     Channel::ConnectorType type = Channel::connectorType(stype);
     Channel::Opts chopts{ Channel::connectorSpeed(sspeed), flags };
 
-    if(type == Channel::ConnectorType::File) {
-        success = createChannelFile(channel, jo.getString("path"), mode, chopts);
-    } else if(type == Channel::ConnectorType::Audio) {
-        success = createChannelAudio(channel, jo.getString("audio"), mode, chopts);
-    } else if(type == Channel::ConnectorType::Fuse) {
-        success = createChannelFuse(channel, jo.getString("fuse"), mode, chopts);
-    } else if(type == Channel::ConnectorType::Pcsc) {
-        success = createChannelPcsc(channel, jo.getString("pcsc"), mode, chopts);
-    }
+    try {
+        if(type == Channel::ConnectorType::File) {
+            createChannelFile(channel, jo.getString("path"), mode, chopts);
+        } else if(type == Channel::ConnectorType::Audio) {
+            success = createChannelAudio(channel, jo.getString("audio"), mode, chopts);
+        } else if(type == Channel::ConnectorType::Fuse) {
+            success = createChannelFuse(channel, jo.getString("fuse"), mode, chopts);
+        } else if(type == Channel::ConnectorType::Pcsc) {
+            success = createChannelPcsc(channel, jo.getString("pcsc"), mode, chopts);
+        }
 
 #ifdef __UNIX__
-    else if(type == Channel::ConnectorType::Unix) {
-        success = createChannelUnix(channel, jo.getString("path"), mode, chopts);
-    } else if(type == Channel::ConnectorType::Socket) {
-        success = createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
-    }
+        else if(type == Channel::ConnectorType::Unix) {
+            createChannelUnix(channel, jo.getString("path"), mode, chopts);
+        } else if(type == Channel::ConnectorType::Socket) {
+            createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
+        }
 
 #endif
 #ifdef LTSM_PKCS11_AUTH
-    else if(type == Channel::ConnectorType::Pkcs11) {
-        success = createChannelPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
-    }
+        else if(type == Channel::ConnectorType::Pkcs11) {
+            success = createChannelPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
+        }
 
 #endif
-    else if(type == Channel::ConnectorType::Command) {
-        success = createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
-    } else {
-        Application::error("{}: {} `{}', id: {}", NS_FuncNameV, "unknown channel type", stype, channel);
+        else if(type == Channel::ConnectorType::Command) {
+            success = createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
+        } else {
+            Application::error("{}: {} `{}', id: {}", NS_FuncNameV, "unknown channel type", stype, channel);
+            success = false;
+        }
+    } catch(const system::system_error& err) {
+        auto ec = err.code();
+        Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+        success = false;
+    } catch(const std::exception& err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+        success = false;
     }
 
     if(success) {
@@ -1177,7 +1149,6 @@ asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Cha
             break;
 
         case Channel::ConnectorType::Unix:
-            // FIXME return
             createChannelUnix(channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
             break;
 
@@ -1620,11 +1591,7 @@ Channel::createCommandConnector(CID channel, const std::string & runcmd, const C
     if(std::filesystem::is_symlink(list.front(), err)) {
         auto cmd = Tools::resolveSymLink(list.front());
         list.pop_front();
-#ifdef __WIN32__
         list.push_front(cmd.string());
-#else
-        list.push_front(cmd.native());
-#endif
         auto runcmd2 = Tools::join(list, " ");
 
         fcmd = popen(runcmd2.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));

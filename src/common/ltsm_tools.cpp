@@ -309,7 +309,7 @@ namespace LTSM {
                 struct sockaddr_un sockaddr;
                 std::memset(&sockaddr, 0, sizeof(struct sockaddr_un));
                 sockaddr.sun_family = AF_UNIX;
-                const auto & native = path.native();
+                const auto & native = path.string();
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1) {
                     Application::warning("{}: unix path is long, truncated to size: {}", NS_FuncNameV, sizeof(sockaddr.sun_path) - 1);
@@ -356,11 +356,7 @@ namespace LTSM {
                 res.splice(res.end(), readDir(entry.path(), true));
             }
 
-#ifdef __WIN32__
             res.emplace_back(entry.path().string());
-#else
-            res.emplace_back(entry.path().native());
-#endif
         }
 
         return res;
@@ -607,7 +603,7 @@ namespace LTSM {
 
             if(! err) {
                 auto tz = path.parent_path().filename() / path.filename();
-                str.append(tz.native());
+                str.append(tz.string());
             }
         } else {
             time_t ts = 0;
