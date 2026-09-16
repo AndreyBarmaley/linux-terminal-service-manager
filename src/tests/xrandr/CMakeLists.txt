@@ -1,7 +1,7 @@
 project(ltsm_test_xrandr)
 set(CUR_TARGET ltsm_test_xrandr)
 
-CommonDefaults(NONE)
+CommonDefaults(BOOST)
 
 add_executable(${CUR_TARGET} main.cpp)
 

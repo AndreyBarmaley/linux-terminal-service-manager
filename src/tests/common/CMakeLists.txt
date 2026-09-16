@@ -4,7 +4,7 @@ foreach(CUR_TARGET ltsm_test_zlib ltsm_test_binarybuf ltsm_test_streambuf ltsm_t
         ltsm_test_asyncmutex ltsm_test_parallels ltsm_test_xcbtypes ltsm_test_framebuffer ltsm_test_tools
         ltsm_test_jsonwrapper ltsm_test_bytestream ltsm_test_asyncsocket ltsm_test_ldapwrapper ltsm_test_gsswrapper ltsm_test_sdlwrapper)
 
-    CommonDefaults(JSON ZLIB SDL XCB LDAP GSSAPI)
+    CommonDefaults(JSON ZLIB SDL XCB LDAP GSSAPI BOOST)
     add_executable(${CUR_TARGET} src/${CUR_TARGET}.cpp)
 
     pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image)
