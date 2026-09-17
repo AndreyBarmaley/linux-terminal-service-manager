@@ -1,7 +1,7 @@
 project(ltsm_test_x11clip)
 set(CUR_TARGET ltsm_test_x11clip)
 
-CommonDefaults(NONE)
+CommonDefaults(BOOST)
 
 add_executable(${CUR_TARGET} main.cpp)
 
