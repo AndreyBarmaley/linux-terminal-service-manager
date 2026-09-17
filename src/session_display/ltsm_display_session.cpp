@@ -52,15 +52,20 @@ using namespace boost;
 namespace LTSM::DisplaySession {
 
     bp::process_stdio SessionProcess::createRedirect(const std::string& cmd) {
-        const auto filename = std::filesystem::path(cmd).filename();
-        auto log_dir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
+#ifdef BOOST_PROCESS_USE_STD_FS
+        namespace fs = std::filesystem;
+#else
+        namespace fs = boost::filesystem;
+#endif
+        const auto filename = fs::path(cmd).filename();
+        auto log_dir = fs::path{"/tmp"} / ".ltsm" / "log";
 
         if(auto home = getenv("HOME")) {
-            log_dir = std::filesystem::path{home} / ".ltsm" / "log";
+            log_dir = fs::path{home} / ".ltsm" / "log";
         }
 
-        if(! std::filesystem::is_directory(log_dir)) {
-            std::filesystem::create_directories(log_dir);
+        if(! fs::is_directory(log_dir)) {
+            fs::create_directories(log_dir);
         }
 
         auto log_file_out = log_dir / filename;
