@@ -687,7 +687,7 @@ namespace LTSM {
                            NS_FuncNameV, channel, length, str);
         }
 
-        ChannelListener::recvLtsmEvent(channel, std::move(buf));
+        ChannelListener::recvLtsmChannelEvent(channel, std::move(buf));
         co_return;
     }
 

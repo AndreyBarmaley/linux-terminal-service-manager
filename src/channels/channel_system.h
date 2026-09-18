@@ -133,7 +133,7 @@ namespace LTSM {
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
-        enum class OptsFlags : uint32_t { ZLibCompression = 1, AllowLoginSession = 2 };
+        enum class OptsFlags : uint32_t { ZLibCompression = 0x0001, AllowLoginSession = 0x0010, SkipSendClose = 0x0100 };
 
         struct Opts {
             Speed speed = Speed::Medium;
@@ -158,10 +158,14 @@ namespace LTSM {
           private:
             std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
             ChannelBase* owner_ = nullptr;
-            ConnectorMode mode_;
+
+            mutable uint64_t rstat_ = 0;
+            mutable uint64_t wstat_ = 0;
+
+            ConnectorMode mode_ = ConnectorMode::Unknown;
+            uint32_t flags_ = 0;
 
             const Speed speed_;
-            const int flags_;
             const CID cid_;
 
           protected:
@@ -177,10 +181,10 @@ namespace LTSM {
 
           public:
             ConnectorBase(CID cid, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
-                : owner_(& srv), mode_(mod), speed_{opts.speed}, flags_(opts.flags), cid_(cid) {
+                : owner_(& srv), mode_(mod), flags_(opts.flags), speed_{opts.speed}, cid_(cid) {
             }
 
-            virtual ~ConnectorBase() = default;
+            virtual ~ConnectorBase();
 
             //
             virtual void pushData(std::vector<uint8_t> &&) { /* empty */ }
@@ -189,6 +193,14 @@ namespace LTSM {
 
             inline bool isZlib(void) const {
                 return static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags_;
+            }
+
+            inline bool skipSendClose(void) const {
+                return static_cast<uint32_t>(OptsFlags::SkipSendClose) & flags_;
+            }
+
+            inline void setSkipSendClose(void) {
+                flags_ |= static_cast<uint32_t>(OptsFlags::SkipSendClose);
             }
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
@@ -232,6 +244,15 @@ namespace LTSM {
             inline CID channel(void) const {
                 return cid_;
             }
+
+            void updateReadStat(uint64_t val) const {
+                rstat_ += val;
+            }
+
+            void updateWriteStat(uint64_t val) const {
+                wstat_ += val;
+            }
+
         };
 
         using ConnectorBasePtr = std::unique_ptr<ConnectorBase>;
@@ -435,7 +456,7 @@ namespace LTSM {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
 
         mutable std::mutex lockch;
-        std::array <Channel::ConnectorBasePtr, ChannelTypeLast + 1> channels_;
+        std::array<Channel::ConnectorBasePtr, ChannelTypeLast + 1> channels_;
 
         int channel_debug_ = -1;
 
@@ -459,7 +480,7 @@ namespace LTSM {
 
         size_t countValidChannels(void) const;
 
-        void recvLtsmProto(CID, std::vector<uint8_t> &&);
+        void recvLtsmChannelEvent(CID, std::vector<uint8_t> &&);
         void recvChannelData(CID, std::vector<uint8_t> &&);
         void recvChannelSystem(const JsonContent &);
 
@@ -471,13 +492,14 @@ namespace LTSM {
 
         // recv system events
         virtual void recvChannelSystemEvent(const std::string &, const JsonObject &) = 0;
-        virtual void systemChannelErrorEvent(const JsonObject &) { /* empty */ }
         virtual void systemChannelConnectedEvent(const JsonObject &) = 0;
         virtual bool isAllowChannel(const Channel::ConnectorBase*) const = 0;
+        virtual void channelErrorNotify(CID, int err, const std::string &) { /* empty */ }
 
         void systemChannelCloseEvent(const JsonObject &);
+        void systemChannelErrorEvent(const JsonObject &);
 
-        void destroyChannel(CID);
+        void destroyChannel(CID, bool sendEvent);
 
 #ifdef __UNIX__
         void createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
@@ -511,9 +533,8 @@ namespace LTSM {
         void sendSystemChannelConnected(CID, int flags, int error);
         void sendSystemChannelError(CID, int code, const std::string &);
 
-        void recvLtsmEvent(CID, std::vector<uint8_t> &&);
-
         virtual boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const = 0;
+        void sendChannelDataSuccess(CID channel, size_t val) const;
 
         template <typename T>
         void sendLtsmChannelData(CID channel, T&& buf) const {

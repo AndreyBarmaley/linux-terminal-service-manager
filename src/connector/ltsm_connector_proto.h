@@ -105,11 +105,11 @@ namespace LTSM::Connector {
 
         // rfb channel listenet
         bool isUserSession(void) const override;
-        void systemChannelErrorEvent(const JsonObject &) override;
         void systemTransferFilesEvent(const JsonObject &) override;
         void systemClientVariablesEvent(const JsonObject &) override;
         void systemKeyboardChangeEvent(const JsonObject &) override;
         void systemCursorFailedEvent(const JsonObject & jo) override;
+        void channelErrorNotify(CID channel, int code, const std::string& err) override;
         bool noVncMode(void) const override;
 
       protected:

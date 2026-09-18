@@ -631,7 +631,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onDestroyChannel(const int32_t & display, const uint8_t & channel) {
         if(display == displayNum()) {
-            destroyChannel(channel);
+            destroyChannel(channel, true /* send event */);
         }
     }
 
@@ -669,15 +669,9 @@ namespace LTSM::Connector {
         sendLtsmChannelData(ChannelTypeSystem, jos.flush());
     }
 
-    void ConnectorLtsm::systemChannelErrorEvent(const JsonObject & jo) {
-        auto channel = jo.getInteger("id");
-        auto code = jo.getInteger("code");
-        auto err = jo.getString("error");
-        Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'",
-                 NS_FuncNameV, channel, displayNum(), code, err);
-
+    void ConnectorLtsm::channelErrorNotify(CID channel, int code, const std::string& err) {
         if(isUserSession()) {
-            busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
+            busSendNotify(displayNum(), "Channel Error", fmt::format("channel: {}, code: {}, error: {}", channel, code, err),
                           NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
         }
     }

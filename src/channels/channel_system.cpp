@@ -268,14 +268,17 @@ void ChannelBase::emplaceChannel(CID channel, Channel::ConnectorBasePtr&& ptr) {
     channels_[channel] = std::move(ptr);
 }
 
-void ChannelBase::destroyChannel(CID channel) {
+void ChannelBase::destroyChannel(CID channel, bool sendEvent) {
     const std::scoped_lock guard{this->lockch};
 
     if(auto& ptr = channels_[channel]) {
+        if(! sendEvent) {
+            ptr->setSkipSendClose();
+        }
         ptr.reset();
-        Application::info("{}: {}, id: {}", NS_FuncNameV, "channel removed", channel);
+        Application::info("{}: id: {}, {}", NS_FuncNameV, channel, "channel removed");
     } else {
-        Application::error("{}: {}, id: {}", NS_FuncNameV, "channel not running", channel);
+        Application::debug(DebugType::Channels, "{}: id: {}, {}", NS_FuncNameV, channel, "channel not running");
     }
 }
 
@@ -289,7 +292,15 @@ void ChannelBase::shutdownChannels(void) {
     }
 }
 
-void ChannelBase::recvLtsmEvent(CID channel, std::vector<uint8_t> && buf) {
+void ChannelBase::recvLtsmChannelEvent(CID channel, std::vector<uint8_t> && buf) {
+    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
+
+    if(isChannelDebug(channel)) {
+        auto str = Tools::hexString(buf, 2);
+        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
+                           NS_FuncNameV, channel, buf.size(), str);
+    }
+
     if(channel == ChannelTypeReserved) {
         Application::error("{}: reserved channel blocked", NS_FuncNameV);
         throw std::invalid_argument(NS_FuncNameS);
@@ -361,13 +372,28 @@ void ChannelBase::recvChannelData(CID channel, std::vector<uint8_t> && buf) {
         throw std::invalid_argument(NS_FuncNameS);
     }
 
+    channelConn->updateWriteStat(buf.size());
     channelConn->pushData(std::move(buf));
+}
+
+void ChannelBase::sendChannelDataSuccess(CID channel, size_t val) const {
+    if(auto& channelConn = channels_[channel]) {
+        channelConn->updateReadStat(val);
+    }
 }
 
 void ChannelBase::systemChannelCloseEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
     Application::info("{}: channel: {}", NS_FuncNameV, channel);
-    destroyChannel(channel);
+    destroyChannel(channel, false /* send event */);
+}
+
+void ChannelBase::systemChannelErrorEvent(const JsonObject & jo) {
+    int channel = jo.getInteger("id");
+    int code = jo.getInteger("code");
+    auto err = jo.getString("error");
+    Application::info("{}: channel: {}, errno: {}, error: `{}'", NS_FuncNameV, channel, code, err);
+    channelErrorNotify(channel, code, err);
 }
 
 asio::awaitable<bool> ChannelBase::sendSystemTransferFiles(std::forward_list<std::string> files) {
@@ -560,18 +586,6 @@ void ChannelBase::sendSystemChannelConnected(CID channel, int flags, int error) 
                         push("flags", flags).
                         push("error", error).
                         push("id", channel).flush());
-}
-
-void ChannelBase::recvLtsmProto(CID channel, std::vector<uint8_t> && buf) {
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
-
-    if(isChannelDebug(channel)) {
-        auto str = Tools::hexString(buf, 2);
-        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           NS_FuncNameV, channel, buf.size(), str);
-    }
-
-    recvLtsmEvent(channel, std::move(buf));
 }
 
 void ChannelBase::setChannelDebug(CID channel, bool debug) {
@@ -1148,6 +1162,10 @@ bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {
 #endif
 
 /// ConnectorBase
+Channel::ConnectorBase::~ConnectorBase() {
+    Application::debug(DebugType::Channels, "channel[{}] write {} bytes, read {} bytes", wstat_, rstat_);
+}
+
 bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
     return (flags_ & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
 }
@@ -1226,6 +1244,7 @@ asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
 
             // read local
             auto transferred = co_await sd_.async_read_some(asio::buffer(buf), asio::use_awaitable);
+
             buf.resize(transferred);
 
             if(isZlib()) {
@@ -1236,7 +1255,12 @@ asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
             co_await getOwner()->sendLtsmChannelAwait(channel(), buf);
         }
     } catch(const system::system_error& err) {
-        if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+        auto ec = err.code();
+        if(ec == asio::error::operation_aborted || ec == asio::error::eof) {
+            if(! skipSendClose()) {
+                getOwner()->sendSystemChannelClose(channel());
+            }
+        } else {
             Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             getOwner()->sendSystemChannelError(channel(), ec.value(), std::string(NS_FuncNameV).append(": ").append(ec.message()));
         }
@@ -1246,8 +1270,6 @@ asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
     }
 
     setConnectorStatus(ConnectorStatus::Error);
-    getOwner()->sendSystemChannelClose(channel());
-
     co_return;
 }
 
@@ -1268,8 +1290,6 @@ Channel::ConnectorFD_W::~ConnectorFD_W() {
 }
 
 boost::asio::awaitable<void> Channel::ConnectorFD_W::writeDataAwait(std::vector<uint8_t> buf) {
-    bool error = false;
-
     try {
         if(isZlib()) {
             auto buf2 = ZLib::inflate(buf);
@@ -1278,20 +1298,20 @@ boost::asio::awaitable<void> Channel::ConnectorFD_W::writeDataAwait(std::vector<
             co_await asio::async_write(sd_, asio::const_buffer(buf.data(), buf.size()), boost::asio::transfer_all(), asio::use_awaitable);
         }
     } catch(const system::system_error& err) {
-        if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+        auto ec = err.code();
+        if(ec == asio::error::operation_aborted) {
+            if(! skipSendClose()) {
+                getOwner()->sendSystemChannelClose(channel());
+            }
+        } else {
             Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             getOwner()->sendSystemChannelError(channel(), ec.value(), std::string(NS_FuncNameV).append(": ").append(ec.message()));
         }
-        error = true;
+        setConnectorStatus(ConnectorStatus::Error);
     } catch(const std::exception& err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         getOwner()->sendSystemChannelError(channel(), -1, std::string(NS_FuncNameV).append(": ").append(err.what()));
-        error = true;
-    }
-
-    if(error) {
         setConnectorStatus(ConnectorStatus::Error);
-        getOwner()->sendSystemChannelClose(channel());
     }
 
     co_return;

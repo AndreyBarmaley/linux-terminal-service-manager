@@ -835,6 +835,8 @@ namespace LTSM {
 
         co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         co_await stream_->async_send_values(asio::buffer(sb.rawbuf()));
+
+        ChannelBase::sendChannelDataSuccess(channel, buf.size());
         co_return;
     }
 
@@ -859,7 +861,7 @@ namespace LTSM {
         const uint16_t length = co_await stream_->async_recv_be16();
         auto buf = co_await stream_->async_recv_buffer(length);
 
-        ChannelClient::recvLtsmProto(channel, std::move(buf));
+        ChannelClient::recvLtsmChannelEvent(channel, std::move(buf));
         co_return;
     }
 

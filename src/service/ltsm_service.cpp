@@ -3112,7 +3112,7 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busDestroyChannel(const int32_t & display, const uint8_t & channel) {
-        Application::debug(DebugType::Dbus, "{}:, display: {}, channel: {:#04x}",
+        Application::debug(DebugType::Dbus, "{}: display: {}, channel: {}",
                            NS_FuncNameV, display, channel);
 
         emitDestroyChannel(display, channel);
