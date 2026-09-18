@@ -106,7 +106,7 @@ if(LTSM_WITH_LDAP)
 endif()
 
 if(LTSM_WITH_OPENSSL)
-    find_package(OpenSSL)
+    find_package(OpenSSL 3.0)
     if(OpenSSL_FOUND)
         target_compile_definitions(${CUR_TARGET} PUBLIC LTSM_WITH_OPENSSL)
         target_compile_definitions(${CUR_TARGET} PRIVATE ${OPENSSL_DEFINITIONS})
