@@ -9,6 +9,8 @@ target_compile_options(${CUR_TARGET} PUBLIC "-Wno-narrowing")
 
 
 if(DEFINED ENV{LTSM_BOOST_ROOT} AND IS_DIRECTORY "$ENV{LTSM_BOOST_ROOT}/boost")
+    set(Boost_USE_STATIC_LIBS ON)
+    set(Boost_USE_MULTITHREADED ON)
     find_package(Boost REQUIRED CONFIG COMPONENTS process)
     if(Boost_process_FOUND)
         target_link_libraries(${CUR_TARGET} PRIVATE Boost::process)
