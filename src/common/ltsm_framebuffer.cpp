@@ -208,7 +208,7 @@ namespace LTSM {
             }
 
             if(30 == depth()) {
-                return platformBigEndian() ? AV_PIX_FMT_X2RGB10 : AV_PIX_FMT_X2BGR10;
+                return platformBigEndian() ? AV_PIX_FMT_X2RGB10BE : AV_PIX_FMT_X2RGB10LE;
             }
 
             if(24 == depth()) {

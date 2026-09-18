@@ -575,10 +575,18 @@ namespace LTSM {
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
+#if LIBSWSCALE_VERSION_INT >= AV_VERSION_INT(6, 2, 100)
             if(int err = sws_scale_frame(swsctx.get(), localFrame.get(), remoteFrame.get()); 0 > err) {
                 Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "sws_scale", FFMPEG::error(err), err);
                 throw ffmpeg_error(NS_FuncNameS);
             }
+#else
+            if(int err = sws_scale(swsctx.get(), localFrame->data, localFrame->linesize,
+                    0, localFrame->height, localFrame->data, localFrame->linesize); 0 > err) {
+                Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "sws_scale", FFMPEG::error(err), err);
+                throw ffmpeg_error(NS_FuncNameS);
+            }
+#endif
 
             const size_t bufsz = localFrame->linesize[0] * localFrame->height;
             std::vector<uint8_t> buf{localFrame->data[0], localFrame->data[0]+bufsz};
