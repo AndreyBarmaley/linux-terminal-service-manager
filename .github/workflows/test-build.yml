@@ -12,6 +12,7 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
+  BOOST_MINOR: 88
 
 jobs:
   build:
@@ -41,19 +42,19 @@ jobs:
             libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
             libaudit-dev libspdlog-dev libpipewire-0.3-dev libgmock-dev libgtest-dev libkrb5-dev
 
-    - name: Boost1.85
+    - name: Boost1.88
       run: |
-        wget https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.bz2
-        tar xf boost_1_85_0.tar.bz2 -C ${{github.workspace}}
-        cd ${{github.workspace}}/boost_1_85_0
-        ./bootstrap.sh --with-libraries=process
-        sed -i '767s/source\.size/source.size()/' ./boost/process/v2/environment.hpp
+        wget https://archives.boost.io/release/1.${{env.BOOST_MINOR}}.0/source/boost_1_${{env.BOOST_MINOR}}_0.tar.bz2
+        tar xf boost_1_${{env.BOOST_MINOR}}_0.tar.bz2 -C ${{github.workspace}}
+        cd ${{github.workspace}}/boost_1_${{env.BOOST_MINOR}}_0
+        ./bootstrap.sh
+        ./b2
 
     - name: Configure
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: |
-        LTSM_BOOST_ROOT=${{github.workspace}}/boost_1_85_0 \
+        LTSM_BOOST_ROOT=${{github.workspace}}/boost_1_${{env.BOOST_MINOR}}_0 \
             cmake -B ${{github.workspace}}/build \
             -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
             -DLTSM_BUILD_SERVER=on \
