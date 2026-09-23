@@ -101,11 +101,12 @@ namespace LTSM {
 
             // open dst socket
             asio::local::stream_protocol::socket dst_sock{executor};
-
-            co_await dst_sock.async_connect(
-                asio::local::stream_protocol::endpoint(socket_path), asio::use_awaitable);
+            const std::chrono::seconds connect_deadline{3};
 
             try {
+                co_await dst_sock.async_connect(
+                    asio::local::stream_protocol::endpoint(socket_path), asio::cancel_after(connect_deadline));
+
                 // open src stream
                 asio::posix::stream_descriptor src_stream{executor, jobFd_};
                 for(;;) {

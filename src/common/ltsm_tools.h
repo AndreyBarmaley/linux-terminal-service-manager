@@ -55,6 +55,7 @@
 #include <functional>
 
 #include <boost/crc.hpp>
+#include <boost/asio/awaitable.hpp>
 
 #include "ltsm_compat.h"
 #include "ltsm_streambuf.h"
@@ -162,10 +163,11 @@ namespace LTSM {
         gid_t getGroupGid(const std::string & group);
 
         std::string getHostname(void);
-        bool checkUnixSocket(const std::filesystem::path &);
 
         bool fileReadable(const std::filesystem::path &);
         bool setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid, mode_t mode = 0);
+
+        boost::asio::awaitable<void> waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms);
     }
 
 #endif

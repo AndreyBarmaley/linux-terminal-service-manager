@@ -107,8 +107,7 @@ class Pkcs11Client : public QThread, protected boost::base_from_member<boost::as
     void stop(void) noexcept;
 
     boost::asio::awaitable<void> clientHandler(void);
-    boost::asio::awaitable<void> retryConnect(const std::string& path, int attempts);
-    boost::asio::awaitable<void> remoteHandshake(void);
+    boost::asio::awaitable<void> remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline);
     boost::asio::awaitable<bool> updateTokens(void);
     boost::asio::awaitable<void> updateTokensTimer(void);
     boost::asio::awaitable<ListCertificates> loadCertificates(uint64_t slotId) const;

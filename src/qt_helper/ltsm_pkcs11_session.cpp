@@ -75,10 +75,8 @@ void Pkcs11Client::run(void) {
 }
 
 asio::awaitable<void> Pkcs11Client::clientHandler(void) {
-    const int attempts = 5;
     try {
-        co_await retryConnect(templatePath.toStdString(), attempts);
-        co_await remoteHandshake();
+        co_await remoteHandshake(templatePath.toStdString(), 3s /* connect deadline */);
         co_await updateTokensTimer();
     } catch(const boost::system::system_error& err) {
         auto ec = err.code();
@@ -92,29 +90,9 @@ asio::awaitable<void> Pkcs11Client::clientHandler(void) {
     }
 }
 
-asio::awaitable<void> Pkcs11Client::retryConnect(const std::string& path, int attempts) {
-    auto ex = co_await asio::this_coro::executor;
-    asio::steady_timer timer{ex};
+asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
+    co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
-    for(int it = 1; it <= attempts; it++) {
-        try {
-            co_await socket().async_connect(path, asio::use_awaitable);
-            Application::debug(DebugType::Pkcs11, "{}: connected, path: {}", NS_FuncNameV, path);
-            co_return;
-        } catch(const system::system_error& err) {
-            if(it == attempts) {
-                Application::error("{}: {} failed, path: {}, attempts: {}, error: {}",
-                    NS_FuncNameV, "connect", path, attempts, err.code().message());
-                throw system::system_error(asio::error::operation_aborted);
-            }
-        }
-
-        timer.expires_after(300ms);
-        co_await timer.async_wait(asio::use_awaitable);
-    }
-}
-
-asio::awaitable<void> Pkcs11Client::remoteHandshake(void) {
     uint16_t cmd, err;
 
     co_await async_send_values(

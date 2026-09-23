@@ -119,8 +119,7 @@ namespace LTSM {
             , trans_lock_{socket().get_executor()} {}
         ~PcscRemote() = default;
 
-        [[nodiscard]] boost::asio::awaitable<void> retryConnect(const std::string & path, int attempts);
-        [[nodiscard]] boost::asio::awaitable<void> remoteHandshake(void);
+        [[nodiscard]] boost::asio::awaitable<void> remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline);
 
         [[nodiscard]] boost::asio::awaitable<RetEstablishedContext> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
         [[nodiscard]] boost::asio::awaitable<RetReleaseContext> sendReleaseContext(const int32_t & id, const uint64_t & context);

@@ -819,7 +819,7 @@ namespace LTSM {
                 co_await rfbHostConnectAwait(host_, port_, socketNoDelay);
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                    Application::error("{}: system error: {}, code: {}", "rfbHostConnectAwait", ec.message(), ec.value());
+                    Application::error("{}: system error: {}, code: {}, host: {}, port: {}", "rfbHostConnectAwait", ec.message(), ec.value(), host_, port_);
                     asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 }
                 co_return;

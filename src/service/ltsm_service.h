@@ -409,8 +409,7 @@ namespace LTSM::Manager {
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
         XvfbSessionPtr runNewDisplaySession(const std::string & username, const std::string & password, EnvironmentsMap && envs, OptionsMap && opts);
 
-        static bool checkDisplaySessionAlive(int display);
-        static bool checkDisplaySessionStarted(XvfbSessionPtr);
+        //static bool checkDisplaySessionStarted(XvfbSessionPtr);
 
         void displayShutdownAsync(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);

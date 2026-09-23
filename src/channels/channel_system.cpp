@@ -21,10 +21,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifdef __UNIX__
-#include <sys/socket.h>
-#endif
-
 #include <sys/stat.h>
 
 #include <fcntl.h>
@@ -246,31 +242,25 @@ Channel::Connector::parseAddrPort(const std::string & addrPort) {
 }
 
 /// ChannelBase
-size_t ChannelBase::countValidChannels(void) const {
-    const std::scoped_lock guard{lockch};
+size_t ChannelBase::countValidSlots(void) const {
     return std::count_if(channels_.begin(), channels_.end(), [](auto & ptr) {
         return !! ptr;
     });
 }
 
-Channel::ConnectorBase* ChannelBase::findChannel(CID channel) {
-    const std::scoped_lock guard{lockch};
-
+bool ChannelBase::isFreeSlot(CID channel) {
     if(auto& ptr = channels_[channel]) {
-        return ptr.get();
+        return false;
     }
 
-    return nullptr;
+    return true;
 }
 
 void ChannelBase::emplaceChannel(CID channel, Channel::ConnectorBasePtr&& ptr) {
-    const std::scoped_lock guard{lockch};
     channels_[channel] = std::move(ptr);
 }
 
 void ChannelBase::destroyChannel(CID channel, bool sendEvent) {
-    const std::scoped_lock guard{this->lockch};
-
     if(auto& ptr = channels_[channel]) {
         if(! sendEvent) {
             ptr->setSkipSendClose();
@@ -283,8 +273,6 @@ void ChannelBase::destroyChannel(CID channel, bool sendEvent) {
 }
 
 void ChannelBase::shutdownChannels(void) {
-    const std::scoped_lock guard{lockch};
-
     for(auto & ptr : channels_) {
         if(ptr) {
             ptr.reset();
@@ -689,7 +677,7 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
         return replyError();
     }
 
-    if(findChannel(channel)) {
+    if(! isFreeSlot(channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel busy", channel);
         return replyError();
     }
@@ -998,7 +986,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
         throw channel_error(NS_FuncNameS);
     }
 
-    if(findChannel(channel)) {
+    if(! isFreeSlot(channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel busy", channel);
         jobFailed();
         replyError();
@@ -1033,7 +1021,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
 }
 
 uint32_t ChannelListener::countFreeChannels(void) const {
-    const auto channels_valid = countValidChannels();
+    const auto channels_valid = countValidSlots();
     const auto used = 2 + channels_valid + planned_counts_.load();
 
     if(used > ChannelTypeLast) {
@@ -1094,7 +1082,7 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
     };
 
     for(; channel < ChannelTypeReserved; ++channel) {
-        if(! findChannel(channel) && ! findPlanned(channel)) {
+        if(isFreeSlot(channel) && ! findPlanned(channel)) {
             break;
         }
     }

@@ -24,11 +24,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#ifdef __UNIX__
-#include <sys/un.h>
-#include <sys/socket.h>
-#endif
-
 #include <bit>
 #include <ctime>
 #include <cstdio>
@@ -54,6 +49,8 @@
 #include <openssl/bio.h>
 #endif
 
+#include <boost/asio.hpp>
+
 #include "ltsm_tools.h"
 #include "ltsm_streambuf.h"
 #include "ltsm_application.h"
@@ -67,6 +64,9 @@ int getgid(void) {
     return 0;
 }
 #endif
+
+using namespace std::chrono_literals;
+using namespace boost;
 
 namespace LTSM {
 #ifdef __UNIX__
@@ -297,34 +297,6 @@ namespace LTSM {
         return buf.data();
     }
 
-    bool Tools::checkUnixSocket(const std::filesystem::path & path) {
-        std::error_code err;
-
-        // check present
-        if(std::filesystem::is_socket(path, err)) {
-            int socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
-
-            if(0 < socket_fd) {
-                // check open
-                struct sockaddr_un sockaddr;
-                std::memset(&sockaddr, 0, sizeof(struct sockaddr_un));
-                sockaddr.sun_family = AF_UNIX;
-                const auto & native = path.string();
-
-                if(native.size() > sizeof(sockaddr.sun_path) - 1) {
-                    Application::warning("{}: unix path is long, truncated to size: {}", NS_FuncNameV, sizeof(sockaddr.sun_path) - 1);
-                }
-
-                std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
-                int res = connect(socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un));
-                close(socket_fd);
-                return res == 0;
-            }
-        }
-
-        return false;
-    }
-
     bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode) {
         if(0 != chown(path.c_str(), uid, gid)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
@@ -343,6 +315,28 @@ namespace LTSM {
 
     bool Tools::fileReadable(const std::filesystem::path & path) {
         return 0 == access(path.c_str(), R_OK);
+    }
+
+    asio::awaitable<void> Tools::waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
+        auto ex = co_await asio::this_coro::executor;
+
+        const auto deadline_time = std::chrono::steady_clock::now() + deadline_ms;
+        asio::steady_timer tm_pause{ex};
+
+        try {
+            while (! std::filesystem::is_socket(file)) {
+                tm_pause.expires_after(100ms);
+                co_await tm_pause.async_wait(asio::cancel_at(deadline_time, asio::use_awaitable));
+            }
+        } catch(const system::system_error& err) {
+            if(err.code() == asio::error::operation_aborted) {
+                // deadline
+                Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+            }
+            throw;
+        }
+
+        co_return;
     }
 
 #endif // __UNIX__

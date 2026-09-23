@@ -184,8 +184,7 @@ namespace LTSM {
             stopSession();
         }
 
-        [[nodiscard]] asio::awaitable<void> retryConnect(const std::string &, int);
-        [[nodiscard]] asio::awaitable<void> remoteHandshake(void);
+        [[nodiscard]] asio::awaitable<void> remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline);
         [[nodiscard]] asio::awaitable<StStat> recvStatStruct(void) const;
 
         bool startSession(void);
@@ -292,28 +291,9 @@ namespace LTSM {
     }
 
     // FuseSession
-    asio::awaitable<void> FuseSession::retryConnect(const std::string & path, int attempts) {
-        auto executor = co_await asio::this_coro::executor;
-        asio::steady_timer timer{executor};
+    asio::awaitable<void> FuseSession::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
+        co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
-        for(int it = 1; it <= attempts; it++) {
-            try {
-                co_await socket().async_connect(path, asio::use_awaitable);
-                Application::debug(DebugType::Fuse, "{}: connected, path: {}", NS_FuncNameV, path);
-                co_return;
-            } catch(const system::system_error& ec) {
-                if(it == attempts) {
-                    Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
-                    throw;
-                }
-            }
-
-            timer.expires_after(300ms);
-            co_await timer.async_wait(asio::use_awaitable);
-        }
-    }
-
-    asio::awaitable<void> FuseSession::remoteHandshake(void) {
         // <VER16> - proto version
         // <LEN16><MOUNTPOINT> - mount point
         co_await async_send_values(
@@ -1088,8 +1068,7 @@ namespace LTSM {
             auto sess = std::make_unique<FuseSession>(ex, localPoint, remotePoint);
 
             try {
-                co_await sess->retryConnect(socketPath, 5);
-                co_await sess->remoteHandshake();
+                co_await sess->remoteHandshake(socketPath, 3s /* connect deadline */);
 
                 if(sess->startSession()) {
                     childs_.emplace_front(std::move(sess));

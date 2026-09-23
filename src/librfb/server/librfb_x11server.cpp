@@ -117,6 +117,13 @@ namespace LTSM {
                 }
             }
 
+            auto ex = co_await asio::this_coro::executor;
+            asio::steady_timer tm_delay{ex, 100ms};
+            co_await tm_delay.async_wait(asio::use_awaitable);
+
+            // full update
+            serverScreenUpdateRequest();
+
             co_return;
 	}, asio::detached);
     }

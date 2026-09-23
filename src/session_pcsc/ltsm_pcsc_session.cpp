@@ -200,31 +200,9 @@ namespace LTSM {
         trans_lock_.unlock(id);
     }
 
-    asio::awaitable<void> PcscRemote::retryConnect(const std::string & path, int attempts) {
-        auto ex = co_await asio::this_coro::executor;
-        asio::steady_timer timer{ex};
+    asio::awaitable<void> PcscRemote::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
+        co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
-        for(int it = 1; it <= attempts; it++) {
-            try {
-                co_await socket().async_connect(path, asio::use_awaitable);
-                Application::debug(DebugType::Pcsc, "{}: connected, path: {}", NS_FuncNameV, path);
-                co_return;
-            } catch(const system::system_error& err) {
-                if(it == attempts) {
-                    Application::warning("{}: {} failed, path: {}, attempts: {}", NS_FuncNameV, "connect", path, attempts);
-                    throw system::system_error(asio::error::operation_aborted);
-                } else {
-            	    auto ec = err.code();
-                    Application::warning("{}: system error: {}", NS_FuncNameV, ec.message());
-                }
-            }
-
-            timer.expires_after(300ms);
-            co_await timer.async_wait(asio::use_awaitable);
-        }
-    }
-
-    asio::awaitable<void> PcscRemote::remoteHandshake(void) {
         co_await send_lock_.async_lock();
 
         try {
@@ -2053,8 +2031,7 @@ namespace LTSM {
             auto executor = co_await asio::this_coro::executor;
 
             try {
-                co_await remote_->retryConnect(socketPath, 5);
-                co_await remote_->remoteHandshake();
+                co_await remote_->remoteHandshake(socketPath, 3s /* connect deadline */);
 
                 // start local listener
                 asio::co_spawn(clients_guard_, listenerHandler(),

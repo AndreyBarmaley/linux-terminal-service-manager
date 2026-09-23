@@ -38,8 +38,6 @@
 #include <boost/process/v2/environment.hpp>
 #endif
 
-#include <boost/asio/experimental/awaitable_operators.hpp>
-
 #include "ltsm_zlib.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
@@ -77,41 +75,6 @@ namespace LTSM::DisplaySession {
         return bp::process_stdio{ .in = nullptr, .out = log_file_out, .err = log_file_err };
     }
 
-    asio::awaitable<void> waitSocketConnectAwait(const std::filesystem::path& file) {
-        if(std::filesystem::is_socket(file)) {
-            co_return;
-        }
-
-        auto ex = co_await asio::this_coro::executor;
-        asio::steady_timer tm_pause{ex};
-
-        while(! std::filesystem::is_socket(file)) {
-            tm_pause.expires_after(100ms);
-            co_await tm_pause.async_wait(asio::use_awaitable);
-        }
-
-        asio::local::stream_protocol::socket sock{ex};
-        co_await sock.async_connect(asio::local::stream_protocol::endpoint{file.string()}, asio::use_awaitable);
-
-        co_return;
-    }
-
-    asio::awaitable<void> waitSocketTimeoutAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
-        auto ex = co_await asio::this_coro::executor;
-        asio::steady_timer tm_deadline{ex, deadline_ms};
-
-        using namespace asio::experimental::awaitable_operators;
-        auto results = co_await(waitSocketConnectAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
-
-        if(results.index() == 0) {
-            tm_deadline.cancel();
-            co_return;
-        }
-
-        Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
-        throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
-    }
-
     template<typename Buffer>
     asio::awaitable<Buffer> readFileAwait(std::filesystem::path file) {
         auto ex = co_await asio::this_coro::executor;
@@ -142,37 +105,27 @@ namespace LTSM::DisplaySession {
         co_return content;
     }
 
-    asio::awaitable<void> waitFileAwait(std::filesystem::path file) {
-        if(std::filesystem::is_regular_file(file)) {
-            co_return;
-        }
 
+    asio::awaitable<void> waitFileNotEmptyAwait(const std::filesystem::path& file, std::chrono::milliseconds deadline_ms) {
         auto ex = co_await asio::this_coro::executor;
+
+        const auto deadline_time = std::chrono::steady_clock::now() + deadline_ms;
         asio::steady_timer tm_pause{ex};
 
-        while(! std::filesystem::is_regular_file(file) ||
-              0 == std::filesystem::file_size(file)) {
-            tm_pause.expires_after(100ms);
-            co_await tm_pause.async_wait(asio::use_awaitable);
+        try {
+            while (! std::filesystem::is_regular_file(file) || 0 == std::filesystem::file_size(file)) {
+                tm_pause.expires_after(100ms);
+                co_await tm_pause.async_wait(asio::cancel_at(deadline_time, asio::use_awaitable));
+            }
+        } catch(const system::system_error& err) {
+            if(err.code() == asio::error::operation_aborted) {
+                // deadline
+                Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+            }
+            throw;
         }
-
+        
         co_return;
-    }
-
-    asio::awaitable<void> waitFileTimeoutAwait(std::filesystem::path file, std::chrono::milliseconds deadline_ms) {
-        auto ex = co_await asio::this_coro::executor;
-        asio::steady_timer tm_deadline{ex, deadline_ms};
-
-        using namespace asio::experimental::awaitable_operators;
-        auto results = co_await(waitFileAwait(file) || tm_deadline.async_wait(asio::use_awaitable));
-
-        if(results.index() == 0) {
-            tm_deadline.cancel();
-            co_return;
-        }
-
-        Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
-        throw std::system_error(std::make_error_code(std::errc::timed_out), file.string());
     }
 
     void clearSessionDbusAddress(int displayNum) {
@@ -379,7 +332,7 @@ namespace LTSM::DisplaySession {
         const uint32_t deadline_ms = json.configGetInteger("xvfb:timeout", 3500);
         auto socket_path = Tools::x11UnixPath(res.display_num_);
 
-        co_await waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
+        co_await Tools::waitSocketTimeoutAwait(socket_path, std::chrono::milliseconds(deadline_ms));
         Application::info("{}: cmd: {}, pid: {}, display: {}, socket: {}",
                           NS_FuncNameV, xorgBin, res.ps_xorg_->id(), displayNum, socket_path);
 
@@ -412,7 +365,7 @@ namespace LTSM::DisplaySession {
             auto dbusPath = std::filesystem::path{env} / "ltsm" / fmt::format("dbus_session_{}", displayNum);
             std::string res;
 
-            co_await waitFileTimeoutAwait(dbusPath, std::chrono::milliseconds(deadline_ms));
+            co_await waitFileNotEmptyAwait(dbusPath, std::chrono::milliseconds(deadline_ms));
             auto dbusAddress = co_await readFileAwait<std::string>(dbusPath);
             // remove endl
             dbusAddress.erase(

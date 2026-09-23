@@ -76,8 +76,7 @@ namespace LTSM {
         }
         ~AudioClient() = default;
     
-        boost::asio::awaitable<void> retryConnect(const std::string &, int);
-        boost::asio::awaitable<void> remoteHandshake(void);
+        boost::asio::awaitable<void> remoteHandshake(const std::string &, std::chrono::seconds connect_deadline);
         boost::asio::awaitable<void> timerWaitEngine(void);
 
         bool engineInit(void);

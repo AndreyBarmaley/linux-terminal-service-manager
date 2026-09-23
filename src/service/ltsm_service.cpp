@@ -1349,57 +1349,61 @@ namespace LTSM::Manager {
         return true;
     }
 
-    bool DBusAdaptor::checkDisplaySessionAlive(int display) {
-        return 0 < display && Tools::checkUnixSocket(Tools::x11UnixPath(display));
-    }
+    template<typename Func>
+    asio::awaitable<bool> waitDisplaySessionDeadlineAwait(XvfbSessionPtr sess, std::chrono::milliseconds deadline_ms, const Func& func) {
+        auto ex = co_await asio::this_coro::executor;
+        const auto deadline_time = std::chrono::steady_clock::now() + deadline_ms;
+        asio::steady_timer tm_pause{ex};
 
-    bool DBusAdaptor::checkDisplaySessionStarted(XvfbSessionPtr sess) {
         try {
-            auto dbusPath = sess->dbusSessionPath();
-            if(! std::filesystem::is_regular_file(dbusPath)) {
-                return false;
+            while (! func(sess.get())) {
+                tm_pause.expires_after(100ms);
+                co_await tm_pause.async_wait(asio::cancel_at(deadline_time, asio::use_awaitable));
             }
-            auto addr = Tools::fileToString(dbusPath);
-            auto dbus = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
-            if(0 < dbus->getVersion()) {
-                // set valid session dbus address
-                sess->dbusAddress = std::move(addr);
-                return true;
+            co_return true;
+        } catch(const system::system_error& err) {
+            auto ec = err.code();
+            if(ec == asio::error::operation_aborted) {
+                // deadline
+                Application::error("{}: deadline", NS_FuncNameV);
+            } else {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
-        } catch(...) {}
-        return false;
-    }
-
-    template <typename WaitFunc>
-    bool waitAsioCallable(asio::io_context & ioc, uint32_t total, uint32_t pause, const WaitFunc & waitFunc) {
-        asio::steady_timer timer{ioc};
-
-        while(true) {
-            timer.expires_after(std::chrono::milliseconds(pause));
-            auto res = timer.async_wait(asio::use_future);
-
-            if(ioc.get_executor().running_in_this_thread()) {
-                // future: skip deadlock
-                while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-                    ioc.run_one();
-                }
-            }
-
-            // wait timer
-            res.get();
-
-            if(waitFunc()) {
-                return true;
-            }
-
-            if(total < pause) {
-                return false;
-            }
-
-            total -= pause;
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
-        return false;
+        co_return false;
+    }
+
+    asio::awaitable<bool> waitDisplaySessionStartedAwait(XvfbSessionPtr sess, std::chrono::milliseconds deadline_ms) {
+        auto checkSessionStarted = [](XvfbSession* sess) {
+            try {
+                auto dbusPath = sess->dbusSessionPath();
+                if(! std::filesystem::is_regular_file(dbusPath)) {
+                    return false;
+                }
+                auto addr = Tools::fileToString(dbusPath);
+                auto dbus = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
+                if(0 < dbus->getVersion()) {
+                    // set valid session dbus address
+                    sess->dbusAddress = std::move(addr);
+                    return true;
+                }
+            } catch(const std::exception&) {
+            }
+            return false;
+        };
+
+        co_return co_await waitDisplaySessionDeadlineAwait(std::move(sess), deadline_ms, checkSessionStarted);
+    }
+
+    asio::awaitable<bool> waitDisplaySessionDisconnectedAwait(XvfbSessionPtr sess, std::chrono::milliseconds deadline_ms) {
+        auto checkSessionDisconnected = [](XvfbSession* sess) {
+            return sess->mode == SessionMode::Disconnected;
+        };
+
+        co_return co_await waitDisplaySessionDeadlineAwait(std::move(sess), deadline_ms, checkSessionDisconnected);
     }
 
     std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie) const {
@@ -1550,9 +1554,12 @@ namespace LTSM::Manager {
 
         auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
 
+        // dbus thread safe
+        auto started = asio::co_spawn(ioc_,
+            waitDisplaySessionStartedAwait(sess, 3000ms /* deadline ms*/), asio::use_future);
+
         // wait display session starting
-        if(waitAsioCallable(ioc_, sessionStartTimeout * 1000 /* ms */, 300,
-                            std::bind(&DBusAdaptor::checkDisplaySessionStarted, sess))) {
+        if(started.get()) {
             try {
                 // fix X11 socket pemissions 0660
                 Tools::setFileOwner(Tools::x11UnixPath(sess->displayNum),
@@ -1568,7 +1575,7 @@ namespace LTSM::Manager {
                 Application::error("{}: {}", NS_FuncNameV, "permission", err.what());
             }
         } else {
-            Application::error("{}: display session not started", NS_FuncNameV);
+            Application::error("{}: {} failed, display: {}", NS_FuncNameV, "start session", sess->displayNum);
         }
 
         // failed
@@ -1630,9 +1637,12 @@ namespace LTSM::Manager {
             Application::info("{}: {}, display: {}, user: {}, pid: {}",
                     NS_FuncNameV, "connect to session", oldSess->displayNum, oldSess->userInfo->user(), oldSess->pid1);
 
-            if(! checkDisplaySessionAlive(oldSess->displayNum)) {
-                Application::error("{}: {} failed, display: {}",
-                    NS_FuncNameV, "checkDisplaySessionAlive", oldSess->displayNum);
+            // dbus thread safe
+            auto started = asio::co_spawn(ioc_,
+                waitDisplaySessionStartedAwait(oldSess, 3000ms /* deadline ms*/), asio::use_future);
+
+            if(! started.get()) {
+                Application::error("{}: {} failed, display: {}", NS_FuncNameV, "start session", oldSess->displayNum);
                 return -1;
             }
 
@@ -2238,6 +2248,7 @@ namespace LTSM::Manager {
         return false;
     }
 
+
     bool DBusAdaptor::pamAuthenticate(XvfbSessionPtr xvfb, const std::string & login, const std::string & password,
                                       bool token) {
         Application::info("{}: display: {}, user: {}", NS_FuncNameV, xvfb->displayNum, login);
@@ -2328,7 +2339,11 @@ namespace LTSM::Manager {
                 // shutdown prev connect
                 emitShutdownConnector(userSess->displayNum);
                 // wait session: changes connected
-                waitAsioCallable(ioc_, 2000, 50, [userSess](){ return userSess->mode == SessionMode::Disconnected; });
+                auto status = asio::co_spawn(ioc_,
+                    waitDisplaySessionDisconnectedAwait(userSess, 3000ms /* deadline ms*/), asio::use_future);
+                if(! status.get()) {
+                    Application::warning("{}: {} failed, display: {}", NS_FuncNameV, "session disconnect", userSess->displayNum);
+                }
             }
         }
 
@@ -2465,7 +2480,39 @@ namespace LTSM::Manager {
         }
     }
 
-    bool waitFileSetPermission(asio::io_context & ioc, std::filesystem::path path, uid_t uid, gid_t gid, mode_t mode) {
+    template <typename WaitFunc>
+    bool waitAsioCallable(asio::io_context & ioc, uint32_t total, uint32_t pause, const WaitFunc & waitFunc) {
+        asio::steady_timer timer{ioc};
+
+        while(true) {
+            timer.expires_after(std::chrono::milliseconds(pause));
+            auto res = timer.async_wait(asio::use_future);
+
+            if(ioc.get_executor().running_in_this_thread()) {
+                // future: skip deadlock
+                while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                    ioc.run_one();
+                }
+            }
+
+            // wait timer
+            res.get();
+
+            if(waitFunc()) {
+                return true;
+            }
+
+            if(total < pause) {
+                return false;
+            }
+
+            total -= pause;
+        }
+
+        return false;
+    }
+
+    bool waitFileSetPermission(asio::io_context & ioc, const std::filesystem::path& path, uid_t uid, gid_t gid, mode_t mode) {
         auto fileExists = [&path]() {
             std::error_code fserr;
             return std::filesystem::exists(path, fserr);

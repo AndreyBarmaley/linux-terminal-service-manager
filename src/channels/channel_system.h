@@ -454,14 +454,13 @@ namespace LTSM {
 
     class ChannelBase {
         boost::asio::strand<boost::asio::any_io_executor> strand_;
-
-        mutable std::mutex lockch;
         std::array<Channel::ConnectorBasePtr, ChannelTypeLast + 1> channels_;
 
         int channel_debug_ = -1;
 
       protected:
-        Channel::ConnectorBase* findChannel(CID);
+        bool isFreeSlot(CID);
+        size_t countValidSlots(void) const;
 
         void setChannelStatus(CID, const Channel::ConnectorStatus &);
         Channel::ConnectorStatus channelStatus(CID) const;
@@ -477,8 +476,6 @@ namespace LTSM {
         inline void setChannelRunning(CID ch) {
             setChannelStatus(ch, Channel::ConnectorStatus::Running);
         }
-
-        size_t countValidChannels(void) const;
 
         void recvLtsmChannelEvent(CID, std::vector<uint8_t> &&);
         void recvChannelData(CID, std::vector<uint8_t> &&);
