@@ -76,7 +76,6 @@ namespace LTSM {
             PixelFormat clientPf;
             ColorMap colourMap;
 
-	    // FIXME
             mutable std::atomic<bool> fbUpdateProcessing_{false};
 
             bool clientLtsmSupported = false;
@@ -120,8 +119,6 @@ namespace LTSM {
             bool isClientSupportedEncoding(int) const;
             bool isContinueUpdatesProcessed(void) const;
             bool isEncoderFFmpeg(void) const;
-
-            void waitUpdateProcess(void);
 
             boost::asio::awaitable<bool> authVncInitAwait(const std::string &);
             boost::asio::awaitable<bool> authVenCryptInitAwait(const SecurityInfo &);

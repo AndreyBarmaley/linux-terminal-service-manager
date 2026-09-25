@@ -101,7 +101,7 @@ namespace LTSM {
             serverDisplayResizedEvent(wsz);
 
             if(isClientSupportedEncoding(ENCODING_EXT_DESKTOP_SIZE)) {
-                auto status = randrSequence == notify.sequence ?
+                auto status = randrSequence_ == notify.sequence ?
                           RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
 
                 co_await asio::post(rfb_strand(), asio::use_awaitable);
@@ -516,7 +516,7 @@ namespace LTSM {
             // pressed mask:
             //  left 0x01, middle 0x02, right 0x04, scrollUp: 0x08,
             //  scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
-            if(pressedMask ^ mask) {
+            if(pressedMask_ ^ mask) {
                 for(int num = 0; num < 8; ++num) {
                     int bit = 1 << num;
 
@@ -524,12 +524,12 @@ namespace LTSM {
                         Application::debug(DebugType::X11Srv, "{}: xfb fake input pressed: {}", NS_FuncNameV, num + 1);
 
                         test->screenInputButton(num + 1, XCB::Point(posx, posy), true);
-                        pressedMask |= bit;
-                    } else if(bit & pressedMask) {
+                        pressedMask_ |= bit;
+                    } else if(bit & pressedMask_) {
                         Application::debug(DebugType::X11Srv, "{}: xfb fake input released: {}", NS_FuncNameV, num + 1);
 
                         test->screenInputButton(num + 1, XCB::Point(posx, posy), false);
-                        pressedMask &= ~bit;
+                        pressedMask_ &= ~bit;
                     }
                 }
             } else {
@@ -805,14 +805,14 @@ namespace LTSM {
             displayResizeNegotiation_ = true;
             uint16_t sequence = 0;
             if(XCB::RootDisplay::setRandrScreenSize(desktop.toSize(), & sequence)) {
-                randrSequence = sequence;
+                randrSequence_ = sequence;
             } else {
 	        asio::co_spawn(rfb_strand(),
                     sendEncodingDesktopResizeAwait(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, std::move(dsz)),
                     asio::detached);
                 displayResizeNegotiation_ = false;
                 displayResizeProcessed_ = false;
-                randrSequence = 0;
+                randrSequence_ = 0;
             }
         }
     }

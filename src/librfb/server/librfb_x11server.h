@@ -52,10 +52,6 @@ namespace LTSM {
             std::atomic<xcb_rectangle_t> serverRegion_;
             std::atomic<xcb_rectangle_t> clientRegion_;
 
-            std::atomic<int> pressedMask{0};
-            std::atomic<int> randrSequence{0};
-            std::atomic<int> sendUpdateFPS{0};
-
             std::atomic<bool> displayResizeNegotiation_{false};
             std::atomic<bool> displayResizeProcessed_{false};
             std::atomic<bool> clientUpdateCursor_{false};
@@ -64,6 +60,8 @@ namespace LTSM {
 
             XCB::ShmIdShared shm;
 
+            int pressedMask_ = 0;
+            int randrSequence_ = 0;
             int rfbStartingCode_ = 0;
 	    const uint32_t fpsMax_ = 22;
             uint16_t clipLocalTypes_ = 0;

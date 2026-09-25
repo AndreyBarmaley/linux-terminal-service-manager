@@ -204,7 +204,7 @@ namespace LTSM {
             }
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
-                status_.exchange(st);
+                status_.store(st);
             }
 
             inline Channel::ConnectorStatus connectorStatus(void) const {

@@ -564,12 +564,6 @@ namespace LTSM {
         co_return;
     }
 
-    void RFB::ServerEncoder::waitUpdateProcess(void) {
-        while(fbUpdateProcessing_.load(std::memory_order_acquire)) {
-            fbUpdateProcessing_.wait(true, std::memory_order_acquire); 
-        }
-    }
-
     asio::awaitable<void> RFB::ServerEncoder::waitUpdateProcessAwait(void) {
         while(fbUpdateProcessing_.load(std::memory_order_acquire)) {
             timer_updates_.expires_after(std::chrono::milliseconds(1));
@@ -586,7 +580,7 @@ namespace LTSM {
         }
 
         try {
-            fbUpdateProcessing_ = true;
+            fbUpdateProcessing_.store(true);
             co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
             auto reply = serverFrameBuffer(area);
             co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
@@ -598,11 +592,11 @@ namespace LTSM {
         } catch(const xcb_error_busy&) {
             Application::warning("{}: update busy, area: {}", NS_FuncNameV, area);
         } catch(const std::exception & err) {
-            fbUpdateProcessing_ = false;
+            fbUpdateProcessing_.store(false);
             throw err;
         }
 
-        fbUpdateProcessing_ = false;
+        fbUpdateProcessing_.store(false);
         co_return;
     }
 

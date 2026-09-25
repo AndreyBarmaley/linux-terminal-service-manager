@@ -1192,7 +1192,7 @@ Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd, const Opts & opts, Channel
     // read loop
     asio::co_spawn(srv.chan_strand(), readLoopAwait(),
         boost::asio::bind_cancellation_slot(read_cancel_.slot(), [this](std::exception_ptr ptr) {
-            loop_running_.exchange(false);
+            loop_running_.store(false);
         })
     );
 }
@@ -1211,7 +1211,7 @@ Channel::ConnectorFD_R::~ConnectorFD_R() {
 }
 
 asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
-    loop_running_.exchange(true);
+    loop_running_.store(true);
 
     try {
         auto info = speedInfo();
