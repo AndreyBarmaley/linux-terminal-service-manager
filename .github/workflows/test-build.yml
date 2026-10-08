@@ -28,7 +28,7 @@ jobs:
     - name: Update packages
       run: |
        sudo apt update
-       sudo apt -y upgrade
+       # sudo apt -y upgrade
 
     - name: Install dependencies
       run: |
