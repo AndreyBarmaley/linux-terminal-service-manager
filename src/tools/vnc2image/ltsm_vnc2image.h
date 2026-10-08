@@ -78,7 +78,7 @@ namespace LTSM {
       public:
         Vnc2Image(int argc, const char** argv);
 
-        void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        boost::asio::awaitable<void> clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
 
         int start(void);

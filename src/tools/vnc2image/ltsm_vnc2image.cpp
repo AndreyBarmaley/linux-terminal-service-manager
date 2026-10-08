@@ -141,10 +141,11 @@ namespace LTSM {
         return fbPtr->region().toSize();
     }
 
-    void Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
+    boost::asio::awaitable<void> Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
         // receive server pixel format
         auto format = PixelFormat(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), 0);
         fbPtr = std::make_unique<FrameBuffer>(XCB::Region(0, 0, wsz.width, wsz.height), format);
+        co_return;
     }
 
     void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel) const {
