@@ -131,7 +131,8 @@ namespace LTSM {
             virtual void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                     const std::vector<RFB::ScreenInfo> &) { /* empty */ }
 
-            virtual void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
+            virtual boost::asio::awaitable<void> clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) { co_return; }
+
             virtual void clientRecvFBUpdateEvent(void) { /* empty */ }
             virtual void clientRecvSetColorMapEvent(const std::vector<Color> &) { /* empty */ }
             virtual void clientRecvBellEvent(void) { /* empty */ }

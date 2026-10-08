@@ -30,11 +30,8 @@
 
 namespace LTSM {
     namespace FFMPEG {
-        std::array<char, 1024> errbuf;
-        std::array<char, 1024> logbuf;
-
-        const char* error(int errnum) {
-            std::ranges::fill(errbuf, 0);
+        std::string error(int errnum) {
+            std::array<char, 256> errbuf = {};
             return 0 > av_strerror(errnum, errbuf.data(), errbuf.size() - 1) ? "error not found" : errbuf.data();
         }
 
@@ -42,6 +39,8 @@ namespace LTSM {
             if(av_log_get_level() < lvl) {
                 return;
             }
+
+            std::array<char, 1024> logbuf = {};
 
             if(int len = vsnprintf(logbuf.data(), logbuf.size(), fmt, vl); 0 < len) {
                 AVClass* avc = avcl ? *(AVClass**) avcl : nullptr;
@@ -331,6 +330,7 @@ namespace LTSM {
             sb.writeDataSize(packet->size);
 
             packets.emplace_back(std::move(sb.rawbuf()));
+            av_packet_unref(packet.get());
         }
 
         return packets;
@@ -434,25 +434,6 @@ namespace LTSM {
         localFrame->format = localFormat(clientFormat);
         ffmpegPixelFormat = clientFormat;
 
-        int ret = av_image_get_buffer_size((AVPixelFormat) localFrame->format, localFrame->width, localFrame->height, 1);
-        if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "av_image_get_buffer_size", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
-        localData.reset((uint8_t*) av_malloc(ret));
-
-        if(! localData) {
-            Application::error("{}: {} failed", NS_FuncNameV, "av_malloc");
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
-        if(int ret = av_image_fill_arrays(localFrame->data, localFrame->linesize, localData.get(),
-                                      (AVPixelFormat) localFrame->format, localFrame->width, localFrame->height, 1); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "av_image_fill_arrays", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncNameS);
-        }
-
         initSwScaller();
     }
 
@@ -548,9 +529,9 @@ namespace LTSM {
         }
 
         // The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
-        const auto len = buf.size();
-        if(buf.size() % AV_INPUT_BUFFER_PADDING_SIZE) {
-            buf.resize(len + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
+        const auto len = Tools::alignUp(buf.size(), AV_INPUT_BUFFER_PADDING_SIZE);
+        if(buf.size() < len) {
+            buf.resize(len);
         }
 
         remotePacket->data = buf.data();
@@ -575,25 +556,42 @@ namespace LTSM {
                 throw ffmpeg_error(NS_FuncNameS);
             }
 
+            int ret = av_image_get_buffer_size((AVPixelFormat) localFrame->format, localFrame->width, localFrame->height, 1);
+            if(0 > ret) {
+                Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "av_image_get_buffer_size", FFMPEG::error(ret), ret);
+                throw ffmpeg_error(NS_FuncNameS);
+            }
+
+            std::vector<uint8_t> buf(ret);
+        
+            if(int ret = av_image_fill_arrays(localFrame->data, localFrame->linesize, buf.data(),
+                                      (AVPixelFormat) localFrame->format, localFrame->width, localFrame->height, 1); 0 > ret) {
+                Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "av_image_fill_arrays", FFMPEG::error(ret), ret);
+                throw ffmpeg_error(NS_FuncNameS);
+            }
+
 #if LIBSWSCALE_VERSION_INT >= AV_VERSION_INT(6, 2, 100)
             if(int err = sws_scale_frame(swsctx.get(), localFrame.get(), remoteFrame.get()); 0 > err) {
                 Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "sws_scale", FFMPEG::error(err), err);
                 throw ffmpeg_error(NS_FuncNameS);
             }
 #else
-            if(int err = sws_scale(swsctx.get(), localFrame->data, localFrame->linesize,
-                    0, localFrame->height, localFrame->data, localFrame->linesize); 0 > err) {
+            if(int err = sws_scale(swsctx.get(), remoteFrame->data, remoteFrame->linesize,
+                    0, remoteFrame->height, localFrame->data, localFrame->linesize); 0 > err) {
                 Application::error("{}: {} failed, error: {}, code: {}", NS_FuncNameV, "sws_scale", FFMPEG::error(err), err);
                 throw ffmpeg_error(NS_FuncNameS);
             }
 #endif
-
-            const size_t bufsz = localFrame->linesize[0] * localFrame->height;
-            std::vector<uint8_t> buf{localFrame->data[0], localFrame->data[0]+bufsz};
-
             rend.updateRawPixels(XCB::Region(0, 0, localFrame->width, localFrame->height), std::move(buf), localFrame->linesize[0], ffmpegPixelFormat);
+
+            // reset data/linesize
+            std::ranges::fill(localFrame->data, nullptr);
+            std::ranges::fill(localFrame->linesize, 0);
+
             av_frame_unref(remoteFrame.get());
         }
+
+        av_packet_unref(remotePacket.get());
     }
 
 #endif

@@ -858,6 +858,13 @@ namespace LTSM::Connector {
             co_return false;
         }, asio::use_future);
 
+        if(xcb_strand_.running_in_this_thread()) {
+            // future: skip deadlock
+            while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                static_cast<boost::asio::io_context&>(xcb_strand_.context()).run_one();
+            }
+        }
+
         bool success = res.get();
 
         if(success) {

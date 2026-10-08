@@ -115,9 +115,12 @@ namespace LTSM::Manager {
         PamAuthenticate(const std::string & service, const std::string & user, const std::string & pass)
             : PamService(service), login(user), password(pass) {}
 
+        bool pamStart(void) { return PamService::pamStart(login); }
+
         bool authenticate(void);
 
         bool isLogin(std::string_view name) const;
+        const std::string& getLogin(void) const { return login; }
     };
 
     /// PamSession
@@ -144,6 +147,8 @@ namespace LTSM::Manager {
 
     enum class SessionMode : int { Shutdown = 0, Login = 1, Started = 2, Connected = 3, Disconnected = 4 };
     enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
+
+    using PamSessionPtr = std::unique_ptr<PamSession>;
 
     /// Flags
     namespace Flags {
@@ -178,7 +183,6 @@ namespace LTSM::Manager {
 
     class UserSession {
         std::string username_;
-        std::string password_;
         std::string shell_;
         std::string gecos_;
         std::string homedir_;
@@ -188,19 +192,11 @@ namespace LTSM::Manager {
         gid_t gid_;
     
     public:
-        UserSession(UserInfoPtr ptr, const std::string & pass) : username_(ptr->user()), password_(pass), shell_(ptr->shell()),
+        UserSession(UserInfoPtr ptr) : username_(ptr->user()), shell_(ptr->shell()),
             gecos_(ptr->gecos()), homedir_(ptr->home()), groups_(ptr->groups()), uid_(ptr->uid()), gid_(ptr->gid()) {}
-
-        void setPassword(std::string_view pass) {
-            password_.assign(pass.begin(), pass.end());
-        }
 
         inline const std::string & user(void) const {
             return username_;
-        }
-
-        inline const std::string & password(void) const {
-            return password_;
         }
 
         inline const std::string & home(void) const {
@@ -245,6 +241,8 @@ namespace LTSM::Manager {
 
         std::filesystem::path xauthfile;
         UserSessionPtr userInfo;
+        PamSessionPtr pamSession;
+        PamSessionPtr authCache;
 
         std::string displayAddr;
         std::string remoteAddr;
@@ -327,7 +325,7 @@ namespace LTSM::Manager {
         ~XvfbSession();
 
         std::string toJsonString(void) const;
-        std::unordered_map<std::string, std::string> getEnvironments(const EnvList & envs = {}) const;
+        EnvironmentsMap getEnvironments(const EnvList & envs = {}) const;
     };
 
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
@@ -406,8 +404,9 @@ namespace LTSM::Manager {
         void createRuntimeDir(void) const;
 
       protected:
+        void retrowException(std::exception_ptr);
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
-        XvfbSessionPtr runNewDisplaySession(const std::string & username, const std::string & password, EnvironmentsMap && envs, OptionsMap && opts);
+        XvfbSessionPtr runNewDisplaySession(PamSessionPtr, EnvironmentsMap&& envs, OptionsMap&& opts);
 
         //static bool checkDisplaySessionStarted(XvfbSessionPtr);
 
@@ -482,18 +481,18 @@ namespace LTSM::Manager {
         void busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) override;
         void busRenderClear(const int32_t & display) override;
 
-        void startSessionChannels(XvfbSessionPtr);
-        void stopSessionChannels(XvfbSessionPtr);
+        boost::asio::awaitable<void> startSessionChannels(XvfbSessionPtr);
+        boost::asio::awaitable<void> stopSessionChannels(XvfbSessionPtr);
 
         void startLoginChannels(XvfbSessionPtr);
         void stopLoginChannels(XvfbSessionPtr);
 
-        bool startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
-        bool startAudioListener(XvfbSessionPtr, const std::string & clientUrl);
-        bool startFuseListener(XvfbSessionPtr, const std::string & clientUrl);
-        bool startPcscListener(XvfbSessionPtr, const std::string & clientUrl);
-        bool startPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl);
-        bool startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
+        boost::asio::awaitable<void> startPrinterListener(XvfbSessionPtr, std::string clientUrl);
+        boost::asio::awaitable<void> startAudioListener(XvfbSessionPtr, std::string clientUrl);
+        boost::asio::awaitable<void> startFuseListener(XvfbSessionPtr, std::string clientUrl);
+        boost::asio::awaitable<void> startPcscListener(XvfbSessionPtr, std::string clientUrl);
+        boost::asio::awaitable<void> startPkcs11Listener(XvfbSessionPtr, std::string clientUrl);
+        boost::asio::awaitable<void> startSaneListener(XvfbSessionPtr, std::string clientUrl);
 
         void stopAudioListener(XvfbSessionPtr, const std::string & clientUrl);
         void stopFuseListener(XvfbSessionPtr, const std::string & clientUrl);

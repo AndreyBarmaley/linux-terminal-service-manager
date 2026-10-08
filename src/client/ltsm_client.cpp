@@ -1248,41 +1248,37 @@ namespace LTSM {
         }
     }
 
-    void ClientApp::clientRecvPixelFormatEvent(const PixelFormat & serverPf, const XCB::Size & serverWindowSz) {
+    asio::awaitable<void> ClientApp::clientRecvPixelFormatEvent(const PixelFormat & serverPf, const XCB::Size & serverWindowSz) {
+        if(window_) {
+            Application::warning("{}: window also init", NS_FuncNameV);
+            co_return;
+        }
+
         Application::info("{}: size: {}", NS_FuncNameV, serverWindowSz);
 
-        if( ! window_) {
-            // sdl init window
-            try {
-                auto res = asio::co_spawn(sdl_strand_, sdlWindowInit(serverWindowSz), asio::use_future);
+        // sdl init window
+        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
 
-                if(sdl_strand_.running_in_this_thread()) {
-                    // future: skip deadlock
-                    while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-                        sdl_ctx_.run_one();
-                    }
-                }
-
-                if(bool sdl_init = res.get(); !sdl_init) {
-                    asio::post(ioc(), std::bind(&ClientApp::stop, this));
-                }
-            } catch(const std::exception& err) {
-                Application::error("{}: exception: {}", "start", err.what());
-                asio::post(ioc(), std::bind(&ClientApp::stop, this));
-            }
+        try {
+            co_await sdlWindowInit(serverWindowSz);
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
+        }
 
 #ifdef __UNIX__
-            asio::co_spawn(xcb_strand(), x11EventsLoop(),
-                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
+        asio::co_spawn(xcb_strand(), x11EventsLoop(),
+            asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
-            if(isContinueUpdatesSupport()) {
-                const auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
-                asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, std::move(crt)), asio::detached);
-            }
+        if(isContinueUpdatesSupport()) {
+            const auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
+            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, std::move(crt)), asio::detached);
         }
+
+        co_return;
     }
 
-    asio::awaitable<bool> ClientApp::sdlWindowInit(const XCB::Size & wsz) {
+    asio::awaitable<void> ClientApp::sdlWindowInit(const XCB::Size & wsz) {
         co_await asio::dispatch(sdl_ctx_, asio::use_awaitable);
 
         int bpp;
@@ -1295,7 +1291,7 @@ namespace LTSM {
                 &gmask, &bmask, &amask)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV,
                                "SDL_PixelFormatEnumToMasks", SDL_GetError());
-            co_return false;
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
@@ -1306,7 +1302,7 @@ namespace LTSM {
                     asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
 
         displayResizeEvent(windowSize_);
-        co_return true;
+        co_return;
     }
 
     void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) const {

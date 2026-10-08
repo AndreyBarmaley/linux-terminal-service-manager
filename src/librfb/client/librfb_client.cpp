@@ -425,7 +425,7 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        clientRecvPixelFormatEvent(server_pf_, XCB::Size(fbWidth, fbHeight));
+        co_await clientRecvPixelFormatEvent(server_pf_, XCB::Size(fbWidth, fbHeight));
         // recv name desktop
         auto nameLen = co_await stream_->async_recv_be32();
         auto nameDesktop = co_await stream_->async_recv_string(nameLen);

@@ -109,6 +109,8 @@ namespace LTSM {
             AVPixelFormat localFormat(const PixelFormat &) const;
         };
 
+        constexpr int FPS = 16;
+
 #ifdef LTSM_ENCODING_FFMPEG
         /// EncodingFFmpeg
         class EncodingFFmpeg : public FFmpegBase, public EncodingBase {
@@ -128,7 +130,7 @@ namespace LTSM {
             std::chrono::steady_clock::time_point updatePoint;
 
             // ref: https://ffmpeg.org/doxygen/7.0/structAVRational.html
-            int fps = 16;
+            int fps = FPS;
             // ref: https://ffmpeg.org/doxygen/7.0/structAVFrame.html
             mutable int64_t pts = 0;
             uint16_t threads = 0;
@@ -159,7 +161,6 @@ namespace LTSM {
             std::unique_ptr<AVFrame, AVFrameDeleter> remoteFrame;
             std::unique_ptr<AVPacket, AVPacketDeleter> remotePacket;
             std::unique_ptr<AVFrame, AVFrameDeleter> localFrame;
-            std::unique_ptr<uint8_t, decltype(av_free)*> localData{nullptr, av_free};
 
 #if LIBAVFORMAT_VERSION_MAJOR < 59
             AVCodec* codec = nullptr;
@@ -179,7 +180,7 @@ namespace LTSM {
             void resizedEvent(const XCB::Size &) override;
             void updateRegionBuf(std::vector<uint8_t> &&, const DecoderRender &, const XCB::Region &) override;
 
-            explicit DecodingFFmpeg(int type = ENCODING_LTSM_H264, int fps = 25);
+            explicit DecodingFFmpeg(int type = ENCODING_LTSM_H264, int fps = FPS);
             ~DecodingFFmpeg() = default;
         };
 

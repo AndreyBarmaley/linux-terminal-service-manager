@@ -28,9 +28,7 @@
 #include <cinttypes>
 
 #include <QThread>
-
 #include <boost/asio.hpp>
-#include <boost/utility/base_from_member.hpp>
 
 #include "ltsm_async_socket.h"
 #include "ltsm_pkcs11_wrapper.h"
@@ -77,13 +75,15 @@ using ListCertificates = std::list<Pkcs11Cert>;
 using ListMechanisms = std::list<Pkcs11Mech>;
 using binary_buf = std::vector<uint8_t>;
 
-class Pkcs11Client : public QThread, protected boost::base_from_member<boost::asio::io_context>, protected LTSM::AsyncLocalStream {
+class Pkcs11Client : public QThread {
     Q_OBJECT
 
-    boost::asio::io_context & ioc_;
+    mutable boost::asio::io_context ioc_;
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
+    boost::asio::strand<boost::asio::any_io_executor> sock_strand_;
     boost::asio::cancellation_signal client_cancel_;
 
+    LTSM::AsyncLocalStream stream_;
     mutable LTSM::async_mutex send_lock_;
 
     QString templatePath;

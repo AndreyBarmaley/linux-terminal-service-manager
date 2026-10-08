@@ -40,10 +40,11 @@ using namespace std::chrono_literals;
 using namespace boost;
 
 Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
-    AsyncLocalStream(member.get_executor()),
-    ioc_{member},
+    ioc_{},
     work_guard_{asio::make_work_guard(ioc_)},
-    send_lock_{ioc_.get_executor()},
+    sock_strand_{asio::make_strand(ioc_)},
+    stream_{sock_strand_},
+    send_lock_{sock_strand_},
     templatePath{"/var/run/ltsm/pkcs11/%{display}/sock"} {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
 }
@@ -59,7 +60,7 @@ Pkcs11Client::~Pkcs11Client() {
 
 void Pkcs11Client::stop(void) noexcept {
     try {
-        socket().cancel();
+        stream_.socket().cancel();
         client_cancel_.emit(asio::cancellation_type::terminal);
         work_guard_.reset();
     } catch(...) {
@@ -91,16 +92,16 @@ asio::awaitable<void> Pkcs11Client::clientHandler(void) {
 }
 
 asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-    co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+    co_await stream_.socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
     uint16_t cmd, err;
 
-    co_await async_send_values(
+    co_await stream_.async_send_values(
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::Init)),
             endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::ProtoVer)));
 
     // client reply: cmd16, err16
-    co_await async_recv_values(cmd, err);
+    co_await stream_.async_recv_values(cmd, err);
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(err);
 
@@ -110,13 +111,13 @@ asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, st
     }
 
     if(err) {
-        auto str = co_await async_recv_string(err);
+        auto str = co_await stream_.async_recv_string(err);
         Application::error("{}: recv error: {}", NS_FuncNameV, str);
         throw pkcs11_error(NS_FuncNameS);
     }
 
     // proto version
-    auto protoVer = co_await async_recv_le16();
+    auto protoVer = co_await stream_.async_recv_le16();
 
     if(protoVer != Pkcs11Op::ProtoVer) {
         Application::error("{}: unsupported version: {}", NS_FuncNameV, protoVer);
@@ -130,7 +131,7 @@ asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, st
     assert(sizeof(info.manufacturerID) == 32);
     assert(sizeof(info.libraryDescription) == 32);
 
-    co_await async_recv_values(
+    co_await stream_.async_recv_values(
         info.cryptokiVersion.major,
         info.cryptokiVersion.minor,
         asio::buffer(info.manufacturerID, sizeof(info.manufacturerID)),
@@ -171,7 +172,7 @@ asio::awaitable<void> Pkcs11Client::updateTokensTimer(void) {
 }
 
 asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
-    co_await async_send_values(
+    co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlots)),
         static_cast<uint8_t>(1 /* bool tokenPresentOnly */));
 
@@ -179,7 +180,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     // <CMD16> - cmd id
     // <LEN16> - slots count
     uint16_t cmd, counts;
-    co_await async_recv_values(cmd, counts);
+    co_await stream_.async_recv_values(cmd, counts);
 
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(counts);
@@ -200,7 +201,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
         // <DATA> token info struct
 
         uint64_t slotId; uint8_t slotValid;
-        co_await async_recv_values(slotId, slotValid);
+        co_await stream_.async_recv_values(slotId, slotValid);
 
         endian::little_to_native_inplace(slotId);
         PKCS11::SlotInfo slotInfo;
@@ -210,7 +211,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
             static_assert(sizeof(slotInfo.manufacturerID) == 32);
             static_assert(sizeof(slotInfo.flags) == sizeof(uint64_t));
 
-            co_await async_recv_values(
+            co_await stream_.async_recv_values(
                 asio::buffer(slotInfo.slotDescription, sizeof(slotInfo.slotDescription)),
                 asio::buffer(slotInfo.manufacturerID, sizeof(slotInfo.manufacturerID)),
                 slotInfo.flags,
@@ -224,7 +225,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
         }
 
         PKCS11::TokenInfo tokenInfo;
-        auto tokenValid = co_await async_recv_byte();
+        auto tokenValid = co_await stream_.async_recv_byte();
 
         if(tokenValid) {
             assert(sizeof(tokenInfo.label) == 32);
@@ -233,7 +234,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
             assert(sizeof(tokenInfo.serialNumber) == 16);
             assert(sizeof(tokenInfo.utcTime) == 16);
 
-            co_await async_recv_values(
+            co_await stream_.async_recv_values(
                 asio::buffer(tokenInfo.label, sizeof(tokenInfo.label)),
                 asio::buffer(tokenInfo.manufacturerID, sizeof(tokenInfo.manufacturerID)),
                 asio::buffer(tokenInfo.model, sizeof(tokenInfo.model)),
@@ -289,47 +290,43 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
     co_return false;
 }
 
-ListTokens Pkcs11Client::getTokens(void) const {
+template<typename Executor, typename Future>
+void waitSafeFuture(const Executor& executor, Future& future) {
+    if(executor.running_in_this_thread()) {
+        while(future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            static_cast<asio::io_context&>(executor.context()).run_one();
+        }
+    }
+}
 
-    auto res = asio::co_spawn(ioc_, [this]() -> asio::awaitable<ListTokens> {
+ListTokens Pkcs11Client::getTokens(void) const {
+    auto res = asio::co_spawn(sock_strand_, [this]() -> asio::awaitable<ListTokens> {
         co_await send_lock_.async_lock();
         auto tokens = this->tokens;
         send_lock_.unlock();
         co_return tokens;
     }, asio::use_future);
 
-    if(ioc_.get_executor().running_in_this_thread()) {
-        // future: skip deadlock
-        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ioc_.run_one();
-        }
-    }
-
+    waitSafeFuture(sock_strand_, res);
     return res.get();
 }
 
 ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
 
-    auto res = asio::co_spawn(ioc_, [&slotId, this]() -> asio::awaitable<ListCertificates> {
+    auto res = asio::co_spawn(sock_strand_, [&slotId, this]() -> asio::awaitable<ListCertificates> {
         co_await send_lock_.async_lock();
         auto certs = co_await this->loadCertificates(slotId);
         send_lock_.unlock();
         co_return certs;
     }, asio::use_future);
 
-    if(ioc_.get_executor().running_in_this_thread()) {
-        // future: skip deadlock
-        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ioc_.run_one();
-        }
-    }
-
+    waitSafeFuture(sock_strand_, res);
     return res.get();
 }
 
 asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId) const {
 
-    co_await async_send_values(
+    co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlotCertificates)),
         endian::native_to_little(slotId),
         static_cast<uint8_t>(1 /* bool havePublicPrivateKeys */));
@@ -338,7 +335,7 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
 
     // client reply: cmd16, counts16
     uint16_t cmd, counts;
-    co_await async_recv_values(cmd, counts);
+    co_await stream_.async_recv_values(cmd, counts);
 
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(counts);
@@ -355,10 +352,10 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
         // <DATA> - cert id data
         // <LEN32> - cert data len
         // <DATA> - cert data
-        auto idLen = co_await async_recv_le16();
-        auto id = co_await async_recv_buffer(idLen);
-        auto valueLen = co_await async_recv_le32();
-        auto value = co_await async_recv_buffer(valueLen);
+        auto idLen = co_await stream_.async_recv_le16();
+        auto id = co_await stream_.async_recv_buffer(idLen);
+        auto valueLen = co_await stream_.async_recv_le32();
+        auto value = co_await stream_.async_recv_buffer(valueLen);
 
         certs.emplace_back(Pkcs11Cert{ .objectId = std::move(id), .objectValue = std::move(value) });
     }
@@ -368,26 +365,20 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
 
 ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
 
-    auto res = asio::co_spawn(ioc_, [&slotId, this]() -> asio::awaitable<ListMechanisms> {
+    auto res = asio::co_spawn(sock_strand_, [&slotId, this]() -> asio::awaitable<ListMechanisms> {
         co_await send_lock_.async_lock();
         auto mechs = co_await this->loadMechanisms(slotId);
         send_lock_.unlock();
         co_return mechs;
     }, asio::use_future);
 
-    if(ioc_.get_executor().running_in_this_thread()) {
-        // future: skip deadlock
-        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ioc_.run_one();
-        }
-    }
-
+    waitSafeFuture(sock_strand_, res);
     return res.get();
 }
 
 asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) const {
 
-    co_await async_send_values(
+    co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlotMechanisms)),
         endian::native_to_little(slotId));
 
@@ -395,7 +386,7 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
 
     // client reply: cmd16, counts16
     uint16_t cmd, counts;
-    co_await async_recv_values(cmd, counts);
+    co_await stream_.async_recv_values(cmd, counts);
 
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(counts);
@@ -411,14 +402,14 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
         uint64_t id, min, max, flags;
         uint16_t len;
 
-        co_await async_recv_values(id, min, max, flags, len);
+        co_await stream_.async_recv_values(id, min, max, flags, len);
         endian::little_to_native_inplace(id);
         endian::little_to_native_inplace(min);
         endian::little_to_native_inplace(max);
         endian::little_to_native_inplace(flags);
         endian::little_to_native_inplace(len);
 
-        auto name = co_await async_recv_string(len);
+        auto name = co_await stream_.async_recv_string(len);
         res.emplace_back(Pkcs11Mech{ .mechId = id, .minKey = min, .maxKey = max, .flags = flags, .name = name });
     }
 
@@ -428,27 +419,21 @@ asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) co
 binary_buf Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
                                   const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    auto res = asio::co_spawn(ioc_, [&slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<binary_buf> {
+    auto res = asio::co_spawn(sock_strand_, [&slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<binary_buf> {
         co_await send_lock_.async_lock();
         auto buf = co_await this->loadSignData(slotId, pin, certId, data, len, mechType);
         send_lock_.unlock();
         co_return buf;
     }, asio::use_future);
 
-    if(ioc_.get_executor().running_in_this_thread()) {
-        // future: skip deadlock
-        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ioc_.run_one();
-        }
-    }
-
+    waitSafeFuture(sock_strand_, res);
     return res.get();
 }
 
 asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    co_await async_send_values(
+    co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::SignData)),
         endian::native_to_little(slotId),
         endian::native_to_little(mechType),
@@ -458,7 +443,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
 
     // client reply: cmd16, length32
     uint16_t cmd; uint32_t length;
-    co_await async_recv_values(cmd, length);
+    co_await stream_.async_recv_values(cmd, length);
 
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(length);
@@ -470,7 +455,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
 
     if(length) {
         // sign result
-        co_return co_await async_recv_buffer(length);
+        co_return co_await stream_.async_recv_buffer(length);
     }
 
     co_return binary_buf{};
@@ -479,27 +464,21 @@ asio::awaitable<binary_buf> Pkcs11Client::loadSignData(uint64_t slotId, const st
 std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    auto res = asio::co_spawn(ioc_, [&slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<binary_buf> {
+    auto res = asio::co_spawn(sock_strand_, [&slotId, &pin, &certId, &data, &len, &mechType, this]() -> asio::awaitable<binary_buf> {
         co_await send_lock_.async_lock();
         auto buf = co_await this->loadDecryptData(slotId, pin, certId, data, len, mechType);
         send_lock_.unlock();
         co_return buf;
     }, asio::use_future);
 
-    if(ioc_.get_executor().running_in_this_thread()) {
-        // future: skip deadlock
-        while(res.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ioc_.run_one();
-        }
-    }
-
+    waitSafeFuture(sock_strand_, res);
     return res.get();
 }
 
 asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const std::string & pin,
         const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType) {
 
-    co_await async_send_values(
+    co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::DecryptData)),
         endian::native_to_little(slotId),
         endian::native_to_little(mechType),
@@ -509,7 +488,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const
 
     // client reply: cmd16, length32
     uint16_t cmd; uint32_t length;
-    co_await async_recv_values(cmd, length);
+    co_await stream_.async_recv_values(cmd, length);
 
     endian::little_to_native_inplace(cmd);
     endian::little_to_native_inplace(length);
@@ -521,7 +500,7 @@ asio::awaitable<binary_buf> Pkcs11Client::loadDecryptData(uint64_t slotId, const
 
     if(length) {
         // decrypt result
-        co_return co_await async_recv_buffer(length);
+        co_return co_await stream_.async_recv_buffer(length);
     }
 
     co_return binary_buf{};
