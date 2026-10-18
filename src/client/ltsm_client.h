@@ -170,12 +170,12 @@ namespace LTSM {
         boost::asio::awaitable<void> sdlKeyboardEvent(const SDL_Event &);
         boost::asio::awaitable<void> sdlDropCompleteEvent(const SDL_Event &);
         boost::asio::awaitable<void> sdlUserEvent(const SDL_Event &);
-        boost::asio::awaitable<void> sdlWindowInit(const XCB::Size &);
+        void sdlWindowInit(const XCB::Size &);
 
         void stop(void);
 
       public:
-        ClientApp(int threads, int argc, char** argv);
+        ClientApp(int threads, int argc, char** const argv);
 
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                                 const std::vector<RFB::ScreenInfo> &) override;

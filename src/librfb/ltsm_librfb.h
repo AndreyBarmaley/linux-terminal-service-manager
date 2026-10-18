@@ -28,6 +28,9 @@
 #include <exception>
 #include <functional>
 
+#include <boost/asio/dispatch.hpp>
+#include <boost/asio/bind_executor.hpp>
+
 #include "ltsm_framebuffer.h"
 
 namespace LTSM {
@@ -38,6 +41,14 @@ namespace LTSM {
     struct encoding_context_error : public rfb_error {
         explicit encoding_context_error(std::string_view what) : rfb_error(view2string(what)) {}
     };
+
+    // ref: https://github.com/chriskohlhoff/asio/issues/1608
+    template <typename Executor>
+    [[nodiscard]] auto fixed_dispatch_await(Executor&& ex) {
+        return boost::asio::dispatch(
+            boost::asio::bind_executor(std::forward<Executor>(ex), boost::asio::deferred)
+        );
+    }
 
     namespace RFB {
         // RFB protocol constant

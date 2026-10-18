@@ -246,7 +246,7 @@ namespace LTSM {
         }
     }
 
-    ClientApp::ClientApp(int threads, int argc, char** argv)
+    ClientApp::ClientApp(int threads, int argc, char** const argv)
         : BoostContext(threads), Application("ltsm_client")
 #ifdef LTSM_WITH_X11
         , RFB::X11Client(get_executor())
@@ -861,15 +861,26 @@ namespace LTSM {
             }
         }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
 
+        // On Apple platforms, the main thread is the thread that runs your program's main() entry point.
+        // On other platforms, the main thread is the one that calls SDL_Init(SDL_INIT_VIDEO)
+        if(0 > SDL_Init(SDL_INIT_VIDEO)) {
+            Application::error("{}: {} failed", NS_FuncNameV, "sdl init");
+            return EXIT_FAILURE;
+        }
+
+        // enable drop file
+        SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+
+        Application::info("{}: client starting, use thread: {}", NS_FuncNameV, concurency());
+
         for(auto it = 0; it < concurency(); ++it) {
             asio::post(thread_pool_, [this](){ ioc().run(); });
         }
 
-        Application::info("{}: client starting, use thread: {}", NS_FuncNameV, concurency());
-
         sdl_ctx_.run();
-        thread_pool_.join();
+        SDL_Quit();
 
+        thread_pool_.join();
         return EXIT_SUCCESS;
     }
 
@@ -899,8 +910,8 @@ namespace LTSM {
         // press/release up/down
         const uint8_t buttons = SDL_BUTTON(0 < we.y ? SDL_BUTTON_X1 : SDL_BUTTON_X2);
 
-        co_spawn(rfb_strand(), sendPointerEventAwait(buttons, mouseX, mouseY), asio::detached);
-        co_spawn(rfb_strand(), sendPointerEventAwait(0, mouseX, mouseY), asio::detached);
+        asio::co_spawn(rfb_strand(), sendPointerEventAwait(buttons, mouseX, mouseY), asio::detached);
+        asio::co_spawn(rfb_strand(), sendPointerEventAwait(0, mouseX, mouseY), asio::detached);
         co_return;
     }
 
@@ -978,11 +989,11 @@ namespace LTSM {
         // skip: starting window resized
         if(time.count() > 3) {
             windowSize_ = wsz;
-            co_spawn(rfb_strand(), [this, wsz=windowSize_]() -> asio::awaitable<void> {
+            asio::co_spawn(rfb_strand(), [this, wsz=windowSize_]() -> asio::awaitable<void> {
                 co_await sendSetDesktopSizeAwait(wsz);
                 co_return;
             }, asio::detached);
-            co_spawn(rfb_strand(), sendFrameBufferUpdateAwait(false), asio::detached);
+            asio::co_spawn(rfb_strand(), sendFrameBufferUpdateAwait(false), asio::detached);
         }
         co_return;
     }
@@ -1063,7 +1074,7 @@ namespace LTSM {
         // sizeof(ke.keysym.scancode) = 4, sizeof(ke.keysym.sym) = 4
         const bool pressed = ke.state == SDL_PRESSED;
 
-        co_spawn(rfb_strand(), sendKeyEventAwait(pressed, ke.keysym.sym, ke.keysym.scancode), asio::detached);
+        asio::co_spawn(rfb_strand(), sendKeyEventAwait(pressed, ke.keysym.sym, ke.keysym.scancode), asio::detached);
         co_return;
     }
 
@@ -1089,7 +1100,7 @@ namespace LTSM {
             // get real size
             windowSize_ = window_->geometry();
 
-            co_spawn(rfb_strand(), [this, contUpdateResume, wsz=windowSize_]() -> asio::awaitable<void> {
+            asio::co_spawn(rfb_strand(), [this, contUpdateResume, wsz=windowSize_]() -> asio::awaitable<void> {
                 displayResizeEvent(wsz);
                 // full update
                 co_await sendFrameBufferUpdateAwait(false);
@@ -1105,7 +1116,7 @@ namespace LTSM {
 
     asio::awaitable<void> ClientApp::sdlDropCompleteEvent(const SDL_Event & ev) {
         if(! dropFiles.empty()) {
-            co_spawn(rfb_strand(), sendSystemTransferFiles(std::move(dropFiles)), asio::detached);
+            asio::co_spawn(rfb_strand(), sendSystemTransferFiles(std::move(dropFiles)), asio::detached);
             dropFiles.clear();
         }
         co_return;
@@ -1118,7 +1129,7 @@ namespace LTSM {
             co_return false;
         }
 
-        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
+        co_await fixed_dispatch_await(sdl_strand_);
 
         switch(ev.type) {
             case SDL_MOUSEMOTION:
@@ -1254,13 +1265,14 @@ namespace LTSM {
             co_return;
         }
 
+        // sdl init window
+        co_await fixed_dispatch_await(sdl_strand_);
+
         Application::info("{}: size: {}", NS_FuncNameV, serverWindowSz);
 
-        // sdl init window
-        co_await asio::dispatch(sdl_strand_, asio::use_awaitable);
 
         try {
-            co_await sdlWindowInit(serverWindowSz);
+            sdlWindowInit(serverWindowSz);
         } catch(const std::exception& err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             asio::post(ioc(), std::bind(&ClientApp::stop, this));
@@ -1278,9 +1290,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> ClientApp::sdlWindowInit(const XCB::Size & wsz) {
-        co_await asio::dispatch(sdl_ctx_, asio::use_awaitable);
-
+    void ClientApp::sdlWindowInit(const XCB::Size & wsz) {
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
 
@@ -1299,10 +1309,12 @@ namespace LTSM {
 
         // start sdl loop
         asio::co_spawn(sdl_strand_, sdlEventsLoop(),
-                    asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
+                asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
 
-        displayResizeEvent(windowSize_);
-        co_return;
+        asio::co_spawn(rfb_strand(), [this, wsz=windowSize_]() -> asio::awaitable<void> {
+                displayResizeEvent(wsz);
+                co_return;
+        }, asio::detached);
     }
 
     void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) const {
@@ -1744,35 +1756,12 @@ int main(int argc, char** argv)
         }
     }
 
-    // init network
-#ifdef __WIN32__
-    WSADATA wsaData;
-
-    if(int ret = WSAStartup(MAKEWORD(2, 2), & wsaData); ret != 0) {
-        std::cerr << "WSAStartup failed: {}" << std::endl;
-        return 1;
-    }
-
-#endif
-
-    if(0 > SDL_Init(SDL_INIT_VIDEO)) {
-        std::cerr << "sdl init video failed" << std::endl;
-        return -1;
-    }
-
-    // enable drop file
-    SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
-
     bool programRestarting = true;
     int res = 0;
 
     while(programRestarting) {
         try {
-#ifdef __WIN32__
-            ClientApp app(thread, argc, (const char**) argv);
-#else
             ClientApp app(thread, argc, argv);
-#endif
 
             if(! app.isAlwaysRunning()) {
                 programRestarting = false;
@@ -1781,13 +1770,14 @@ int main(int argc, char** argv)
             res = app.start();
         } catch(const std::invalid_argument & err) {
             std::cerr << "unknown params: " << err.what() << std::endl << std::endl;
-            return -1;
+            res = EXIT_FAILURE;
+            programRestarting = false;
         } catch(const std::exception & err) {
             Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             Application::info("program: {}", "terminate...");
+            res = EXIT_FAILURE;
         }
     }
 
-    SDL_Quit();
     return res;
 }
