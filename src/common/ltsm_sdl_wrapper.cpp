@@ -313,11 +313,13 @@ namespace LTSM::SDL {
     void Window::setFullScreen(bool state) {
         SDL_SetWindowFullscreen(window_.get(), state ? SDL_WINDOW_FULLSCREEN : 0);
     }
+}
 
 #ifdef __UNIX__
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 
+namespace LTSM {
     struct XKSymScancode {
         int xksym;
         SDL_Scancode scancode;
@@ -380,12 +382,12 @@ namespace LTSM::SDL {
         { XK_bracketleft, SDL_SCANCODE_LEFTBRACKET }, { XK_bracketright, SDL_SCANCODE_RIGHTBRACKET }
     };
 
-    int Window::convertScanCodeToKeySym(SDL_Scancode scancode) {
+    int SDL::Window::convertScanCodeToKeySym(SDL_Scancode scancode) {
         auto it = std::ranges::find_if(sdlKeyMap, [&](auto & pair) {
             return pair.scancode == scancode;
         });
 
         return it != sdlKeyMap.end() ? (*it).xksym : 0;
     }
-#endif // __UNIX__
 }
+#endif // __UNIX__

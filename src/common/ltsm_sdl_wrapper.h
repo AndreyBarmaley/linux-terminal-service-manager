@@ -162,8 +162,9 @@ namespace LTSM {
 
             Texture createTexture(const XCB::Size &, const SDL_TextureAccess & access = SDL_TEXTUREACCESS_STATIC, uint32_t format = 0) const;
 
+#ifdef __UNIX__
             static int convertScanCodeToKeySym(SDL_Scancode);
-
+#endif
             std::pair<int, int> scaleCoord(int posx, int posy) const;
         };
 
