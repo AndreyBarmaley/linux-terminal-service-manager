@@ -26,20 +26,29 @@
 #include "ltsm_application.h"
 #include "ltsm_sdl_wrapper.h"
 
-namespace LTSM {
+namespace LTSM::SDL {
+    XCB::Region displayUsableBounds(void) {
+        SDL_Rect rect;
+        if(0 != SDL_GetDisplayUsableBounds(0, &rect)) {
+            Application::error("{}: {} failed, error: {}", NS_FuncNameV, "SDL_GetDisplayUsableBounds", SDL_GetError());
+            throw sdl_error(NS_FuncNameS);
+        }
+        return XCB::Region(rect.x, rect.y, rect.w, rect.h);
+    }
+
     // Surface
-    int SDL::Surface::width(void) const {
+    int Surface::width(void) const {
         assertm(!! ptr_, "invalid surface");
         return ptr_->w;
     }
 
-    int SDL::Surface::height(void) const {
+    int Surface::height(void) const {
         assertm(!! ptr_, "invalid surface");
         return ptr_->h;
     }
 
     // Texture
-    XCB::Size SDL::Texture::size(void) const {
+    XCB::Size Texture::size(void) const {
         assertm(!! ptr_, "invalid texture");
         int width, height;
 
@@ -51,7 +60,7 @@ namespace LTSM {
         return XCB::Size(width, height);
     }
 
-    void SDL::Texture::updateRect(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
+    void Texture::updateRect(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
         assertm(!! ptr_, "invalid texture");
 
         if(0 != SDL_UpdateTexture(ptr_.get(), rect, pixels, pitch)) {
@@ -60,7 +69,7 @@ namespace LTSM {
         }
     }
 
-    SDL::Window::Window(const std::string & title, const XCB::Size & rendsz, const XCB::Size & winsz, int flags, bool accel) :
+    Window::Window(const std::string & title, const XCB::Size & rendsz, const XCB::Size & winsz, int flags, bool accel) :
         render_sz_{rendsz}, window_sz_{winsz}, flags_{flags}, accel_{accel} {
 
         if(winsz.isEmpty()) {
@@ -79,13 +88,13 @@ namespace LTSM {
         resize(render_sz_, window_sz_);
     }
 
-    SDL::Window::~Window() {
+    Window::~Window() {
         display_.reset();
         renderer_.reset();
         window_.reset();
     }
 
-    void SDL::Window::resize(const XCB::Size & rsz, const XCB::Size & wsz) {
+    void Window::resize(const XCB::Size & rsz, const XCB::Size & wsz) {
 
         display_.reset();
         renderer_.reset();
@@ -140,11 +149,25 @@ namespace LTSM {
         SDL_RenderPresent(renderer_.get());
     }
 
-    const XCB::Size & SDL::Window::geometry(void) const {
+    XCB::Point Window::position(void) const {
+        int x = 0, y = 0;
+        SDL_GetWindowPosition(window_.get(), &x, &y);
+        return XCB::Point(x, y);
+    }
+
+    XCB::Region Window::geometry(void) const {
+        return XCB::Region{position(), window_sz_};
+    }
+
+    const XCB::Size & Window::size(void) const {
         return window_sz_;
     }
 
-    void SDL::Window::renderReset(SDL_Texture* target) {
+    void Window::setPosition(const XCB::Point & pos) {
+        SDL_SetWindowPosition(window_.get(), pos.x, pos.y);
+    }
+
+    void Window::renderReset(SDL_Texture* target) {
 
         if(target) {
             int access;
@@ -166,7 +189,7 @@ namespace LTSM {
         }
     }
 
-    void SDL::Window::renderClear(const SDL_Color* col, SDL_Texture* target) {
+    void Window::renderClear(const SDL_Color* col, SDL_Texture* target) {
         if(!target) {
             target = display_.get();
         }
@@ -188,7 +211,7 @@ namespace LTSM {
         }
     }
 
-    void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target) {
+    void Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target) {
         if(!target) {
             target = display_.get();
         }
@@ -215,7 +238,7 @@ namespace LTSM {
         }
     }
 
-    void SDL::Window::renderTexture(const SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
+    void Window::renderTexture(const SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
         assertm(source, "invalid texture");
 
         if(!target) {
@@ -234,7 +257,7 @@ namespace LTSM {
         }
     }
 
-    void SDL::Window::renderDisplayUpdateRaw(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
+    void Window::renderDisplayUpdateRaw(const SDL_Rect* rect, const void* pixels, uint32_t pitch) {
         assertm(!! display_, "invalid texture");
 
         if(0 != SDL_UpdateTexture(display_.get(), rect, pixels, pitch)) {
@@ -245,7 +268,7 @@ namespace LTSM {
         changed_ = true;
     }
 
-    void SDL::Window::renderPresent(void) {
+    void Window::renderPresent(void) {
         if(changed_) {
             renderReset();
 
@@ -259,7 +282,7 @@ namespace LTSM {
         }
     }
 
-    SDL::Texture SDL::Window::createTexture(const XCB::Size & tsz, const SDL_TextureAccess & access, uint32_t format) const {
+    Texture Window::createTexture(const XCB::Size & tsz, const SDL_TextureAccess & access, uint32_t format) const {
         if(0 == format) {
             format = pixelFormat();
         }
@@ -272,7 +295,7 @@ namespace LTSM {
         throw sdl_error(NS_FuncNameS);
     }
 
-    std::pair<int, int> SDL::Window::scaleCoord(int posx, int posy) const {
+    std::pair<int, int> Window::scaleCoord(int posx, int posy) const {
         std::pair<int, int> res(0, 0);
         int winsz_w, winsz_h, rendsz_w, rendsz_h;
         SDL_GetWindowSize(window_.get(), &winsz_w, &winsz_h);
@@ -287,7 +310,7 @@ namespace LTSM {
         return res;
     }
 
-    void SDL::Window::setFullScreen(bool state) {
+    void Window::setFullScreen(bool state) {
         SDL_SetWindowFullscreen(window_.get(), state ? SDL_WINDOW_FULLSCREEN : 0);
     }
 
@@ -357,7 +380,7 @@ namespace LTSM {
         { XK_bracketleft, SDL_SCANCODE_LEFTBRACKET }, { XK_bracketright, SDL_SCANCODE_RIGHTBRACKET }
     };
 
-    int SDL::Window::convertScanCodeToKeySym(SDL_Scancode scancode) {
+    int Window::convertScanCodeToKeySym(SDL_Scancode scancode) {
         auto it = std::ranges::find_if(sdlKeyMap, [&](auto & pair) {
             return pair.scancode == scancode;
         });

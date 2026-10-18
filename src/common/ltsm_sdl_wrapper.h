@@ -35,6 +35,8 @@ namespace LTSM {
     };
 
     namespace SDL {
+        XCB::Region displayUsableBounds(void);
+
         class Texture {
             std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> ptr_{nullptr, SDL_DestroyTexture};
 
@@ -110,13 +112,17 @@ namespace LTSM {
             Window(const std::string & title, const XCB::Size & rendsz, const XCB::Size & winsz = {}, int flags = 0, bool accel = true);
             ~Window();
 
+            void setPosition(const XCB::Point &);
             void resize(const XCB::Size & /* render sz */, const XCB::Size & /* window sz */);
 
             inline void resize(const XCB::Size & nsz) {
                 resize(nsz, nsz);
             }
 
-            const XCB::Size& geometry(void) const;
+            XCB::Point position(void) const;
+            XCB::Region geometry(void) const;
+
+            const XCB::Size& size(void) const;
 
             inline SDL_Texture* display(void) {
                 return display_.get();

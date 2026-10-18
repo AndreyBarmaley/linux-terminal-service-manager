@@ -1098,7 +1098,7 @@ namespace LTSM {
             }
 
             // get real size
-            windowSize_ = window_->geometry();
+            windowSize_ = window_->size();
 
             asio::co_spawn(rfb_strand(), [this, contUpdateResume, wsz=windowSize_]() -> asio::awaitable<void> {
                 displayResizeEvent(wsz);
@@ -1270,7 +1270,6 @@ namespace LTSM {
 
         Application::info("{}: size: {}", NS_FuncNameV, serverWindowSz);
 
-
         try {
             sdlWindowInit(serverWindowSz);
         } catch(const std::exception& err) {
@@ -1304,8 +1303,17 @@ namespace LTSM {
             throw std::runtime_error(NS_FuncNameS);
         }
 
+        if(primarySize_.isEmpty()) {
+            XCB::Region bound;
+            if(XCB::Region::intersection(SDL::displayUsableBounds(), XCB::Region(wsz), &bound)) {
+                Application::warning("{}: fixed bounds: {}", NS_FuncNameV, bound);
+                primarySize_ = bound;
+                window_->setPosition(bound);
+            }
+        }
+
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        windowSize_ = window_->geometry();
+        windowSize_ = window_->size();
 
         // start sdl loop
         asio::co_spawn(sdl_strand_, sdlEventsLoop(),
