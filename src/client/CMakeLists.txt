@@ -23,12 +23,15 @@ add_subdirectory(audio ${CUR_TARGET}_audio)
 add_subdirectory(pkcs11 ${CUR_TARGET}_pkcs11)
 
 if(APPLE)
+    set(CLIENT_EPOCH_VERSION "3.0")
+    set(CLIENT_BUILD_VERSION "20261001")
+
     set_target_properties(${CUR_TARGET} PROPERTIES
         MACOS_BUNDLE TRUE
         MACOSX_BUNDLE_BUNDLE_NAME "LtsmClientApp"
         MACOSX_BUNDLE_GUI_IDENTIFIER "ru.nice-soft.ltsm"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${CLIENT_BUILD_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${CLIENT_EPOCH_VERSION}"
     )
 
     set(APP_PATH "${CMAKE_BINARY_DIR}/src/${CUR_TARGET}.app")
@@ -37,7 +40,7 @@ if(APPLE)
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_PACKAGE_NAME "LtsmClientApp")
     set(CPACK_PACKAGE_VENDOR "nice-soft.ru")
-    set(CPACK_PACKAGE_VERSION "1.0.0")
+    set(CPACK_PACKAGE_VERSION "${CLIENT_EPOCH_VERSION}.${CLIENT_BUILD_VERSION}")
     set(CPACK_DMG_VOLUME_NAME "LtsmClientApp Installer")
 
     install(CODE "
