@@ -48,8 +48,14 @@ TEST_F(AsyncMutexTest, MutualExclusion) {
         execution_order.push_back(id);
         shared_resource++;
         
-        boost::asio::steady_timer transient_timer(ctx.get_executor(), std::chrono::milliseconds(10));
-        co_await transient_timer.async_wait(boost::asio::use_awaitable);
+        boost::asio::steady_timer timer1(ctx.get_executor(), std::chrono::milliseconds(10));
+        co_await timer1.async_wait(boost::asio::use_awaitable);
+
+        boost::asio::steady_timer timer2(ctx.get_executor(), std::chrono::milliseconds(30));
+        co_await timer2.async_wait(boost::asio::use_awaitable);
+
+        boost::asio::steady_timer timer3(ctx.get_executor(), std::chrono::milliseconds(20));
+        co_await timer3.async_wait(boost::asio::use_awaitable);
         
         shared_resource--;
         execution_order.push_back(id);
@@ -58,19 +64,23 @@ TEST_F(AsyncMutexTest, MutualExclusion) {
         co_return;
     };
 
-    boost::asio::co_spawn(ctx, worker(1), boost::asio::detached);
-    boost::asio::co_spawn(ctx, worker(2), boost::asio::detached);
+    auto job_size = 7;
+    for(int it = 0; it < job_size; ++it) {
+        boost::asio::co_spawn(ctx, worker(it), boost::asio::detached);
+    }
 
     ctx.run();
 
     EXPECT_EQ(shared_resource, 0);
-    
-    ASSERT_EQ(execution_order.size(), 4);
-    EXPECT_EQ(execution_order[0], execution_order[1]);
-    EXPECT_EQ(execution_order[2], execution_order[3]);
+
+    ASSERT_EQ(execution_order.size(), job_size * 2);
+    for(int it = 0; it < job_size; it+=2) {
+        EXPECT_EQ(execution_order[it], execution_order[it+1]);
+    }
 }
 
 TEST_F(AsyncMutexTest, FifoOrdering) {
+
     async_mutex mutex(ctx.get_executor());
     std::vector<int> order;
 
