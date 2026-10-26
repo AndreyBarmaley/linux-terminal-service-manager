@@ -102,6 +102,8 @@ namespace LTSM {
                 return clientEncodings_;
             }
 
+            void serverReplyError(std::string_view err);
+
             // ServerEncoder
             virtual XcbFrameBuffer serverFrameBuffer(const XCB::Region &) const = 0;
             virtual std::forward_list<std::string> serverDisabledEncodings(void) const = 0;

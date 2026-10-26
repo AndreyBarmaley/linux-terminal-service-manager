@@ -99,7 +99,7 @@ namespace LTSM {
             Application::debug(DebugType::Rfb, "{}: challenge: {}", NS_FuncNameV, tmp);
         }
 
-        co_await stream_->async_send_buf(asio::buffer(challenge));
+        stream_->sync_send_buf(asio::buffer(challenge));
         auto response = co_await stream_->async_recv_buffer(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -124,11 +124,6 @@ namespace LTSM {
             }
         }
 
-        const std::string err("password mismatch");
-        co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-        co_await stream_->async_send_be32(err.size());
-        co_await stream_->async_send_buf(asio::buffer(err));
-        Application::error("{}: {}, passwd file: {}", NS_FuncNameV, err, passwdFile);
         co_return false;
     }
 
@@ -372,6 +367,14 @@ namespace LTSM {
     }
 #endif
 
+    void RFB::ServerEncoder::serverReplyError(std::string_view err) {
+        StreamBuf sb(sizeof(uint32_t) + sizeof(uint32_t) + err.size());
+        sb.writeIntBE32(RFB::SECURITY_RESULT_ERR);
+        sb.writeIntBE32(err.size());
+        sb.write(err);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
+    }
+
     asio::awaitable<bool> RFB::ServerEncoder::serverSecurityInitAwait(int protover, const SecurityInfo & secInfo) {
         // RFB 6.1.2 security
         if(protover == 33) {
@@ -426,105 +429,117 @@ namespace LTSM {
         int clientSecurity = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}, client security: {:#04x}", NS_FuncNameV, clientSecurity);
 
-        if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
-            // RFB 6.1.3 security result
-            if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
-                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
-            } else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
-                if(secInfo.passwdFile.empty()) {
-                    Application::error("{}: passwd file not defined", NS_FuncNameV);
-                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-                    co_await stream_->async_send_be32(0);
-                    co_return false;
-                }
-
-                std::error_code err;
-
-                if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                    Application::error("{}: {} failed, code: {}, error: {}, path: `{}'",
-                                        NS_FuncNameV, "exists", err.value(), err.message(), secInfo.passwdFile);
-                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-                    co_await stream_->async_send_be32(0);
-                    co_return false;
-                }
-
-                if(! co_await authVncInitAwait(secInfo.passwdFile)) {
-                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-                    co_await stream_->async_send_be32(0);
-                    co_return false;
-                }
-
-                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
-            } else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt) {
-                if(! co_await authVenCryptInitAwait(secInfo)) {
-                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-                    co_await stream_->async_send_be32(0);
-                    co_return false;
-                }
-
-                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
-            }
-#ifdef LTSM_WITH_GSSAPI
-            else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
-                try {
-                    auto krb = std::make_unique<GssWrapper::Service>(*stream_);
-                    Application::info("{}: kerberos service: `{}'", NS_FuncNameV, secInfo.krb5Service);
-
-                    if(krb->handshakeLayer(secInfo.krb5Service)) {
-                        auto remoteName = Gss::displayName(krb->securityContext()->name);
-                        std::unique_ptr<JsonObject> jo;
-
-                        if(auto buf = krb->recvTokenString(); !buf.empty()) {
-                            jo = std::make_unique<JsonObject>(JsonContentString(std::move(buf)).toObject());
-                        }
-
-                        // stop kerbero session
-                        krb.reset();
-                        Application::info("{}: kerberos auth: {}, remote: {}", NS_FuncNameV, "success", remoteName);
-
-                        if(auto pos = remoteName.find("@"); pos != std::string::npos) {
-                            clientAuthName_ = remoteName.substr(0, pos);
-                            clientAuthDomain_ = remoteName.substr(pos + 1);
-                        } else {
-                            clientAuthName_ = remoteName;
-                        }
-
-                        // check json info
-                        if(jo) {
-                            auto tls = jo->getBoolean("continue:tls", false);
-
-                            if(tls && ! co_await authVenCryptInitAwait(secInfo)) {
-                                co_return false;
-                            }
-                        }
-
-                        co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
-                        co_return true;
-                    }
-                } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                }
-
-                const std::string err("security kerberos failed");
-                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-                co_await stream_->async_send_be32(err.size());
-                co_await stream_->async_send_buf(asio::buffer(err));
-                Application::error("{}: error: {}", NS_FuncNameV, err);
-                co_return false;
-            }
-
-#endif
-            else {
-                const std::string err("no matching security types");
-                co_await stream_->async_send_be32(RFB::SECURITY_RESULT_ERR);
-                co_await stream_->async_send_be32(err.size());
-                co_await stream_->async_send_buf(asio::buffer(err));
-                Application::error("{}: error: {}", NS_FuncNameV, err);
-                co_return false;
-            }
+        if(protover != 38) {
+            auto err = std::format("invalid proto ver: {}", protover);
+            Application::error("{}: {}", NS_FuncNameV, err);
+            serverReplyError(err);
+            co_return false;
+        }
+        
+        // RFB 6.1.3 security result
+        if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
+            co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+            co_return true;
         }
 
-        co_return true;
+        if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
+            if(secInfo.passwdFile.empty()) {
+                std::string_view err{"passwd file empty"};
+                Application::error("{}: {}", NS_FuncNameV, err);
+                serverReplyError(err);
+                co_return false;
+            }
+
+            std::error_code err;
+
+            if(! std::filesystem::exists(secInfo.passwdFile, err)) {
+                auto err = std::format("passwd file not found: `{}'", secInfo.passwdFile);
+                Application::error("{}: {}", NS_FuncNameV, err);
+                serverReplyError(err);
+                co_return false;
+            }
+
+            if(! co_await authVncInitAwait(secInfo.passwdFile)) {
+                std::string_view err{"authVncInit failed"};
+                Application::error("{}: {}", NS_FuncNameV, err);
+                serverReplyError(err);
+                co_return false;
+            }
+
+            co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+            co_return true;
+        }
+
+        if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt) {
+            if(! co_await authVenCryptInitAwait(secInfo)) {
+                std::string_view err{"authVenCryptInit failed"};
+                Application::error("{}: {}", NS_FuncNameV, err);
+                serverReplyError(err);
+                co_return false;
+            }
+
+            co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+            co_return true;
+        }
+
+#ifdef LTSM_WITH_GSSAPI
+        if(clientSecurity == SECURITY_TYPE_GSSAPI) {
+            try {
+                auto krb = std::make_unique<GssWrapper::Service>(*stream_);
+                Application::info("{}: kerberos service: `{}'", NS_FuncNameV, secInfo.krb5Service);
+
+                if(krb->handshakeLayer(secInfo.krb5Service)) {
+                    auto remoteName = Gss::displayName(krb->securityContext()->name);
+                    std::unique_ptr<JsonObject> jo;
+
+                    if(auto buf = krb->recvTokenString(); !buf.empty()) {
+                        jo = std::make_unique<JsonObject>(JsonContentString(std::move(buf)).toObject());
+                    }
+
+                    // stop kerbero session
+                    krb.reset();
+                    Application::info("{}: kerberos auth: {}, remote: {}", NS_FuncNameV, "success", remoteName);
+
+                    if(auto pos = remoteName.find("@"); pos != std::string::npos) {
+                        clientAuthName_ = remoteName.substr(0, pos);
+                        clientAuthDomain_ = remoteName.substr(pos + 1);
+                    } else {
+                        clientAuthName_ = remoteName;
+                    }
+
+                    // check json info
+                    if(jo) {
+                        auto tls = jo->getBoolean("continue:tls", false);
+
+                        if(tls && ! co_await authVenCryptInitAwait(secInfo)) {
+                            std::string_view err{"authVenCryptInit failed"};
+                            Application::error("{}: {}", NS_FuncNameV, err);
+                            serverReplyError(err);
+                            co_return false;
+                        }
+                    }
+
+                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+                    co_return true;
+                }
+            } catch(const std::exception & ex) {
+                auto err = std::format("exception: {}", ex.what());
+                Application::error("{}: {}", NS_FuncNameV, err);
+                serverReplyError(err);
+                co_return false;
+            }
+
+            std::string_view err{"security kerberos failed"};
+            Application::error("{}: {}", NS_FuncNameV, err);
+            serverReplyError(err);
+            co_return false;
+        }
+#endif
+
+        std::string_view err{"no matching security types"};
+        Application::error("{}: {}", NS_FuncNameV, err);
+        serverReplyError(err);
+        co_return false;
     }
 
     asio::awaitable<void> RFB::ServerEncoder::serverClientInitAwait(std::string_view desktopName, const XCB::Size & displaySize, int displayDepth,
