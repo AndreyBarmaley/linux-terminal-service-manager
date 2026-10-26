@@ -185,6 +185,10 @@ class AsyncSocketBase {
     virtual boost::asio::awaitable<void> async_send_buffers(std::initializer_list<boost::asio::const_buffer>) const = 0;
     virtual boost::asio::awaitable<void> async_send_buffers(std::vector<boost::asio::const_buffer>&&) const = 0;
 
+    inline void sync_send_buf(const boost::asio::const_buffer& buf) const {
+        sync_send_buf(buf.data(), buf.size());
+    }
+
     // async_send_values(val1, val2, ... valX)
     template <typename... Values>
     [[nodiscard]] boost::asio::awaitable<void> async_send_values(const Values&... vals) const {
