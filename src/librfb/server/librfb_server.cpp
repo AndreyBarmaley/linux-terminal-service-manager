@@ -128,34 +128,58 @@ namespace LTSM {
     }
 
     asio::awaitable<bool> RFB::ServerEncoder::authVenCryptInitAwait(const SecurityInfo & secInfo) {
+        StreamBuf sb(12);
         // VenCrypt version 0.2
-        co_await stream_->async_send_byte(0);
-        co_await stream_->async_send_byte(2);
+        sb.writeInt8(0);
+        sb.writeInt8(2);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         // client req
         const uint8_t majorVer = co_await stream_->async_recv_byte();
         const uint8_t minorVer = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}: client vencrypt version {}.{}", NS_FuncNameV, majorVer, minorVer);
 
+        auto replyAckFailed = [&]() {
+            const uint8_t failed = 255;
+            stream_->sync_send_buf(asio::buffer(&failed, 1));
+        };
+
+        auto replyAckSuccess = [&]() {
+            const uint8_t success = 0;
+            stream_->sync_send_buf(asio::buffer(&success, 1));
+        };
+
         if(majorVer != 0 || (minorVer < 1 || minorVer > 2)) {
-            // send unsupported
-            co_await stream_->async_send_byte(255);
             Application::error("{}: unsupported vencrypt version {}.{}", NS_FuncNameV, majorVer, minorVer);
+            replyAckFailed();
             co_return false;
         }
 
         // send supported
-        co_await stream_->async_send_byte(0);
+        replyAckSuccess();
+
         bool x509Mode = false;
+        sb.reset();
+
+        auto replySecurityFailed = [&]() {
+            const uint8_t failed = 0;
+            stream_->sync_send_buf(asio::buffer(&failed, 1));
+        };
+
+        auto replySecuritySuccess = [&]() {
+            const uint8_t success = 1;
+            stream_->sync_send_buf(asio::buffer(&success, 1));
+        };
 
         if(minorVer == 1) {
             if(secInfo.tlsAnonMode) {
-                co_await stream_->async_send_byte(1);
-                co_await stream_->async_send_byte(RFB::SECURITY_VENCRYPT01_TLSNONE);
+                sb.writeInt8(1);
+                sb.writeInt8(RFB::SECURITY_VENCRYPT01_TLSNONE);
             } else {
-                co_await stream_->async_send_byte(2);
-                co_await stream_->async_send_byte(RFB::SECURITY_VENCRYPT01_TLSNONE);
-                co_await stream_->async_send_byte(RFB::SECURITY_VENCRYPT01_X509NONE);
+                sb.writeInt8(2);
+                sb.writeInt8(RFB::SECURITY_VENCRYPT01_TLSNONE);
+                sb.writeInt8(RFB::SECURITY_VENCRYPT01_X509NONE);
             }
+            stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
 
             const uint8_t mode = co_await stream_->async_recv_byte();
             Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: {}", NS_FuncNameV, mode);
@@ -167,6 +191,7 @@ namespace LTSM {
                 case RFB::SECURITY_VENCRYPT01_X509NONE:
                     if(secInfo.tlsAnonMode) {
                         Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, "x509");
+                        replySecurityFailed();
                         co_return false;
                     }
 
@@ -174,19 +199,22 @@ namespace LTSM {
                     break;
 
                 default:
+                    // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
+                    // If client supports none of the VeNCrypt subtypes it terminates connection.
                     Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, mode);
                     co_return false;
             }
         } else {
             // minorVer == 2
             if(secInfo.tlsAnonMode) {
-                co_await stream_->async_send_byte(1);
-                co_await stream_->async_send_be32(RFB::SECURITY_VENCRYPT02_TLSNONE);
+                sb.writeInt8(1);
+                sb.writeIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE);
             } else {
-                co_await stream_->async_send_byte(2);
-                co_await stream_->async_send_be32(RFB::SECURITY_VENCRYPT02_TLSNONE);
-                co_await stream_->async_send_be32(RFB::SECURITY_VENCRYPT02_X509NONE);
+                sb.writeInt8(2);
+                sb.writeIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE);
+                sb.writeIntBE32(RFB::SECURITY_VENCRYPT02_X509NONE);
             }
+            stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
 
             const uint32_t mode = co_await stream_->async_recv_be32();
             Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: {}", NS_FuncNameV, mode);
@@ -198,6 +226,7 @@ namespace LTSM {
                 case RFB::SECURITY_VENCRYPT02_X509NONE:
                     if(secInfo.tlsAnonMode) {
                         Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, "x509");
+                        replySecurityFailed();
                         co_return false;
                     }
 
@@ -205,35 +234,30 @@ namespace LTSM {
                     break;
 
                 default:
+                    // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
+                    // If client supports none of the VeNCrypt subtypes it terminates connection.
                     Application::error("{}: unsupported vencrypt mode: {}", NS_FuncNameV, mode);
                     co_return false;
             }
         }
 
         if(x509Mode) {
-            const std::string* errFile = nullptr;
             std::error_code fserr;
 
-            if(! std::filesystem::exists(secInfo.caFile, fserr)) {
-                errFile = &secInfo.caFile;
-            }
-
             if(! std::filesystem::exists(secInfo.certFile, fserr)) {
-                errFile = &secInfo.certFile;
+                Application::error("{}: file not found: {}", NS_FuncNameV, secInfo.certFile);
+                replySecurityFailed();
+                co_return false;
             }
 
             if(! std::filesystem::exists(secInfo.keyFile, fserr)) {
-                errFile = &secInfo.keyFile;
-            }
-
-            if(errFile) {
-                Application::error("{}: file not found: {}", NS_FuncNameV, errFile->c_str());
-                co_await stream_->async_send_byte(0);
+                Application::error("{}: file not found: {}", NS_FuncNameV, secInfo.keyFile);
+                replySecurityFailed();
                 co_return false;
             }
         }
 
-        co_await stream_->async_send_byte(1);
+        replySecuritySuccess();
 
         try {
             auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).socket());
