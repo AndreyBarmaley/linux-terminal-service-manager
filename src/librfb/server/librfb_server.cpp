@@ -1015,8 +1015,8 @@ namespace LTSM {
                 writeIntBE16(col.b);
         }
 
-        co_await send_lock_.async_lock();
         co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        co_await send_lock_.async_lock();
         co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
         send_lock_.unlock();
         co_return;
@@ -1069,6 +1069,7 @@ namespace LTSM {
     asio::awaitable<void> RFB::ServerEncoder::sendContinuousUpdatesAwait(bool enable) const {
         // RFB: 6.5.5
         Application::info("{}: status: {}", NS_FuncNameV, (enable ? "enable" : "disable"));
+        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
         co_await send_lock_.async_lock();
         co_await stream_->async_send_byte(RFB::SERVER_CONTINUOUS_UPDATES);
         send_lock_.unlock();
