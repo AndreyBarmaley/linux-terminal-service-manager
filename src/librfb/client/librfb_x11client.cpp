@@ -92,7 +92,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Client::extClipboardRemoteTypesAwait(uint16_t types) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
 
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -108,7 +108,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Client::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
         Application::debug(DebugType::X11Cli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(! extClipboardRemoteCaps()) {
@@ -179,7 +179,7 @@ namespace LTSM {
     }
 
     asio::awaitable<bool> RFB::X11Client::extClipboardSourceReadyAwait(xcb_atom_t atom) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
 
         uint16_t requestType = ExtClip::x11AtomToType(atom);
         clientClipboard_.clear();
