@@ -338,12 +338,12 @@ namespace LTSM {
     }
 
     asio::awaitable<uint16_t> RFB::X11Server::xcbDisplayDepth(void) const {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
         co_return XCB::RootDisplay::depth();
     }
 
     asio::awaitable<XCB::Size> RFB::X11Server::xcbDisplaySize(void) const {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
         co_return XCB::RootDisplay::size();
     }
 
@@ -552,7 +552,7 @@ namespace LTSM {
     }
 
     asio::awaitable<clipboard_buf> RFB::X11Server::extClipboardLocalDataAwait(uint16_t type) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
 
         if(0 == extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -590,7 +590,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Server::extClipboardRemoteTypesAwait(uint16_t types) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
 
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -607,7 +607,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Server::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
 
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -818,7 +818,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Server::sendUpdateCursorAwait(void) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
         if(auto fixes = static_cast<const XCB::ModuleWindowFixes*>(XCB::RootDisplay::getExtensionConst(XCB::Module::WINFIXES))) {
             XCB::CursorImage replyCursor = fixes->getCursorImage();
             const auto & reply = replyCursor.reply();
@@ -859,7 +859,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+        co_await fixed_dispatch_await(xcb_strand());
 
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
