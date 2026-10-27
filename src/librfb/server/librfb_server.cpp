@@ -307,7 +307,7 @@ namespace LTSM {
         // RFB 6.1.1 version
         int protover = RFB::VERSION_MAJOR * 10 + RFB::VERSION_MINOR;
         auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
-        co_await stream_->async_send_buf(asio::buffer(version));
+        stream_->sync_send_buf(asio::buffer(version));
         std::string magick = co_await stream_->async_recv_string(12);
         Application::debug(DebugType::Rfb, "{}: handshake version {}", NS_FuncNameV, magick);
 
@@ -391,15 +391,9 @@ namespace LTSM {
     }
 #endif
 
-    void RFB::ServerEncoder::serverReplyError(std::string_view err) {
-        StreamBuf sb(sizeof(uint32_t) + sizeof(uint32_t) + err.size());
-        sb.writeIntBE32(RFB::SECURITY_RESULT_ERR);
-        sb.writeIntBE32(err.size());
-        sb.write(err);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-    }
-
     asio::awaitable<bool> RFB::ServerEncoder::serverSecurityInitAwait(int protover, const SecurityInfo & secInfo) {
+        StreamBuf sb(8);
+
         // RFB 6.1.2 security
         if(protover == 33) {
             uint32_t res = 0;
@@ -412,49 +406,65 @@ namespace LTSM {
                 res |= RFB::SECURITY_TYPE_NONE;
             }
 
-            co_await stream_->async_send_be32(res);
+            sb.writeIntBE32(res);
         } else {
-            std::vector<uint8_t> res;
+            sb.writeInt8(0); // header
+
 #ifdef LTSM_WITH_GSSAPI
-            res.push_back(SECURITY_TYPE_GSSAPI);
+            sb.writeInt8(SECURITY_TYPE_GSSAPI);
 #endif
 
             if(secInfo.authVenCrypt) {
-                res.push_back(RFB::SECURITY_TYPE_VENCRYPT);
+                sb.writeInt8(RFB::SECURITY_TYPE_VENCRYPT);
             }
 
             if(secInfo.authVnc) {
-                res.push_back(RFB::SECURITY_TYPE_VNC);
+                sb.writeInt8(RFB::SECURITY_TYPE_VNC);
             }
 
             if(noVncMode()) {
-                res.clear();
+                sb.reset();
+                sb.writeInt8(0); // header
             }
 
             if(secInfo.authNone) {
-                res.push_back(RFB::SECURITY_TYPE_NONE);
+                sb.writeInt8(RFB::SECURITY_TYPE_NONE);
             }
 
-            co_await stream_->async_send_byte(res.size());
+            auto& buf = sb.rawbuf();
+            buf[0] = buf.size() - 1;
 
-            if(res.empty()) {
+            if(0 == buf[0]) {
                 Application::error("{}: server security invalid", NS_FuncNameV);
                 co_return false;
             }
-
-            co_await stream_->async_send_buf(asio::buffer(res));
         }
+
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
 
         // unsupported
         if(protover == 33) {
             co_return true;
         }
 
+        auto serverReplyOk = [&]() {
+            const uint32_t res = boost::endian::native_to_big(static_cast<uint32_t>(RFB::SECURITY_RESULT_OK));
+            stream_->sync_send_buf(asio::buffer(&res, sizeof(res)));
+        };
+
+        auto serverReplyError = [&](std::string_view err) {
+            StreamBuf sb(sizeof(uint32_t) + sizeof(uint32_t) + err.size());
+            sb.writeIntBE32(RFB::SECURITY_RESULT_ERR);
+            sb.writeIntBE32(err.size());
+            sb.write(err);
+            stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
+        };
+
         int clientSecurity = co_await stream_->async_recv_byte();
         Application::debug(DebugType::Rfb, "{}, client security: {:#04x}", NS_FuncNameV, clientSecurity);
 
         if(protover != 38) {
-            auto err = std::format("invalid proto ver: {}", protover);
+            auto err = fmt::format("invalid proto ver: {}", protover);
             Application::error("{}: {}", NS_FuncNameV, err);
             serverReplyError(err);
             co_return false;
@@ -462,7 +472,7 @@ namespace LTSM {
         
         // RFB 6.1.3 security result
         if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
-            co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+            serverReplyOk();
             co_return true;
         }
 
@@ -477,7 +487,7 @@ namespace LTSM {
             std::error_code err;
 
             if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                auto err = std::format("passwd file not found: `{}'", secInfo.passwdFile);
+                auto err = fmt::format("passwd file not found: `{}'", secInfo.passwdFile);
                 Application::error("{}: {}", NS_FuncNameV, err);
                 serverReplyError(err);
                 co_return false;
@@ -490,7 +500,7 @@ namespace LTSM {
                 co_return false;
             }
 
-            co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+            serverReplyOk();
             co_return true;
         }
 
@@ -502,7 +512,7 @@ namespace LTSM {
                 co_return false;
             }
 
-            co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+            serverReplyOk();
             co_return true;
         }
 
@@ -543,11 +553,11 @@ namespace LTSM {
                         }
                     }
 
-                    co_await stream_->async_send_be32(RFB::SECURITY_RESULT_OK);
+                    serverReplyOk();
                     co_return true;
                 }
             } catch(const std::exception & ex) {
-                auto err = std::format("exception: {}", ex.what());
+                auto err = fmt::format("exception: {}", ex.what());
                 Application::error("{}: {}", NS_FuncNameV, err);
                 serverReplyError(err);
                 co_return false;
