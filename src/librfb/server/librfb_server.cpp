@@ -79,7 +79,7 @@ namespace LTSM {
 
     // ServerEncoder
     RFB::ServerEncoder::ServerEncoder(const boost::asio::any_io_executor& ctx)
-        : ChannelListener(ctx), rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx}, send_lock_{ctx} {
+        : ChannelListener(ctx), rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx} {
         stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
@@ -608,8 +608,8 @@ namespace LTSM {
             writeIntBE32(desktopName.size()).
             write(desktopName);
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -630,9 +630,9 @@ namespace LTSM {
 
         try {
             fbUpdateProcessing_.store(true);
-            co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
+            co_await fixed_dispatch_await(xcb_strand_);
             auto reply = serverFrameBuffer(area);
-            co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+            co_await fixed_dispatch_await(rfb_strand_);
             co_await sendFrameBufferUpdateAwait(reply.fb);
 
             asio::post(xcb_strand_, [this, area]() {
@@ -659,7 +659,7 @@ namespace LTSM {
 
     asio::awaitable<void> RFB::ServerEncoder::rfbMessageAwait(void) {
 
-        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
+        co_await fixed_dispatch_await(rfb_strand_);
         int msgType = co_await stream_->async_recv_byte();
 
         switch(msgType) {
@@ -973,7 +973,7 @@ namespace LTSM {
 
             auto buffer = co_await stream_->async_recv_buffer(std::abs(length));
 
-            co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
+            co_await fixed_dispatch_await(xcb_strand_);
             co_await recvExtClipboardCapsAwait(buffer);
         }
 
@@ -1064,20 +1064,17 @@ namespace LTSM {
                 writeIntBE16(col.b);
         }
 
-        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+        co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
     asio::awaitable<void> RFB::ServerEncoder::sendBellEventAwait(void) const {
         Application::info("{}: process", NS_FuncNameV);
         // RFB: 6.5.3
-        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_byte(RFB::SERVER_BELL);
-        send_lock_.unlock();
+        co_await fixed_dispatch_await(rfb_strand_);
+        const uint8_t cmd = RFB::SERVER_BELL;
+        stream_->sync_send_buf(asio::buffer(&cmd, sizeof(cmd)));
         co_return;
     }
 
@@ -1108,20 +1105,17 @@ namespace LTSM {
 
         sb.write(buf);
 
-        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+        co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
     asio::awaitable<void> RFB::ServerEncoder::sendContinuousUpdatesAwait(bool enable) const {
         // RFB: 6.5.5
         Application::info("{}: status: {}", NS_FuncNameV, (enable ? "enable" : "disable"));
-        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_byte(RFB::SERVER_CONTINUOUS_UPDATES);
-        send_lock_.unlock();
+        co_await fixed_dispatch_await(rfb_strand_);
+        const uint8_t cmd = RFB::SERVER_CONTINUOUS_UPDATES;
+        stream_->sync_send_buf(asio::buffer(&cmd, sizeof(cmd)));
         continueUpdatesProcessed = enable;
         co_return;
     }
@@ -1143,12 +1137,10 @@ namespace LTSM {
         // added header
         packets.emplace_front(std::move(header));
 
-        co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
+        co_await fixed_dispatch_await(rfb_strand_);
         for(const auto & pkt: packets) {
-            co_await stream_->async_send_buf(asio::buffer(pkt));
+            stream_->sync_send_buf(asio::buffer(pkt));
         }
-        send_lock_.unlock();
         co_return;
     }
 
@@ -1315,10 +1307,8 @@ namespace LTSM {
             // flags
             writeIntBE32(0);
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -1377,10 +1367,8 @@ namespace LTSM {
         // part2: send bitmask buf
         sb.write(bitmaskBuf);
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -1422,10 +1410,8 @@ namespace LTSM {
             sb.writeIntBE32(0);
         }
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -1446,10 +1432,8 @@ namespace LTSM {
             writeIntBE32(0).
             writeIntBE32(LTSM::service_version);
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -1473,10 +1457,8 @@ namespace LTSM {
     	    writeIntBE32(buf.size()).
     	    write(buf);
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -1532,10 +1514,8 @@ namespace LTSM {
 
         sb.write(buf);
 
-	co_await asio::dispatch(rfb_strand_, asio::use_awaitable);
-        co_await send_lock_.async_lock();
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
-        send_lock_.unlock();
+	co_await fixed_dispatch_await(rfb_strand_);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 

@@ -32,7 +32,6 @@
 #include "librfb_extclip.h"
 #include "librfb_encodings.h"
 #include "ltsm_xcb_wrapper.h"
-#include "ltsm_async_mutex.h"
 #include "ltsm_async_socket.h"
 
 namespace LTSM {
@@ -63,7 +62,6 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer timer_updates_;
-            mutable async_mutex send_lock_;
 
             mutable std::forward_list<uint32_t> cursorSended_;
             ClientEncodings clientEncodings_;
