@@ -83,7 +83,7 @@ namespace LTSM {
             Application::debug(DebugType::Rfb, "{}: encrypt: {}", NS_FuncNameV, tmp);
         }
 
-        co_await stream_->async_send_buf(asio::buffer(crypt));
+        stream_->sync_send_buf(asio::buffer(crypt));
         co_return;
     }
 
@@ -95,8 +95,10 @@ namespace LTSM {
         Application::debug(DebugType::Rfb, "{}: server vencrypt version {}.{}", NS_FuncNameV, majorVer, minorVer);
 
         // client VenCrypt version 0.2
-        co_await stream_->async_send_byte(0);
-        co_await stream_->async_send_byte(2);
+        StreamBuf sb(12);
+        sb.writeInt8(0);
+        sb.writeInt8(2);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
 
         // recv support flag
         const uint8_t zeroVer = co_await stream_->async_recv_byte();
@@ -137,7 +139,10 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Rfb, "{}: send vencrypt mode: {}", NS_FuncNameV, mode);
-        co_await stream_->async_send_be32(mode);
+        sb.reset();
+        sb.writeIntBE32(mode);
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
+
         int status = co_await stream_->async_recv_byte();
 
         if(0 == status) {
@@ -298,7 +303,7 @@ namespace LTSM {
         }
 
         // 12 bytes
-        co_await stream_->async_send_buf(asio::buffer(version));
+        stream_->sync_send_buf(asio::buffer(version));
 
         // RFB 1.7.1.2 security
         const uint8_t counts = co_await stream_->async_recv_byte();
@@ -327,7 +332,8 @@ namespace LTSM {
 
         if(krb5Cred) {
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "gssapi");
-            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_GSSAPI);
+            const uint8_t sectype = RFB::SECURITY_TYPE_GSSAPI;
+            stream_->sync_send_buf(asio::buffer(&sectype, 1));
             const bool authInit = co_await authGssApiInitAwait(sec);
 
             if(! authInit) {
@@ -338,7 +344,8 @@ namespace LTSM {
         if(sec.authVenCrypt &&
                 std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; })) {
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "vencrypt");
-            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_VENCRYPT);
+            const uint8_t sectype = RFB::SECURITY_TYPE_VENCRYPT;
+            stream_->sync_send_buf(asio::buffer(&sectype, 1));
             const bool authInit = co_await authVenCryptInitAwait(sec);
 
             if(! authInit) {
@@ -355,12 +362,14 @@ namespace LTSM {
 
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "vncauth");
 
-            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_VNC);
+            const uint8_t sectype = RFB::SECURITY_TYPE_VNC;
+            stream_->sync_send_buf(asio::buffer(&sectype, 1));
             co_await authVncInitAwait(password);
         } else if(sec.authNone &&
                 std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_NONE; })) {
             Application::debug(DebugType::Rfb, "{}: security: {} selected", NS_FuncNameV, "noauth");
-            co_await stream_->async_send_byte(RFB::SECURITY_TYPE_NONE);
+            const uint8_t sectype = RFB::SECURITY_TYPE_NONE;
+            stream_->sync_send_buf(asio::buffer(&sectype, 1));
         } else {
             Application::error("{}: security vnc: not supported", NS_FuncNameV);
             throw rfb_error(NS_FuncNameS);
@@ -376,10 +385,10 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        bool shared = false;
-        Application::debug(DebugType::Rfb, "{}: send share flags: {}", NS_FuncNameV, (int) shared);
+        const uint8_t shared = 0;
+        Application::debug(DebugType::Rfb, "{}: send share flags: {}", NS_FuncNameV, shared);
         // RFB 6.3.1 client init (shared flag)
-        co_await stream_->async_send_byte(shared ? 1 : 0);
+        stream_->sync_send_buf(asio::buffer(&shared, 1));
 
         // RFB 6.3.2 server init
         auto buf = co_await stream_->async_recv_buffer(20);
@@ -651,7 +660,7 @@ namespace LTSM {
             writeZero(3); // padding
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -671,7 +680,7 @@ namespace LTSM {
         }
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -694,7 +703,7 @@ namespace LTSM {
             writeIntBE16(reg.height);
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -712,7 +721,7 @@ namespace LTSM {
             writeIntBE16(reg.height);
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         continueUpdatesProcessed = enable;
         co_return;
     }
@@ -739,7 +748,7 @@ namespace LTSM {
             writeIntBE32(0);
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -764,7 +773,7 @@ namespace LTSM {
         }
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -779,7 +788,7 @@ namespace LTSM {
             writeIntBE16(posy);
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -808,7 +817,7 @@ namespace LTSM {
         sb.write(buf);
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_buf(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
         co_return;
     }
 
@@ -834,7 +843,7 @@ namespace LTSM {
         sb.write(buf);
 
         co_await fixed_dispatch_await(rfb_strand_);
-        co_await stream_->async_send_values(asio::buffer(sb.rawbuf()));
+        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
 
         ChannelBase::sendChannelDataSuccess(channel, buf.size());
         co_return;
