@@ -25,6 +25,7 @@
 #define _LTSM_AUDIO_SESSION_
 
 #include <span>
+#include <mutex>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -43,20 +44,50 @@
 #include "ltsm_audio_pipewire.h"
 #endif
 
+#include <boost/asio/experimental/channel.hpp>
+
 namespace LTSM {
-    struct AudioPacket {
+    using AudioBuffers = boost::container::small_vector<boost::asio::const_buffer, 3>;
+
+    class AudioPacket {
         uint16_t id_ = 0;
         uint32_t len_ = 0;
-        std::vector<uint8_t> data_;
 
-        AudioPacket(uint32_t len);
-        AudioPacket(std::vector<uint8_t> &&);
+    public:
+        AudioPacket(uint16_t id, uint32_t len);
+        virtual ~AudioPacket() = default;
+        virtual AudioBuffers buffers() const;
     };
 
-    using AudioPacketPtr = std::unique_ptr<AudioPacket>;
+    class AudioPacketSilent : public AudioPacket {
+    public:
+        explicit AudioPacketSilent(uint16_t len) : AudioPacket(AudioOp::Silent, len) {
+        }
+    };
 
-    struct AudioClient : protected AsyncLocalStream {
-        boost::asio::strand<boost::asio::any_io_executor> strand_;
+    class AudioPacketPcm : public AudioPacket {
+        const std::span<const uint8_t> pcm_;
+    public:
+        explicit AudioPacketPcm(std::span<const uint8_t> pcm) : AudioPacket(AudioOp::Data, pcm.size()), pcm_{pcm} {
+        }
+        AudioBuffers buffers() const override;
+    };
+
+    class AudioPacketEnc : public AudioPacket {
+        const std::vector<uint8_t> enc_;
+    public:
+        explicit AudioPacketEnc(std::vector<uint8_t> enc) : AudioPacket(AudioOp::Data, enc.size()), enc_{std::move(enc)} {
+        }
+        AudioBuffers buffers() const override;
+    };
+
+    using AudioPackets = std::vector<std::unique_ptr<AudioPacket>>;
+    using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+
+    class AudioClient {
+        mutable AsyncLocalStream stream_;
+        TransferChannel packets_channel_;
+        boost::asio::steady_timer tm_wait_engine_;
 
         const uint8_t channels_ = 2;
 
@@ -71,24 +102,29 @@ namespace LTSM {
         uint32_t bit_rate_ = 44100;
         uint32_t frag_size_ = 1024;
 
-        AudioClient(const boost::asio::any_io_executor & ex)
-            : AsyncLocalStream(ex), strand_{boost::asio::make_strand(ex)} {
-        }
-        ~AudioClient() = default;
-    
-        boost::asio::awaitable<void> remoteHandshake(const std::string &, std::chrono::seconds connect_deadline);
+    protected:
         boost::asio::awaitable<void> timerWaitEngine(void);
 
         bool engineInit(void);
         void dataReadyNotify(std::span<const uint8_t>);
-        std::list<AudioPacketPtr> dataEncode(std::span<const uint8_t>);
+        AudioPackets dataEncode(std::span<const uint8_t>);
+
+    public:
+        AudioClient(const boost::asio::any_io_executor & ex)
+            : stream_(ex), packets_channel_{ex, 4}, tm_wait_engine_{ex} {
+        }
+        ~AudioClient() = default;
+    
+        boost::asio::awaitable<void> remoteHandshake(const std::string &, std::chrono::seconds connect_deadline);
+        boost::asio::awaitable<void> sendPackets(void);
+        void cancel();
 
         bool socketPath(std::string_view path) const {
-            return const_cast<AudioClient&>(*this).socket().local_endpoint().path() == path;
+            return stream_.socket().local_endpoint().path() == path;
         }
 
         bool socketConnected(void) const {
-            return const_cast<AudioClient&>(*this).socket().is_open();
+            return stream_.socket().is_open();
         }
     };
 
@@ -102,11 +138,13 @@ namespace LTSM {
         boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
 
         std::forward_list<AudioClientPtr> clients_;
+        std::once_flag stop_flag_;
 
       protected:
         boost::asio::awaitable<void> signalsHandler(void);
         boost::asio::awaitable<void> sdbusHandler(void);
-        void stop(void) noexcept;
+        void stopContext(void);
+        void stop(void);
 
       public:
         AudioSessionBus(DBusConnectionPtr, bool debug = false);
