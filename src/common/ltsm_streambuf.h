@@ -41,7 +41,7 @@ namespace LTSM {
     struct BinaryBuf : std::vector<uint8_t> {
         using std::vector<uint8_t>::vector;
 
-        explicit BinaryBuf(const std::vector<uint8_t> &);
+        explicit BinaryBuf(std::span<const uint8_t>);
         explicit BinaryBuf(std::vector<uint8_t> && v) noexcept;
 
         BinaryBuf & operator=(const std::vector<uint8_t> &);
