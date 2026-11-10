@@ -111,7 +111,7 @@ namespace LTSM {
                 asio::posix::stream_descriptor src_stream{executor, jobFd_};
                 for(;;) {
                     size_t rlen = co_await src_stream.async_read_some(asio::buffer(buf), asio::use_awaitable);
-                    co_await asio::async_write(dst_sock, asio::buffer(buf.data(), rlen), asio::use_awaitable);
+                    co_await asio::async_write(dst_sock, asio::buffer(buf.data(), rlen), boost::asio::transfer_all(), asio::use_awaitable);
                 }
             } catch(const system::system_error& err) {
                 if(err.code() == asio::error::eof) {
