@@ -15,6 +15,7 @@ env:
     BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
     BUILD_TYPE: Debug
     DEBIAN_FRONTEND: noninteractive
+    BOOST_MINOR: 88
 
 jobs:
   build:
@@ -29,7 +30,7 @@ jobs:
          sudo apt-get update
          sudo apt-get -y upgrade
 
-      - name: Set up JDK 11
+      - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           distribution: "temurin"
@@ -48,7 +49,7 @@ jobs:
         run: |
          sudo apt-get -y install dbus wget curl unzip openssl socat rsyslog zenity \
            xserver-xorg-video-dummy xserver-xorg xterm x11-xserver-utils dbus-x11 \
-           libexpat1 libpam0g-dev gnutls-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
+           libexpat1 libpam0g-dev gnutls-dev freerdp3-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
            libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
            libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
@@ -80,13 +81,22 @@ jobs:
           unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
           echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
 
+      - name: Boost1.88
+        run: |
+          wget https://archives.boost.io/release/1.${{env.BOOST_MINOR}}.0/source/boost_1_${{env.BOOST_MINOR}}_0.tar.bz2
+          tar xf boost_1_${{env.BOOST_MINOR}}_0.tar.bz2 -C ${{github.workspace}}
+          cd ${{github.workspace}}/boost_1_${{env.BOOST_MINOR}}_0
+          ./bootstrap.sh
+          ./b2
+
       - name: Run build-wrapper
         run: |
           echo "fix user group"
           sed -i -e 's|ltsm-auth|adm|' ${{github.workspace}}/src/common/ltsm_global.h
           sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/src/common/ltsm_global.h
           echo "start cmake"
-          cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          LTSM_BOOST_ROOT=${{github.workspace}}/boost_1_${{env.BOOST_MINOR}}_0 \
+             cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
                 -DLTSM_BUILD_SERVER=on \
                 -DLTSM_BUILD_CLIENT=on \
                 -DLTSM_BUILD_TESTS=on \
@@ -166,7 +176,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          export PATH="$JAVA_HOME/bin:$PATH"
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export JRE="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME_21_X64/bin:$PATH"
+          echo $PATH
           sonar-scanner --define sonar.host.url="${{ env.SONAR_SERVER_URL }}" \
             --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
-            --define sonar.coverageReportPaths=coverage.xml
+            --define sonar.coverageReportPaths=coverage.xml \
+            --define sonar.scanner.skipJreProvisioning=true \
+            --define sonar.scanner.javaExe="$JAVA_HOME_21_X64/bin/java"

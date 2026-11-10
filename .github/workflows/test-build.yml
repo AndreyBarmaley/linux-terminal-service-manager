@@ -33,7 +33,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt install -y cmake wget g++ git libexpat1 libpam0g-dev \
-            libsdbus-c++-dev gnutls-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
+            libsdbus-c++-dev gnutls-dev freerdp3-dev libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
             libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev libsdl2-dev libsdl2-image-dev qtbase5-dev \
             libxcb-xkb-dev libxkbcommon-x11-dev \
             libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
