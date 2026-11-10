@@ -29,7 +29,6 @@
 #include <chrono>
 #include <memory>
 #include <string>
-#include <forward_list>
 
 #include "ltsm_application.h"
 #include "ltsm_async_sdbus.h"
@@ -84,7 +83,7 @@ namespace LTSM {
     using AudioPackets = std::vector<std::unique_ptr<AudioPacket>>;
     using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
 
-    class AudioClient {
+    class AudioClient : std::enable_shared_from_this<AudioClient> {
         mutable AsyncLocalStream stream_;
         TransferChannel packets_channel_;
         boost::asio::steady_timer tm_wait_engine_;
@@ -129,7 +128,8 @@ namespace LTSM {
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
-    using AudioClientPtr = std::unique_ptr<AudioClient>;
+    using AudioClientPtr = std::shared_ptr<AudioClient>;
+    using AudioClients = boost::container::small_vector<AudioClientPtr, 4>;
 
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
@@ -137,7 +137,7 @@ namespace LTSM {
         boost::asio::cancellation_signal connect_cancel_;
         boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
 
-        std::forward_list<AudioClientPtr> clients_;
+        AudioClients clients_;
         std::once_flag stop_flag_;
 
       protected:

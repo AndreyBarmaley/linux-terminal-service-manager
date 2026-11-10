@@ -27,6 +27,7 @@
 #include <filesystem>
 
 #include <boost/container/small_vector.hpp>
+#include <boost/range/algorithm_ext/erase.hpp>
 
 #include "ltsm_tools.h"
 #include "ltsm_audio.h"
@@ -410,11 +411,10 @@ namespace LTSM {
             }
 
             auto executor = co_await asio::this_coro::executor;
-            AudioClient* client = nullptr;
+            AudioClientPtr client = std::make_shared<AudioClient>(executor);
 
             try {
-                clients_.emplace_front(std::make_unique<AudioClient>(executor));
-                client = clients_.front().get();
+                clients_.push_back(client);
                 co_await client->remoteHandshake(socketPath, 3s /* connect deadline */);
                 co_await client->sendPackets();
             } catch(const system::system_error& err) {
@@ -427,9 +427,7 @@ namespace LTSM {
                 Application::error("{}: exception: {}", func, err.what());
             }
 
-            if(client) {
-                std::erase_if(clients_, [client](auto& cli){ return cli.get() == client; });
-            }
+            boost::range::remove_erase(clients_, client);
             co_return;
 
         }, asio::bind_cancellation_slot(connect_cancel_.slot(), asio::detached));
@@ -445,7 +443,7 @@ namespace LTSM {
             });
             if(it != clients_.end()) {
                 (*it)->cancel();
-                std::erase(clients_, *it);
+                boost::range::remove_erase(clients_, *it);
             }
         });
     }
