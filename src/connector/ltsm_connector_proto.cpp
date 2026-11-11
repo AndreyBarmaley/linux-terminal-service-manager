@@ -161,9 +161,7 @@ namespace LTSM::Connector {
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", true);
 
-        auto buf = jos.flush();
-        co_await sendLtsmChannelAwait(ChannelTypeSystem, std::span{reinterpret_cast<const uint8_t*>(buf.data()), buf.size()});
-
+        sendLtsmChannelData(ChannelTypeSystem, jos.flush());
         co_return;
     }
 
@@ -206,7 +204,7 @@ namespace LTSM::Connector {
     void ConnectorLtsm::onSendBellSignal(const int32_t & display) {
         if(display == displayNum()) {
             Application::info("{}: dbus signal, display: {}", NS_FuncNameV, display);
-            asio::co_spawn(ioc(), sendBellEventAwait(), asio::detached);
+            sendBellEvent();
         }
     }
 
@@ -279,7 +277,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::serverEncodingsEvent(void) {
         if(isClientLtsmSupported()) {
-            asio::co_spawn(rfb_strand(), sendEncodingLtsmSupportedAwait(), asio::detached);
+            sendEncodingLtsmSupported();
         }
     }
 

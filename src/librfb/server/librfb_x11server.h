@@ -42,6 +42,7 @@ namespace LTSM {
             boost::asio::signal_set signals_;
             boost::asio::cancellation_signal xcb_cancel_;
             boost::asio::cancellation_signal rfb_cancel_;
+            boost::asio::cancellation_signal send_cancel_;
             boost::asio::cancellation_signal srv_cancel_;
             boost::asio::steady_timer force_update_;
             boost::asio::steady_timer clipboard_ready_;
@@ -115,7 +116,8 @@ namespace LTSM {
             boost::asio::awaitable<uint16_t> xcbDisplayDepth(void) const;
 
             boost::asio::awaitable<void> xcbEventsLoop(void);
-            boost::asio::awaitable<void> rfbReceiveMessages(void);
+            boost::asio::awaitable<void> rfbRecvMessagesAwait(void);
+            boost::asio::awaitable<void> rfbSendMessagesAwait(void);
             boost::asio::awaitable<void> signalsHandler(void);
             boost::asio::awaitable<void> serverUpdateLoop(void);
             boost::asio::awaitable<void> serverUpdateProcess(void);

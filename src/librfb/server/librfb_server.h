@@ -34,6 +34,8 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_async_socket.h"
 
+#include <boost/asio/experimental/channel.hpp>
+
 namespace LTSM {
     struct XcbFrameBuffer {
         XCB::PixmapInfoReply reply;
@@ -55,6 +57,8 @@ namespace LTSM {
 
     namespace RFB {
         int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
+        using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+        constexpr int TransferChannelSize = 16;
 
         /// ServerEncoder
         class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip {
@@ -62,6 +66,7 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer timer_updates_;
+            mutable TransferChannel packets_channel_;
 
             mutable std::forward_list<uint32_t> cursorSended_;
             ClientEncodings clientEncodings_;
@@ -121,17 +126,20 @@ namespace LTSM {
             boost::asio::awaitable<bool> authVncInitAwait(const std::string &);
             boost::asio::awaitable<bool> authVenCryptInitAwait(const SecurityInfo &);
             boost::asio::awaitable<void> waitUpdateProcessAwait(void);
-            boost::asio::awaitable<void> sendColourMapAwait(int first) const;
-            boost::asio::awaitable<void> sendBellEventAwait(void) const;
-            boost::asio::awaitable<void> sendCutTextAwait(std::span<const uint8_t>, bool ext) const;
-            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable) const;
-            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const FrameBuffer &) const;
+
+            void sendColourMap(int first) const;
+            void sendBellEvent(void) const;
+            void sendCutText(std::span<const uint8_t>, bool ext) const;
+            void sendContinuousUpdates(bool enable) const;
+            void sendFrameBufferUpdate(const FrameBuffer &) const;
+            void sendEncodingDesktopResize(const DesktopResizeStatus&, const DesktopResizeError&, const XCB::Size&) const;
+            void sendEncodingRichCursor(const FrameBuffer & fb, const XCB::Point &) const;
+            void sendEncodingLtsmCursor(const XCB::Point &, const XCB::Size &, std::span<const uint8_t> pixels) const;
+            void sendEncodingLtsmSupported(void) const;
+            void sendEncodingLtsmData(std::span<const uint8_t>) const;
+
             boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &) const;
-            boost::asio::awaitable<void> sendEncodingDesktopResizeAwait(DesktopResizeStatus, DesktopResizeError, XCB::Size) const;
-            boost::asio::awaitable<void> sendEncodingRichCursorAwait(const FrameBuffer & fb, const XCB::Point &) const;
-            boost::asio::awaitable<void> sendEncodingLtsmCursorAwait(const XCB::Point &, const XCB::Size &, std::span<const uint8_t> pixels) const;
-            boost::asio::awaitable<void> sendEncodingLtsmSupportedAwait(void) const;
-            boost::asio::awaitable<void> sendEncodingLtsmDataAwait(std::span<const uint8_t>) const;
+            boost::asio::awaitable<void> sendQueueAwait(void);
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
             boost::asio::awaitable<void> recvPixelFormatAwait(void);
@@ -142,13 +150,23 @@ namespace LTSM {
             boost::asio::awaitable<void> recvCutTextAwait(void);
             boost::asio::awaitable<void> recvSetContinuousUpdatesAwait(void);
             boost::asio::awaitable<void> recvSetDesktopSizeAwait(void);
-            boost::asio::awaitable<void> rfbMessageAwait(void);
+            boost::asio::awaitable<void> recvRfbMessageAwait(void);
 
             boost::asio::awaitable<int> serverHandshakeVersionAwait(void);
             boost::asio::awaitable<bool> serverSecurityInitAwait(int protover, const SecurityInfo &);
             boost::asio::awaitable<void> serverClientInitAwait(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
 
             void cursorRequest(uint32_t);
+
+            void asyncSendBuf(BinaryBuf&&) const;
+
+            void asyncSendBuf(std::span<const uint8_t> span) const {
+                asyncSendBuf(BinaryBuf(span));
+            }
+
+            void asyncSendBuf(std::span<const char> span) const {
+                asyncSendBuf(BinaryBuf(span));
+            }
 
           public:
             ServerEncoder(const boost::asio::any_io_executor&);
@@ -167,7 +185,7 @@ namespace LTSM {
             void asioStop(void);
             void serverSelectEncodings(void);
 
-            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const final;
+            void sendLtsmChannelDataPriv(CID, std::vector<uint8_t>&&) const final;
 
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);

@@ -32,6 +32,9 @@
 
 namespace LTSM {
     /* BinaryBuf */
+    BinaryBuf::BinaryBuf(std::span<const char> v) : std::vector<uint8_t>(v.data(), v.data() + v.size()) {
+    }
+
     BinaryBuf::BinaryBuf(std::span<const uint8_t> v) : std::vector<uint8_t>(v.data(), v.data() + v.size()) {
     }
 

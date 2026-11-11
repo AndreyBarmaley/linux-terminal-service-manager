@@ -42,6 +42,7 @@ namespace LTSM {
         using std::vector<uint8_t>::vector;
 
         explicit BinaryBuf(std::span<const uint8_t>);
+        explicit BinaryBuf(std::span<const char>);
         explicit BinaryBuf(std::vector<uint8_t> && v) noexcept;
 
         BinaryBuf & operator=(const std::vector<uint8_t> &);
