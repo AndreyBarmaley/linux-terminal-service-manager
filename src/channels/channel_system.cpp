@@ -790,16 +790,14 @@ void ChannelListener::plannedEmplaceSpawn(Channel::Planned && job) {
     Application::info("{}: accept client, url: `{}', mode: {}, fd: {}",
         NS_FuncNameV, job.clientOpts.url, Channel::Connector::modeString(job.clientOpts.mode), job.serverFd);
 
-    asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [func=NS_FuncNameV](std::exception_ptr ptr) {
+    asio::post(chan_strand(), [this,job=std::move(job)]() mutable {
         try {
-            if(ptr) {
-                std::rethrow_exception(ptr);
-            }
+            plannedEmplace(std::move(job));
         } catch(const system::system_error& err) {
             auto ec = err.code();
-            Application::error("{}: system error: {}, code: {}", func, ec.message(), ec.value());
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
         } catch(const std::exception& err) {
-            Application::error("{}: exception: {}", func, err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
     });
 }
@@ -894,7 +892,7 @@ asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clie
     co_return;
 }
 
-asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
+void ChannelListener::destroyListener(std::string url) {
     if(auto it = listeners_.find(url); it != listeners_.end()) {
         if(it->second) {
             it->second->emit(asio::cancellation_type::terminal);
@@ -902,7 +900,6 @@ asio::awaitable<void> ChannelListener::destroyListenerAwait(std::string url) {
         Application::info("{}: server url: {}", NS_FuncNameV, url);
         listeners_.erase(it);
     }
-    co_return;
 }
 
 void ChannelListener::recvChannelSystemEvent(const std::string& cmd, const JsonObject & jo) {
@@ -937,12 +934,10 @@ void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
     int error = jo.getInteger("error");
     int flags = jo.getInteger("flags", 0);
 
-    asio::co_spawn(chan_strand(), systemChannelConnectedAwait(channel, flags, error), [this](std::exception_ptr ptr) {
-        exceptionHandler(ptr);
-    });
+    systemChannelConnected(channel, flags, error);
 }
 
-asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, int flags, int error) {
+void ChannelListener::systemChannelConnected(CID channel, int flags, int error) {
     // find planed
     auto it = std::ranges::find_if(channels_planned_, [ = ](auto & st) {
         return st.channel == channel;
@@ -996,7 +991,7 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
     bool success = false;
 
     try {
-        co_await createChannelAwait(channel, job);
+        createChannel(channel, job);
         success = true;
     } catch(const system::system_error& err) {
         auto ec = err.code();
@@ -1016,8 +1011,6 @@ asio::awaitable<void> ChannelListener::systemChannelConnectedAwait(CID channel, 
     setChannelConnected(channel);
     sendSystemChannelConnected(channel, flags, false /* replyError */);
     setChannelRunning(channel);
-
-    co_return;
 }
 
 uint32_t ChannelListener::countFreeChannels(void) const {
@@ -1062,16 +1055,14 @@ bool ChannelListener::createChannel(const Channel::UrlMode & clientOpts, const C
     }
 
     auto job = Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts };
-    asio::co_spawn(chan_strand(), plannedEmplaceAwait(std::move(job)), [this](std::exception_ptr ptr) {
-        exceptionHandler(ptr);
-    });
+    plannedEmplaceSpawn(std::move(job));
 
     // next part: ChannelBase::systemChannelConnected
 
     return true;
 }
 
-asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job) {
+void ChannelListener::plannedEmplace(Channel::Planned job) {
     // find free channel
     CID channel = 1;
 
@@ -1101,10 +1092,9 @@ asio::awaitable<void> ChannelListener::plannedEmplaceAwait(Channel::Planned job)
 
     // send channel open to client
     sendSystemChannelOpen(back.channel, back.clientOpts, back.chOpts);
-    co_return;
 }
 
-asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Channel::Planned& job) {
+void ChannelListener::createChannel(CID channel, const Channel::Planned& job) {
 
     Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'",
                       NS_FuncNameV, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
@@ -1134,8 +1124,6 @@ asio::awaitable<void> ChannelListener::createChannelAwait(CID channel, const Cha
             Application::error("{}: {}, id: {}", NS_FuncNameV, "channel type not implemented", channel);
             throw channel_error(NS_FuncNameS);
     }
-
-    co_return;
 }
 
 bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {

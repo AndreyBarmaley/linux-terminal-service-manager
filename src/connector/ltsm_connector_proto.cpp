@@ -649,7 +649,9 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onDestroyListener(const int32_t & display, const std::string & client, const std::string & server) {
         if(display == displayNum()) {
-            asio::co_spawn(chan_strand(), destroyListenerAwait(server), asio::detached);
+            asio::post(chan_strand(), [this, server]() {
+                destroyListener(server);
+            });
         }
     }
 

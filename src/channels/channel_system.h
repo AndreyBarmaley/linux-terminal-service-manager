@@ -622,21 +622,15 @@ namespace LTSM {
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         uint32_t countFreeChannels(void) const;
 
-        boost::asio::awaitable<void> systemChannelConnectedAwait(CID channel, int flags, int error);
-        boost::asio::awaitable<void> plannedEmplaceAwait(Channel::Planned job);
-        boost::asio::awaitable<void> createChannelAwait(CID, const Channel::Planned &);
+        void systemChannelConnected(CID channel, int flags, int error);
+        void plannedEmplace(Channel::Planned);
+        void createChannel(CID, const Channel::Planned &);
 
         boost::asio::awaitable<void> createListenerAwait(Channel::UrlMode clientOpts, Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit);
-        boost::asio::awaitable<void> destroyListenerAwait(std::string clientUrl);
-
+        void destroyListener(std::string clientUrl);
 
         boost::asio::ip::tcp::endpoint createTcpEndpoint(const Channel::UrlMode & serverOpts) const;
         boost::asio::local::stream_protocol::endpoint createUnixEndpoint(const Channel::UrlMode & serverOpts) const;
-
-        boost::asio::awaitable<void> createUnixListenerAwait(const Channel::UrlMode & serverOpts, int listenLimit,
-                                        const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts);
-        boost::asio::awaitable<void> createTcpListenerAwait(const Channel::UrlMode & serverOpts, int listenLimit,
-                                        const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts);
 
       public:
         explicit ChannelListener(const boost::asio::any_io_executor& ctx) : ChannelBase(ctx) {
