@@ -42,10 +42,7 @@ namespace LTSM {
 
     void RFB::X11Client::extClipboardSendBuf(std::vector<uint8_t>&& buf) const {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
-            co_await sendCutTextAwait(buf, true);
-            co_return;
-        }, asio::detached);
+        sendCutText(buf, true);
     }
 
     uint16_t RFB::X11Client::extClipboardLocalTypes(void) const {
@@ -92,7 +89,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Client::extClipboardRemoteTypesAwait(uint16_t types) {
-        co_await fixed_dispatch_await(xcb_strand());
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
 
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -108,7 +105,8 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::X11Client::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
-        co_await fixed_dispatch_await(xcb_strand());
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+
         Application::debug(DebugType::X11Cli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
         if(! extClipboardRemoteCaps()) {
@@ -131,10 +129,7 @@ namespace LTSM {
                 ptr->clientClipboard_.swap(buf);
                 ptr->clipboard_ready_.cancel();
             } else {
-                asio::co_spawn(rfb_strand(), [this, buf = std::move(buf)]() -> asio::awaitable<void> {
-                    co_await sendCutTextAwait(buf, false /* ext mode */);
-                    co_return;
-                }, asio::detached);
+                sendCutText(buf, false /* ext mode */);
             }
         }
     }
@@ -179,7 +174,7 @@ namespace LTSM {
     }
 
     asio::awaitable<bool> RFB::X11Client::extClipboardSourceReadyAwait(xcb_atom_t atom) {
-        co_await fixed_dispatch_await(xcb_strand());
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
 
         uint16_t requestType = ExtClip::x11AtomToType(atom);
         clientClipboard_.clear();

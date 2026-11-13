@@ -75,7 +75,8 @@ namespace LTSM {
     {
         boost::asio::thread_pool thread_pool_{concurency()};
         boost::asio::signal_set signals_;
-        boost::asio::cancellation_signal rfb_cancel_;
+        boost::asio::cancellation_signal send_cancel_;
+        boost::asio::cancellation_signal recv_cancel_;
         boost::asio::io_context sdl_ctx_;
         boost::asio::executor_work_guard<boost::asio::any_io_executor> sdl_guard_;
         boost::asio::strand<boost::asio::any_io_executor> sdl_strand_;
@@ -160,17 +161,18 @@ namespace LTSM {
         boost::asio::awaitable<void> x11EventsLoop(void);
 #endif
         boost::asio::awaitable<void> signalsHandler(void);
-        boost::asio::awaitable<void> windowResizedEvent(const XCB::Size &);
+        boost::asio::awaitable<bool> sdlWindowInit(const XCB::Size&);
         boost::asio::awaitable<void> sdlEventsLoop(void);
-        boost::asio::awaitable<bool> sdlEventProcessing(void);
-        boost::asio::awaitable<void> sdlMouseMotion(const SDL_Event &);
-        boost::asio::awaitable<void> sdlMouseButton(const SDL_Event &);
-        boost::asio::awaitable<void> sdlMouseWheel(const SDL_Event &);
-        boost::asio::awaitable<void> sdlWindowEvent(const SDL_Event &);
-        boost::asio::awaitable<void> sdlKeyboardEvent(const SDL_Event &);
-        boost::asio::awaitable<void> sdlDropCompleteEvent(const SDL_Event &);
-        boost::asio::awaitable<void> sdlUserEvent(const SDL_Event &);
-        void sdlWindowInit(const XCB::Size &);
+
+        void windowResizedEvent(const XCB::Size &);
+        bool sdlEventProcessing(void);
+        void sdlMouseMotion(const SDL_Event &);
+        void sdlMouseButton(const SDL_Event &);
+        void sdlMouseWheel(const SDL_Event &);
+        void sdlWindowEvent(const SDL_Event &);
+        void sdlKeyboardEvent(const SDL_Event &);
+        void sdlDropCompleteEvent(const SDL_Event &);
+        void sdlUserEvent(const SDL_Event &);
 
         void stop(void);
 
@@ -180,7 +182,7 @@ namespace LTSM {
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                                 const std::vector<RFB::ScreenInfo> &) override;
 
-        boost::asio::awaitable<void> clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
 
         void clientRecvFBUpdateEvent(void) override;
         //void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;

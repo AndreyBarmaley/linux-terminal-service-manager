@@ -51,7 +51,6 @@ using namespace boost;
 namespace LTSM {
     /* RFB::ClientDecoder */
     asio::awaitable<void> RFB::ClientDecoder::rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay) {
-        co_await fixed_dispatch_await(rfb_strand_);
         auto ex = co_await asio::this_coro::executor;
         asio::ip::tcp::resolver resolver{ex};
         auto endpoints = resolver.resolve(host, std::to_string(port));
@@ -67,7 +66,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::authVncInitAwait(std::string_view password) const {
-        co_await fixed_dispatch_await(rfb_strand_);
         // recv challenge 16 bytes
         auto challenge = co_await stream_->async_recv_buffer(16);
 
@@ -88,7 +86,6 @@ namespace LTSM {
     }
 
     asio::awaitable<bool> RFB::ClientDecoder::authVenCryptInitAwait(const SecurityInfo & sec) {
-        co_await fixed_dispatch_await(rfb_strand_);
         // server VenCrypt version
         const uint8_t majorVer = co_await stream_->async_recv_byte();
         const uint8_t minorVer = co_await stream_->async_recv_byte();
@@ -249,7 +246,6 @@ namespace LTSM {
     }
 
     asio::awaitable<bool> RFB::ClientDecoder::authGssApiInitAwait(const SecurityInfo & sec) {
-        co_await fixed_dispatch_await(rfb_strand_);
         try {
             auto krb = std::make_unique<GssWrapper::Client>(*stream_);
             // a remote peer asked for mutual authentication
@@ -284,7 +280,6 @@ namespace LTSM {
 #endif
 
     asio::awaitable<void> RFB::ClientDecoder::rfbHandshakeAwait(const SecurityInfo & sec) {
-        co_await fixed_dispatch_await(rfb_strand_);
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
         const auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
@@ -434,7 +429,7 @@ namespace LTSM {
             throw rfb_error(NS_FuncNameS);
         }
 
-        co_await clientRecvPixelFormatEvent(server_pf_, XCB::Size(fbWidth, fbHeight));
+        clientRecvPixelFormatEvent(server_pf_, XCB::Size(fbWidth, fbHeight));
         // recv name desktop
         auto nameLen = co_await stream_->async_recv_be32();
         auto nameDesktop = co_await stream_->async_recv_string(nameLen);
@@ -457,10 +452,39 @@ namespace LTSM {
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void) {
         shutdownChannels();
+        packets_channel_.close();
         incr_update_timer_.cancel();
         if(stream_) {
             stream_->closeSocket();
         }
+    }
+
+    asio::awaitable<void> RFB::ClientDecoder::rfbSendMessagesAwait(void) {
+        try {
+            for(;;) {
+                auto buf = co_await packets_channel_.async_receive(asio::use_awaitable);
+                co_await stream_->async_send_buf(asio::buffer(buf));
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                rfbMessagesShutdown();
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            rfbMessagesShutdown();
+        }
+        
+        co_return;
+    }
+
+    void RFB::ClientDecoder::asyncSendBuf(BinaryBuf&& buf) const {
+        if(! packets_channel_.is_open()) {
+            Application::warning("{}: packets channel invalid", NS_FuncNameV);
+            return;
+        }
+
+        packets_channel_.async_send(system::error_code(), std::move(buf), asio::detached);
     }
 
     std::list<int> RFB::ClientDecoder::supportedEncodings(bool extclip) {
@@ -513,12 +537,12 @@ namespace LTSM {
 
             if(! (continueUpdatesSupport && continueUpdatesProcessed)) {
                 // request incr update
-                co_await sendFrameBufferUpdateAwait(true);
+                sendFrameBufferUpdate(true);
             }
         }
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::rfbMessagesLoopAwait(void) {
+    asio::awaitable<void> RFB::ClientDecoder::rfbRecvMessagesAwait(void) {
         auto encodings = supportedEncodings();
         // added pseudo encodings
         encodings.push_front(ENCODING_LAST_RECT);
@@ -560,18 +584,17 @@ namespace LTSM {
             }
         }
 
-        co_await sendEncodingsAwait(encodings);
-        co_await sendPixelFormatAwait();
+        sendEncodings(encodings);
+        sendPixelFormat();
 
         // request full update
-        co_await sendFrameBufferUpdateAwait(false);
+        sendFrameBufferUpdate(false);
         Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
 
         // request incr update job
         asio::co_spawn(rfb_strand_, rfbRequestIncrUpdate(), asio::detached);
 
         while(true) {
-            co_await fixed_dispatch_await(rfb_strand_);
             int msgType = co_await stream_->async_recv_byte();
 
             switch(msgType) {
@@ -596,7 +619,7 @@ namespace LTSM {
                     break;
 
                 case SERVER_CONTINUOUS_UPDATES:
-                    co_await recvContinuousUpdatesEventAwait();
+                    recvContinuousUpdatesEvent();
                     break;
 
                 default: {
@@ -627,14 +650,14 @@ namespace LTSM {
 #ifdef LTSM_DECODING_FFMPEG
         // event background
         if(isDecoderFFmpeg()) {
-            asio::dispatch(rfb_strand_, [this, sz = dsz]() {
+            asio::post(rfb_strand_, [this, sz = dsz]() {
                 this->decoder_->resizedEvent(sz);
             });
         }
 #endif
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendPixelFormatAwait(void) const {
+    void RFB::ClientDecoder::sendPixelFormat(void) const {
         const auto & pf = clientFormat();
         Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({:#010x}), green({:#010x}), blue({:#010x})",
                            NS_FuncNameV, pf.bitsPerPixel(), (int) platformBigEndian(),
@@ -659,12 +682,10 @@ namespace LTSM {
             writeInt8(pf.bshift()).
             writeZero(3); // padding
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendEncodingsAwait(const std::list<int> & encodings) const {
+    void RFB::ClientDecoder::sendEncodings(const std::list<int> & encodings) const {
         for(const auto & type : encodings) {
             Application::debug(DebugType::Rfb, "{}: {}", NS_FuncNameV, encodingName(type));
         }
@@ -679,18 +700,15 @@ namespace LTSM {
             sb.writeIntBE32(val);
         }
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(bool incr) const {
+    void RFB::ClientDecoder::sendFrameBufferUpdate(bool incr) const {
         auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
-        co_await sendFrameBufferUpdateAwait(crt, incr);
-        co_return;
+        sendFrameBufferUpdate(crt, incr);
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendFrameBufferUpdateAwait(const XCB::Region & reg, bool incr) const {
+    void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr) const {
         Application::debug(DebugType::Rfb, "{}: region: {}", NS_FuncNameV, reg);
 
         StreamBuf sb(10);
@@ -702,12 +720,10 @@ namespace LTSM {
             writeIntBE16(reg.width).
             writeIntBE16(reg.height);
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendContinuousUpdatesAwait(bool enable, XCB::Region reg) const {
+    void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region& reg) const {
         Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
                            (enable ? "enable" : "disable"), reg);
 
@@ -720,13 +736,11 @@ namespace LTSM {
             writeIntBE16(reg.width).
             writeIntBE16(reg.height);
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
+        asyncSendBuf(std::move(sb.rawbuf()));
         continueUpdatesProcessed = enable;
-        co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendSetDesktopSizeAwait(const XCB::Size & wsz) const {
+    void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz) const {
         Application::info("{}: size: {}", NS_FuncNameV, wsz);
 
         StreamBuf sb(24);
@@ -747,12 +761,10 @@ namespace LTSM {
             // flag
             writeIntBE32(0);
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const {
+    void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym, uint16_t scancode) const {
         Application::debug(DebugType::Rfb, "{}: keysym: {:#010x}, pressed: {}", NS_FuncNameV, keysym, (int) pressed);
 
         // support: ENCODING_LTSM_KEYB
@@ -772,12 +784,10 @@ namespace LTSM {
                 writeIntBE32(keysym);
         }
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const {
+    void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) const {
         Application::debug(DebugType::Rfb, "{}: pointer: {}, buttons: {:#04x}", NS_FuncNameV, XCB::Point(posx, posy), buttons);
 
         StreamBuf sb(6);
@@ -787,12 +797,10 @@ namespace LTSM {
             writeIntBE16(posx).
             writeIntBE16(posy);
 
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendCutTextAwait(std::span<const uint8_t> buf, bool ext) const {
+    void RFB::ClientDecoder::sendCutText(std::span<const uint8_t> buf, bool ext) const {
         StreamBuf sb(8);
 
         sb.writeInt8(RFB::CLIENT_CUT_TEXT).
@@ -814,14 +822,11 @@ namespace LTSM {
             sb.writeIntBE32(buf.size());
         }
 
-        sb.write(buf);
-
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
-        co_return;
+        asyncSendBuf(std::move(sb.rawbuf()));
+        asyncSendBuf(buf);
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::sendLtsmChannelAwait(CID channel, std::span<const uint8_t> buf) const {
+    void RFB::ClientDecoder::sendLtsmChannelDataPriv(CID channel, std::vector<uint8_t>&& buf) const {
         Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", NS_FuncNameV, channel, buf.size());
 
         StreamBuf sb(5);
@@ -840,18 +845,13 @@ namespace LTSM {
                            NS_FuncNameV, channel, buf.size(), str);
         }
 
-        sb.write(buf);
-
-        co_await fixed_dispatch_await(rfb_strand_);
-        stream_->sync_send_buf(asio::buffer(sb.rawbuf()));
+        asyncSendBuf(std::move(sb.rawbuf()));
+        asyncSendBuf(buf);
 
         ChannelBase::sendChannelDataSuccess(channel, buf.size());
-        co_return;
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvLtsmProtoAwait(void) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
         if(0 == server_ltsm_version_) {
             Application::error("{}: server not supported: {}", NS_FuncNameV, RFB::encodingName(RFB::ENCODING_LTSM));
             throw system::system_error(asio::error::operation_aborted);
@@ -875,7 +875,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvFBUpdateEventAwait(void) {
-        co_await fixed_dispatch_await(rfb_strand_);
         auto start = std::chrono::steady_clock::now();
         // format -
         // u8: padding
@@ -902,7 +901,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvFBUpdateRegionAwait(void) {
-        co_await fixed_dispatch_await(rfb_strand_);
         // region format -
         // u16: rx
         // u16: ry
@@ -956,8 +954,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmAwait(const XCB::Region & reg) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
         uint32_t type = co_await stream_->async_recv_be32();
         Application::info("{}: success, type: {}", NS_FuncNameV, type);
 
@@ -989,11 +985,9 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingLtsmCursorAwait(const XCB::Region & reg) {
-        co_await fixed_dispatch_await(rfb_strand_);
         Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
 
         BinaryBuf buf;
-
         const uint32_t cursorId = co_await stream_->async_recv_be32();
         const uint32_t rawsz = co_await stream_->async_recv_be32();
 
@@ -1013,9 +1007,8 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingRichCursorAwait(const XCB::Region & reg) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
         Application::debug(DebugType::Rfb, "{}: decoding region: {}", NS_FuncNameV, reg);
+
         const auto bufsz = static_cast<uint32_t>(reg.width) * reg.height * clientFormat().bytePerPixel();
         const auto masksz = std::floor((static_cast<uint32_t>(reg.width) + 7) / 8) * reg.height;
 
@@ -1029,9 +1022,8 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingExtDesktopSizeAwait(int status, int err, const XCB::Size & sz) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
         Application::info("{}: status: {}, error: {}, size: {}", NS_FuncNameV, status, err, sz);
+
         const uint8_t numOfScreens = co_await stream_->async_recv_byte();
         [[maybe_unused]] const uint8_t pad1 = co_await stream_->async_recv_byte();
         [[maybe_unused]] const uint8_t pad2 = co_await stream_->async_recv_byte();
@@ -1061,8 +1053,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvColorMapEventAwait(void) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
         [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
         const uint16_t firstColor = co_await stream_->async_recv_be16();
         const uint16_t numColors = co_await stream_->async_recv_be16();
@@ -1096,8 +1086,6 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvCutTextEventAwait(void) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
         [[maybe_unused]] const auto pad1 = co_await stream_->async_recv_byte();
         [[maybe_unused]] const auto pad2 = co_await stream_->async_recv_byte();
         [[maybe_unused]] const auto pad3 = co_await stream_->async_recv_byte();
@@ -1123,24 +1111,19 @@ namespace LTSM {
             });
         } else {
             Application::debug(DebugType::Rfb, "{}: length: {}, extclip", NS_FuncNameV, length);
-            co_await fixed_dispatch_await(xcb_strand_);
+            co_await asio::dispatch(xcb_strand_, asio::use_awaitable);
             co_await recvExtClipboardCapsAwait(buffer);
         }
         co_return;
     }
 
-    asio::awaitable<void> RFB::ClientDecoder::recvContinuousUpdatesEventAwait(void) {
-        co_await fixed_dispatch_await(rfb_strand_);
-
+    void RFB::ClientDecoder::recvContinuousUpdatesEvent(void) {
         Application::debug(DebugType::Rfb, "{}: message", NS_FuncNameV);
         continueUpdatesSupport = true;
-        auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
-        asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(false, std::move(crt)), asio::detached);
-        co_return;
+        sendContinuousUpdates(false, XCB::Region(clientSize()));
     }
 
     asio::awaitable<void> RFB::ClientDecoder::recvDecodingUpdateRegionAwait(int type, const XCB::Region & reg) {
-        co_await fixed_dispatch_await(rfb_strand_);
 
         if(! decoder_ || type != decoder_->type()) {
             switch(type) {

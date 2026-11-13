@@ -523,34 +523,28 @@ namespace LTSM {
             return strand_;
         }
 
-        boost::asio::awaitable<bool> sendSystemTransferFiles(std::forward_list<std::string>);
+        bool sendSystemTransferFiles(std::forward_list<std::string>&&) const;
 
         void sendSystemChannelOpen(CID, const Channel::UrlMode &, const Channel::Opts &);
         void sendSystemChannelClose(CID);
         void sendSystemChannelConnected(CID, int flags, int error);
         void sendSystemChannelError(CID, int code, const std::string &);
 
-        virtual boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const = 0;
-        void sendChannelDataSuccess(CID channel, size_t val) const;
+        virtual void sendLtsmChannelDataPriv(CID, std::vector<uint8_t>&&) const = 0;
 
-        template <typename T>
-        void sendLtsmChannelData(CID channel, T&& buf) const {
-            // ltsm_async_socket.h
-            using DecayedT = std::decay_t<T>;
-            if constexpr (has_data_size_v<DecayedT>) {
-                if (buf.empty()) {
-                    return;
-                }
-                assert(0xFFFF >= buf.size());
-                boost::asio::co_spawn(strand_, [this, channel, buf = std::move(buf)]() -> boost::asio::awaitable<void> {
-                    auto bytes_span = std::span{reinterpret_cast<const uint8_t*>(buf.data()), buf.size()};
-                    co_await sendLtsmChannelAwait(channel, bytes_span);
-                    co_return;
-                }, boost::asio::detached);
-            } else {
-                static_assert(always_false_v<T>, "invalid value type for has_data_size");
-            }
+        void sendLtsmChannelData(CID cid, std::vector<uint8_t>&& buf) const {
+            return sendLtsmChannelDataPriv(cid, std::move(buf));
         }
+
+        void sendLtsmChannelData(CID cid, std::span<const uint8_t> span) const {
+            return sendLtsmChannelDataPriv(cid, std::vector<uint8_t>{std::begin(span), std::end(span)});
+        }
+
+        void sendLtsmChannelData(CID cid, const std::string& str) const {
+            return sendLtsmChannelDataPriv(cid, std::vector<uint8_t>{std::begin(str), std::end(str)});
+        }
+
+        void sendChannelDataSuccess(CID channel, size_t val) const;
 
         virtual bool serverSide(void) const {
             return false;

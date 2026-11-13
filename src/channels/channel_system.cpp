@@ -384,7 +384,7 @@ void ChannelBase::systemChannelErrorEvent(const JsonObject & jo) {
     channelErrorNotify(channel, code, err);
 }
 
-asio::awaitable<bool> ChannelBase::sendSystemTransferFiles(std::forward_list<std::string> files) {
+bool ChannelBase::sendSystemTransferFiles(std::forward_list<std::string>&& files) const {
     Application::info("{}", NS_FuncNameV);
 
     std::erase_if(files, [](auto & file) {
@@ -406,7 +406,7 @@ asio::awaitable<bool> ChannelBase::sendSystemTransferFiles(std::forward_list<std
 
     if(files.empty()) {
         Application::error("{}: failed,  empty list", NS_FuncNameV);
-        co_return false;
+        return false;
     }
 
     JsonObjectStream jo;
@@ -423,9 +423,9 @@ asio::awaitable<bool> ChannelBase::sendSystemTransferFiles(std::forward_list<std
     }
 
     jo.push("files", ja.flush());
-
     sendLtsmChannelData(ChannelTypeSystem, jo.flush());
-    co_return true;
+
+    return true;
 }
 
 void ChannelBase::createChannelAudio(CID channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
@@ -1240,7 +1240,7 @@ asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
             }
 
             // send to remote
-            co_await getOwner()->sendLtsmChannelAwait(channel(), buf);
+            getOwner()->sendLtsmChannelData(channel(), std::move(buf));
         }
     } catch(const system::system_error& err) {
         auto ec = err.code();

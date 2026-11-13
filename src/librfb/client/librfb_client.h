@@ -31,14 +31,20 @@
 #include "librfb_decodings.h"
 #include "ltsm_async_socket.h"
 
+#include <boost/asio/experimental/channel.hpp>
+
 namespace LTSM {
     namespace RFB {
+        using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+        constexpr int TransferChannelSize = 4;
+
         /* ClientDecoder */
         class ClientDecoder : public ChannelClient, public DecoderRender, public ExtClip {
 
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer incr_update_timer_;
+            mutable TransferChannel packets_channel_;
 
             std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
             std::unique_ptr<DecodingBase> decoder_;
@@ -73,15 +79,15 @@ namespace LTSM {
             boost::asio::awaitable<bool> authGssApiInitAwait(const SecurityInfo &);
 #endif
 
-            boost::asio::awaitable<void> sendPixelFormatAwait(void) const;
-            boost::asio::awaitable<void> sendEncodingsAwait(const std::list<int> &) const;
-            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(bool incr) const;
-            boost::asio::awaitable<void> sendFrameBufferUpdateAwait(const XCB::Region &, bool incr) const;
-            boost::asio::awaitable<void> sendContinuousUpdatesAwait(bool enable, XCB::Region) const;
-            boost::asio::awaitable<void> sendSetDesktopSizeAwait(const XCB::Size &) const;
-            boost::asio::awaitable<void> sendCutTextAwait(std::span<const uint8_t>, bool ext) const;
-            boost::asio::awaitable<void> sendKeyEventAwait(bool pressed, uint32_t keysym, uint16_t scancode) const;
-            boost::asio::awaitable<void> sendPointerEventAwait(uint8_t buttons, uint16_t posx, uint16_t posy) const;
+            void sendPixelFormat(void) const;
+            void sendEncodings(const std::list<int> &) const;
+            void sendFrameBufferUpdate(bool incr) const;
+            void sendFrameBufferUpdate(const XCB::Region &, bool incr) const;
+            void sendContinuousUpdates(bool enable, const XCB::Region&) const;
+            void sendSetDesktopSize(const XCB::Size &) const;
+            void sendCutText(std::span<const uint8_t>, bool ext) const;
+            void sendKeyEvent(bool pressed, uint32_t keysym, uint16_t scancode) const;
+            void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) const;
 
             boost::asio::awaitable<void> rfbRequestIncrUpdate(void);
             boost::asio::awaitable<void> recvFBUpdateRegionAwait(void);
@@ -91,7 +97,7 @@ namespace LTSM {
             boost::asio::awaitable<void> recvColorMapEventAwait(void);
             boost::asio::awaitable<void> recvBellEventAwait(void);
             boost::asio::awaitable<void> recvCutTextEventAwait(void);
-            boost::asio::awaitable<void> recvContinuousUpdatesEventAwait(void);
+            void recvContinuousUpdatesEvent(void);
 
             boost::asio::awaitable<void> recvDecodingLtsmAwait(const XCB::Region &);
             boost::asio::awaitable<void> recvDecodingLastRectAwait(const XCB::Region &);
@@ -102,14 +108,26 @@ namespace LTSM {
 
             boost::asio::awaitable<void> rfbHostConnectAwait(std::string_view host, uint16_t port, bool no_delay = false);
             boost::asio::awaitable<void> rfbHandshakeAwait(const SecurityInfo &);
-            boost::asio::awaitable<void> rfbMessagesLoopAwait(void);
+            boost::asio::awaitable<void> rfbRecvMessagesAwait(void);
+            boost::asio::awaitable<void> rfbSendMessagesAwait(void);
+
+            void asyncSendBuf(BinaryBuf&&) const;
+
+            void asyncSendBuf(std::span<const uint8_t> span) const {
+                asyncSendBuf(BinaryBuf(span));
+            }
+
+            void asyncSendBuf(std::span<const char> span) const {
+                asyncSendBuf(BinaryBuf(span));
+            }
 
           public:
             ClientDecoder(const boost::asio::any_io_executor& ctx)
                 : ChannelClient(ctx)
                 , rfb_strand_{ctx}
                 , xcb_strand_{ctx}
-                , incr_update_timer_{rfb_strand_} {
+                , incr_update_timer_{rfb_strand_}
+                , packets_channel_{ctx, TransferChannelSize} {
             }
 
             inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }
@@ -120,7 +138,7 @@ namespace LTSM {
             bool isContinueUpdatesProcessed(void) const;
             bool isDecoderFFmpeg(void) const;
 
-            boost::asio::awaitable<void> sendLtsmChannelAwait(CID, std::span<const uint8_t>) const final;
+            void sendLtsmChannelDataPriv(CID, std::vector<uint8_t>&&) const final;
 
             static std::list<int> supportedEncodings(bool extclip = false);
 
@@ -131,7 +149,7 @@ namespace LTSM {
             virtual void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                     const std::vector<RFB::ScreenInfo> &) { /* empty */ }
 
-            virtual boost::asio::awaitable<void> clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) { co_return; }
+            virtual void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
 
             virtual void clientRecvFBUpdateEvent(void) { /* empty */ }
             virtual void clientRecvSetColorMapEvent(const std::vector<Color> &) { /* empty */ }
