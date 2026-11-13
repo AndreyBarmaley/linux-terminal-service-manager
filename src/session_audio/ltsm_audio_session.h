@@ -82,6 +82,7 @@ namespace LTSM {
 
     using AudioPackets = std::vector<std::unique_ptr<AudioPacket>>;
     using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+    constexpr int TransferChannelSize = 4;
 
     class AudioClient : std::enable_shared_from_this<AudioClient> {
         mutable AsyncLocalStream stream_;
@@ -110,7 +111,7 @@ namespace LTSM {
 
     public:
         AudioClient(const boost::asio::any_io_executor & ex)
-            : stream_(ex), packets_channel_{ex, 4}, tm_wait_engine_{ex} {
+            : stream_(ex), packets_channel_{ex, TransferChannelSize}, tm_wait_engine_{ex} {
         }
         ~AudioClient() = default;
     
