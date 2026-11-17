@@ -278,7 +278,7 @@ namespace LTSM {
 
         RFB::FrameBufferPackets packets;
         packets.emplace_back(std::move(buf));
-        
+
         return packets;
     }
 
@@ -306,7 +306,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingRRE::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {
@@ -418,7 +420,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingHexTile::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {
@@ -560,7 +564,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingTRLE::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {
@@ -745,7 +751,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingZRLE::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {
@@ -877,7 +885,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingLZ4::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {
@@ -1022,7 +1032,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingTJPG::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {
@@ -1120,7 +1132,9 @@ namespace LTSM {
         auto regions = reg0.divideBlocks(bsz);
 
         auto runJob = std::bind(&EncodingQOI::writeRegionTo, this, st, top, std::cref(fb), std::placeholders::_1);
+
         FrameBufferPackets packets;
+        packets.reserve(regions.size());
 
         // move job to thread pool
         for(auto & reg : regions) {

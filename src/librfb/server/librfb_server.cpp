@@ -656,23 +656,29 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ServerEncoder::sendQueueAwait(void) {
-        auto buf = co_await packets_channel_.async_receive(asio::use_awaitable);
-        co_await stream_->async_send_buf(asio::buffer(buf));
-        // check queue
-        bool send = false;
-        do {
-            send = packets_channel_.try_receive(
+        boost::container::small_vector<BinaryBuf, TransferChannelSize> buffers;
+        for(;;) {
+            bool send = packets_channel_.try_receive(
                 [&](boost::system::error_code ec, auto tmp) {
                     if(ec) {
                         throw boost::system::system_error(ec, "try_receive failed");
                     }
-                    buf = std::move(tmp);
+                    buffers.push_back(std::move(tmp));
                 }
             );
-            if(send) {
-                co_await stream_->async_send_buf(asio::buffer(buf));
+
+            if(! send) {
+                break;
             }
-        } while(send);
+        }
+
+        if(buffers.size()) {
+            co_await stream_->async_send_sequence(buffers.begin(), buffers.end());
+        } else{
+            auto ex = co_await asio::this_coro::executor;
+            asio::steady_timer tm_delay{ex, 1ms};
+            co_await tm_delay.async_wait(asio::use_awaitable);
+        }
 
         co_return;
     }
@@ -683,7 +689,13 @@ namespace LTSM {
             return;
         }
 
-        packets_channel_.async_send(system::error_code(), std::move(buf), asio::detached);
+        while(true) {
+            if(packets_channel_.try_send(system::error_code(), std::move(buf))) {
+                return;
+            }
+            Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
+            std::this_thread::sleep_for(1ms);
+        }
     }
 
     asio::awaitable<void> RFB::ServerEncoder::recvRfbMessageAwait(void) {
@@ -1156,8 +1168,9 @@ namespace LTSM {
         header[1] = 0;
         // regions: be16
         endian::store_big_u16(std::addressof(header[2]), packets.size());
-        // added header
-        packets.emplace_front(std::move(header));
+
+        // send header
+        asyncSendBuf(std::move(header));
 
         for(const auto & pkt: packets) {
             asyncSendBuf(std::move(pkt));
