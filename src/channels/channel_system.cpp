@@ -41,6 +41,8 @@
 #include "ltsm_librfb.h"
 #include "ltsm_json_wrapper.h"
 
+#include <boost/asio/experimental/awaitable_operators.hpp>
+
 using namespace std::chrono_literals;
 using namespace boost;
 using namespace LTSM;
@@ -265,6 +267,7 @@ void ChannelBase::destroyChannel(CID channel, bool sendEvent) {
         if(! sendEvent) {
             ptr->setSkipSendClose();
         }
+        ptr->cancel();
         ptr.reset();
         Application::info("{}: id: {}, {}", NS_FuncNameV, channel, "channel removed");
     } else {
@@ -275,6 +278,7 @@ void ChannelBase::destroyChannel(CID channel, bool sendEvent) {
 void ChannelBase::shutdownChannels(void) {
     for(auto & ptr : channels_) {
         if(ptr) {
+            ptr->cancel();
             ptr.reset();
         }
     }
@@ -843,7 +847,7 @@ asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clie
 
     auto sig = std::make_unique<asio::cancellation_signal>();
     const auto& slot = sig->slot();
-    listeners_[serverOpts.url.data()] = std::move(sig);
+    listeners_[serverOpts.url] = std::move(sig);
 
     try {
         Application::info("{}: server url: {}, client url: {}", NS_FuncNameV, serverOpts.url, clientOpts.url);
@@ -862,7 +866,7 @@ asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clie
             // wait accept
             co_await asio::co_spawn(ex,
                 acceptorAcceptAwait(std::move(acceptor), job),
-                boost::asio::bind_cancellation_slot(slot, boost::asio::use_awaitable));
+                asio::bind_cancellation_slot(slot, asio::use_awaitable));
         } else {
             auto endpoint = createTcpEndpoint(serverOpts);
             using protocol = asio::ip::tcp;
@@ -878,7 +882,7 @@ asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clie
             // wait accept
             co_await asio::co_spawn(ex,
                 acceptorAcceptAwait(std::move(acceptor), job),
-                boost::asio::bind_cancellation_slot(slot, boost::asio::use_awaitable));
+                asio::bind_cancellation_slot(slot, asio::use_awaitable));
         }
     } catch(const system::system_error& err) {
         if(auto ec = err.code(); ec != asio::error::operation_aborted) {
@@ -1139,7 +1143,7 @@ bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {
 
 /// ConnectorBase
 Channel::ConnectorBase::~ConnectorBase() {
-    Application::debug(DebugType::Channels, "channel[{}] write {} bytes, read {} bytes", wstat_, rstat_);
+    Application::debug(DebugType::Channels, "channel[{}] write {} bytes, read {} bytes", channel(), wstat_, rstat_);
 }
 
 bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
@@ -1173,54 +1177,26 @@ std::pair<std::chrono::milliseconds,uint32_t> Channel::ConnectorBase::speedInfo(
     }
 }
 
-/// ConnectorFD_R
-Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::ReadOnly, opts, srv),
-        sd_{srv.chan_strand(), fd}, tm_delay_{srv.chan_strand()} {
-    // read loop
-    asio::co_spawn(srv.chan_strand(), readLoopAwait(),
-        boost::asio::bind_cancellation_slot(read_cancel_.slot(), [this](std::exception_ptr ptr) {
-            loop_running_.store(false);
-        })
-    );
-}
-
-Channel::ConnectorFD_R::~ConnectorFD_R() {
-    sd_.cancel();
-    tm_delay_.cancel();
-    read_cancel_.emit(asio::cancellation_type::terminal);
-    // wait loop ended
-    if(loop_running_.load()) {
-        Application::debug(DebugType::Channels, "{}: wait ended", NS_FuncNameV);
-        while(loop_running_.load()) {
-            std::this_thread::yield();
-        }
+asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd) {
+    if(connectorStatus() != Channel::ConnectorStatus::Running) {
+        Application::error("{}: channel: {} not running", NS_FuncNameV, channel());
+        co_return;
     }
-}
 
-asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
-    loop_running_.store(true);
+    auto info = speedInfo();
+    std::vector<uint8_t> buf(info.second);
+
+    auto ex = co_await asio::this_coro::executor;
+    asio::steady_timer tm_delay{ex};
 
     try {
-        auto info = speedInfo();
-        std::vector<uint8_t> buf(info.second);
-
         for(;;) {
-            if(connectorStatus() == Channel::ConnectorStatus::Error) {
-                Application::error("{}: status error", NS_FuncNameV);
-                co_return;
-            }
-
-            tm_delay_.expires_after(info.first);
-            co_await tm_delay_.async_wait(asio::use_awaitable);
-
-            if(connectorStatus() != Channel::ConnectorStatus::Running) {
-                continue;
-            }
+            tm_delay.expires_after(info.first);
+            co_await tm_delay.async_wait(asio::use_awaitable);
 
             // read local
-            auto transferred = co_await sd_.async_read_some(asio::buffer(buf), asio::use_awaitable);
-
+            buf.resize(info.second);
+            auto transferred = co_await sd.async_read_some(asio::buffer(buf), asio::use_awaitable);
             buf.resize(transferred);
 
             if(isZlib()) {
@@ -1245,37 +1221,31 @@ asio::awaitable<void> Channel::ConnectorFD_R::readLoopAwait(void) {
         getOwner()->sendSystemChannelError(channel(), -1, std::string(NS_FuncNameV).append(": ").append(err.what()));
     }
 
+    sd.close();
     setConnectorStatus(ConnectorStatus::Error);
     co_return;
 }
 
-/// ConnectorFD_W
-Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::WriteOnly, opts, srv), sd_{srv.chan_strand(), fd} {
-}
-
-Channel::ConnectorFD_W::~ConnectorFD_W() {
-    sd_.cancel();
-    // wait all write process
-    if(auto num = write_process_.load()) {
-        Application::info("{}: wait ended, process: {}", NS_FuncNameV, num);
-        while(write_process_.load()) {
-            std::this_thread::yield();
-        }
+asio::awaitable<void> Channel::ConnectorBase::writeLoopAwait(TransferChannel& packets_channel, StreamDescriptor& sd) {
+    if(connectorStatus() != Channel::ConnectorStatus::Running) {
+        Application::error("{}: channel: {} not running", NS_FuncNameV, channel());
+        co_return;
     }
-}
 
-boost::asio::awaitable<void> Channel::ConnectorFD_W::writeDataAwait(std::vector<uint8_t> buf) {
     try {
-        if(isZlib()) {
-            auto buf2 = ZLib::inflate(buf);
-            co_await asio::async_write(sd_, asio::const_buffer(buf2.data(), buf2.size()), boost::asio::transfer_all(), asio::use_awaitable);
-        } else {
-            co_await asio::async_write(sd_, asio::const_buffer(buf.data(), buf.size()), boost::asio::transfer_all(), asio::use_awaitable);
+        for(;;) {
+            const auto buf1 = co_await packets_channel.async_receive(asio::use_awaitable);
+
+            if(isZlib()) {
+                auto buf2 = ZLib::inflate(buf1);
+                co_await asio::async_write(sd, asio::buffer(buf2), asio::transfer_all(), asio::use_awaitable);
+            } else {
+                co_await asio::async_write(sd, asio::buffer(buf1), asio::transfer_all(), asio::use_awaitable);
+            }
         }
     } catch(const system::system_error& err) {
         auto ec = err.code();
-        if(ec == asio::error::operation_aborted) {
+        if(ec == asio::error::operation_aborted || ec == asio::error::eof) {
             if(! skipSendClose()) {
                 getOwner()->sendSystemChannelClose(channel());
             }
@@ -1283,41 +1253,100 @@ boost::asio::awaitable<void> Channel::ConnectorFD_W::writeDataAwait(std::vector<
             Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
             getOwner()->sendSystemChannelError(channel(), ec.value(), std::string(NS_FuncNameV).append(": ").append(ec.message()));
         }
-        setConnectorStatus(ConnectorStatus::Error);
     } catch(const std::exception& err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         getOwner()->sendSystemChannelError(channel(), -1, std::string(NS_FuncNameV).append(": ").append(err.what()));
-        setConnectorStatus(ConnectorStatus::Error);
     }
 
+    packets_channel.close();
+    sd.close();
+    setConnectorStatus(ConnectorStatus::Error);
     co_return;
 }
 
+/// ConnectorFD_R
+Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv)
+    : ConnectorBase(ch, ConnectorMode::ReadOnly, opts, srv), sd_{srv.chan_strand(), fd} {
+}
+
+void Channel::ConnectorFD_R::connectorRunningEvent(void) {
+    Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
+    auto ex = getOwner()->chan_strand();
+    // read loop
+    asio::co_spawn(ex, [self=shared_from_this()]() -> asio::awaitable<void> {
+        auto& fdr = static_cast<ConnectorFD_R&>(*self);
+        co_await self->readLoopAwait(fdr.sd_);
+        co_return;
+    }, asio::bind_cancellation_slot(loop_cancel_.slot(), asio::detached));
+}
+
+void Channel::ConnectorFD_R::cancel(void) {
+    loop_cancel_.emit(asio::cancellation_type::terminal);
+}
+
+/// ConnectorFD_W
+Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv)
+   : ConnectorBase(ch, ConnectorMode::WriteOnly, opts, srv), packets_channel_{srv.chan_strand(), TransferChannelSize}, sd_{srv.chan_strand(), fd} {
+}
+
+void Channel::ConnectorFD_W::connectorRunningEvent(void) {
+    Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
+    auto ex = getOwner()->chan_strand();
+    // write loop
+    asio::co_spawn(ex, [self=shared_from_this()]() -> asio::awaitable<void> {
+        auto& fdw = static_cast<ConnectorFD_W&>(*self);
+        co_await self->writeLoopAwait(fdw.packets_channel_, fdw.sd_);
+        co_return;
+    }, asio::bind_cancellation_slot(loop_cancel_.slot(), asio::detached));
+}
+
+void Channel::ConnectorFD_W::cancel(void) {
+    packets_channel_.cancel();
+    loop_cancel_.emit(asio::cancellation_type::terminal);
+}
+
 void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
-    if(10 < write_process_.load()) {
-        Application::error("{}: overload", NS_FuncNameV);
-        throw channel_error(NS_FuncNameS);
+    if(! packets_channel_.is_open()) {
+        return;
     }
 
-    write_process_.fetch_add(1);
-
-    asio::co_spawn(getOwner()->chan_strand(), writeDataAwait(std::move(buf)),
-        [this](std::exception_ptr ptr) {
-            // complete token
-            write_process_.fetch_sub(1);
-        }
-    );
+    if(connectorStatus() == Channel::ConnectorStatus::Running) {
+        Application::debug(DebugType::Channels, "{}: data size: {}", NS_FuncNameV, buf.size());
+        packets_channel_.async_send(system::error_code(), BinaryBuf(std::move(buf)), asio::detached);
+    }
 }
 
 /// ConnectorFD_RW
 Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-    : ConnectorFD_R(ch, fd, opts, srv), fdw_(ch, dup(fd), opts, srv) {
-    // overwrite mode
-    setConnectorMode(ConnectorMode::ReadWrite);
+   : ConnectorBase(ch, ConnectorMode::ReadWrite, opts, srv), packets_channel_{srv.chan_strand(), TransferChannelSize}, sd_{srv.chan_strand(), fd} {
+}
+
+void Channel::ConnectorFD_RW::connectorRunningEvent(void) {
+    Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
+    auto ex = getOwner()->chan_strand();
+    // read loop
+    asio::co_spawn(ex, [self=shared_from_this()]() -> asio::awaitable<void> {
+        auto& fdrw = static_cast<ConnectorFD_RW&>(*self);
+        using namespace boost::asio::experimental::awaitable_operators;
+        co_await (self->readLoopAwait(fdrw.sd_) || self->writeLoopAwait(fdrw.packets_channel_, fdrw.sd_));
+        co_return;
+    }, asio::bind_cancellation_slot(loop_cancel_.slot(), asio::detached));
+}
+
+void Channel::ConnectorFD_RW::cancel(void) {
+    packets_channel_.cancel();
+    loop_cancel_.emit(asio::cancellation_type::terminal);
 }
 
 void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
-    fdw_.pushData(std::move(buf));
+    if(! packets_channel_.is_open()) {
+        return;
+    }
+
+    if(connectorStatus() == Channel::ConnectorStatus::Running) {
+        Application::debug(DebugType::Channels, "{}: data size: {}", NS_FuncNameV, buf.size());
+        packets_channel_.async_send(system::error_code(), BinaryBuf(std::move(buf)), asio::detached);
+    }
 }
 
 // ConnectorCMD_W
@@ -1383,15 +1412,15 @@ Channel::createUnixConnector(CID channel, const std::filesystem::path & path, co
     }
 
     if(mode == ConnectorMode::ReadWrite) {
-        return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_RW>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1411,15 +1440,15 @@ Channel::createTcpConnector(CID channel, const std::string & ipaddr, uint16_t po
     }
 
     if(mode == ConnectorMode::ReadWrite) {
-        return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_RW>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1438,15 +1467,15 @@ Channel::createFdConnector(CID channel, int fd, const ConnectorMode & mode, cons
     }
 
     if(mode == ConnectorMode::ReadWrite) {
-        return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_RW>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1505,15 +1534,15 @@ Channel::createFileConnector(CID channel, const std::filesystem::path & path, co
     }
 
     if(mode == ConnectorMode::ReadWrite) {
-        return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_RW>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorFD_R>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_R>(channel, fd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorFD_W>(channel, fd, chOpts, sender);
+        return std::make_shared<ConnectorFD_W>(channel, fd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");
@@ -1564,11 +1593,11 @@ Channel::createCommandConnector(CID channel, const std::string & runcmd, const C
     }
 
     if(mode == ConnectorMode::ReadOnly) {
-        return std::make_unique<ConnectorCMD_R>(channel, fcmd, chOpts, sender);
+        return std::make_shared<ConnectorCMD_R>(channel, fcmd, chOpts, sender);
     }
 
     if(mode == ConnectorMode::WriteOnly) {
-        return std::make_unique<ConnectorCMD_W>(channel, fcmd, chOpts, sender);
+        return std::make_shared<ConnectorCMD_W>(channel, fcmd, chOpts, sender);
     }
 
     Application::error("{}: id: {}, {} failed", NS_FuncNameV, channel, "mode");

@@ -41,6 +41,7 @@
 
 #undef D
 #include <boost/container/flat_map.hpp>
+#include <boost/asio/experimental/channel.hpp>
 
 #include "ltsm_audio.h"
 #include "ltsm_async_socket.h"
@@ -153,8 +154,12 @@ namespace LTSM {
             }
         };
 
+        using StreamDescriptor = boost::asio::posix::stream_descriptor;
+        using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+        constexpr int TransferChannelSize = 4;
+
         /// ConnectorBase
-        class ConnectorBase {
+        class ConnectorBase : public std::enable_shared_from_this<ConnectorBase> {
           private:
             std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
             ChannelBase* owner_ = nullptr;
@@ -187,7 +192,9 @@ namespace LTSM {
             virtual ~ConnectorBase();
 
             //
+            virtual void cancel(void) { /* empty */ }
             virtual void pushData(std::vector<uint8_t> &&) { /* empty */ }
+            virtual void connectorRunningEvent(void) { /* empty */ }
 
             bool isAllowSessionFor(bool user) const;
 
@@ -205,6 +212,9 @@ namespace LTSM {
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
                 status_.store(st);
+                if(Channel::ConnectorStatus::Running == st) {
+                    connectorRunningEvent();
+                }
             }
 
             inline Channel::ConnectorStatus connectorStatus(void) const {
@@ -253,48 +263,54 @@ namespace LTSM {
                 wstat_ += val;
             }
 
+            boost::asio::awaitable<void> writeLoopAwait(TransferChannel&, StreamDescriptor&);
+            boost::asio::awaitable<void> readLoopAwait(StreamDescriptor&);
         };
 
-        using ConnectorBasePtr = std::unique_ptr<ConnectorBase>;
+        using ConnectorBasePtr = std::shared_ptr<ConnectorBase>;
 
         // ConnectorFD_R
         class ConnectorFD_R : public ConnectorBase {
-            boost::asio::posix::stream_descriptor sd_;
-            boost::asio::steady_timer tm_delay_;
-            boost::asio::cancellation_signal read_cancel_;
-            std::atomic<bool> loop_running_{false};
+            StreamDescriptor sd_;
+            boost::asio::cancellation_signal loop_cancel_;
 
           protected:
-            boost::asio::awaitable<void> readLoopAwait(void);
 
           public:
             ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            ~ConnectorFD_R();
+            ~ConnectorFD_R() = default;
+
+            void cancel(void) override;
+            void connectorRunningEvent(void) override;
         };
 
         // ConnectorFD_W
         class ConnectorFD_W : public ConnectorBase {
-            boost::asio::posix::stream_descriptor sd_;
-            std::atomic<uint32_t> write_process_{0};
-
-          protected:
-            boost::asio::awaitable<void> writeDataAwait(std::vector<uint8_t>);
+            TransferChannel packets_channel_;
+            StreamDescriptor sd_;
+            boost::asio::cancellation_signal loop_cancel_;
 
           public:
             ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            ~ConnectorFD_W();
+            ~ConnectorFD_W() = default;
 
             void pushData(std::vector<uint8_t> &&) override;
+            void cancel(void) override;
+            void connectorRunningEvent(void) override;
         };
 
         // ConnectorFD_RW
-        class ConnectorFD_RW : public ConnectorFD_R {
-            ConnectorFD_W fdw_;
+        class ConnectorFD_RW : public ConnectorBase {
+            TransferChannel packets_channel_;
+            StreamDescriptor sd_;
+            boost::asio::cancellation_signal loop_cancel_;
 
           public:
             ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv);
 
             void pushData(std::vector<uint8_t> &&) override;
+            void cancel(void) override;
+            void connectorRunningEvent(void) override;
         };
 
         // ConnectorCMD_R
