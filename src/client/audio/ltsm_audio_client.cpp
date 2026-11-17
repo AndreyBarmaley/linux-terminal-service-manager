@@ -41,7 +41,7 @@
 using namespace std::chrono_literals;
 
 // createClientAudioConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioConnector(CID channel,
+LTSM::Channel::ConnectorBasePtr LTSM::Channel::createClientAudioConnector(CID channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));

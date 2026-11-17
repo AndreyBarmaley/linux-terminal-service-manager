@@ -156,7 +156,7 @@ namespace LTSM {
 
         using StreamDescriptor = boost::asio::posix::stream_descriptor;
         using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
-        constexpr int TransferChannelSize = 4;
+        constexpr int TransferChannelSize = 16;
 
         /// ConnectorBase
         class ConnectorBase : public std::enable_shared_from_this<ConnectorBase> {

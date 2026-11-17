@@ -36,7 +36,7 @@
 namespace LTSM {
     namespace RFB {
         using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
-        constexpr int TransferChannelSize = 4;
+        constexpr int TransferChannelSize = 16;
 
         /* ClientDecoder */
         class ClientDecoder : public ChannelClient, public DecoderRender, public ExtClip {
@@ -110,6 +110,7 @@ namespace LTSM {
             boost::asio::awaitable<void> rfbHandshakeAwait(const SecurityInfo &);
             boost::asio::awaitable<void> rfbRecvMessagesAwait(void);
             boost::asio::awaitable<void> rfbSendMessagesAwait(void);
+            boost::asio::awaitable<void> sendQueueAwait(void);
 
             void asyncSendBuf(BinaryBuf&&) const;
 

@@ -1312,7 +1312,13 @@ void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
 
     if(connectorStatus() == Channel::ConnectorStatus::Running) {
         Application::debug(DebugType::Channels, "{}: data size: {}", NS_FuncNameV, buf.size());
-        packets_channel_.async_send(system::error_code(), BinaryBuf(std::move(buf)), asio::detached);
+        while(true) {
+            if(packets_channel_.try_send(system::error_code(), std::move(buf))) {
+                return;
+            }
+            Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
+            std::this_thread::sleep_for(1ms);
+        }
     }
 }
 
@@ -1345,7 +1351,13 @@ void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
 
     if(connectorStatus() == Channel::ConnectorStatus::Running) {
         Application::debug(DebugType::Channels, "{}: data size: {}", NS_FuncNameV, buf.size());
-        packets_channel_.async_send(system::error_code(), BinaryBuf(std::move(buf)), asio::detached);
+        while(true) {
+            if(packets_channel_.try_send(system::error_code(), std::move(buf))) {
+                return;
+            }
+            Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
+            std::this_thread::sleep_for(1ms);
+        }
     }
 }
 

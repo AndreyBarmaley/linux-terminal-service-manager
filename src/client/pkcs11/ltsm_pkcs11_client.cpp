@@ -35,7 +35,7 @@
 using namespace std::chrono_literals;
 
 // createClientPkcs11Connector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(CID channel,
+LTSM::Channel::ConnectorBasePtr LTSM::Channel::createClientPkcs11Connector(CID channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));

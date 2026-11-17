@@ -159,7 +159,7 @@ namespace LTSM {
 }
 
 // createClientFuseConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(CID channel,
+LTSM::Channel::ConnectorBasePtr LTSM::Channel::createClientFuseConnector(CID channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));
