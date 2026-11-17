@@ -101,7 +101,12 @@ namespace LTSM {
 
             try {
                 co_await rfbHandshakeAwait(rfbsec);
-                co_await rfbMessagesLoopAwait();
+
+                // after rfbHandshake: start async send queue
+                asio::co_spawn(rfb_strand(), rfbSendMessagesAwait(),
+                    asio::bind_cancellation_slot(send_cancel_.slot(), asio::detached));
+                
+                co_await rfbRecvMessagesAwait();
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
@@ -134,6 +139,7 @@ namespace LTSM {
             PNG::save(*fbPtr, filename);
         }
 
+        send_cancel_.emit(asio::cancellation_type::terminal);
         RFB::ClientDecoder::rfbMessagesShutdown();
     }
 
@@ -141,11 +147,10 @@ namespace LTSM {
         return fbPtr->region().toSize();
     }
 
-    boost::asio::awaitable<void> Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
+    void Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
         // receive server pixel format
         auto format = PixelFormat(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), 0);
         fbPtr = std::make_unique<FrameBuffer>(XCB::Region(0, 0, wsz.width, wsz.height), format);
-        co_return;
     }
 
     void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel) const {

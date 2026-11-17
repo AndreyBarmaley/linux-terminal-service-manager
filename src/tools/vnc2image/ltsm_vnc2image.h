@@ -47,6 +47,7 @@ namespace LTSM {
     };
 
     class Vnc2Image : public BoostContext, public Application, protected RFB::ClientDecoder {
+        boost::asio::cancellation_signal send_cancel_;
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 
@@ -78,7 +79,7 @@ namespace LTSM {
       public:
         Vnc2Image(int argc, const char** argv);
 
-        boost::asio::awaitable<void> clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
 
         int start(void);

@@ -215,6 +215,10 @@ Channel::parseUrl(std::string_view url) {
         return std::make_pair(Channel::ConnectorType::Pkcs11, view2string(url.substr(9)));
     }
 
+    if(url.empty()) {
+        return std::make_pair(Channel::ConnectorType::Unknown, "");
+    }
+
     return std::make_pair(Channel::ConnectorType::Unknown, view2string(url));
 }
 

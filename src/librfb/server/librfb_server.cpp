@@ -1161,7 +1161,7 @@ namespace LTSM {
         auto packets = encoder_->getFrameBufferPackets(this, fb);
 
         // add header
-        BinaryBuf header(4, 0);
+        uint8_t header[] = {0, 0, 0, 0};
         // RFB: 6.5.1
         header[0] = RFB::SERVER_FB_UPDATE;
         // padding
@@ -1170,7 +1170,7 @@ namespace LTSM {
         endian::store_big_u16(std::addressof(header[2]), packets.size());
 
         // send header
-        asyncSendBuf(std::move(header));
+        asyncSendBuf(std::span{header, sizeof(header)});
 
         for(const auto & pkt: packets) {
             asyncSendBuf(std::move(pkt));
