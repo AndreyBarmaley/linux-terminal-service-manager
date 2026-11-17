@@ -43,8 +43,6 @@
 #include "ltsm_audio_pipewire.h"
 #endif
 
-#include <boost/asio/experimental/channel.hpp>
-
 namespace LTSM {
     using AudioBuffers = boost::container::small_vector<boost::asio::const_buffer, 3>;
 
@@ -81,13 +79,10 @@ namespace LTSM {
     };
 
     using AudioPackets = std::vector<std::unique_ptr<AudioPacket>>;
-    using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
-    constexpr int TransferChannelSize = 4;
 
     class AudioClient : std::enable_shared_from_this<AudioClient> {
         mutable AsyncLocalStream stream_;
-        TransferChannel packets_channel_;
-        boost::asio::steady_timer tm_wait_engine_;
+        boost::asio::steady_timer tm_wait_;
 
         const uint8_t channels_ = 2;
 
@@ -107,16 +102,16 @@ namespace LTSM {
 
         bool engineInit(void);
         void dataReadyNotify(std::span<const uint8_t>);
-        AudioPackets dataEncode(std::span<const uint8_t>);
+        AudioPackets encodePackets(std::span<const uint8_t>);
 
     public:
         AudioClient(const boost::asio::any_io_executor & ex)
-            : stream_(ex), packets_channel_{ex, TransferChannelSize}, tm_wait_engine_{ex} {
+            : stream_(ex), tm_wait_{ex} {
         }
         ~AudioClient() = default;
     
         boost::asio::awaitable<void> remoteHandshake(const std::string &, std::chrono::seconds connect_deadline);
-        boost::asio::awaitable<void> sendPackets(void);
+        boost::asio::awaitable<void> waitRunning(void);
         void cancel();
 
         bool socketPath(std::string_view path) const {

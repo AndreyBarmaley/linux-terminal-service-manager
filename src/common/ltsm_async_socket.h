@@ -262,6 +262,12 @@ class AsyncSocket : public AsyncSocketBase {
         }
     }
 
+    template <typename Buffers>
+    void sync_send_buffers(const Buffers& bufs) const {
+        boost::asio::write(const_cast<AsyncSocket&>(*this).socket(), bufs,
+                            boost::asio::transfer_all());
+    }
+
     [[nodiscard]] boost::asio::awaitable<void> async_recv_buf(void* ptr, size_t len) const final {
         if (len) {
             co_await boost::asio::async_read(const_cast<AsyncSocket&>(*this).socket(), boost::asio::buffer(ptr, len),

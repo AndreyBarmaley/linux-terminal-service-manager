@@ -161,8 +161,8 @@ namespace LTSM {
     asio::awaitable<void> AudioClient::timerWaitEngine(void)
     {
         for(;;) {
-            tm_wait_engine_.expires_after(300ms);
-            co_await tm_wait_engine_.async_wait(asio::use_awaitable);
+            tm_wait_.expires_after(300ms);
+            co_await tm_wait_.async_wait(asio::use_awaitable);
 
             if(engineInit()) {
                 co_return;
@@ -221,44 +221,40 @@ namespace LTSM {
     }
 
     void AudioClient::cancel() {
-        tm_wait_engine_.cancel();
-        packets_channel_.cancel();
+        tm_wait_.cancel();
         stream_.socket().cancel();
     }
 
     void AudioClient::dataReadyNotify(std::span<const uint8_t> span) {
         // this thread - from audio engine callback
-        if(! packets_channel_.is_open()) {
+        if(! stream_.socket().is_open()) {
             return;
         }
 
         Application::debug(DebugType::Audio, "{}: data size: {}", NS_FuncNameV, span.size());
-        packets_channel_.async_send(system::error_code(), BinaryBuf(span), asio::detached);
-    }
-
-    asio::awaitable<void> AudioClient::sendPackets(void) {
         try {
-            for(;;) {
-                const auto data = co_await packets_channel_.async_receive(asio::use_awaitable);
-                for(const auto & pkt : dataEncode(data)) {
-                    // send all buffers
-                    co_await stream_.async_send_buffers(pkt->buffers());
-                }
+            for(const auto & pkt : encodePackets(span)) {
+                // send all buffers
+                stream_.sync_send_buffers(pkt->buffers());
             }
         } catch(const system::system_error& err) {
             auto ec = err.code();
             if(ec != asio::error::operation_aborted) {
-                Application::error("{}: system error: `{}', code: {}",
-                        "AudioClient::dataReadyNotify", ec.message(), ec.value());
+                Application::error("{}: system error: `{}', code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
-            packets_channel_.close();
-            stream_.socket().close();
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
         }
+        stream_.socket().close();
+    }
 
+    asio::awaitable<void> AudioClient::waitRunning(void) {
+        tm_wait_.expires_at(std::chrono::steady_clock::time_point::max());
+        co_await tm_wait_.async_wait(asio::use_awaitable);
         co_return;
     }
 
-    AudioPackets AudioClient::dataEncode(std::span<const uint8_t> span) {
+    AudioPackets AudioClient::encodePackets(std::span<const uint8_t> span) {
         AudioPackets res; res.reserve(4);
 
         const bool silent = std::ranges::all_of(span, [](auto & val) {
@@ -278,21 +274,14 @@ namespace LTSM {
         // encode data
         encoder_->push(span);
 
-        try {
-            while(true) {
-                auto buf = encoder_->encode();
+        while(true) {
+            auto buf = encoder_->encode();
 
-                if(buf.empty()) {
-                    break;
-                }
-
-                res.emplace_back(std::make_unique<AudioPacketEnc>(std::move(buf)));
+            if(buf.empty()) {
+                break;
             }
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            packets_channel_.close();
-            stream_.socket().close();
-            return {};
+
+            res.emplace_back(std::make_unique<AudioPacketEnc>(std::move(buf)));
         }
 
         return res;
@@ -416,7 +405,7 @@ namespace LTSM {
             try {
                 clients_.push_back(client);
                 co_await client->remoteHandshake(socketPath, 3s /* connect deadline */);
-                co_await client->sendPackets();
+                co_await client->waitRunning();
             } catch(const system::system_error& err) {
                 auto ec = err.code();
                 if(ec != asio::error::operation_aborted) {
