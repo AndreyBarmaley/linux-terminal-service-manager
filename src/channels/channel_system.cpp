@@ -1188,12 +1188,11 @@ asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd
 
     auto ex = co_await asio::this_coro::executor;
     asio::steady_timer tm_delay{ex};
+    auto speed_tp = std::chrono::steady_clock::now();
+    uint32_t speed_sz = 0;
 
     try {
         for(;;) {
-            tm_delay.expires_after(info.first);
-            co_await tm_delay.async_wait(asio::use_awaitable);
-
             // read local
             buf.resize(info.second);
             auto transferred = co_await sd.async_read_some(asio::buffer(buf), asio::use_awaitable);
@@ -1205,11 +1204,30 @@ asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd
 
             // send to remote
             getOwner()->sendLtsmChannelData(channel(), std::move(buf));
+
+            // speed limits apply
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = now - speed_tp;
+
+            if(elapsed >= info.first) {
+                speed_tp = now;
+                speed_sz = transferred;
+            } else {
+                speed_sz += transferred;
+
+                if(speed_sz >= info.second) {
+                    tm_delay.expires_after(info.first - elapsed);
+                    co_await tm_delay.async_wait(asio::use_awaitable);
+
+                    speed_tp = std::chrono::steady_clock::now();
+                    speed_sz = 0;
+                }
+            }
         }
     } catch(const system::system_error& err) {
         auto ec = err.code();
         if(ec == asio::error::operation_aborted || ec == asio::error::eof) {
-            if(! skipSendClose()) {
+            if(sd.is_open() && ! skipSendClose()) {
                 getOwner()->sendSystemChannelClose(channel());
             }
         } else {
@@ -1221,7 +1239,11 @@ asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd
         getOwner()->sendSystemChannelError(channel(), -1, std::string(NS_FuncNameV).append(": ").append(err.what()));
     }
 
-    sd.close();
+    if(isNoFdClose()) {
+        sd.release();
+    } else {
+        sd.close();
+    }
     setConnectorStatus(ConnectorStatus::Error);
     co_return;
 }
@@ -1246,7 +1268,7 @@ asio::awaitable<void> Channel::ConnectorBase::writeLoopAwait(TransferChannel& pa
     } catch(const system::system_error& err) {
         auto ec = err.code();
         if(ec == asio::error::operation_aborted || ec == asio::error::eof) {
-            if(! skipSendClose()) {
+            if(sd.is_open() && ! skipSendClose()) {
                 getOwner()->sendSystemChannelClose(channel());
             }
         } else {
@@ -1259,7 +1281,11 @@ asio::awaitable<void> Channel::ConnectorBase::writeLoopAwait(TransferChannel& pa
     }
 
     packets_channel.close();
-    sd.close();
+    if(isNoFdClose()) {
+        sd.release();
+    } else {
+        sd.close();
+    }
     setConnectorStatus(ConnectorStatus::Error);
     co_return;
 }
@@ -1364,6 +1390,7 @@ void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
 // ConnectorCMD_W
 Channel::ConnectorCMD_W::ConnectorCMD_W(CID channel, FILE* file, const Opts & opts, ChannelBase & owner)
     : ConnectorFD_W(channel, fileno(file), opts, owner), fcmd(file) {
+    setNoFdClose();
 }
 
 Channel::ConnectorCMD_W::~ConnectorCMD_W() {
@@ -1375,6 +1402,7 @@ Channel::ConnectorCMD_W::~ConnectorCMD_W() {
 // ConnectorCMD_R
 Channel::ConnectorCMD_R::ConnectorCMD_R(CID channel, FILE* file, const Opts & opts, ChannelBase & owner)
     : ConnectorFD_R(channel, fileno(file), opts, owner), fcmd(file) {
+    setNoFdClose();
 }
 
 Channel::ConnectorCMD_R::~ConnectorCMD_R() {

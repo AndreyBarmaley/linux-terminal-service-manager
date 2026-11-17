@@ -134,7 +134,7 @@ namespace LTSM {
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
-        enum class OptsFlags : uint32_t { ZLibCompression = 0x0001, AllowLoginSession = 0x0010, SkipSendClose = 0x0100 };
+        enum class OptsFlags : uint32_t { ZLibCompression = 0x0001, AllowLoginSession = 0x0010, SkipSendClose = 0x0100, NoFdClose = 0x0200 };
 
         struct Opts {
             Speed speed = Speed::Medium;
@@ -206,8 +206,16 @@ namespace LTSM {
                 return static_cast<uint32_t>(OptsFlags::SkipSendClose) & flags_;
             }
 
+            inline bool isNoFdClose(void) const {
+                return static_cast<uint32_t>(OptsFlags::NoFdClose) & flags_;
+            }
+
             inline void setSkipSendClose(void) {
                 flags_ |= static_cast<uint32_t>(OptsFlags::SkipSendClose);
+            }
+
+            inline void setNoFdClose(void) {
+                flags_ |= static_cast<uint32_t>(OptsFlags::NoFdClose);
             }
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
