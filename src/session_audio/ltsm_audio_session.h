@@ -80,9 +80,9 @@ namespace LTSM {
 
     using AudioPackets = std::vector<std::unique_ptr<AudioPacket>>;
 
-    class AudioClient : std::enable_shared_from_this<AudioClient> {
+    class AudioClient {
         mutable AsyncLocalStream stream_;
-        boost::asio::steady_timer tm_wait_;
+        boost::asio::steady_timer tm_wait_engine_;
 
         const uint8_t channels_ = 2;
 
@@ -98,7 +98,6 @@ namespace LTSM {
         uint32_t frag_size_ = 1024;
 
     protected:
-        boost::asio::awaitable<void> timerWaitEngine(void);
 
         bool engineInit(void);
         void dataReadyNotify(std::span<const uint8_t>);
@@ -106,12 +105,12 @@ namespace LTSM {
 
     public:
         AudioClient(const boost::asio::any_io_executor & ex)
-            : stream_(ex), tm_wait_{ex} {
+            : stream_(ex), tm_wait_engine_{ex} {
         }
         ~AudioClient() = default;
     
         boost::asio::awaitable<void> remoteHandshake(const std::string &, std::chrono::seconds connect_deadline);
-        boost::asio::awaitable<void> waitRunning(void);
+        boost::asio::awaitable<void> waitEngine(void);
         void cancel();
 
         bool socketPath(std::string_view path) const {
@@ -124,14 +123,13 @@ namespace LTSM {
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
-    using AudioClientPtr = std::shared_ptr<AudioClient>;
+    using AudioClientPtr = std::unique_ptr<AudioClient>;
     using AudioClients = boost::container::small_vector<AudioClientPtr, 4>;
 
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
         boost::asio::cancellation_signal connect_cancel_;
-        boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
 
         AudioClients clients_;
         std::once_flag stop_flag_;
@@ -148,6 +146,7 @@ namespace LTSM {
 
         int start(void);
 
+      private:
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
         void setDebug(const std::string & level) override;

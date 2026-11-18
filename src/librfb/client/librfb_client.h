@@ -31,11 +31,11 @@
 #include "librfb_decodings.h"
 #include "ltsm_async_socket.h"
 
-#include <boost/asio/experimental/channel.hpp>
+#include <boost/asio/experimental/concurrent_channel.hpp>
 
 namespace LTSM {
     namespace RFB {
-        using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+        using TransferChannel = boost::asio::experimental::concurrent_channel<void(boost::system::error_code, BinaryBuf)>;
         constexpr int TransferChannelSize = 16;
 
         /* ClientDecoder */
@@ -44,10 +44,13 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer incr_update_timer_;
+
             mutable TransferChannel packets_channel_;
+            mutable std::atomic<int> packets_channel_jobs_{0};
 
             std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
             std::unique_ptr<DecodingBase> decoder_;
+
 
             PixelFormat server_pf_;
             int server_ltsm_version_ = 0;
@@ -128,7 +131,7 @@ namespace LTSM {
                 , rfb_strand_{ctx}
                 , xcb_strand_{ctx}
                 , incr_update_timer_{rfb_strand_}
-                , packets_channel_{ctx, TransferChannelSize} {
+                , packets_channel_{rfb_strand_, TransferChannelSize} {
             }
 
             inline boost::asio::strand<boost::asio::any_io_executor> rfb_strand(void) const { return rfb_strand_; }

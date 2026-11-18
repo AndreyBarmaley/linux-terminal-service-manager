@@ -34,7 +34,7 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_async_socket.h"
 
-#include <boost/asio/experimental/channel.hpp>
+#include <boost/asio/experimental/concurrent_channel.hpp>
 
 namespace LTSM {
     struct XcbFrameBuffer {
@@ -57,7 +57,7 @@ namespace LTSM {
 
     namespace RFB {
         int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
-        using TransferChannel = boost::asio::experimental::channel<void(boost::system::error_code, BinaryBuf)>;
+        using TransferChannel = boost::asio::experimental::concurrent_channel<void(boost::system::error_code, BinaryBuf)>;
         constexpr int TransferChannelSize = 16;
 
         /// ServerEncoder
@@ -66,7 +66,9 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer timer_updates_;
+
             mutable TransferChannel packets_channel_;
+            mutable std::atomic<int> packets_channel_jobs_{0};
 
             mutable std::forward_list<uint32_t> cursorSended_;
             ClientEncodings clientEncodings_;

@@ -1146,8 +1146,14 @@ bool ChannelListener::isAllowChannel(const Channel::ConnectorBase* conn) const {
 #endif
 
 /// ConnectorBase
+Channel::ConnectorBase::ConnectorBase(CID cid, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
+    : owner_(& srv), mode_(mod), flags_(opts.flags), speed_{opts.speed}, cid_(cid),
+                    strand_{srv.chan_strand().get_inner_executor()} {
+}
+
 Channel::ConnectorBase::~ConnectorBase() {
-    Application::debug(DebugType::Channels, "channel[{}] write {} bytes, read {} bytes", channel(), wstat_, rstat_);
+    Application::debug(DebugType::Channels, "channel[{}] write {} bytes, read {} bytes",
+        channel(), static_cast<uint64_t>(wstat_), static_cast<uint64_t>(rstat_));
 }
 
 bool Channel::ConnectorBase::isAllowSessionFor(bool user) const {
@@ -1181,7 +1187,12 @@ std::pair<std::chrono::milliseconds,uint32_t> Channel::ConnectorBase::speedInfo(
     }
 }
 
-asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd) {
+/// ConnectorFD
+Channel::ConnectorFD::ConnectorFD(CID ch, int fd, const Opts & opts, ChannelBase & srv, const ConnectorMode & mod)
+    : ConnectorBase(ch, mod, opts, srv), sd_{conn_strand(), fd} {
+}
+
+asio::awaitable<void> Channel::ConnectorFD::readLoopAwait(void) {
     if(connectorStatus() != Channel::ConnectorStatus::Running) {
         Application::error("{}: channel: {} not running", NS_FuncNameV, channel());
         co_return;
@@ -1199,7 +1210,7 @@ asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd
         for(;;) {
             // read local
             buf.resize(info.second);
-            auto transferred = co_await sd.async_read_some(asio::buffer(buf), asio::use_awaitable);
+            auto transferred = co_await sd_.async_read_some(asio::buffer(buf), asio::use_awaitable);
             buf.resize(transferred);
 
             if(isZlib()) {
@@ -1231,7 +1242,10 @@ asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd
     } catch(const system::system_error& err) {
         auto ec = err.code();
         if(ec == asio::error::operation_aborted || ec == asio::error::eof) {
-            if(sd.is_open() && ! skipSendClose()) {
+            if(ec == asio::error::eof) {
+                Application::error("{}: channel: {} stream eof", NS_FuncNameV, channel());
+            }
+            if(sd_.is_open() && ! skipSendClose()) {
                 getOwner()->sendSystemChannelClose(channel());
             }
         } else {
@@ -1244,15 +1258,15 @@ asio::awaitable<void> Channel::ConnectorBase::readLoopAwait(StreamDescriptor& sd
     }
 
     if(isNoFdClose()) {
-        sd.release();
+        sd_.release();
     } else {
-        sd.close();
+        sd_.close();
     }
     setConnectorStatus(ConnectorStatus::Error);
     co_return;
 }
 
-asio::awaitable<void> Channel::ConnectorBase::writeLoopAwait(TransferChannel& packets_channel, StreamDescriptor& sd) {
+asio::awaitable<void> Channel::ConnectorFD::writeLoopAwait(TransferChannel& packets_channel) {
     if(connectorStatus() != Channel::ConnectorStatus::Running) {
         Application::error("{}: channel: {} not running", NS_FuncNameV, channel());
         co_return;
@@ -1264,15 +1278,15 @@ asio::awaitable<void> Channel::ConnectorBase::writeLoopAwait(TransferChannel& pa
 
             if(isZlib()) {
                 auto buf2 = ZLib::inflate(buf1);
-                co_await asio::async_write(sd, asio::buffer(buf2), asio::transfer_all(), asio::use_awaitable);
+                co_await asio::async_write(sd_, asio::buffer(buf2), asio::transfer_all(), asio::use_awaitable);
             } else {
-                co_await asio::async_write(sd, asio::buffer(buf1), asio::transfer_all(), asio::use_awaitable);
+                co_await asio::async_write(sd_, asio::buffer(buf1), asio::transfer_all(), asio::use_awaitable);
             }
         }
     } catch(const system::system_error& err) {
         auto ec = err.code();
-        if(ec == asio::error::operation_aborted || ec == asio::error::eof) {
-            if(sd.is_open() && ! skipSendClose()) {
+        if(ec == asio::error::operation_aborted) {
+            if(sd_.is_open() && ! skipSendClose()) {
                 getOwner()->sendSystemChannelClose(channel());
             }
         } else {
@@ -1286,109 +1300,104 @@ asio::awaitable<void> Channel::ConnectorBase::writeLoopAwait(TransferChannel& pa
 
     packets_channel.close();
     if(isNoFdClose()) {
-        sd.release();
+        sd_.release();
     } else {
-        sd.close();
+        sd_.close();
     }
     setConnectorStatus(ConnectorStatus::Error);
     co_return;
 }
 
+void Channel::ConnectorFD::cancel(void) {
+    Application::warning("{}:", NS_FuncNameV);
+    loop_cancel_.emit(asio::cancellation_type::terminal);
+}
+
+boost::asio::cancellation_slot Channel::ConnectorFD::makeCancelSlot(void) {
+    return loop_cancel_.slot();
+}
+
 /// ConnectorFD_R
 Channel::ConnectorFD_R::ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-    : ConnectorBase(ch, ConnectorMode::ReadOnly, opts, srv), sd_{srv.chan_strand(), fd} {
+    : ConnectorFD(ch, fd, opts, srv, ConnectorMode::ReadOnly) {
 }
 
 void Channel::ConnectorFD_R::connectorRunningEvent(void) {
     Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
-    auto ex = getOwner()->chan_strand();
     // read loop
-    asio::co_spawn(ex, [self=shared_from_this()]() -> asio::awaitable<void> {
+    asio::co_spawn(conn_strand(), [self=shared_from_this()]() -> asio::awaitable<void> {
         auto& fdr = static_cast<ConnectorFD_R&>(*self);
-        co_await self->readLoopAwait(fdr.sd_);
+        co_await fdr.readLoopAwait();
         co_return;
-    }, asio::bind_cancellation_slot(loop_cancel_.slot(), asio::detached));
-}
-
-void Channel::ConnectorFD_R::cancel(void) {
-    loop_cancel_.emit(asio::cancellation_type::terminal);
+    }, asio::bind_cancellation_slot(makeCancelSlot(), asio::detached));
 }
 
 /// ConnectorFD_W
 Channel::ConnectorFD_W::ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-   : ConnectorBase(ch, ConnectorMode::WriteOnly, opts, srv), packets_channel_{srv.chan_strand(), TransferChannelSize}, sd_{srv.chan_strand(), fd} {
+   : ConnectorFD(ch, fd, opts, srv, ConnectorMode::WriteOnly), packets_channel_{conn_strand(), TransferChannelSize} {
+}
+
+boost::asio::awaitable<void> Channel::ConnectorFD_W::writeLoopAwait(void) {
+    co_await ConnectorFD::writeLoopAwait(packets_channel_);
+    co_return;
 }
 
 void Channel::ConnectorFD_W::connectorRunningEvent(void) {
     Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
-    auto ex = getOwner()->chan_strand();
     // write loop
-    asio::co_spawn(ex, [self=shared_from_this()]() -> asio::awaitable<void> {
+    asio::co_spawn(conn_strand(), [self=shared_from_this()]() -> asio::awaitable<void> {
         auto& fdw = static_cast<ConnectorFD_W&>(*self);
-        co_await self->writeLoopAwait(fdw.packets_channel_, fdw.sd_);
+        co_await fdw.writeLoopAwait();
         co_return;
-    }, asio::bind_cancellation_slot(loop_cancel_.slot(), asio::detached));
+    }, asio::bind_cancellation_slot(makeCancelSlot(), asio::detached));
 }
 
 void Channel::ConnectorFD_W::cancel(void) {
     packets_channel_.cancel();
-    loop_cancel_.emit(asio::cancellation_type::terminal);
+    ConnectorFD::cancel();
 }
 
 void Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf) {
     if(! packets_channel_.is_open()) {
+        Application::warning("{}: transfer channel invalid", NS_FuncNameV);
         return;
     }
 
-    if(connectorStatus() == Channel::ConnectorStatus::Running) {
-        Application::debug(DebugType::Channels, "{}: data size: {}", NS_FuncNameV, buf.size());
-        while(true) {
-            if(packets_channel_.try_send(system::error_code(), std::move(buf))) {
-                return;
-            }
+    if(packets_channel_.try_send(boost::system::error_code{}, std::move(buf))) {
+        return;
+    }
+
+    if(conn_strand().running_in_this_thread()) {
+        if(TransferChannelSize < packets_channel_jobs_.load()) {
             Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
-            std::this_thread::sleep_for(1ms);
         }
+        packets_channel_jobs_.fetch_add(1);
+        packets_channel_.async_send(system::error_code(), std::move(buf),
+            [this](boost::system::error_code) {
+                packets_channel_jobs_.fetch_sub(1);
+            }
+        );
+    } else {
+        auto future = packets_channel_.async_send(system::error_code(), std::move(buf), asio::use_future);
+        future.get();
     }
 }
 
 /// ConnectorFD_RW
 Channel::ConnectorFD_RW::ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv)
-   : ConnectorBase(ch, ConnectorMode::ReadWrite, opts, srv), packets_channel_{srv.chan_strand(), TransferChannelSize}, sd_{srv.chan_strand(), fd} {
+   : ConnectorFD_W(ch, fd, opts, srv) {
+    setConnectorMode(ConnectorMode::ReadWrite);
 }
 
 void Channel::ConnectorFD_RW::connectorRunningEvent(void) {
     Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
-    auto ex = getOwner()->chan_strand();
     // read loop
-    asio::co_spawn(ex, [self=shared_from_this()]() -> asio::awaitable<void> {
+    asio::co_spawn(conn_strand(), [self=shared_from_this()]() -> asio::awaitable<void> {
         auto& fdrw = static_cast<ConnectorFD_RW&>(*self);
         using namespace boost::asio::experimental::awaitable_operators;
-        co_await (self->readLoopAwait(fdrw.sd_) || self->writeLoopAwait(fdrw.packets_channel_, fdrw.sd_));
+        co_await (fdrw.readLoopAwait() || fdrw.writeLoopAwait());
         co_return;
-    }, asio::bind_cancellation_slot(loop_cancel_.slot(), asio::detached));
-}
-
-void Channel::ConnectorFD_RW::cancel(void) {
-    packets_channel_.cancel();
-    loop_cancel_.emit(asio::cancellation_type::terminal);
-}
-
-void Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf) {
-    if(! packets_channel_.is_open()) {
-        return;
-    }
-
-    if(connectorStatus() == Channel::ConnectorStatus::Running) {
-        Application::debug(DebugType::Channels, "{}: data size: {}", NS_FuncNameV, buf.size());
-        while(true) {
-            if(packets_channel_.try_send(system::error_code(), std::move(buf))) {
-                return;
-            }
-            Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
-            std::this_thread::sleep_for(1ms);
-        }
-    }
+    }, asio::bind_cancellation_slot(makeCancelSlot(), asio::detached));
 }
 
 // ConnectorCMD_W

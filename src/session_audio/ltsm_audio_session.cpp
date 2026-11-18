@@ -155,14 +155,14 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", NS_FuncNameV, "PCM");
         }
 
-        co_await timerWaitEngine();
+        co_return;
     }
 
-    asio::awaitable<void> AudioClient::timerWaitEngine(void)
+    asio::awaitable<void> AudioClient::waitEngine(void)
     {
         for(;;) {
-            tm_wait_.expires_after(300ms);
-            co_await tm_wait_.async_wait(asio::use_awaitable);
+            tm_wait_engine_.expires_after(300ms);
+            co_await tm_wait_engine_.async_wait(asio::use_awaitable);
 
             if(engineInit()) {
                 co_return;
@@ -221,7 +221,7 @@ namespace LTSM {
     }
 
     void AudioClient::cancel() {
-        tm_wait_.cancel();
+        tm_wait_engine_.cancel();
         stream_.socket().cancel();
     }
 
@@ -245,13 +245,6 @@ namespace LTSM {
         } catch(const std::exception& err) {
             Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
         }
-        stream_.socket().close();
-    }
-
-    asio::awaitable<void> AudioClient::waitRunning(void) {
-        tm_wait_.expires_at(std::chrono::steady_clock::time_point::max());
-        co_await tm_wait_.async_wait(asio::use_awaitable);
-        co_return;
     }
 
     AudioPackets AudioClient::encodePackets(std::span<const uint8_t> span) {
@@ -295,7 +288,7 @@ namespace LTSM {
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
         SDBus::AsioCoroConnector(std::move(conn)),
-        signals_ {ioc_}, clients_strand_{asio::make_strand(ioc_)} {
+        signals_ {ioc_} {
         registerAdaptor();
 
         if(debug) {
@@ -314,16 +307,16 @@ namespace LTSM {
     void AudioSessionBus::stopContext(void) {
         sdbusLoopCancel();
 
-        system::error_code ec;
-        signals_.cancel(ec);
         connect_cancel_.emit(asio::cancellation_type::terminal);
-
-        asio::post(clients_strand_, [this]() {
+        asio::post(ioc_, [this]() {
             for(auto& ptr: clients_) {
                 ptr->cancel();
             }
             clients_.clear();
         });
+
+        system::error_code ec;
+        signals_.cancel(ec);
     }
 
     asio::awaitable<void> AudioSessionBus::signalsHandler(void) {
@@ -391,21 +384,23 @@ namespace LTSM {
     bool AudioSessionBus::connectChannel(const std::string & socketPath) {
         Application::debug(DebugType::Dbus, "{}: socket path: `{}'", NS_FuncNameV, socketPath);
 
-        asio::co_spawn(clients_strand_, [socketPath,func=NS_FuncNameV, this]() -> asio::awaitable<void>  {
+        // connectChannel from sdbus context: ioc_
+        const bool running = std::ranges::any_of(clients_,
+            [&](auto & cli) { return cli->socketPath(socketPath); });
 
-            if(std::ranges::any_of(clients_,
-                [&](auto & cli) { return cli->socketPath(socketPath); })) {
-                Application::error("{}: socket busy, path: `{}'", func, socketPath);
-                co_return;
-            }
+        if(running) {
+            Application::error("{}: socket busy, path: `{}'", NS_FuncNameV, socketPath);
+            return false;
+        }
 
+        asio::co_spawn(ioc_, [socketPath,func=NS_FuncNameV, this]() -> asio::awaitable<void> {
             auto executor = co_await asio::this_coro::executor;
-            AudioClientPtr client = std::make_shared<AudioClient>(executor);
+            AudioClientPtr client = std::make_unique<AudioClient>(executor);
 
             try {
-                clients_.push_back(client);
                 co_await client->remoteHandshake(socketPath, 3s /* connect deadline */);
-                co_await client->waitRunning();
+                co_await client->waitEngine();
+                clients_.emplace_back(std::move(client));
             } catch(const system::system_error& err) {
                 auto ec = err.code();
                 if(ec != asio::error::operation_aborted) {
@@ -416,7 +411,6 @@ namespace LTSM {
                 Application::error("{}: exception: {}", func, err.what());
             }
 
-            boost::range::remove_erase(clients_, client);
             co_return;
 
         }, asio::bind_cancellation_slot(connect_cancel_.slot(), asio::detached));
@@ -426,15 +420,16 @@ namespace LTSM {
 
     void AudioSessionBus::disconnectChannel(const std::string & socketPath) {
         Application::debug(DebugType::Dbus, "{}: socket path: `{}'", NS_FuncNameV, socketPath);
-        asio::post(clients_strand_, [this, socketPath]() {
-            auto it = std::ranges::find_if(clients_, [&](auto & cli) {
-                return cli->socketPath(socketPath);
-            });
-            if(it != clients_.end()) {
-                (*it)->cancel();
-                boost::range::remove_erase(clients_, *it);
-            }
+
+        // disconnectChannel from sdbus context: ioc_
+        auto it = std::ranges::find_if(clients_, [&](auto & cli) {
+            return cli->socketPath(socketPath);
         });
+
+        if(it != clients_.end()) {
+            (*it)->cancel();
+            boost::range::remove_erase(clients_, *it);
+        }
     }
 }
 

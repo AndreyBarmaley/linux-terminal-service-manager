@@ -507,16 +507,27 @@ namespace LTSM {
 
     void RFB::ClientDecoder::asyncSendBuf(BinaryBuf&& buf) const {
         if(! packets_channel_.is_open()) {
-            Application::warning("{}: packets channel invalid", NS_FuncNameV);
+            Application::warning("{}: transfer channel invalid", NS_FuncNameV);
             return;
         }
 
-        while(true) {
-            if(packets_channel_.try_send(system::error_code(), std::move(buf))) {
-                return;
+        if(packets_channel_.try_send(boost::system::error_code{}, std::move(buf))) {
+            return; 
+        }
+
+        if(rfb_strand_.running_in_this_thread()) {
+            if(TransferChannelSize < packets_channel_jobs_.load()) {
+                Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
             }
-            Application::warning("{}: transfer channel overloaded", NS_FuncNameV);
-            std::this_thread::sleep_for(1ms);
+            packets_channel_jobs_.fetch_add(1);
+            packets_channel_.async_send(system::error_code(), std::move(buf),
+                [this](boost::system::error_code) {
+                    packets_channel_jobs_.fetch_sub(1);
+                }
+            );
+        } else {
+            auto future = packets_channel_.async_send(system::error_code(), std::move(buf), asio::use_future);
+            future.get();
         }
     }
 
