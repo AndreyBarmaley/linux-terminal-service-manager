@@ -67,4 +67,6 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 4
 
     - name: Tests
-      run: ctest --test-dir build/src/tests/common
+      run: |
+        ctest --test-dir build/src/tests/common
+        ctest --test-dir build/src/tests/librfb
