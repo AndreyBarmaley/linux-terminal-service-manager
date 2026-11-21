@@ -18,10 +18,9 @@ using namespace LTSM;
 using ::testing::_;
 using ::testing::Invoke;
 
-class MockAsyncSocket : public AsyncSocketBase {
+class MockAsyncStream : public AsyncStreamBase {
 public:
-    MOCK_METHOD(void, closeSocket, (), (override));
-    MOCK_METHOD(size_t, sync_recv_available, (), (const, override));
+    MOCK_METHOD(void, close, (), (override));
     MOCK_METHOD(void, sync_recv_buf, (void* ptr, size_t len), (const, override));
     MOCK_METHOD(void, sync_send_buf, (const void* ptr, size_t len), (const, override));
 
@@ -36,13 +35,13 @@ public:
                 (std::vector<boost::asio::const_buffer>&& buffers), (const, override));
 };
 
-class AsyncSocketTest : public ::testing::Test {
+class AsyncStreamTest : public ::testing::Test {
 protected:
     boost::asio::io_context ctx;
-    MockAsyncSocket mock_sock;
+    MockAsyncStream mock_sock;
 };
 
-TEST_F(AsyncSocketTest, ValueToBufferWithIntegral) {
+TEST_F(AsyncStreamTest, ValueToBufferWithIntegral) {
     uint32_t val = 0x11223344;
     boost::asio::mutable_buffer buf = value_to_buffer(val);
     
@@ -50,7 +49,7 @@ TEST_F(AsyncSocketTest, ValueToBufferWithIntegral) {
     EXPECT_EQ(buf.size(), sizeof(val));
 }
 
-TEST_F(AsyncSocketTest, ValueToConstBufferWithStdString) {
+TEST_F(AsyncStreamTest, ValueToConstBufferWithStdString) {
     std::string str = "Hello";
     boost::asio::const_buffer buf = value_to_const_buffer(str);
     
@@ -58,7 +57,7 @@ TEST_F(AsyncSocketTest, ValueToConstBufferWithStdString) {
     EXPECT_EQ(buf.size(), str.size());
 }
 
-TEST_F(AsyncSocketTest, AsyncRecvValuesFillsVariables) {
+TEST_F(AsyncStreamTest, AsyncRecvValuesFillsVariables) {
     EXPECT_CALL(mock_sock, async_recv_buffers(_))
         .WillOnce([](std::initializer_list<boost::asio::mutable_buffer> list) -> boost::asio::awaitable<void> {
             auto it = list.begin();
@@ -92,10 +91,10 @@ TEST(AsyncTcpStreamTest, SocketAccessAndLifecycle) {
     
     AsyncTcpStream stream(local_ctx.get_executor());
     
-    boost::asio::ip::tcp::socket& raw_socket = stream.socket();
+    boost::asio::ip::tcp::socket& raw_socket = stream.stream();
     EXPECT_FALSE(raw_socket.is_open());
     
-    EXPECT_NO_THROW(stream.closeSocket());
+    EXPECT_NO_THROW(stream.close());
 }
 
 int main(int argc, char** argv) {

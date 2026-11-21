@@ -34,24 +34,27 @@
 #include <vector>
 #include <thread>
 #include <utility>
+#include <optional>
 #include <filesystem>
 #include <forward_list>
 
-#include <boost/asio.hpp>
-
 #undef D
 #include <boost/container/flat_map.hpp>
-#include <boost/asio/experimental/concurrent_channel.hpp>
 
 #include "ltsm_audio.h"
-#include "ltsm_async_socket.h"
 
 #ifdef LTSM_PKCS11_AUTH
 #include "ltsm_pkcs11_wrapper.h"
 #endif
 
+#include "ltsm_tools.h"
+#include "ltsm_application.h"
+
 #include "ltsm_streambuf.h"
 #include "ltsm_json_wrapper.h"
+#include "ltsm_async_socket.h"
+
+#include "channel_stream.h"
 
 namespace LTSM {
     static const int LtsmProtocolVersion = 0x03;
@@ -90,7 +93,7 @@ namespace LTSM {
     constexpr CID ChannelTypeLast = UINT8_MAX;
 
     namespace Channel {
-        enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11, Fd };
+        enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11, AcceptSock };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
         enum class ConnectorStatus { Unknown, Openning, Connected, Running, Error };
 
@@ -134,33 +137,35 @@ namespace LTSM {
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
-        enum class OptsFlags : uint32_t { ZLibCompression = 0x0001, AllowLoginSession = 0x0010, SkipSendClose = 0x0100, NoFdClose = 0x0200 };
+        enum class OptsFlags : uint32_t { ZLibCompression = 0x0001, AllowLoginSession = 0x0010, SendEventClose = 0x0100, NoFdClose = 0x0200 };
 
         struct Opts {
             Speed speed = Speed::Medium;
             int flags = 0;
         };
 
+        using generic_socket = boost::asio::generic::stream_protocol::socket;
+
         struct Planned {
             UrlMode serverOpts;
             UrlMode clientOpts;
             Opts chOpts;
-            int serverFd = -1;
             CID channel = 0;
+            std::optional<generic_socket> acceptSock;
 
-            void setFdMode(int fd) {
-                serverFd = fd;
-                serverOpts.updateType(Channel::ConnectorType::Fd);
-            }
+            void acceptSockClose(void);
+
+            Planned(const UrlMode& srv, const UrlMode& cli, const Opts& opt);
+            Planned(const UrlMode& srv, const UrlMode& cli, const Opts& opt, generic_socket&& sock);
+
+            Planned(Planned&&) noexcept;
+            Planned& operator=(Planned&&) noexcept;
+
+            ~Planned();
         };
 
-        using StreamDescriptor = boost::asio::posix::stream_descriptor;
-        using StdBuffer = std::vector<uint8_t>;
-        using TransferChannel = boost::asio::experimental::concurrent_channel<void(boost::system::error_code, StdBuffer)>;
-        constexpr int TransferChannelSize = 16;
-
         /// ConnectorBase
-        class ConnectorBase : public std::enable_shared_from_this<ConnectorBase> {
+        class ConnectorBase {
           private:
             std::atomic<Channel::ConnectorStatus> status_{ConnectorStatus::Unknown};
             ChannelBase* owner_ = nullptr;
@@ -169,18 +174,12 @@ namespace LTSM {
             mutable std::atomic<uint64_t> wstat_ = 0;
 
             ConnectorMode mode_ = ConnectorMode::Unknown;
-            uint32_t flags_ = 0;
+            std::atomic<uint32_t> flags_{0};
 
             const Speed speed_;
             const CID cid_;
 
-            boost::asio::strand<boost::asio::any_io_executor> strand_;
-
           protected:
-            inline boost::asio::strand<boost::asio::any_io_executor> conn_strand(void) {
-                return strand_;
-            }
-
             inline ChannelBase* connectorOwner(void) {
                 return owner_;
             }
@@ -189,11 +188,15 @@ namespace LTSM {
                 mode_ = cm;
             }
 
-            std::pair<std::chrono::milliseconds,uint32_t> speedInfo(void) const;
+            inline void setNoFdClose(void) {
+                flags_ |= static_cast<uint32_t>(OptsFlags::NoFdClose);
+            }
 
           public:
             ConnectorBase(CID cid, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv);
             virtual ~ConnectorBase();
+
+            std::pair<std::chrono::milliseconds,uint32_t> speedInfo(void) const;
 
             //
             virtual void cancel(void) { /* empty */ }
@@ -206,20 +209,16 @@ namespace LTSM {
                 return static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags_;
             }
 
-            inline bool skipSendClose(void) const {
-                return static_cast<uint32_t>(OptsFlags::SkipSendClose) & flags_;
+            inline bool isSendEventClose(void) const {
+                return static_cast<uint32_t>(OptsFlags::SendEventClose) & flags_;
             }
 
             inline bool isNoFdClose(void) const {
                 return static_cast<uint32_t>(OptsFlags::NoFdClose) & flags_;
             }
 
-            inline void setSkipSendClose(void) {
-                flags_ |= static_cast<uint32_t>(OptsFlags::SkipSendClose);
-            }
-
-            inline void setNoFdClose(void) {
-                flags_ |= static_cast<uint32_t>(OptsFlags::NoFdClose);
+            inline void setSendEventClose(void) {
+                flags_ |= static_cast<uint32_t>(OptsFlags::SendEventClose);
             }
 
             inline void setConnectorStatus(const Channel::ConnectorStatus & st) {
@@ -276,76 +275,171 @@ namespace LTSM {
             }
         };
 
+        using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
         using ConnectorBasePtr = std::shared_ptr<ConnectorBase>;
 
-        class ConnectorFD : public ConnectorBase {
-            StreamDescriptor sd_;
-            boost::asio::cancellation_signal loop_cancel_;
+        class AsyncConnectorBase : public ConnectorBase {
+            TimePoint speed_tp{std::chrono::steady_clock::now()};
+            uint32_t speed_sz = 0;
 
           protected:
-            boost::asio::cancellation_slot makeCancelSlot(void);
-            boost::asio::awaitable<void> writeLoopAwait(TransferChannel&);
-            boost::asio::awaitable<void> readLoopAwait(void);
+            void readErrorHandler(std::exception_ptr ptr);
+            void writeErrorHandler(std::exception_ptr ptr);
+
+            boost::asio::awaitable<void> readStreamHandler(std::vector<uint8_t>);
+            void writeStreamHandler(std::vector<uint8_t> &);
+            void writeJobsOverhead(uint32_t jobs);
+
+            virtual bool streamOpen(void) const = 0;
 
           public:
-            ConnectorFD(CID ch, int fd, const Opts & opts, ChannelBase & srv, const ConnectorMode & mod);
-            ~ConnectorFD() = default;
-
-
-            void cancel(void) override;
+            using ConnectorBase::ConnectorBase;
         };
 
-        // ConnectorFD_R
-        class ConnectorFD_R : public ConnectorFD {
-          public:
-            ConnectorFD_R(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            ~ConnectorFD_R() = default;
-
-            void connectorRunningEvent(void) override;
-        };
-
-        // ConnectorFD_W
-        class ConnectorFD_W : public ConnectorFD {
-            TransferChannel packets_channel_;
-            std::atomic<int> packets_channel_jobs_{0};
+        template<typename AsioStream>
+        class AsyncStreamConnectorRO : public AsyncConnectorBase, public IReaderStream<AsyncStreamBase> {
+            AsioStream stream_;
 
           protected:
-            boost::asio::awaitable<void> writeLoopAwait(void);
+            AsyncStreamBase & stream(void) override {
+                return stream_;
+            }
+
+            bool streamOpen(void) const override {
+                return stream_.isOpen();
+            }
+
+            boost::asio::awaitable<void> readStreamHandler(std::vector<uint8_t> buf) override {
+                co_await AsyncConnectorBase::readStreamHandler(std::move(buf));
+                co_return;
+            }
+
+            void readErrorHandler(std::exception_ptr ptr) override {
+                AsyncConnectorBase::readErrorHandler(ptr);
+            }
 
           public:
-            ConnectorFD_W(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            ~ConnectorFD_W() = default;
+            AsyncStreamConnectorRO(AsioStream&& sd,
+                    CID ch, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
+                : AsyncConnectorBase(ch, mod, opts, srv), stream_{std::move(sd)} {
+            }
 
-            void pushData(std::vector<uint8_t> &&) override;
-            void cancel(void) override;
-            void connectorRunningEvent(void) override;
+            void cancel(void) override {
+                Application::info("{}: channel: {} is stopping", NS_FuncNameV, channel());
+                stopReaderLoop();
+                stream_.close();
+            }
+
+            void connectorRunningEvent(void) override {
+                Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
+                startReaderLoop();
+            }
         };
 
-        // ConnectorFD_RW
-        class ConnectorFD_RW : public ConnectorFD_W {
-          public:
-            ConnectorFD_RW(CID ch, int fd, const Opts & opts, ChannelBase & srv);
-            ~ConnectorFD_RW() = default;
+        template<typename AsioStream>
+        class AsyncStreamConnectorWO : public AsyncConnectorBase, public IWriterStream<AsyncStreamBase> {
+            TransferChannel channel_;
+            AsioStream stream_;
 
-            void connectorRunningEvent(void) override;
+          protected:
+            AsyncStreamBase & stream(void) override {
+                return stream_;
+            }
+
+            TransferChannel & transferChannel(void) override {
+                return channel_;
+            }
+
+            bool streamOpen(void) const override {
+                return stream_.isOpen();
+            }
+
+            boost::asio::awaitable<void> writeStreamHandler(std::vector<uint8_t> buf) override {
+                AsyncConnectorBase::writeStreamHandler(buf);
+                co_await stream_.async_send_buf(boost::asio::buffer(buf));
+                co_return;
+            }
+
+            void writeErrorHandler(std::exception_ptr ptr) override {
+                AsyncConnectorBase::readErrorHandler(ptr);
+            }
+
+            void writeJobsOverhead(uint32_t jobs) override {
+                AsyncConnectorBase::writeJobsOverhead(jobs);
+            }
+
+          public:
+            AsyncStreamConnectorWO(AsioStream&& sd,
+                    CID ch, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
+                : AsyncConnectorBase(ch, mod, opts, srv), channel_{sd.get_executor(), TransferChannelSize}, stream_{std::move(sd)} {
+            }
+
+            void cancel(void) override {
+                Application::info("{}: channel: {} is stopping", NS_FuncNameV, channel());
+                stopWriterLoop();
+                channel_.cancel();
+                //
+                stream_.close();
+                channel_.close();
+            }
+
+            void pushData(std::vector<uint8_t>&& buf) override {
+                pushWriterData(std::move(buf));
+            }
+
+            void connectorRunningEvent(void) override {
+                Application::info("{}: channel: {} is running", NS_FuncNameV, channel());
+                startWriterLoop();
+            }
         };
 
-        // ConnectorCMD_R
-        class ConnectorCMD_R : public ConnectorFD_R {
-            FILE* fcmd = nullptr;
+        template<typename AsioStream>
+        class AsyncStreamConnectorRW : public AsyncStreamConnectorWO<AsioStream>, public IReaderStream<AsyncStreamBase> {
+          protected:
+            boost::asio::awaitable<void> readStreamHandler(std::vector<uint8_t> buf) override {
+                co_await AsyncConnectorBase::readStreamHandler(std::move(buf));
+                co_return;
+            }
+
+            void readErrorHandler(std::exception_ptr ptr) override {
+                AsyncConnectorBase::readErrorHandler(ptr);
+            }
 
           public:
-            ConnectorCMD_R(CID, FILE*, const Opts &, ChannelBase &);
-            ~ConnectorCMD_R();
-        };
+            AsyncStreamConnectorRW(AsioStream&& sd,
+                    CID ch, const ConnectorMode & mod, const Opts & opts, ChannelBase & srv)
+                : AsyncStreamConnectorWO<AsioStream>(std::move(sd), ch, mod, opts, srv) {
+            }
 
-        // ConnectorCMD_W
-        class ConnectorCMD_W : public ConnectorFD_W {
-            FILE* fcmd = nullptr;
+            void pushData(std::vector<uint8_t>&& buf) override {
+                if(AsyncConnectorBase::isWriteAllow()) {
+                    AsyncStreamConnectorWO<AsioStream>::pushWriterData(std::move(buf));
+                }
+            }
 
-          public:
-            ConnectorCMD_W(CID, FILE*, const Opts &, ChannelBase &);
-            ~ConnectorCMD_W();
+            void cancel(void) override {
+                Application::info("{}: channel: {} is stopping", NS_FuncNameV, AsyncConnectorBase::channel());
+                if(AsyncConnectorBase::isReadAllow()) {
+                    IReaderStream<AsyncStreamBase>::stopReaderLoop();
+                }
+                if(AsyncConnectorBase::isWriteAllow()) {
+                    IWriterStream<AsyncStreamBase>::stopWriterLoop();
+                    AsyncStreamConnectorWO<AsioStream>::transferChannel().cancel();
+                    AsyncStreamConnectorWO<AsioStream>::transferChannel().close();
+                }
+                //
+                AsyncStreamConnectorWO<AsioStream>::stream().close();
+            }
+
+            void connectorRunningEvent(void) override {
+                Application::info("{}: channel: {} is running", NS_FuncNameV, AsyncConnectorBase::channel());
+                if(AsyncConnectorBase::isReadAllow()) {
+                    IReaderStream<AsyncStreamBase>::startReaderLoop();
+                }
+                if(AsyncConnectorBase::isWriteAllow()) {
+                    IWriterStream<AsyncStreamBase>::startWriterLoop();
+                }
+            }
         };
 
 #ifdef LTSM_CLIENT
@@ -382,7 +476,6 @@ namespace LTSM {
             std::forward_list<AudioFormat> formats;
             const AudioFormat* format = nullptr;
 
-            using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
             std::unique_ptr<TimePoint> silent;
 
             std::unique_ptr<AudioPlayer> player;
@@ -464,7 +557,8 @@ namespace LTSM {
             const char* speedString(const Speed &);
         }
 
-        ConnectorBasePtr createFdConnector(CID, int fd, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createSocketConnector(CID, AsyncGenericSocket&&, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createStreamConnector(CID, AsyncStreamDescriptor&& sd, const ConnectorMode &, const Opts &, ChannelBase &);
 #ifdef __UNIX__
         ConnectorBasePtr createUnixConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
         ConnectorBasePtr createTcpConnector(CID, const std::string & ipaddr, uint16_t port, const ConnectorMode &, const Opts &, ChannelBase &);
@@ -482,7 +576,7 @@ namespace LTSM {
         ConnectorBasePtr createClientAudioConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
         ConnectorBasePtr createFileConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
-        ConnectorBasePtr createCommandConnector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
+        ConnectorBasePtr createCommandConnector(CID, const std::string &, const std::vector<std::string> &, const ConnectorMode &, const Opts &, ChannelBase &);
     } // namespace Channel
 
     class ChannelBase {
@@ -535,7 +629,7 @@ namespace LTSM {
         void createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         void createChannelSocket(CID, std::pair<std::string, uint16_t>, const Channel::ConnectorMode &, const Channel::Opts &);
 #endif
-        void createChannelFd(CID, int fd, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelSocket(CID, AsyncGenericSocket&&, const Channel::ConnectorMode &, const Channel::Opts &);
         void createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         void createChannelCommand(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         void createChannelFuse(CID, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
@@ -630,14 +724,14 @@ namespace LTSM {
 
       protected:
         template<typename Acceptor>
-        boost::asio::awaitable<void> acceptorAcceptAwait(Acceptor acceptor, const Channel::Planned & job) {
+        boost::asio::awaitable<void> acceptorAcceptAwait(Acceptor acceptor,
+                    const Channel::UrlMode& serverOpts, const Channel::UrlMode& clientOpts, const Channel::Opts& channelOpts) {
             auto ex = co_await boost::asio::this_coro::executor;
 
             for(;;) {
                 auto sock = co_await acceptor.async_accept(boost::asio::use_awaitable);
-                auto job2 = job;
-                job2.setFdMode(sock.release());
-                plannedEmplaceSpawn(std::move(job2));
+                auto job = Channel::Planned(serverOpts, clientOpts, channelOpts, std::move(sock));
+                plannedEmplaceSpawn(std::move(job));
             }
         }
 
@@ -657,7 +751,7 @@ namespace LTSM {
 
         void systemChannelConnected(CID channel, int flags, int error);
         void plannedEmplace(Channel::Planned);
-        void createChannel(CID, const Channel::Planned &);
+        void createChannelPlanned(CID, Channel::Planned &&);
 
         boost::asio::awaitable<void> createListenerAwait(Channel::UrlMode clientOpts, Channel::UrlMode serverOpts, Channel::Opts channelOpts, int listenLimit);
         void destroyListener(std::string clientUrl);

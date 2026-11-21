@@ -296,7 +296,7 @@ namespace LTSM {
 
         if(localExtClipboardFlags & ExtClipCaps::OpNotify) {
             const int allowTypes = 0xFFFF & remoteExtClipboardFlags & flags;
-            co_await extClipboardRemoteTypesAwait(allowTypes);
+            extClipboardRemoteTypes(allowTypes);
             co_return;
         }
 
@@ -322,7 +322,7 @@ namespace LTSM {
                         auto len = sbr.readIntBE32();
                         auto raw = sbr.read(len);
 
-                        co_await extClipboardRemoteDataAwait(type, std::move(raw));
+                        extClipboardRemoteData(type, std::move(raw));
                         localProvideTypes &= ~type;
                     }
                 }

@@ -32,7 +32,7 @@
 #include "librfb_extclip.h"
 #include "librfb_encodings.h"
 #include "ltsm_xcb_wrapper.h"
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 
 #include <boost/asio/experimental/concurrent_channel.hpp>
 
@@ -70,12 +70,11 @@ namespace LTSM {
             mutable TransferChannel packets_channel_;
             mutable std::atomic<int> packets_channel_jobs_{0};
 
-            mutable std::forward_list<uint32_t> cursorSended_;
             ClientEncodings clientEncodings_;
             std::string clientAuthName_;
             std::string clientAuthDomain_;
 
-            std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
+            std::unique_ptr<AsyncStreamBase> stream_; /// socket layer
             std::unique_ptr<EncodingBase> encoder_;
 
             PixelFormat clientPf;
@@ -136,11 +135,11 @@ namespace LTSM {
             void sendFrameBufferUpdate(const FrameBuffer &) const;
             void sendEncodingDesktopResize(const DesktopResizeStatus&, const DesktopResizeError&, const XCB::Size&) const;
             void sendEncodingRichCursor(const FrameBuffer & fb, const XCB::Point &) const;
-            void sendEncodingLtsmCursor(const XCB::Point &, const XCB::Size &, std::span<const uint8_t> pixels) const;
+            void sendEncodingLtsmCursor(uint32_t, const XCB::Point &, const XCB::Size &, std::span<const uint8_t> pixels) const;
             void sendEncodingLtsmSupported(void) const;
             void sendEncodingLtsmData(std::span<const uint8_t>) const;
 
-            boost::asio::awaitable<void> sendUpdateScreenAwait(const XCB::Region &) const;
+            void sendUpdateScreen(const XCB::Region &) const;
             boost::asio::awaitable<void> sendQueueAwait(void);
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);
@@ -157,8 +156,6 @@ namespace LTSM {
             boost::asio::awaitable<int> serverHandshakeVersionAwait(void);
             boost::asio::awaitable<bool> serverSecurityInitAwait(int protover, const SecurityInfo &);
             boost::asio::awaitable<void> serverClientInitAwait(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
-
-            void cursorRequest(uint32_t);
 
             void asyncSendBuf(BinaryBuf&&) const;
 

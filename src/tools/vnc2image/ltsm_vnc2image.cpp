@@ -191,12 +191,10 @@ namespace LTSM {
         co_return clipboard_buf{};
     }
 
-    boost::asio::awaitable<void> Vnc2Image::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
-        co_return;
+    void Vnc2Image::extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&& buf) {
     }
 
-    boost::asio::awaitable<void> Vnc2Image::extClipboardRemoteTypesAwait(uint16_t type) {
-        co_return;
+    void Vnc2Image::extClipboardRemoteTypes(uint16_t type) {
     }
 
     void Vnc2Image::extClipboardSendBuf(std::vector<uint8_t>&&) const {

@@ -21,8 +21,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_BOOST_SOCKETS_
-#define _LTSM_BOOST_SOCKETS_
+#ifndef _LTSM_ASYNC_SSL_
+#define _LTSM_ASYNC_SSL_
 
 #ifdef __WIN32__
 #include <windows.h>
@@ -40,26 +40,31 @@ namespace LTSM {
 using AsioSslContext = boost::asio::ssl::context;
 using AsioSslStream = boost::asio::ssl::stream<AsioTcpSocket>;
 
-namespace AsioTls {
-enum class HandshakeType { Client, Server };
-
-class AsyncStream : public AsyncSocket<AsioSslStream> {
+class AsyncSslStream : public AsyncStream<AsioSslStream> {
     AsioSslContext ssl_ctx_;
     AsioSslStream ssl_sock_;
     bool ssl_connected_ = false;
 
   protected:
-    AsioSslStream& socket(void) override { return ssl_sock_; }
+    AsioSslStream& stream(void) final { return ssl_sock_; }
 
   public:
-    explicit AsyncStream(const boost::asio::any_io_executor& ex, const AsioSslContext::method& method)
+    explicit AsyncSslStream(const boost::asio::any_io_executor& ex, const AsioSslContext::method& method)
         : ssl_ctx_{method}, ssl_sock_{AsioTcpSocket{ex}, ssl_ctx_} {}
 
-    explicit AsyncStream(AsioTcpSocket&& sock, const AsioSslContext::method& method)
+    explicit AsyncSslStream(AsioTcpSocket&& sock, const AsioSslContext::method& method)
         : ssl_ctx_{method}, ssl_sock_{std::move(sock), ssl_ctx_} {}
 
-    size_t sync_recv_available(void) const final {
+    ~AsyncSslStream() {
+        close();
+    }
+
+    size_t sync_recv_available(void) const {
         return ssl_stream().lowest_layer().available();
+    }
+
+    bool isOpen(void) const final {
+        return ssl_stream().lowest_layer().is_open();
     }
 
     inline AsioSslContext& ssl_context(void) { return ssl_ctx_; }
@@ -70,13 +75,15 @@ class AsyncStream : public AsyncSocket<AsioSslStream> {
 
     inline const AsioSslStream& ssl_stream(void) const { return ssl_sock_; }
 
+    enum class HandshakeType { Client, Server };
+
     void sslHandshake(const HandshakeType& type) {
         ssl_stream().handshake(type == HandshakeType::Client ? boost::asio::ssl::stream_base::client
                                                              : boost::asio::ssl::stream_base::server);
         ssl_connected_ = true;
     }
 
-    void closeSocket(void) override {
+    void close(void) final {
         if (auto& sock = ssl_stream().lowest_layer(); sock.is_open()) {
             boost::system::error_code ec;
             sock.cancel(ec);
@@ -96,7 +103,6 @@ class AsyncStream : public AsyncSocket<AsioSslStream> {
         }
     }
 };
-} // namespace AsioTls
 } // namespace LTSM
 
-#endif // _LTSM_BOOST_SOCKETS_
+#endif // _LTSM_ASYNC_SSL_

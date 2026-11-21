@@ -33,7 +33,7 @@
 #include "ltsm_zlib.h"
 #include "librfb_server.h"
 #include "ltsm_application.h"
-#include "ltsm_boost_socket.h"
+#include "ltsm_async_ssl.h"
 
 #ifdef LTSM_WITH_GSSAPI
 #include "ltsm_gsslayer.h"
@@ -84,11 +84,11 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::assignSocket(asio::ip::tcp::socket&& sock) {
-        dynamic_cast<AsyncTcpStream&>(*stream_).socket() = std::move(sock);
+        dynamic_cast<AsyncTcpStream&>(*stream_).stream() = std::move(sock);
     }
 
     void RFB::ServerEncoder::assignSocketFd(int fd) {
-        dynamic_cast<AsyncTcpStream&>(*stream_).socket().assign(asio::ip::tcp::v4(), fd);
+        dynamic_cast<AsyncTcpStream&>(*stream_).stream().assign(asio::ip::tcp::v4(), fd);
     }
 
     asio::awaitable<bool> RFB::ServerEncoder::authVncInitAwait(const std::string & passwdFile) {
@@ -260,8 +260,8 @@ namespace LTSM {
         replySecuritySuccess();
 
         try {
-            auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).socket());
-            auto sock = std::make_unique<AsioTls::AsyncStream>(std::move(tcp_stream), asio::ssl::context::tlsv12_server);
+            auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).stream());
+            auto sock = std::make_unique<AsyncSslStream>(std::move(tcp_stream), asio::ssl::context::tlsv12_server);
 
             auto& ssl_ctx = sock->ssl_context();
             auto& ssl_stream = sock->ssl_stream();
@@ -291,7 +291,7 @@ namespace LTSM {
             ssl_stream.set_verify_mode(verify_mode);
 
             sock->setCipherSuite(ciphers);
-            sock->sslHandshake(AsioTls::HandshakeType::Server);
+            sock->sslHandshake(AsyncSslStream::HandshakeType::Server);
             Application::info("{}: {}", NS_FuncNameV, "TLS handshake success");
             stream_ = std::move(sock);
         } catch(system::system_error & err) {
@@ -327,7 +327,7 @@ namespace LTSM {
     namespace GssWrapper {
         /// @brief: gss api server layer
         class Service : public Gss::ServiceContext {
-            AsyncSocketBase & sock_;
+            AsyncStreamBase & sock_;
 
           protected:
             // Gss::ServiceContext interface
@@ -348,7 +348,7 @@ namespace LTSM {
             }
 
           public:
-            Service(AsyncSocketBase & sock) : sock_{sock} {
+            Service(AsyncStreamBase & sock) : sock_{sock} {
             }
 
             bool checkServiceCredential(std::string_view service) const {
@@ -621,11 +621,11 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::ServerEncoder::sendUpdateScreenAwait(const XCB::Region & area) const {
+    void RFB::ServerEncoder::sendUpdateScreen(const XCB::Region & area) const {
         // xcb context
         if(! encoder_) {
             Application::warning("{}: encoder null", NS_FuncNameV);
-            co_return;
+            return;
         }
 
         try {
@@ -643,14 +643,13 @@ namespace LTSM {
         }
 
         fbUpdateProcessing_.store(false);
-        co_return;
     }
 
     void RFB::ServerEncoder::asioStop(void) {
         shutdownChannels();
         packets_channel_.close();
         if(stream_) {
-            stream_->closeSocket();
+            stream_->close();
         }
         timer_updates_.cancel();
     }
@@ -1189,7 +1188,7 @@ namespace LTSM {
     }
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const {
-        if(auto stream = dynamic_cast<AsioTls::AsyncStream*>(stream_.get())) {
+        if(auto stream = dynamic_cast<AsyncSslStream*>(stream_.get())) {
             auto& ssl_st = stream->ssl_stream();
             return OpenSSL::streamDescription(ssl_st.native_handle());
         }
@@ -1411,10 +1410,10 @@ namespace LTSM {
         asyncSendBuf(bitmaskBuf);
     }
 
-    void RFB::ServerEncoder::sendEncodingLtsmCursor(const XCB::Point & hot, const XCB::Size & cur, std::span<const uint8_t> pixels) const {
+    void RFB::ServerEncoder::sendEncodingLtsmCursor(uint32_t id, const XCB::Point & hot, const XCB::Size & cur, std::span<const uint8_t> pixels) const {
         Application::debug(DebugType::Rfb, "{}: size: {}, hot: {}", NS_FuncNameV, cur, hot);
 
-        StreamBuf sb(256);
+        StreamBuf sb(24 + pixels.size() / 3);
         // LTSM proto
         sb.writeInt8(RFB::SERVER_FB_UPDATE).
             // padding
@@ -1427,11 +1426,12 @@ namespace LTSM {
             writeIntBE16(cur.height).
             writeIntBE32(ENCODING_LTSM_CURSOR);
         // cursor id
-        auto cursorId = Tools::crc32b(pixels);
-        sb.writeIntBE32(cursorId);
+        sb.writeIntBE32(id);
 
         // cursor rgba data
-        if(std::ranges::none_of(cursorSended_, [&cursorId](auto & curid) { return curid == cursorId; })) {
+        if(pixels.empty()) {
+            sb.writeIntBE32(0);
+        } else {
             try {
                 auto zlib = Tools::zlibCompress(pixels);
                 // raw size
@@ -1440,13 +1440,10 @@ namespace LTSM {
                     writeIntBE32(zlib.size()).
                     // compress data
                     write(zlib);
-                cursorSended_.push_front(cursorId);
             } catch(const std::exception & err) {
                 Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
                 sb.writeIntBE32(0);
             }
-        } else {
-            sb.writeIntBE32(0);
         }
 
         asyncSendBuf(std::move(sb.rawbuf()));
@@ -1571,10 +1568,5 @@ namespace LTSM {
                 serverScreenUpdateRequest();
             }
         });
-    }
-
-    void RFB::ServerEncoder::cursorRequest(uint32_t cursorId) {
-        Application::info("{}: cursorId: {:#010x}", NS_FuncNameV, cursorId);
-        cursorSended_.remove(cursorId);
     }
 }

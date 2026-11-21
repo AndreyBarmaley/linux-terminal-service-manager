@@ -70,7 +70,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> AudioClient::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-        co_await stream_.socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+        co_await stream_.stream().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
 #ifdef LTSM_WITH_PIPEWIRE
         // pipewire priority
@@ -222,12 +222,12 @@ namespace LTSM {
 
     void AudioClient::cancel() {
         tm_wait_engine_.cancel();
-        stream_.socket().cancel();
+        stream_.stream().cancel();
     }
 
     void AudioClient::dataReadyNotify(std::span<const uint8_t> span) {
         // this thread - from audio engine callback
-        if(! stream_.socket().is_open()) {
+        if(! stream_.stream().is_open()) {
             return;
         }
 

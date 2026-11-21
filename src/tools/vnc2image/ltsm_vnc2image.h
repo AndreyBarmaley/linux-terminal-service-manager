@@ -68,8 +68,8 @@ namespace LTSM {
 
         uint16_t extClipboardLocalTypes(void) const override;
         boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
-        boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
-        boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t type) override;
+        void extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&&) override;
+        void extClipboardRemoteTypes(uint16_t type) override;
         void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
         void decoderInitEvent(RFB::DecodingBase*) override;
         void systemLoginSuccessEvent(const JsonObject &) override { /* empty */ }

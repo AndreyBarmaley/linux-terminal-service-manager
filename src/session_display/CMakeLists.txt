@@ -3,11 +3,6 @@
 target_sources(${CUR_TARGET} PRIVATE ltsm_display_session.cpp)
 target_compile_options(${CUR_TARGET} PUBLIC "-Wno-narrowing")
 
-# asio::stream_file
-# pkg_search_module(URING REQUIRED liburing)
-# target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_ASIO_HAS_IO_URING)
-
-
 if(DEFINED ENV{LTSM_BOOST_ROOT} AND IS_DIRECTORY "$ENV{LTSM_BOOST_ROOT}/boost")
     set(Boost_USE_STATIC_LIBS ON)
     set(Boost_USE_MULTITHREADED ON)
@@ -26,6 +21,3 @@ else()
         target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_PROCESS_USE_STD_FS)
     endif()
 endif()
-
-target_include_directories(${CUR_TARGET} PRIVATE ${URING_INCLUDE_DIR})
-target_link_libraries(${CUR_TARGET} PRIVATE ${URING_LIBRARIES})

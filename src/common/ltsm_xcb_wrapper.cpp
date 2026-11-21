@@ -3214,7 +3214,7 @@ namespace LTSM {
             Application::debug(DebugType::Xcb, "{}: cursor notify, serial: {:#010x}, name {}, sequence: {}, timestamp: {}",
                                NS_FuncNameV, cn->cursor_serial, nameAtom, cn->sequence, cn->timestamp);
 
-            xcbFixesCursorChangedEvent();
+            xcbFixesCursorChangedEvent(cn->cursor_serial);
         } else if(isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE)) {
             auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
             const xcb_randr_crtc_change_t & cc = rn->u.cc;

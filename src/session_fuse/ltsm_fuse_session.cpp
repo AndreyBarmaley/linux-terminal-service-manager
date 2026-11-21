@@ -164,7 +164,7 @@ namespace LTSM {
         FuseSession(const asio::any_io_executor & ex, const std::string & local, const std::string & remote)
             : AsyncLocalStream(ex)
             , fuse_strand_{asio::make_strand(ex)}
-            , send_lock_{socket().get_executor()}
+            , send_lock_{stream().get_executor()}
             , localPoint{local}, remotePoint{remote} {
             // added parent inode: 1
             StStat st = {};
@@ -194,11 +194,11 @@ namespace LTSM {
         }
 
         std::string socketPath(void) const {
-            return const_cast<FuseSession&>(*this).socket().local_endpoint().path();
+            return const_cast<FuseSession&>(*this).stream().local_endpoint().path();
         }
 
         inline bool socketConnected(void) const {
-            return const_cast<FuseSession&>(*this).socket().is_open();
+            return const_cast<FuseSession&>(*this).stream().is_open();
         }
 
         asio::strand<asio::any_io_executor> & strand(void) {
@@ -292,7 +292,7 @@ namespace LTSM {
 
     // FuseSession
     asio::awaitable<void> FuseSession::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-        co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+        co_await stream().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
         // <VER16> - proto version
         // <LEN16><MOUNTPOINT> - mount point
@@ -441,7 +441,7 @@ namespace LTSM {
         });
 
         using namespace asio::experimental::awaitable_operators;
-        asio::co_spawn(socket().get_executor(), fuseCmdSend() && fuseCmdRecv(), std::move(stop_token));
+        asio::co_spawn(stream().get_executor(), fuseCmdSend() && fuseCmdRecv(), std::move(stop_token));
 
         return true;
     }
@@ -514,9 +514,9 @@ namespace LTSM {
 
         for(;;) {
             try {
-                co_await socket().async_wait(asio::local::stream_protocol::socket::wait_read, asio::use_awaitable);
+                co_await stream().async_wait(asio::local::stream_protocol::socket::wait_read, asio::use_awaitable);
 
-                Application::debug(DebugType::Fuse, "{}: socket data: {}", NS_FuncNameV, socket().available());
+                Application::debug(DebugType::Fuse, "{}: socket data: {}", NS_FuncNameV, stream().available());
 
                 // data present locked
                 co_await send_lock_.async_lock();

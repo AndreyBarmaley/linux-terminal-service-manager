@@ -115,8 +115,8 @@ namespace LTSM {
       public:
         PcscRemote(boost::asio::local::stream_protocol::socket && sock)
             : AsyncLocalStream(std::move(sock))
-            , send_lock_{socket().get_executor()}
-            , trans_lock_{socket().get_executor()} {}
+            , send_lock_{stream().get_executor()}
+            , trans_lock_{stream().get_executor()} {}
         ~PcscRemote() = default;
 
         [[nodiscard]] boost::asio::awaitable<void> remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline);
@@ -143,11 +143,11 @@ namespace LTSM {
         }
 
         bool isConnected(void) const {
-            return const_cast<PcscRemote&>(*this).socket().is_open();
+            return const_cast<PcscRemote&>(*this).stream().is_open();
         }
 
         std::string socketPath(void) const {
-            return const_cast<PcscRemote&>(*this).socket().remote_endpoint().path();
+            return const_cast<PcscRemote&>(*this).stream().remote_endpoint().path();
         }
 
         [[nodiscard]] boost::asio::awaitable<uint32_t> syncReaders(const int32_t & id, const uint64_t & context, bool* changed);

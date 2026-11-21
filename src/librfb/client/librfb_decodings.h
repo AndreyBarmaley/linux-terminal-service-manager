@@ -29,7 +29,7 @@
 
 #include "ltsm_librfb.h"
 #include "ltsm_streambuf.h"
-#include "ltsm_boost_socket.h"
+#include "ltsm_async_stream.h"
 
 #include <boost/asio/post.hpp>
 
@@ -64,10 +64,10 @@ namespace LTSM {
         };
 
         class AsioDecoderStream : public DecoderStream {
-            AsyncSocketBase& sock_;
+            AsyncStreamBase& sock_;
 
           public:
-            AsioDecoderStream(AsyncSocketBase& st) : sock_(st) {}
+            AsioDecoderStream(AsyncStreamBase& st) : sock_(st) {}
             ~AsioDecoderStream() = default;
 
             void recvRaw(void*, size_t) const override;

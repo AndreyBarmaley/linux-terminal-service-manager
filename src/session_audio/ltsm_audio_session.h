@@ -114,11 +114,11 @@ namespace LTSM {
         void cancel();
 
         bool socketPath(std::string_view path) const {
-            return stream_.socket().local_endpoint().path() == path;
+            return stream_.stream().local_endpoint().path() == path;
         }
 
         bool socketConnected(void) const {
-            return stream_.socket().is_open();
+            return stream_.stream().is_open();
         }
     };
 

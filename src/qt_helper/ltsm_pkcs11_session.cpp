@@ -60,7 +60,7 @@ Pkcs11Client::~Pkcs11Client() {
 
 void Pkcs11Client::stop(void) noexcept {
     try {
-        stream_.socket().cancel();
+        stream_.stream().cancel();
         client_cancel_.emit(asio::cancellation_type::terminal);
         work_guard_.reset();
     } catch(...) {
@@ -92,7 +92,7 @@ asio::awaitable<void> Pkcs11Client::clientHandler(void) {
 }
 
 asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-    co_await stream_.socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+    co_await stream_.stream().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
     uint16_t cmd, err;
 

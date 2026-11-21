@@ -29,7 +29,6 @@
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
-#include "ltsm_async_socket.h"
 
 #include <boost/asio/experimental/concurrent_channel.hpp>
 
@@ -48,9 +47,8 @@ namespace LTSM {
             mutable TransferChannel packets_channel_;
             mutable std::atomic<int> packets_channel_jobs_{0};
 
-            std::unique_ptr<AsyncSocketBase> stream_; /// socket layer
+            std::unique_ptr<AsyncStreamBase> stream_; /// socket layer
             std::unique_ptr<DecodingBase> decoder_;
-
 
             PixelFormat server_pf_;
             int server_ltsm_version_ = 0;

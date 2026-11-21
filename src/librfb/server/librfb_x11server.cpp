@@ -42,8 +42,8 @@ namespace LTSM {
         return XCB::Rectangle(clientRegion_.load());
     }
 
-    void RFB::X11Server::xcbFixesCursorChangedEvent(void) {
-        clientUpdateCursor_ = isClientSupportedEncoding(ENCODING_RICH_CURSOR);
+    void RFB::X11Server::xcbFixesCursorChangedEvent(uint32_t cursor_serial) {
+        clientUpdateCursorSerial_.store(cursor_serial);
     }
 
     void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
@@ -345,25 +345,25 @@ namespace LTSM {
         }
 
         if(xcbAllowMessages()) {
-            co_await sendUpdateScreenAwait(damageRect);
+            sendUpdateScreen(damageRect);
 
             if(clientUpdateCursor_) {
-                co_await sendUpdateCursorAwait();
-                clientUpdateCursor_ = false;
+                if(auto cursor_serial = clientUpdateCursorSerial_.load()) {
+                    clientUpdateCursorSerial_.store(0);
+                    sendUpdateCursor(cursor_serial);
+                }
             }
         }
 
         co_return;
     }
 
-    asio::awaitable<uint16_t> RFB::X11Server::xcbDisplayDepth(void) const {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
-        co_return XCB::RootDisplay::depth();
+    uint16_t RFB::X11Server::xcbDisplayDepth(void) const {
+        return XCB::RootDisplay::depth();
     }
 
-    asio::awaitable<XCB::Size> RFB::X11Server::xcbDisplaySize(void) const {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
-        co_return XCB::RootDisplay::size();
+    XCB::Size RFB::X11Server::xcbDisplaySize(void) const {
+        return XCB::RootDisplay::size();
     }
 
     bool RFB::X11Server::isDisplaySize(const XCB::Size& sz) const {
@@ -415,8 +415,8 @@ namespace LTSM {
             asio::bind_cancellation_slot(send_cancel_.slot(), asio::detached));
 
         // RFB 6.3.1 client init
-        const auto displaySize = co_await xcbDisplaySize();
-        const auto displayDepth = co_await xcbDisplayDepth();
+        const auto displaySize = xcbDisplaySize();
+        const auto displayDepth = xcbDisplayDepth();
 
         serverRegion_.store(xcb_rectangle_t{0, 0, displaySize.width, displaySize.height});
         frameTimePoint_ = std::chrono::steady_clock::now();
@@ -482,13 +482,14 @@ namespace LTSM {
         serverEncodingsEvent();
 
         if(isClientSupportedEncoding(ENCODING_EXT_DESKTOP_SIZE) && rfbDesktopResizeEnabled()) {
-            asio::co_spawn(xcb_strand(), [this]() -> asio::awaitable<void> {
-                const auto dsz = co_await xcbDisplaySize();
-                sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime,
+            const auto dsz = xcbDisplaySize();
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime,
 							RFB::DesktopResizeError::NoError, dsz);
-		co_return;
-            }, asio::detached);
+	    return;
         }
+
+        clientUpdateCursor_ = isClientSupportedEncoding(ENCODING_LTSM_CURSOR) ||
+            isClientSupportedEncoding(ENCODING_RICH_CURSOR);
     }
 
     void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
@@ -593,15 +594,12 @@ namespace LTSM {
                 try {
                     co_await clipboard_ready_.async_wait(asio::use_awaitable);
                 } catch(const system::system_error& err) {
+                    auto ec = err.code();
                     // clipboard_ready_.cancel() -> data ready
-                    if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                        Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-                        co_return clipboard_buf{};
+                    if(ec == asio::error::operation_aborted) {
+                        co_return clientClipboard_;
                     }
-                }
-
-                if(clientClipboard_.size()) {
-                    co_return clientClipboard_;
+                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
                 }
             }
         }
@@ -609,9 +607,7 @@ namespace LTSM {
         co_return clipboard_buf{};
     }
 
-    asio::awaitable<void> RFB::X11Server::extClipboardRemoteTypesAwait(uint16_t types) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
-
+    void RFB::X11Server::extClipboardRemoteTypes(uint16_t types) {
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
@@ -622,13 +618,9 @@ namespace LTSM {
         if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
             paste->setSelectionOwner(*this);
         }
-    
-        co_return;
     }
 
-    asio::awaitable<void> RFB::X11Server::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
-
+    void RFB::X11Server::extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&& buf) {
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
@@ -636,8 +628,6 @@ namespace LTSM {
 
         clientClipboard_.swap(buf);
         clipboard_ready_.cancel();
-
-        co_return;
     }
 
     void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
@@ -700,14 +690,15 @@ namespace LTSM {
         try {
             co_await clipboard_ready_.async_wait(asio::use_awaitable);
         } catch(const system::system_error& err) {
+            auto ec = err.code();
             // clipboard_ready_.cancel() -> data ready
-            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-                co_return false;
+            if(ec == asio::error::operation_aborted) {
+                co_return true;
             }
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
         }
 
-        co_return true;
+        co_return false;
     }
 
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
@@ -826,8 +817,21 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> RFB::X11Server::sendUpdateCursorAwait(void) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
+    void RFB::X11Server::cursorRequest(uint32_t cursorId) {
+        Application::info("{}: cursorId: {:#010x}", NS_FuncNameV, cursorId);
+        asio::post(xcb_strand(), [this, cursorId]() {
+            cursorsCache_.erase(cursorId);
+        });
+    }
+
+    void RFB::X11Server::sendUpdateCursor(uint32_t cursorId) {
+        if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
+            if(auto it = cursorsCache_.find(cursorId); it != cursorsCache_.end()) {
+                const auto& rt = it->second;
+                sendEncodingLtsmCursor(cursorId, rt.topLeft(), rt.toSize(), {});
+                return;
+            }
+        }
 
         if(auto fixes = static_cast<const XCB::ModuleWindowFixes*>(XCB::RootDisplay::getExtensionConst(XCB::Module::WINFIXES))) {
             XCB::CursorImage replyCursor = fixes->getCursorImage();
@@ -844,7 +848,8 @@ namespace LTSM {
                     const auto cursorSize = XCB::Size(reply->width, reply->height);
                     // priority LTSM cursors
                     if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
-                        sendEncodingLtsmCursor(cursorHot, cursorSize, std::span{ptr, dataSize * sizeof(uint32_t)});
+                        sendEncodingLtsmCursor(cursorId, cursorHot, cursorSize, std::span{ptr, dataSize * sizeof(uint32_t)});
+                        cursorsCache_.emplace(cursorId, XCB::Region(cursorHot, cursorSize));
                     } else {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                         auto cursorFB = FrameBuffer(ptr, XCB::Region(cursorSize), BGRA32);

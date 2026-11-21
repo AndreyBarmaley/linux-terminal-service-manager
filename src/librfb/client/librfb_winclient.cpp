@@ -38,10 +38,7 @@ namespace LTSM {
 
     void RFB::WinClient::extClipboardSendBuf(std::vector<uint8_t>&& buf) const {
         Application::debug(DebugType::X11Cli, "{}, length: {}", NS_FuncNameV, buf.size());
-        asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
-            co_await sendCutTextAwait(buf, true);
-            co_return;
-        }, asio::detached);
+        sendCutText(buf, true);
     }
 
     uint16_t RFB::WinClient::extClipboardLocalTypes(void) const {
@@ -69,7 +66,7 @@ namespace LTSM {
         co_return clipboard_buf{};
     }
 
-    asio::awaitable<void> RFB::WinClient::extClipboardRemoteTypesAwait(uint16_t types) {
+    void RFB::WinClient::extClipboardRemoteTypes(uint16_t types) {
         Application::debug(DebugType::WinCli, "{}, types: {:#06x}", NS_FuncNameV, types);
 
         if(! extClipboardRemoteCaps()) {
@@ -81,10 +78,9 @@ namespace LTSM {
 
         //if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))
         //        paste->setSelectionOwner(*this);
-        co_return;
     }
 
-    asio::awaitable<void> RFB::WinClient::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
+    void RFB::WinClient::extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&& buf) {
         // xcb context
         Application::debug(DebugType::WinCli, "{}, type: {:#06x}, length: {}", NS_FuncNameV, type, buf.size());
 
@@ -94,7 +90,6 @@ namespace LTSM {
         }
 
         clientClipboard.swap(buf);
-        co_return;
     }
 
     void RFB::WinClient::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {

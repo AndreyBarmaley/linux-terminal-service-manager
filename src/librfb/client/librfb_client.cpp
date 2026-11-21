@@ -43,7 +43,7 @@
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/container/small_vector.hpp>
 
-#include "ltsm_boost_socket.h"
+#include "ltsm_async_ssl.h"
 
 using namespace std::chrono_literals;
 using namespace boost;
@@ -55,11 +55,11 @@ namespace LTSM {
         asio::ip::tcp::resolver resolver{ex};
         auto endpoints = resolver.resolve(host, std::to_string(port));
         auto tcp_stream = std::make_unique<AsyncTcpStream>(ex);
-        co_await asio::async_connect(tcp_stream->socket(), endpoints, asio::use_awaitable);
+        co_await asio::async_connect(tcp_stream->stream(), endpoints, asio::use_awaitable);
         // set no delay
         if(no_delay) {
             asio::ip::tcp::no_delay option(true);
-            tcp_stream->socket().set_option(option);
+            tcp_stream->stream().set_option(option);
         }
         stream_ = std::move(tcp_stream);
         co_return;
@@ -149,8 +149,8 @@ namespace LTSM {
 
         // TLS handshake
         try {
-            auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).socket());
-            auto sock = std::make_unique<AsioTls::AsyncStream>(std::move(tcp_stream), asio::ssl::context::tlsv12_client);
+            auto tcp_stream = std::move(static_cast<AsyncTcpStream&>(*stream_).stream());
+            auto sock = std::make_unique<AsyncSslStream>(std::move(tcp_stream), asio::ssl::context::tlsv12_client);
 
             auto& ssl_ctx = sock->ssl_context();
             auto& ssl_stream = sock->ssl_stream();
@@ -170,7 +170,7 @@ namespace LTSM {
 
             ssl_stream.set_verify_mode(verify_mode);
             sock->setCipherSuite("AECDH-AES256-SHA:@SECLEVEL=0");
-            sock->sslHandshake(AsioTls::HandshakeType::Client);
+            sock->sslHandshake(AsyncSslStream::HandshakeType::Client);
             Application::info("{}: {}", NS_FuncNameV, "TLS handshake success");
             stream_ = std::move(sock);
         } catch(system::system_error & err) {
@@ -186,7 +186,7 @@ namespace LTSM {
     namespace GssWrapper {
         /// @brief: gss api client layer
         class Client : public Gss::ClientContext {
-            AsyncSocketBase & sock_;
+            AsyncStreamBase & sock_;
 
           protected:
             // Gss::ServiceContext interface
@@ -207,7 +207,7 @@ namespace LTSM {
             }
 
         public:
-            Client(AsyncSocketBase & sock) : sock_{sock} {
+            Client(AsyncStreamBase & sock) : sock_{sock} {
             }
 
             bool checkUserCredential(std::string_view username) const {
@@ -455,7 +455,7 @@ namespace LTSM {
         packets_channel_.close();
         incr_update_timer_.cancel();
         if(stream_) {
-            stream_->closeSocket();
+            stream_->close();
         }
     }
 

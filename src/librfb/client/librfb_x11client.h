@@ -54,8 +54,8 @@ namespace LTSM {
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
             boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
-            boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
-            boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) override;
+            void extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&&) override;
+            void extClipboardRemoteTypes(uint16_t types) override;
             boost::asio::awaitable<bool> extClipboardSourceReadyAwait(xcb_atom_t atom);
             void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
 
