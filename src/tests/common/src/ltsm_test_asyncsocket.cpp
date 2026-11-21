@@ -20,6 +20,7 @@ using ::testing::Invoke;
 
 class MockAsyncStream : public AsyncStreamBase {
 public:
+    MOCK_METHOD(bool, isOpen, (), (const, override));
     MOCK_METHOD(void, close, (), (override));
     MOCK_METHOD(void, sync_recv_buf, (void* ptr, size_t len), (const, override));
     MOCK_METHOD(void, sync_send_buf, (const void* ptr, size_t len), (const, override));
@@ -33,6 +34,8 @@ public:
                 (std::initializer_list<boost::asio::const_buffer> list), (const, override));
     MOCK_METHOD(boost::asio::awaitable<void>, async_send_buffers, 
                 (std::vector<boost::asio::const_buffer>&& buffers), (const, override));
+    MOCK_METHOD(boost::asio::any_io_executor, get_executor, (), (override));
+    MOCK_METHOD(boost::asio::awaitable<size_t>, async_read_some, (boost::asio::mutable_buffer buffer), (const, override));
 };
 
 class AsyncStreamTest : public ::testing::Test {
