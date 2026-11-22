@@ -25,8 +25,18 @@
 #define _CHANNEL_STREAM_
 
 #include <atomic>
+#include <optional>
+
 #include <boost/asio/experimental/concurrent_channel.hpp>
 #include "ltsm_async_stream.h"
+
+#if BOOST_VERSION >= 108700
+#include <boost/process/process.hpp>
+#include <boost/process/stdio.hpp>
+#else
+#include <boost/process/v2/process.hpp>
+#include <boost/process/v2/stdio.hpp>
+#endif
 
 namespace LTSM {
     template<typename AsioGeneric, StreamMode Mode = StreamMode::IReadWrite>
@@ -48,7 +58,7 @@ namespace LTSM {
             return ao_.is_open();
         }
 
-        void close(void) final {
+        void close(void) override {
             if(ao_.is_open()) {
                 boost::system::error_code ec;
                 ao_.cancel(ec);
@@ -68,6 +78,42 @@ namespace LTSM {
     using AsyncReadablePipe = AsyncAsioGeneric<boost::asio::readable_pipe, StreamMode::IRead>;
     using AsyncWritablePipe = AsyncAsioGeneric<boost::asio::writable_pipe, StreamMode::IWrite>;
 
+    class BasicProcessExec {
+        boost::process::v2::process proc_;
+
+      protected:
+        void stopping(void);
+
+      public:
+        BasicProcessExec(boost::asio::any_io_executor ex,
+            const std::string & cmd, const std::vector<std::string> & args, boost::process::v2::process_stdio&& redirect)
+            : proc_{ex, cmd, std::move(args), std::move(redirect)} {
+        }
+
+        BasicProcessExec(BasicProcessExec&&) noexcept = default;
+
+        ~BasicProcessExec() {
+            stopping();
+        }
+    };
+
+    class AsyncReadablePipeCmd : public AsyncReadablePipe, public BasicProcessExec {
+      public:
+        AsyncReadablePipeCmd(boost::asio::any_io_executor ex, const std::string & cmd, const std::vector<std::string>& args)
+            : AsyncReadablePipe(boost::asio::readable_pipe{ex})
+            , BasicProcessExec(ex, cmd, args, boost::process::v2::process_stdio{nullptr, AsyncReadablePipe::stream(), nullptr}) {
+        }
+    };
+
+    class AsyncWritablePipeCmd : public AsyncWritablePipe, public BasicProcessExec {
+      public:
+        AsyncWritablePipeCmd(boost::asio::any_io_executor ex, const std::string & cmd, const std::vector<std::string>& args)
+            : AsyncWritablePipe(boost::asio::writable_pipe{ex})
+            , BasicProcessExec(ex, cmd, args, boost::process::v2::process_stdio{AsyncWritablePipe::stream(), nullptr, nullptr}) {
+        }
+    };
+
+    /// IStreamHandler
     template<typename Stream>
     class IStreamHandler : public std::enable_shared_from_this<IStreamHandler<Stream>> {
       protected:

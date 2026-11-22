@@ -28,14 +28,10 @@
 #include <filesystem>
 
 #if BOOST_VERSION >= 108700
-#include <boost/process/stdio.hpp>
 #include <boost/process/popen.hpp>
-#include <boost/process/process.hpp>
 #include <boost/process/environment.hpp>
 #else
-#include <boost/process/v2/stdio.hpp>
 #include <boost/process/v2/popen.hpp>
-#include <boost/process/v2/process.hpp>
 #include <boost/process/v2/environment.hpp>
 #endif
 
@@ -192,7 +188,7 @@ Channel::Planned& Channel::Planned::operator=(Planned&&) noexcept = default;
 
 void Channel::Planned::acceptSockClose(void) {
     if(acceptSock && acceptSock->is_open()) {
-        boost::system::error_code ec;
+        system::error_code ec;
         acceptSock->shutdown(generic_socket::shutdown_both, ec);
         acceptSock->close(ec);
         acceptSock.reset();
@@ -1254,7 +1250,7 @@ void Channel::AsyncConnectorBase::writeErrorHandler(std::exception_ptr ptr) {
     setConnectorStatus(ConnectorStatus::Error);
 }
 
-boost::asio::awaitable<void> Channel::AsyncConnectorBase::readStreamHandler(std::vector<uint8_t> buf) {
+asio::awaitable<void> Channel::AsyncConnectorBase::readStreamHandler(std::vector<uint8_t> buf) {
     if(isZlib()) {
         buf = ZLib::deflate(buf, Z_BEST_SPEED + 2);
     }
@@ -1275,11 +1271,11 @@ boost::asio::awaitable<void> Channel::AsyncConnectorBase::readStreamHandler(std:
         speed_sz += transferred;
 
         if(speed_sz >= info.second) {
-            auto ex = co_await boost::asio::this_coro::executor;
-            boost::asio::steady_timer tm_delay{ex};
+            auto ex = co_await asio::this_coro::executor;
+            asio::steady_timer tm_delay{ex};
 
             tm_delay.expires_after(info.first - elapsed);
-            co_await tm_delay.async_wait(boost::asio::use_awaitable);
+            co_await tm_delay.async_wait(asio::use_awaitable);
 
             speed_tp = std::chrono::steady_clock::now();
             speed_sz = 0;
@@ -1452,11 +1448,39 @@ Channel::createFileConnector(CID channel, const std::filesystem::path & path, co
     throw channel_error(NS_FuncNameS);
 }
 
+void BasicProcessExec::stopping(void) {
+    if(! proc_.running()) {
+        return;
+    }
+
+    auto ex = proc_.get_executor();
+    asio::co_spawn(ex, [proc=std::move(proc_)]() mutable -> asio::awaitable<void> {
+        const auto pid = proc.id();
+        proc.request_exit();
+
+        auto [ec, exit_code] = co_await proc.async_wait(
+            asio::cancel_after(300ms, asio::as_tuple(asio::use_awaitable))
+        );
+
+        if(ec) {
+            if(ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+            } else if(proc.running()) {
+                proc.terminate();
+            }
+        } else {
+            Application::debug(DebugType::Channels, "{}: pid: {}, exit code: {}", NS_FuncNameV, pid, exit_code);
+        }
+
+        co_return;
+    }, asio::detached);
+}
+
 /// createCommandConnector
 Channel::ConnectorBasePtr
 Channel::createCommandConnector(CID channel, const std::string & cmd, const std::vector<std::string> & args, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
 
-    auto exe = boost::process::v2::environment::find_executable(cmd);
+    auto exe = process::v2::environment::find_executable(cmd);
     if(exe.empty()) {
         Application::error("{}: cmd `{}' not found", NS_FuncNameV, cmd);
         throw channel_error(NS_FuncNameS);
@@ -1464,36 +1488,20 @@ Channel::createCommandConnector(CID channel, const std::string & cmd, const std:
 
     try {
         auto ex = sender.chan_strand();
-        process::v2::process_stdio redirect{nullptr, nullptr, nullptr};
         Channel::ConnectorBasePtr ret;
 
         if(mode == ConnectorMode::ReadOnly) {
-            boost::asio::readable_pipe rp(ex);
-            redirect.out = rp;
-            using AsyncChannelStream = AsyncStreamConnectorRO<AsyncReadablePipe>;
-            ret = std::make_shared<AsyncChannelStream>(AsyncReadablePipe(std::move(rp)), channel, mode, chOpts, sender);
+            using AsyncChannelStream = AsyncStreamConnectorRO<AsyncReadablePipeCmd>;
+            ret = std::make_shared<AsyncChannelStream>(AsyncReadablePipeCmd(ex, exe.string(), args), channel, mode, chOpts, sender);
         }
 
         if(mode == ConnectorMode::WriteOnly) {
-            boost::asio::writable_pipe wp(ex);
-            redirect.in = wp;
-            using AsyncChannelStream = AsyncStreamConnectorWO<AsyncWritablePipe>;
-            ret = std::make_shared<AsyncChannelStream>(AsyncWritablePipe(std::move(wp)), channel, mode, chOpts, sender);
+            using AsyncChannelStream = AsyncStreamConnectorWO<AsyncWritablePipeCmd>;
+            ret = std::make_shared<AsyncChannelStream>(AsyncWritablePipeCmd(ex, exe.string(), args), channel, mode, chOpts, sender);
         }
 
         if(ret) {
-            auto proc = std::make_shared<boost::process::v2::process>(ex, cmd, std::move(args), std::move(redirect));
-            Application::info("{}: id: {}, run cmd: `{}', pid: {}, mode: {}", NS_FuncNameV, channel, exe.string(), proc->id(), Channel::Connector::modeString(mode));
-
-            proc->async_wait([proc, exe](boost::system::error_code ec, int exit_code) {
-                if(ec) {
-                    Application::warning("{}: wait cmd: `{}', pid: {}, exit code: {}", NS_FuncNameV, exe.string(), proc->id(), exit_code);
-                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-                } else {
-                    Application::debug(DebugType::Channels, "{}: wait cmd: `{}', pid: {}, exit code: {}", NS_FuncNameV, exe.string(), proc->id(), exit_code);
-                }
-            });
-
+            Application::info("{}: id: {}, run cmd: `{}', mode: {}", NS_FuncNameV, channel, exe.string(), Channel::Connector::modeString(mode));
             return ret;
         }
 
