@@ -242,8 +242,10 @@ namespace LTSM {
             if(ec != asio::error::operation_aborted) {
                 Application::error("{}: system error: `{}', code: {}", NS_FuncNameV, ec.message(), ec.value());
             }
+            stream_.stream().close();
         } catch(const std::exception& err) {
             Application::error("{}: exception: `{}'", NS_FuncNameV, err.what());
+            stream_.stream().close();
         }
     }
 
