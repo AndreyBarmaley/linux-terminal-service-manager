@@ -32,7 +32,7 @@
 
 #include "ltsm_application.h"
 #include "ltsm_async_sdbus.h"
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
 

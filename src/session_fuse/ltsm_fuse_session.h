@@ -31,7 +31,7 @@
 #include "ltsm_fuse.h"
 #include "ltsm_async_sdbus.h"
 #include "ltsm_fuse_adaptor.h"
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 
 namespace LTSM {
     class FuseSession;

@@ -32,63 +32,83 @@
 #include <openssl/ssl.h>
 
 #include <boost/asio/ssl/stream.hpp>
-
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 
 namespace LTSM {
 //
-using AsioSslContext = boost::asio::ssl::context;
-using AsioSslStream = boost::asio::ssl::stream<AsioTcpSocket>;
 
-class AsyncSslStream : public AsyncStream<AsioSslStream> {
-    AsioSslContext ssl_ctx_;
-    AsioSslStream ssl_sock_;
+using SslContext = boost::asio::ssl::context;
+using SslStream = boost::asio::ssl::stream<boost::asio::generic::stream_protocol::socket>;
+
+// Вспомогательная база гарантирует, что ssl_ctx_ будет создан ДО AsyncStream<SslStream>
+// и уничтожен ПОСЛЕ закрытия сокета в деструкторе AsyncStream.
+struct AsyncSslContextHolder {
+    SslContext ssl_ctx_;
+
+    explicit AsyncSslContextHolder(SslContext::method method)
+        : ssl_ctx_{method} {}
+};
+
+class AsyncSslStream : private AsyncSslContextHolder, public AsyncStream<SslStream> {
     bool ssl_connected_ = false;
 
-  protected:
-    AsioSslStream& stream(void) final { return ssl_sock_; }
-
   public:
-    explicit AsyncSslStream(const boost::asio::any_io_executor& ex, const AsioSslContext::method& method)
-        : ssl_ctx_{method}, ssl_sock_{AsioTcpSocket{ex}, ssl_ctx_} {}
+    enum class HandshakeType { Client, Server };
 
-    explicit AsyncSslStream(AsioTcpSocket&& sock, const AsioSslContext::method& method)
-        : ssl_ctx_{method}, ssl_sock_{std::move(sock), ssl_ctx_} {}
+    AsyncSslStream(const boost::asio::any_io_executor& ex, SslContext::method method)
+        : AsyncSslContextHolder{method},
+          AsyncStream<SslStream>{boost::asio::generic::stream_protocol::socket{ex}, ssl_ctx_} {}
 
-    ~AsyncSslStream() {
+    AsyncSslStream(boost::asio::generic::stream_protocol::socket&& sock, SslContext::method method)
+        : AsyncSslContextHolder{method},
+          AsyncStream<SslStream>{std::move(sock), ssl_ctx_} {}
+
+    // Запрещаем перемещение, так как ssl::stream хранит внутреннюю ссылку на ssl_ctx_
+    AsyncSslStream(AsyncSslStream&&) = delete;
+    AsyncSslStream& operator=(AsyncSslStream&&) = delete;
+
+    ~AsyncSslStream() override {
         close();
     }
 
-    size_t sync_recv_available(void) const {
+    [[nodiscard]] std::size_t sync_recv_available() const {
         return ssl_stream().lowest_layer().available();
     }
 
-    bool isOpen(void) const final {
+    [[nodiscard]] bool isOpen() const override {
         return ssl_stream().lowest_layer().is_open();
     }
 
-    inline AsioSslContext& ssl_context(void) { return ssl_ctx_; }
+    [[nodiscard]] SslContext& ssl_context() noexcept { return ssl_ctx_; }
+    [[nodiscard]] const SslContext& ssl_context() const noexcept { return ssl_ctx_; }
 
-    inline const AsioSslContext& ssl_context(void) const { return ssl_ctx_; }
+    [[nodiscard]] SslStream& ssl_stream() noexcept { return stream(); }
+    [[nodiscard]] const SslStream& ssl_stream() const noexcept { return stream(); }
 
-    inline AsioSslStream& ssl_stream(void) { return ssl_sock_; }
-
-    inline const AsioSslStream& ssl_stream(void) const { return ssl_sock_; }
-
-    enum class HandshakeType { Client, Server };
-
-    void sslHandshake(const HandshakeType& type) {
-        ssl_stream().handshake(type == HandshakeType::Client ? boost::asio::ssl::stream_base::client
-                                                             : boost::asio::ssl::stream_base::server);
+    void sslHandshake(HandshakeType type) {
+        ssl_stream().handshake(
+            type == HandshakeType::Client ? boost::asio::ssl::stream_base::client
+                                          : boost::asio::ssl::stream_base::server
+        );
         ssl_connected_ = true;
     }
 
-    void close(void) final {
+    [[nodiscard]] boost::asio::awaitable<void> asyncSslHandshake(HandshakeType type) {
+        co_await ssl_stream().async_handshake(
+            type == HandshakeType::Client ? boost::asio::ssl::stream_base::client
+                                          : boost::asio::ssl::stream_base::server,
+            boost::asio::use_awaitable
+        );
+        ssl_connected_ = true;
+    }
+
+    void close() override {
         if (auto& sock = ssl_stream().lowest_layer(); sock.is_open()) {
             boost::system::error_code ec;
             sock.cancel(ec);
 
             if (ssl_connected_) {
+                ssl_connected_ = false;
                 ssl_stream().shutdown(ec);
             }
 
@@ -97,8 +117,8 @@ class AsyncSslStream : public AsyncStream<AsioSslStream> {
     }
 
     void setCipherSuite(const char* list) {
-        if (list) {
-            auto ssl = ssl_stream().native_handle();
+        if (list != nullptr) {
+            auto* ssl = ssl_stream().native_handle();
             SSL_set_cipher_list(ssl, list);
         }
     }

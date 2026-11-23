@@ -36,7 +36,7 @@
 #include "ltsm_async_sdbus.h"
 #include "ltsm_async_mutex.h"
 #include "ltsm_application.h"
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 #include "ltsm_pcsc_adaptor.h"
 
 namespace PcscLite {

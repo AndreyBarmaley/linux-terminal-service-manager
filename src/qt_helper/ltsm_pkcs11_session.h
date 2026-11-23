@@ -30,7 +30,7 @@
 #include <QThread>
 #include <boost/asio.hpp>
 
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 #include "ltsm_pkcs11_wrapper.h"
 #include "ltsm_async_mutex.h"
 
@@ -94,8 +94,8 @@ class Pkcs11Client : public QThread {
     ~Pkcs11Client();
 
     ListTokens getTokens(void) const;
-    ListCertificates getCertificates(uint64_t slotId) const;
-    ListMechanisms getMechanisms(uint64_t slotId) const;
+    ListCertificates getCertificates(uint64_t slotId);
+    ListMechanisms getMechanisms(uint64_t slotId);
 
     binary_buf signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
                         const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
@@ -110,8 +110,8 @@ class Pkcs11Client : public QThread {
     boost::asio::awaitable<void> remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline);
     boost::asio::awaitable<bool> updateTokens(void);
     boost::asio::awaitable<void> updateTokensTimer(void);
-    boost::asio::awaitable<ListCertificates> loadCertificates(uint64_t slotId) const;
-    boost::asio::awaitable<ListMechanisms> loadMechanisms(uint64_t slotId) const;
+    boost::asio::awaitable<ListCertificates> loadCertificates(uint64_t slotId);
+    boost::asio::awaitable<ListMechanisms> loadMechanisms(uint64_t slotId);
     boost::asio::awaitable<binary_buf> loadSignData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
             const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
     boost::asio::awaitable<binary_buf> loadDecryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,

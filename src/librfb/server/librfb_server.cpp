@@ -43,6 +43,7 @@
 #include "librfb_ffmpeg.h"
 #endif
 
+#include <boost/container/small_vector.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/asio/ssl/stream.hpp>
 

@@ -52,8 +52,6 @@
 
 #include "ltsm_streambuf.h"
 #include "ltsm_json_wrapper.h"
-#include "ltsm_async_socket.h"
-
 #include "channel_stream.h"
 
 namespace LTSM {
@@ -326,8 +324,7 @@ namespace LTSM {
 
             void cancel(void) override {
                 Application::info("{}: channel: {} is stopping", NS_FuncNameV, channel());
-                stopReaderLoop();
-                stream_.close();
+                stopReaderLoop(true);
             }
 
             void connectorRunningEvent(void) override {
@@ -361,10 +358,10 @@ namespace LTSM {
             }
 
             void writeErrorHandler(std::exception_ptr ptr) override {
-                AsyncConnectorBase::readErrorHandler(ptr);
+                AsyncConnectorBase::writeErrorHandler(ptr);
             }
 
-            void writeJobsOverhead(uint32_t jobs) override {
+            void writeQueueOverflow(uint32_t jobs) override {
                 AsyncConnectorBase::writeJobsOverhead(jobs);
             }
 
@@ -376,11 +373,7 @@ namespace LTSM {
 
             void cancel(void) override {
                 Application::info("{}: channel: {} is stopping", NS_FuncNameV, channel());
-                stopWriterLoop();
-                channel_.cancel();
-                //
-                stream_.close();
-                channel_.close();
+                stopWriterLoop(true);
             }
 
             void pushData(std::vector<uint8_t>&& buf) override {
@@ -419,16 +412,14 @@ namespace LTSM {
 
             void cancel(void) override {
                 Application::info("{}: channel: {} is stopping", NS_FuncNameV, AsyncConnectorBase::channel());
-                if(AsyncConnectorBase::isReadAllow()) {
-                    IReaderStream<AsyncStreamBase>::stopReaderLoop();
+                const bool read_allow  = AsyncConnectorBase::isReadAllow();
+                const bool write_allow = AsyncConnectorBase::isWriteAllow();
+                if(read_allow) {
+                    IReaderStream<AsyncStreamBase>::stopReaderLoop(!write_allow);
                 }
-                if(AsyncConnectorBase::isWriteAllow()) {
-                    IWriterStream<AsyncStreamBase>::stopWriterLoop();
-                    AsyncStreamConnectorWO<AsioStream>::transferChannel().cancel();
-                    AsyncStreamConnectorWO<AsioStream>::transferChannel().close();
+                if(write_allow) {
+                    IWriterStream<AsyncStreamBase>::stopWriterLoop(true);
                 }
-                //
-                AsyncStreamConnectorWO<AsioStream>::stream().close();
             }
 
             void connectorRunningEvent(void) override {
@@ -648,6 +639,10 @@ namespace LTSM {
 
         inline boost::asio::strand<boost::asio::any_io_executor> chan_strand(void) const {
             return strand_;
+        }
+
+        bool isValidChannelId(int id) const noexcept {
+            return id > ChannelTypeSystem && id < ChannelTypeReserved;
         }
 
         bool sendSystemTransferFiles(std::forward_list<std::string>&&) const;

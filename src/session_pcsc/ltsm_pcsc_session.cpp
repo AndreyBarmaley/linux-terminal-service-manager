@@ -750,7 +750,8 @@ namespace LTSM {
                 state.cbAtr = cbAtr;
 
                 std::string readerName(readerLen, 0);
-                co_await async_recv_values(readerName, asio::buffer(state.rgbAtr, cbAtr));
+                auto state_buf = asio::buffer(state.rgbAtr, cbAtr);
+                co_await async_recv_values(readerName, state_buf);
 
                 if(readerName != state.szReader) {
                     Application::warning("{}: invalid reader, `{}' != `{}'", NS_FuncNameV, readerName, state.szReader);

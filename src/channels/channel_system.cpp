@@ -20,12 +20,16 @@
  *   if not, write to the Free Software Foundation, Inc.,              *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
-
 #include <chrono>
 #include <cstring>
 #include <utility>
+#include <charconv>
 #include <exception>
 #include <filesystem>
+
+#ifdef __WIN32__
+#include <winsock2.h>
+#endif
 
 #if BOOST_VERSION >= 108700
 #include <boost/process/popen.hpp>
@@ -259,14 +263,17 @@ Channel::Connector::parseAddrPort(const std::string & addrPort) {
     }
 
     auto addr = list.front().empty() ? "127.0.0.1" : list.front();
-    int port = std::stoi(list.back());
+    const auto & port_s = list.back();
 
-    if(port < 1 || UINT16_MAX < port) {
-        Application::error("{}: {}, port: {}", NS_FuncNameV, "invalid port", port);
+    uint16_t port = 0;
+    auto [ptr, ec] = std::from_chars(port_s.data(), port_s.data() + port_s.size(), port);
+
+    if(ec != std::errc() || ptr != port_s.data() + port_s.size() || port == 0) {
+        Application::error("{}: invalid port: `{}'", NS_FuncNameV, port_s);
         throw channel_error(NS_FuncNameS);
     }
 
-    return std::make_pair(addr, static_cast<uint16_t>(port));
+    return std::make_pair(addr, port);
 }
 
 /// ChannelBase
@@ -402,16 +409,26 @@ void ChannelBase::sendChannelDataSuccess(CID channel, size_t val) const {
 
 void ChannelBase::systemChannelCloseEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
-    Application::info("{}: channel: {}", NS_FuncNameV, channel);
-    destroyChannel(channel, false /* send event */);
+
+    if(isValidChannelId(channel)) {
+        Application::info("{}: channel: {}", NS_FuncNameV, channel);
+        destroyChannel(channel, false /* send event */);
+    } else {
+        Application::error("{}: invalid channel id: {}", NS_FuncNameV, channel);
+    }
 }
 
 void ChannelBase::systemChannelErrorEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
     int code = jo.getInteger("code");
     auto err = jo.getString("error");
-    Application::info("{}: channel: {}, errno: {}, error: `{}'", NS_FuncNameV, channel, code, err);
-    channelErrorNotify(channel, code, err);
+
+    if(isValidChannelId(channel)) {
+        Application::info("{}: channel: {}, errno: {}, error: `{}'", NS_FuncNameV, channel, code, err);
+        channelErrorNotify(channel, code, err);
+    } else {
+        Application::error("{}: invalid channel id: {}", NS_FuncNameV, channel);
+    }
 }
 
 bool ChannelBase::sendSystemTransferFiles(std::forward_list<std::string>&& files) const {
@@ -693,7 +710,7 @@ void ChannelClient::systemChannelOpenEvent(const JsonObject & jo) {
         sendSystemChannelConnected(channel, flags, true /* replyError */);
     };
 
-    if(channel <= ChannelTypeSystem || channel >= ChannelTypeReserved) {
+    if(!ChannelBase::isValidChannelId(channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel incorrect", channel);
         return replyError();
     }
@@ -776,6 +793,11 @@ void ChannelClient::systemChannelConnectedEvent(const JsonObject & jo) {
     int channel = jo.getInteger("id");
     int error = jo.getInteger("error");
     int flags = jo.getInteger("flags", 0);
+
+    if(!isValidChannelId(channel)) {
+        Application::error("{}: invalid channel id: {}", NS_FuncNameV, channel);
+        throw channel_error(NS_FuncNameS);
+    }
 
     if(error) {
         Application::error("{}: error: {}, id: {}", NS_FuncNameV, error, channel);
@@ -884,7 +906,7 @@ asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clie
             if(0 < listenLimit) {
                 acceptor.listen(listenLimit);
             }
-            Application::debug(DebugType::Channels, "listen path: {}", NS_FuncNameV, endpoint.path());
+            Application::debug(DebugType::Channels, "{}: listen path: {}", NS_FuncNameV, endpoint.path());
             // wait accept
             co_await asio::co_spawn(ex,
                 acceptorAcceptAwait(std::move(acceptor), serverOpts, clientOpts, channelOpts),
@@ -900,7 +922,7 @@ asio::awaitable<void> ChannelListener::createListenerAwait(Channel::UrlMode clie
             if(0 < listenLimit) {
                 acceptor.listen(listenLimit);
             }
-            Application::debug(DebugType::Channels, "listen port: {}", NS_FuncNameV, endpoint.port());
+            Application::debug(DebugType::Channels, "{}: listen port: {}", NS_FuncNameV, endpoint.port());
             // wait accept
             co_await asio::co_spawn(ex,
                 acceptorAcceptAwait(std::move(acceptor), serverOpts, clientOpts, channelOpts),
@@ -960,6 +982,11 @@ void ChannelListener::systemChannelConnectedEvent(const JsonObject & jo) {
     int error = jo.getInteger("error");
     int flags = jo.getInteger("flags", 0);
 
+    if(!isValidChannelId(channel)) {
+        Application::error("{}: invalid channel id: {}", NS_FuncNameV, channel);
+        throw channel_error(NS_FuncNameS);
+    }
+
     systemChannelConnected(channel, flags, error);
 }
 
@@ -991,7 +1018,7 @@ void ChannelListener::systemChannelConnected(CID channel, int flags, int error) 
         throw channel_error(NS_FuncNameS);
     }
 
-    if(channel <= ChannelTypeSystem || channel >= ChannelTypeReserved) {
+    if(!ChannelBase::isValidChannelId(channel)) {
         Application::error("{}: {}, id: {}", NS_FuncNameV, "channel incorrect", channel);
         replyError();
         throw channel_error(NS_FuncNameS);
