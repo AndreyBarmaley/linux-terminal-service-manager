@@ -550,10 +550,6 @@ namespace LTSM {
 
         ConnectorBasePtr createSocketConnector(CID, AsyncGenericSocket&&, const ConnectorMode &, const Opts &, ChannelBase &);
         ConnectorBasePtr createStreamConnector(CID, AsyncStreamDescriptor&& sd, const ConnectorMode &, const Opts &, ChannelBase &);
-#ifdef __UNIX__
-        ConnectorBasePtr createUnixConnector(CID, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelBase &);
-        ConnectorBasePtr createTcpConnector(CID, const std::string & ipaddr, uint16_t port, const ConnectorMode &, const Opts &, ChannelBase &);
-#endif
 #ifdef LTSM_PKCS11_AUTH
         ConnectorBasePtr createClientPkcs11Connector(CID, const std::string &, const ConnectorMode &, const Opts &, ChannelBase &);
 #endif
@@ -617,8 +613,8 @@ namespace LTSM {
         void destroyChannel(CID, bool sendEvent);
 
 #ifdef __UNIX__
-        void createChannelUnix(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
-        void createChannelSocket(CID, std::pair<std::string, uint16_t>, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelUnixPath(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
+        void createChannelTcpAddress(CID, std::pair<std::string, uint16_t>, const Channel::ConnectorMode &, const Channel::Opts &);
 #endif
         void createChannelSocket(CID, AsyncGenericSocket&&, const Channel::ConnectorMode &, const Channel::Opts &);
         void createChannelFile(CID, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
