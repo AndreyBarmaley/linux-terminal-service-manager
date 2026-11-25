@@ -201,7 +201,7 @@ TEST(AsyncTcpStreamTest, LoopbackSendAndRecv) {
 }
 
 int main(int argc, char** argv) {
-    Application::setDebugTarget(DebugTarget::SyslogFile, "test_asyncsocket.log");
+    Application::setDebugTarget(DebugTarget::SyslogFile, "test_asyncstream.log");
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

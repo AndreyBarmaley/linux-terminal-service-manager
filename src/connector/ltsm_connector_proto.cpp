@@ -129,7 +129,7 @@ namespace LTSM::Connector {
             asio::post(ioc(), std::bind(&ConnectorLtsm::busShutdownDisplay, this, oldDisplay));
         }
 
-        co_await xcbShmInit(userUid);
+        xcbShmInit(userUid);
         const auto clientRegion = getClientRegion();
 
         if(RootDisplay::size() != clientRegion.toSize()) {

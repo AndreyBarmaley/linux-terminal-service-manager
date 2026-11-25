@@ -33,9 +33,9 @@
 #include "pcsclite.h"
 
 #include "ltsm_pcsc.h"
+#include "ltsm_application.h"
 #include "ltsm_async_sdbus.h"
 #include "ltsm_async_mutex.h"
-#include "ltsm_application.h"
 #include "ltsm_async_stream.h"
 #include "ltsm_pcsc_adaptor.h"
 
@@ -75,7 +75,7 @@ namespace LTSM {
     using RetStatusChanged = std::tuple<bool, uint32_t>;
 
     struct Transaction {
-        async_mutex trans_lock;
+        AsyncMutex trans_lock;
         int32_t client_id{0};
 
         boost::asio::awaitable<void> lock(int32_t id) {
@@ -103,7 +103,7 @@ namespace LTSM {
         //uint64_t timer_context_{0};
         //boost::asio::cancellation_signal timer_stop_;
 
-        async_mutex send_lock_;
+        AsyncMutex send_lock_;
         Transaction trans_lock_;
 
         boost::system::error_code ec_;

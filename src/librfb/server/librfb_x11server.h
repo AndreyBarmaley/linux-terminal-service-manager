@@ -113,7 +113,7 @@ namespace LTSM {
             XCB::Region getClientRegion(void) const;
             XCB::Region joinAllDamages(void);
 
-            boost::asio::awaitable<void> xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
+            void xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
 
             XCB::Size xcbDisplaySize(void) const;
             uint16_t  xcbDisplayDepth(void) const;

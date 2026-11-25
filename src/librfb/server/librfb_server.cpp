@@ -47,10 +47,13 @@
 #include <boost/system/system_error.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
+#include "ltsm_async_wait.h"
+
 using namespace boost;
 using namespace std::chrono_literals;
 
 namespace LTSM {
+
     // ClintEncodings
     void ClientEncodings::setPriority(const std::vector<int> & priorities) {
         std::erase_if(encs, [&](auto & enc) {
@@ -80,7 +83,8 @@ namespace LTSM {
 
     // ServerEncoder
     RFB::ServerEncoder::ServerEncoder(const boost::asio::any_io_executor& ctx)
-        : ChannelListener(ctx), rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx}, packets_channel_{rfb_strand_, TransferChannelSize} {
+        : ChannelListener(ctx), rfb_strand_{ctx}, xcb_strand_{ctx}, timer_updates_{ctx},
+            wait_fbupdate_{xcb_strand_}, packets_channel_{rfb_strand_, TransferChannelSize} {
         stream_ = std::make_unique<AsyncTcpStream>(rfb_strand_);
     }
 
@@ -614,15 +618,11 @@ namespace LTSM {
     }
 
     asio::awaitable<void> RFB::ServerEncoder::waitUpdateProcessAwait(void) {
-        while(fbUpdateProcessing_.load(std::memory_order_acquire)) {
-            timer_updates_.expires_after(std::chrono::milliseconds(1));
-            co_await timer_updates_.async_wait(asio::use_awaitable);
-        }
-
+        co_await wait_fbupdate_.wait();
         co_return;
     }
 
-    void RFB::ServerEncoder::sendUpdateScreen(const XCB::Region & area) const {
+    void RFB::ServerEncoder::sendUpdateScreen(const XCB::Region & area) {
         // xcb context
         if(! encoder_) {
             Application::warning("{}: encoder null", NS_FuncNameV);
@@ -630,20 +630,18 @@ namespace LTSM {
         }
 
         try {
-            fbUpdateProcessing_.store(true);
-            // xcb context
+            wait_fbupdate_.set();
             auto reply = serverFrameBuffer(area);
             sendFrameBufferUpdate(reply.fb);
             serverSendFBUpdateEvent(area);
-
         } catch(const xcb_error_busy&) {
             Application::warning("{}: update busy, area: {}", NS_FuncNameV, area);
         } catch(const std::exception & err) {
-            fbUpdateProcessing_.store(false);
+            wait_fbupdate_.clear();
             throw;
         }
 
-        fbUpdateProcessing_.store(false);
+        wait_fbupdate_.clear();
     }
 
     void RFB::ServerEncoder::asioStop(void) {
@@ -653,6 +651,7 @@ namespace LTSM {
             stream_->close();
         }
         timer_updates_.cancel();
+        wait_fbupdate_.cancel();
     }
 
     asio::awaitable<void> RFB::ServerEncoder::sendQueueAwait(void) {

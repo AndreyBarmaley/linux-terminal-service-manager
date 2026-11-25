@@ -115,7 +115,7 @@ namespace LTSM {
     class FuseSession : protected AsyncLocalStream {
         asio::strand<asio::any_io_executor> fuse_strand_;
         asio::cancellation_signal fuse_stop_;
-        mutable async_mutex send_lock_;
+        mutable AsyncMutex send_lock_;
 
         fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
         fuse_lowlevel_ops oper = {};

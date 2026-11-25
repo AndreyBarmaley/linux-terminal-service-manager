@@ -40,8 +40,8 @@ namespace LTSM {
 using SslContext = boost::asio::ssl::context;
 using SslStream = boost::asio::ssl::stream<boost::asio::generic::stream_protocol::socket>;
 
-// Вспомогательная база гарантирует, что ssl_ctx_ будет создан ДО AsyncStream<SslStream>
-// и уничтожен ПОСЛЕ закрытия сокета в деструкторе AsyncStream.
+// ssl_ctx_ create  before AsyncStream<SslStream>
+// and destroy after close sock in ~AsyncStream.
 struct AsyncSslContextHolder {
     SslContext ssl_ctx_;
 
@@ -63,7 +63,6 @@ class AsyncSslStream : private AsyncSslContextHolder, public AsyncStream<SslStre
         : AsyncSslContextHolder{method},
           AsyncStream<SslStream>{std::move(sock), ssl_ctx_} {}
 
-    // Запрещаем перемещение, так как ssl::stream хранит внутреннюю ссылку на ssl_ctx_
     AsyncSslStream(AsyncSslStream&&) = delete;
     AsyncSslStream& operator=(AsyncSslStream&&) = delete;
 

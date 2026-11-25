@@ -33,6 +33,7 @@
 #include "librfb_encodings.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_async_stream.h"
+#include "ltsm_async_wait.h"
 
 #include <boost/asio/experimental/concurrent_channel.hpp>
 
@@ -66,6 +67,7 @@ namespace LTSM {
             boost::asio::strand<boost::asio::any_io_executor> rfb_strand_;
             boost::asio::strand<boost::asio::any_io_executor> xcb_strand_;
             boost::asio::steady_timer timer_updates_;
+            AsyncWait wait_fbupdate_;
 
             mutable TransferChannel packets_channel_;
             mutable std::atomic<int> packets_channel_jobs_{0};
@@ -79,8 +81,6 @@ namespace LTSM {
 
             PixelFormat clientPf;
             ColorMap colourMap;
-
-            mutable std::atomic<bool> fbUpdateProcessing_{false};
 
             bool clientLtsmSupported = false;
             bool clientLtsmKeyboard = false;
@@ -139,7 +139,7 @@ namespace LTSM {
             void sendEncodingLtsmSupported(void) const;
             void sendEncodingLtsmData(std::span<const uint8_t>) const;
 
-            void sendUpdateScreen(const XCB::Region &) const;
+            void sendUpdateScreen(const XCB::Region &);
             boost::asio::awaitable<void> sendQueueAwait(void);
 
             boost::asio::awaitable<void> recvLtsmProtoAwait(void);

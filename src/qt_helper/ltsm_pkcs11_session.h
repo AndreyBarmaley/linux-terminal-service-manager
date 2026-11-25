@@ -84,7 +84,7 @@ class Pkcs11Client : public QThread {
     boost::asio::cancellation_signal client_cancel_;
 
     LTSM::AsyncLocalStream stream_;
-    mutable LTSM::async_mutex send_lock_;
+    mutable LTSM::AsyncMutex send_lock_;
 
     QString templatePath;
     ListTokens tokens;

@@ -94,8 +94,8 @@ namespace LTSM {
 
         serverRegion_.store(xcb_rectangle_t{0, 0, wsz.width, wsz.height});
 
-        asio::co_spawn(xcb_strand(), [this, wsz, notify]() -> asio::awaitable<void> {
-            co_await xcbShmInit(0, & wsz);
+        asio::co_spawn(rfb_strand(), [this, wsz, notify]() -> asio::awaitable<void> {
+            xcbShmInit(0, & wsz);
 
             displayResizeProcessed_ = false;
             serverDisplayResizedEvent(wsz);
@@ -103,8 +103,6 @@ namespace LTSM {
             if(isClientSupportedEncoding(ENCODING_EXT_DESKTOP_SIZE)) {
                 auto status = randrSequence_ == notify.sequence ?
                           RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
-
-                co_await asio::post(rfb_strand(), asio::use_awaitable);
 
                 if(status == RFB::DesktopResizeStatus::ServerRuntime) {
                     sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
@@ -117,6 +115,7 @@ namespace LTSM {
                 }
             }
 
+            // FIME check it
             auto ex = co_await asio::this_coro::executor;
             asio::steady_timer tm_delay{ex, 100ms};
             co_await tm_delay.async_wait(asio::use_awaitable);
@@ -424,7 +423,7 @@ namespace LTSM {
         co_await serverClientInitAwait("X11 Remote Desktop", displaySize, displayDepth, serverFormat());
         timerNotActivated.cancel();
 
-        co_await xcbShmInit();
+        xcbShmInit();
 
         serverConnectedEvent();
         Application::info("{}: wait RFB messages, fps: {}", NS_FuncNameV, frameRateOption());
@@ -871,9 +870,7 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
-        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
-
+    void RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
 
@@ -890,8 +887,6 @@ namespace LTSM {
                 shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
             }
         }
-
-        co_return;
     }
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
