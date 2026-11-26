@@ -56,7 +56,7 @@ namespace LTSM {
             bool server_big_endian_ = false;
 
             bool continueUpdatesSupport = false;
-            mutable bool continueUpdatesProcessed = false;
+            bool continueUpdatesProcessed = false;
 
           protected:
             friend class DecodingRaw;
@@ -84,7 +84,7 @@ namespace LTSM {
             void sendEncodings(const std::list<int> &) const;
             void sendFrameBufferUpdate(bool incr) const;
             void sendFrameBufferUpdate(const XCB::Region &, bool incr) const;
-            void sendContinuousUpdates(bool enable, const XCB::Region&) const;
+            void sendContinuousUpdates(bool enable, const XCB::Region&);
             void sendSetDesktopSize(const XCB::Size &) const;
             void sendCutText(std::span<const uint8_t>, bool ext) const;
             void sendKeyEvent(bool pressed, uint32_t keysym, uint16_t scancode) const;

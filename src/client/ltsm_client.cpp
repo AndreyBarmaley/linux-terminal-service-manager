@@ -673,7 +673,7 @@ namespace LTSM {
             if(passfile == "-" || Tools::lower(passfile) == "stdin") {
                 std::getline(std::cin, rfbsec_.passwdFile);
             } else if(std::filesystem::is_regular_file(passfile)) {
-                std::ifstream ifs(passfile);
+                std::ifstream ifs(std::filesystem::canonical(passfile));
 
                 if(ifs) {
                     std::getline(ifs, rfbsec_.passwdFile);
@@ -1289,7 +1289,7 @@ namespace LTSM {
             XCB::Region bound;
             if(XCB::Region::intersection(SDL::displayUsableBounds(), XCB::Region(wsz), &bound)) {
                 Application::warning("{}: fixed bounds: {}", NS_FuncNameV, bound);
-                primarySize_ = bound;
+                primarySize_ = bound.toSize();
                 window_->setPosition(bound);
             }
         }

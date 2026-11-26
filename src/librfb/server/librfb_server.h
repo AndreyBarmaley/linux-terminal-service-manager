@@ -87,7 +87,7 @@ namespace LTSM {
             bool clientVideoSupported = false;
             bool clientTrueColor = true;
             bool clientBigEndian = false;
-            mutable bool continueUpdatesProcessed = false;
+            bool continueUpdatesProcessed = false;
 
           protected:
             friend class EncodingBase;
@@ -131,7 +131,7 @@ namespace LTSM {
             void sendColourMap(int first) const;
             void sendBellEvent(void) const;
             void sendCutText(std::span<const uint8_t>, bool ext) const;
-            void sendContinuousUpdates(bool enable) const;
+            void sendContinuousUpdates(bool enable);
             void sendFrameBufferUpdate(const FrameBuffer &) const;
             void sendEncodingDesktopResize(const DesktopResizeStatus&, const DesktopResizeError&, const XCB::Size&) const;
             void sendEncodingRichCursor(const FrameBuffer & fb, const XCB::Point &) const;

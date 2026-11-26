@@ -767,7 +767,7 @@ namespace LTSM {
         asyncSendBuf(std::move(sb.rawbuf()));
     }
 
-    void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region& reg) const {
+    void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region& reg) {
         Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", NS_FuncNameV,
                            (enable ? "enable" : "disable"), reg);
 

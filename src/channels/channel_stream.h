@@ -50,7 +50,7 @@ namespace LTSM {
         bp_v2::process proc_;
 
       protected:
-        void stopping();
+        void stopping() noexcept;
 
       public:
         BasicProcessExec(boost::asio::any_io_executor ex,

@@ -1153,7 +1153,7 @@ namespace LTSM {
         asyncSendBuf(buf);
     }
 
-    void RFB::ServerEncoder::sendContinuousUpdates(bool enable) const {
+    void RFB::ServerEncoder::sendContinuousUpdates(bool enable) {
         // RFB: 6.5.5
         Application::info("{}: status: {}", NS_FuncNameV, (enable ? "enable" : "disable"));
         const uint8_t cmd = RFB::SERVER_CONTINUOUS_UPDATES;

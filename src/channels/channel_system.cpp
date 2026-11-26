@@ -1446,8 +1446,13 @@ Channel::createFileConnector(CID channel, const std::filesystem::path & path, co
     throw channel_error(NS_FuncNameS);
 }
 
-void BasicProcessExec::stopping(void) {
-    if(! proc_.running()) {
+void BasicProcessExec::stopping(void) noexcept {
+    try {
+        if(! proc_.running()) {
+            return;
+        }
+    } catch(const std::exception& err) {
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return;
     }
 
