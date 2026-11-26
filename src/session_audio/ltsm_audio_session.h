@@ -25,14 +25,14 @@
 #define _LTSM_AUDIO_SESSION_
 
 #include <span>
+#include <mutex>
 #include <chrono>
 #include <memory>
 #include <string>
-#include <forward_list>
 
 #include "ltsm_application.h"
 #include "ltsm_async_sdbus.h"
-#include "ltsm_async_socket.h"
+#include "ltsm_async_stream.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
 
@@ -44,19 +44,45 @@
 #endif
 
 namespace LTSM {
-    struct AudioPacket {
+    using AudioBuffers = boost::container::small_vector<boost::asio::const_buffer, 3>;
+
+    class AudioPacket {
         uint16_t id_ = 0;
         uint32_t len_ = 0;
-        std::vector<uint8_t> data_;
 
-        AudioPacket(uint32_t len);
-        AudioPacket(std::vector<uint8_t> &&);
+    public:
+        AudioPacket(uint16_t id, uint32_t len);
+        virtual ~AudioPacket() = default;
+        virtual AudioBuffers buffers() const;
     };
 
-    using AudioPacketPtr = std::unique_ptr<AudioPacket>;
+    class AudioPacketSilent : public AudioPacket {
+    public:
+        explicit AudioPacketSilent(uint16_t len) : AudioPacket(AudioOp::Silent, len) {
+        }
+    };
 
-    struct AudioClient : protected AsyncLocalStream {
-        boost::asio::strand<boost::asio::any_io_executor> strand_;
+    class AudioPacketPcm : public AudioPacket {
+        const std::span<const uint8_t> pcm_;
+    public:
+        explicit AudioPacketPcm(std::span<const uint8_t> pcm) : AudioPacket(AudioOp::Data, pcm.size()), pcm_{pcm} {
+        }
+        AudioBuffers buffers() const override;
+    };
+
+    class AudioPacketEnc : public AudioPacket {
+        const std::vector<uint8_t> enc_;
+    public:
+        explicit AudioPacketEnc(std::vector<uint8_t> enc) : AudioPacket(AudioOp::Data, enc.size()), enc_{std::move(enc)} {
+        }
+        AudioBuffers buffers() const override;
+    };
+
+    using AudioPackets = std::vector<std::unique_ptr<AudioPacket>>;
+
+    class AudioClient {
+        mutable AsyncLocalStream stream_;
+        boost::asio::steady_timer tm_wait_engine_;
 
         const uint8_t channels_ = 2;
 
@@ -71,42 +97,48 @@ namespace LTSM {
         uint32_t bit_rate_ = 44100;
         uint32_t frag_size_ = 1024;
 
+    protected:
+
+        bool engineInit(void);
+        void dataReadyNotify(std::span<const uint8_t>);
+        AudioPackets encodePackets(std::span<const uint8_t>);
+
+    public:
         AudioClient(const boost::asio::any_io_executor & ex)
-            : AsyncLocalStream(ex), strand_{boost::asio::make_strand(ex)} {
+            : stream_(ex), tm_wait_engine_{ex} {
         }
         ~AudioClient() = default;
     
         boost::asio::awaitable<void> remoteHandshake(const std::string &, std::chrono::seconds connect_deadline);
-        boost::asio::awaitable<void> timerWaitEngine(void);
-
-        bool engineInit(void);
-        void dataReadyNotify(std::span<const uint8_t>);
-        std::list<AudioPacketPtr> dataEncode(std::span<const uint8_t>);
+        boost::asio::awaitable<void> waitEngine(void);
+        void cancel();
 
         bool socketPath(std::string_view path) const {
-            return const_cast<AudioClient&>(*this).socket().local_endpoint().path() == path;
+            return stream_.stream().local_endpoint().path() == path;
         }
 
         bool socketConnected(void) const {
-            return const_cast<AudioClient&>(*this).socket().is_open();
+            return stream_.stream().is_open();
         }
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
     using AudioClientPtr = std::unique_ptr<AudioClient>;
+    using AudioClients = boost::container::small_vector<AudioClientPtr, 4>;
 
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>, protected SDBus::AsioCoroConnector {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
         boost::asio::cancellation_signal connect_cancel_;
-        boost::asio::strand<boost::asio::any_io_executor> clients_strand_;
 
-        std::forward_list<AudioClientPtr> clients_;
+        AudioClients clients_;
+        std::once_flag stop_flag_;
 
       protected:
         boost::asio::awaitable<void> signalsHandler(void);
         boost::asio::awaitable<void> sdbusHandler(void);
-        void stop(void) noexcept;
+        void stopContext(void);
+        void stop(void);
 
       public:
         AudioSessionBus(DBusConnectionPtr, bool debug = false);
@@ -114,6 +146,7 @@ namespace LTSM {
 
         int start(void);
 
+      private:
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
         void setDebug(const std::string & level) override;

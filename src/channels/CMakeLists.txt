@@ -1,3 +1,32 @@
 # LTSM channels
 
+if(UNIX)
+    # linux asio::stream_file
+    pkg_search_module(URING REQUIRED liburing)
+    target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_ASIO_HAS_IO_URING)
+    target_link_libraries(${CUR_TARGET} PRIVATE ${URING_LIBRARIES})
+endif()
+
 target_sources(${CUR_TARGET} PRIVATE channel_system.cpp)
+
+if(DEFINED ENV{LTSM_BOOST_ROOT} AND IS_DIRECTORY "$ENV{LTSM_BOOST_ROOT}/boost")
+    set(Boost_USE_STATIC_LIBS ON)
+    set(Boost_USE_MULTITHREADED ON)
+    find_package(Boost REQUIRED COMPONENTS filesystem process)
+    if(Boost_process_FOUND)
+        target_link_libraries(${CUR_TARGET} PRIVATE Boost::filesystem Boost::process)
+        if(WIN32)
+            target_link_libraries(${CUR_TARGET} PRIVATE bcrypt ntdll)
+        endif()
+    endif()
+else()
+    find_package(Boost REQUIRED CONFIG)
+    if(Boost_VERSION VERSION_GREATER "1.85.0")
+        find_package(Boost REQUIRED CONFIG COMPONENTS process)
+        if(Boost_process_FOUND)
+            target_link_libraries(${CUR_TARGET} PRIVATE Boost::process)
+        endif()
+    else()
+        target_compile_definitions(${CUR_TARGET} PRIVATE BOOST_PROCESS_USE_STD_FS)
+    endif()
+endif()

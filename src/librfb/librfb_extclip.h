@@ -107,8 +107,8 @@ namespace LTSM {
 
             virtual uint16_t extClipboardLocalTypes(void) const = 0;
             virtual boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) = 0;
-            virtual boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) = 0;
-            virtual boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) = 0;
+            virtual void extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&&) = 0;
+            virtual void extClipboardRemoteTypes(uint16_t types) = 0;
             virtual void extClipboardSendBuf(std::vector<uint8_t>&&) const = 0;
 
           public:

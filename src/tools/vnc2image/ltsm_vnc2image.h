@@ -47,6 +47,7 @@ namespace LTSM {
     };
 
     class Vnc2Image : public BoostContext, public Application, protected RFB::ClientDecoder {
+        boost::asio::cancellation_signal send_cancel_;
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 
@@ -67,8 +68,8 @@ namespace LTSM {
 
         uint16_t extClipboardLocalTypes(void) const override;
         boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
-        boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
-        boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t type) override;
+        void extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&&) override;
+        void extClipboardRemoteTypes(uint16_t type) override;
         void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
         void decoderInitEvent(RFB::DecodingBase*) override;
         void systemLoginSuccessEvent(const JsonObject &) override { /* empty */ }
@@ -78,7 +79,7 @@ namespace LTSM {
       public:
         Vnc2Image(int argc, const char** argv);
 
-        boost::asio::awaitable<void> clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
 
         int start(void);

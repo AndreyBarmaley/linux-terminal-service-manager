@@ -60,7 +60,7 @@ Pkcs11Client::~Pkcs11Client() {
 
 void Pkcs11Client::stop(void) noexcept {
     try {
-        stream_.socket().cancel();
+        stream_.stream().cancel();
         client_cancel_.emit(asio::cancellation_type::terminal);
         work_guard_.reset();
     } catch(...) {
@@ -92,7 +92,7 @@ asio::awaitable<void> Pkcs11Client::clientHandler(void) {
 }
 
 asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-    co_await stream_.socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+    co_await stream_.stream().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
     uint16_t cmd, err;
 
@@ -130,13 +130,15 @@ asio::awaitable<void> Pkcs11Client::remoteHandshake(const std::string & path, st
     PKCS11::LibraryInfo info;
     assert(sizeof(info.manufacturerID) == 32);
     assert(sizeof(info.libraryDescription) == 32);
+    auto manufacturer_buf = asio::buffer(info.manufacturerID, sizeof(info.manufacturerID));
+    auto library_buf = asio::buffer(info.libraryDescription, sizeof(info.libraryDescription));
 
     co_await stream_.async_recv_values(
         info.cryptokiVersion.major,
         info.cryptokiVersion.minor,
-        asio::buffer(info.manufacturerID, sizeof(info.manufacturerID)),
+        manufacturer_buf,
         info.flags,
-        asio::buffer(info.libraryDescription, sizeof(info.libraryDescription)),
+        library_buf,
         info.libraryVersion.major,
         info.libraryVersion.minor
     );
@@ -210,10 +212,12 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
             static_assert(sizeof(slotInfo.slotDescription) == 64);
             static_assert(sizeof(slotInfo.manufacturerID) == 32);
             static_assert(sizeof(slotInfo.flags) == sizeof(uint64_t));
+            auto description_buf = asio::buffer(slotInfo.slotDescription, sizeof(slotInfo.slotDescription));
+            auto manufacturer_buf = asio::buffer(slotInfo.manufacturerID, sizeof(slotInfo.manufacturerID));
 
             co_await stream_.async_recv_values(
-                asio::buffer(slotInfo.slotDescription, sizeof(slotInfo.slotDescription)),
-                asio::buffer(slotInfo.manufacturerID, sizeof(slotInfo.manufacturerID)),
+                description_buf,
+                manufacturer_buf,
                 slotInfo.flags,
                 slotInfo.hardwareVersion.major,
                 slotInfo.hardwareVersion.minor,
@@ -234,11 +238,17 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
             assert(sizeof(tokenInfo.serialNumber) == 16);
             assert(sizeof(tokenInfo.utcTime) == 16);
 
+            auto label_buf = asio::buffer(tokenInfo.label, sizeof(tokenInfo.label));
+            auto manufacturer_buf = asio::buffer(tokenInfo.manufacturerID, sizeof(tokenInfo.manufacturerID));
+            auto model_buf = asio::buffer(tokenInfo.model, sizeof(tokenInfo.model));
+            auto serial_buf = asio::buffer(tokenInfo.serialNumber, sizeof(tokenInfo.serialNumber));
+            auto time_buf = asio::buffer(tokenInfo.utcTime, sizeof(tokenInfo.utcTime));
+
             co_await stream_.async_recv_values(
-                asio::buffer(tokenInfo.label, sizeof(tokenInfo.label)),
-                asio::buffer(tokenInfo.manufacturerID, sizeof(tokenInfo.manufacturerID)),
-                asio::buffer(tokenInfo.model, sizeof(tokenInfo.model)),
-                asio::buffer(tokenInfo.serialNumber, sizeof(tokenInfo.serialNumber)),
+                label_buf,
+                manufacturer_buf,
+                model_buf,
+                serial_buf,
                 tokenInfo.flags,
                 tokenInfo.ulMaxSessionCount,
                 tokenInfo.ulSessionCount,
@@ -254,7 +264,7 @@ asio::awaitable<bool> Pkcs11Client::updateTokens(void) {
                 tokenInfo.hardwareVersion.minor,
                 tokenInfo.firmwareVersion.major,
                 tokenInfo.firmwareVersion.minor,
-                asio::buffer(tokenInfo.utcTime, sizeof(tokenInfo.utcTime))
+                time_buf
             );
 
             endian::little_to_native_inplace(tokenInfo.flags);
@@ -311,7 +321,7 @@ ListTokens Pkcs11Client::getTokens(void) const {
     return res.get();
 }
 
-ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
+ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) {
 
     auto res = asio::co_spawn(sock_strand_, [&slotId, this]() -> asio::awaitable<ListCertificates> {
         co_await send_lock_.async_lock();
@@ -324,7 +334,7 @@ ListCertificates Pkcs11Client::getCertificates(uint64_t slotId) const {
     return res.get();
 }
 
-asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId) const {
+asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId) {
 
     co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlotCertificates)),
@@ -363,7 +373,7 @@ asio::awaitable<ListCertificates> Pkcs11Client::loadCertificates(uint64_t slotId
     co_return certs;
 }
 
-ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
+ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) {
 
     auto res = asio::co_spawn(sock_strand_, [&slotId, this]() -> asio::awaitable<ListMechanisms> {
         co_await send_lock_.async_lock();
@@ -376,7 +386,7 @@ ListMechanisms Pkcs11Client::getMechanisms(uint64_t slotId) const {
     return res.get();
 }
 
-asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) const {
+asio::awaitable<ListMechanisms> Pkcs11Client::loadMechanisms(uint64_t slotId) {
 
     co_await stream_.async_send_values(
         endian::native_to_little(static_cast<uint16_t>(Pkcs11Op::GetSlotMechanisms)),

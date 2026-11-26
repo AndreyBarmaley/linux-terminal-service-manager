@@ -201,7 +201,7 @@ namespace LTSM {
     }
 
     asio::awaitable<void> PcscRemote::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-        co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+        co_await stream().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
         co_await send_lock_.async_lock();
 
@@ -750,7 +750,8 @@ namespace LTSM {
                 state.cbAtr = cbAtr;
 
                 std::string readerName(readerLen, 0);
-                co_await async_recv_values(readerName, asio::buffer(state.rgbAtr, cbAtr));
+                auto state_buf = asio::buffer(state.rgbAtr, cbAtr);
+                co_await async_recv_values(readerName, state_buf);
 
                 if(readerName != state.szReader) {
                     Application::warning("{}: invalid reader, `{}' != `{}'", NS_FuncNameV, readerName, state.szReader);
@@ -876,8 +877,8 @@ namespace LTSM {
         timer_context_ = context;
         auto token = asio::bind_cancellation_slot(timer_stop_.slot(), asio::detached);
 
-        asio::co_spawn(socket().get_executor(),
-        [this, ex = socket().get_executor(), id, context]() -> asio::awaitable<void> {
+        asio::co_spawn(stream().get_executor(),
+        [this, ex = stream().get_executor(), id, context]() -> asio::awaitable<void> {
             asio::steady_timer timer{ex};
 
             for(;;) {
@@ -1736,7 +1737,7 @@ namespace LTSM {
             endian::native_to_little(context),
             endian::native_to_little(ret));
 
-        asio::post(socket().get_executor(),
+        asio::post(stream().get_executor(),
                        std::bind(&PcscSessionBus::stopClientContext, session_, cancelContext));
 
         co_return true;

@@ -143,7 +143,7 @@ namespace LTSM {
             co_return false;
         }
 
-        co_await xcbShmInit();
+        xcbShmInit();
 
         // init server format
         pf_ = PixelFormat(RootDisplay::bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);

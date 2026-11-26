@@ -115,7 +115,7 @@ namespace LTSM {
     class FuseSession : protected AsyncLocalStream {
         asio::strand<asio::any_io_executor> fuse_strand_;
         asio::cancellation_signal fuse_stop_;
-        mutable async_mutex send_lock_;
+        mutable AsyncMutex send_lock_;
 
         fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
         fuse_lowlevel_ops oper = {};
@@ -152,19 +152,19 @@ namespace LTSM {
         [[nodiscard]] asio::awaitable<void> replyAccess(fuse_req_t, fuse_ino_t, int32_t mask) const;
         [[nodiscard]] asio::awaitable<void> replyReadLink(fuse_req_t, fuse_ino_t) const;
         [[nodiscard]] asio::awaitable<void> replyReadDir(fuse_req_t, fuse_ino_t, size_t, off_t) const;
-        [[nodiscard]] asio::awaitable<void> replyOpen(fuse_req_t) const;
+        [[nodiscard]] asio::awaitable<void> replyOpen(fuse_req_t);
         [[nodiscard]] asio::awaitable<void> replyRelease(fuse_req_t) const;
-        [[nodiscard]] asio::awaitable<void> replyRead(fuse_req_t) const;
+        [[nodiscard]] asio::awaitable<void> replyRead(fuse_req_t);
 
-        [[nodiscard]] asio::awaitable<void> sendOpen(fuse_req_t, std::string path, int32_t flags) const;
-        [[nodiscard]] asio::awaitable<void> sendRelease(fuse_req_t, uint64_t fh) const;
-        [[nodiscard]] asio::awaitable<void> sendRead(fuse_req_t req, size_t blocksz, off_t off, uint64_t fh) const;
+        [[nodiscard]] asio::awaitable<void> sendOpen(fuse_req_t, std::string path, int32_t flags);
+        [[nodiscard]] asio::awaitable<void> sendRelease(fuse_req_t, uint64_t fh);
+        [[nodiscard]] asio::awaitable<void> sendRead(fuse_req_t req, size_t blocksz, off_t off, uint64_t fh);
 
       public:
         FuseSession(const asio::any_io_executor & ex, const std::string & local, const std::string & remote)
             : AsyncLocalStream(ex)
             , fuse_strand_{asio::make_strand(ex)}
-            , send_lock_{socket().get_executor()}
+            , send_lock_{stream().get_executor()}
             , localPoint{local}, remotePoint{remote} {
             // added parent inode: 1
             StStat st = {};
@@ -185,7 +185,7 @@ namespace LTSM {
         }
 
         [[nodiscard]] asio::awaitable<void> remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline);
-        [[nodiscard]] asio::awaitable<StStat> recvStatStruct(void) const;
+        [[nodiscard]] asio::awaitable<StStat> recvStatStruct(void);
 
         bool startSession(void);
 
@@ -194,11 +194,11 @@ namespace LTSM {
         }
 
         std::string socketPath(void) const {
-            return const_cast<FuseSession&>(*this).socket().local_endpoint().path();
+            return const_cast<FuseSession&>(*this).stream().local_endpoint().path();
         }
 
         inline bool socketConnected(void) const {
-            return const_cast<FuseSession&>(*this).socket().is_open();
+            return const_cast<FuseSession&>(*this).stream().is_open();
         }
 
         asio::strand<asio::any_io_executor> & strand(void) {
@@ -211,9 +211,9 @@ namespace LTSM {
         void cbReadLink(fuse_req_t, fuse_ino_t) const;
         void cbReadDir(fuse_req_t, fuse_ino_t, size_t maxsz, off_t offset, int32_t flags) const;
         void cbAccess(fuse_req_t, fuse_ino_t, int32_t mask) const;
-        void cbOpen(fuse_req_t, fuse_ino_t, int32_t flags) const;
-        void cbRelease(fuse_req_t, fuse_ino_t, uint64_t fh) const;
-        void cbRead(fuse_req_t, fuse_ino_t, size_t maxsz, off_t offset, uint64_t fh) const;
+        void cbOpen(fuse_req_t, fuse_ino_t, int32_t flags);
+        void cbRelease(fuse_req_t, fuse_ino_t, uint64_t fh);
+        void cbRead(fuse_req_t, fuse_ino_t, size_t maxsz, off_t offset, uint64_t fh);
     };
 
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path) {
@@ -292,7 +292,7 @@ namespace LTSM {
 
     // FuseSession
     asio::awaitable<void> FuseSession::remoteHandshake(const std::string & path, std::chrono::seconds connect_deadline) {
-        co_await socket().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
+        co_await stream().async_connect(path, asio::cancel_after(connect_deadline, asio::use_awaitable));
 
         // <VER16> - proto version
         // <LEN16><MOUNTPOINT> - mount point
@@ -378,7 +378,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<StStat> FuseSession::recvStatStruct(void) const {
+    asio::awaitable<StStat> FuseSession::recvStatStruct(void) {
         // <STAT> - stat struct
         uint64_t dev, ino, nlink, rdev, size, blksize, blocks, atime, mtime, ctime;
         uint32_t mode, uid, gid;
@@ -441,7 +441,7 @@ namespace LTSM {
         });
 
         using namespace asio::experimental::awaitable_operators;
-        asio::co_spawn(socket().get_executor(), fuseCmdSend() && fuseCmdRecv(), std::move(stop_token));
+        asio::co_spawn(stream().get_executor(), fuseCmdSend() && fuseCmdRecv(), std::move(stop_token));
 
         return true;
     }
@@ -514,9 +514,9 @@ namespace LTSM {
 
         for(;;) {
             try {
-                co_await socket().async_wait(asio::local::stream_protocol::socket::wait_read, asio::use_awaitable);
+                co_await stream().async_wait(asio::local::stream_protocol::socket::wait_read, asio::use_awaitable);
 
-                Application::debug(DebugType::Fuse, "{}: socket data: {}", NS_FuncNameV, socket().available());
+                Application::debug(DebugType::Fuse, "{}: socket data: {}", NS_FuncNameV, stream().available());
 
                 // data present locked
                 co_await send_lock_.async_lock();
@@ -557,7 +557,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> FuseSession::replyOpen(fuse_req_t req) const {
+    asio::awaitable<void> FuseSession::replyOpen(fuse_req_t req) {
 
         // <FDH32> - fd handle
         uint32_t fh = co_await async_recv_le32();
@@ -575,7 +575,7 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> FuseSession::replyRead(fuse_req_t req) const {
+    asio::awaitable<void> FuseSession::replyRead(fuse_req_t req) {
 
         // <LEN16><DATA> - raw data
         auto len = co_await async_recv_le16();
@@ -836,7 +836,7 @@ namespace LTSM {
         co_return;
     }
 
-    void FuseSession::cbOpen(fuse_req_t req, fuse_ino_t ino, int32_t flags) const {
+    void FuseSession::cbOpen(fuse_req_t req, fuse_ino_t ino, int32_t flags) {
         Application::debug(DebugType::Fuse, "{}: ino: {}, flags: {:#010x}", NS_FuncNameV, ino, flags);
 
         auto pathStat = findInode(ino);
@@ -857,7 +857,7 @@ namespace LTSM {
         asio::co_spawn(fuse_strand_, sendOpen(req, std::move(path), flags), asio::detached);
     }
 
-    asio::awaitable<void> FuseSession::sendOpen(fuse_req_t req, std::string path, int32_t flags) const {
+    asio::awaitable<void> FuseSession::sendOpen(fuse_req_t req, std::string path, int32_t flags) {
 
         co_await send_lock_.async_lock();
 
@@ -881,7 +881,7 @@ namespace LTSM {
         co_return;
     }
 
-    void FuseSession::cbRelease(fuse_req_t req, fuse_ino_t ino, uint64_t fh) const {
+    void FuseSession::cbRelease(fuse_req_t req, fuse_ino_t ino, uint64_t fh) {
         Application::debug(DebugType::Fuse, "{}: ino: {}, fh: {}", NS_FuncNameV, ino, fh);
 
         auto pathStat = findInode(ino);
@@ -899,7 +899,7 @@ namespace LTSM {
         asio::co_spawn(fuse_strand_, sendRelease(req, fh), asio::detached);
     }
 
-    asio::awaitable<void> FuseSession::sendRelease(fuse_req_t req, uint64_t fh) const {
+    asio::awaitable<void> FuseSession::sendRelease(fuse_req_t req, uint64_t fh) {
         co_await send_lock_.async_lock();
 
         // <CMD16> - fuse cmd
@@ -919,7 +919,7 @@ namespace LTSM {
         co_return;
     }
 
-    void FuseSession::cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsz, off_t off, uint64_t fh) const {
+    void FuseSession::cbRead(fuse_req_t req, fuse_ino_t ino, size_t maxsz, off_t off, uint64_t fh) {
         Application::debug(DebugType::Fuse, "{}: ino: {}, fh: {}", NS_FuncNameV, ino, fh);
 
         auto pathStat = findInode(ino);
@@ -940,7 +940,7 @@ namespace LTSM {
         asio::co_spawn(fuse_strand_, sendRead(req, blocksz, off, fh), asio::detached);
     }
 
-    asio::awaitable<void> FuseSession::sendRead(fuse_req_t req, size_t blocksz, off_t off, uint64_t fh) const {
+    asio::awaitable<void> FuseSession::sendRead(fuse_req_t req, size_t blocksz, off_t off, uint64_t fh) {
 
         co_await send_lock_.async_lock();
 

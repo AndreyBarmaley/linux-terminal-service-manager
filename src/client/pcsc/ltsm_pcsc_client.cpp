@@ -133,7 +133,7 @@ namespace PcscLite {
 using namespace std::chrono_literals;
 
 // createClientPcscConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscConnector(CID channel,
+LTSM::Channel::ConnectorBasePtr LTSM::Channel::createClientPcscConnector(CID channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelBase & sender) {
     Application::info("{}: id: {}, url: `{}', mode: {}", NS_FuncNameV, channel, url,
                       Channel::Connector::modeString(mode));

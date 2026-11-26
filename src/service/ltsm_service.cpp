@@ -2644,7 +2644,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("{}: url: {}", NS_FuncNameV, clientUrl);
-        auto[clientType, clientAddress] = Channel::parseUrl(clientUrl);
+        auto [clientType, clientAddress] = Channel::parseUrl(clientUrl);
 
         if(clientType == Channel::ConnectorType::Unknown) {
             Application::error("{}: {}, unknown client url: {}", NS_FuncNameV, "printer", clientUrl);

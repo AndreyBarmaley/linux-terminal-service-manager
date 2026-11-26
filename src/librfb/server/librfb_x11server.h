@@ -42,6 +42,7 @@ namespace LTSM {
             boost::asio::signal_set signals_;
             boost::asio::cancellation_signal xcb_cancel_;
             boost::asio::cancellation_signal rfb_cancel_;
+            boost::asio::cancellation_signal send_cancel_;
             boost::asio::cancellation_signal srv_cancel_;
             boost::asio::steady_timer force_update_;
             boost::asio::steady_timer clipboard_ready_;
@@ -52,9 +53,12 @@ namespace LTSM {
             std::atomic<xcb_rectangle_t> serverRegion_;
             std::atomic<xcb_rectangle_t> clientRegion_;
 
+            std::atomic<bool> clientUpdateCursor_{false};
+            std::atomic<uint32_t> clientUpdateCursorSerial_{0};
+            std::unordered_map<uint32_t, XCB::Region> cursorsCache_;
+
             std::atomic<bool> displayResizeNegotiation_{false};
             std::atomic<bool> displayResizeProcessed_{false};
-            std::atomic<bool> clientUpdateCursor_{false};
             std::atomic<bool> fullscreenUpdateReq_{false};
             std::atomic<bool> fpsMinAction_{false};
 
@@ -73,7 +77,7 @@ namespace LTSM {
             void minFpsHandler(const boost::system::error_code&);
 
             // root display
-            void xcbFixesCursorChangedEvent(void) override;
+            void xcbFixesCursorChangedEvent(uint32_t cursor_serial) override;
             void xcbDamageNotifyEvent(const xcb_rectangle_t &, uint8_t level) override;
             void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
             void xcbRandrScreenSetSizeEvent(const XCB::Size &) override;
@@ -101,25 +105,26 @@ namespace LTSM {
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
             boost::asio::awaitable<clipboard_buf> extClipboardLocalDataAwait(uint16_t type) override;
-            boost::asio::awaitable<void> extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t>) override;
-            boost::asio::awaitable<void> extClipboardRemoteTypesAwait(uint16_t types) override;
+            void extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&&) override;
+            void extClipboardRemoteTypes(uint16_t types) override;
             boost::asio::awaitable<bool> extClipboardSourceReadyAwait(xcb_atom_t atom);
             void extClipboardSendBuf(std::vector<uint8_t>&&) const override;
 
             XCB::Region getClientRegion(void) const;
             XCB::Region joinAllDamages(void);
 
-            boost::asio::awaitable<void> xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
+            void xcbShmInit(uid_t = 0, const XCB::Size* sz = nullptr);
 
-            boost::asio::awaitable<XCB::Size> xcbDisplaySize(void) const;
-            boost::asio::awaitable<uint16_t> xcbDisplayDepth(void) const;
+            XCB::Size xcbDisplaySize(void) const;
+            uint16_t  xcbDisplayDepth(void) const;
 
             boost::asio::awaitable<void> xcbEventsLoop(void);
-            boost::asio::awaitable<void> rfbReceiveMessages(void);
+            boost::asio::awaitable<void> rfbRecvMessagesAwait(void);
+            boost::asio::awaitable<void> rfbSendMessagesAwait(void);
             boost::asio::awaitable<void> signalsHandler(void);
             boost::asio::awaitable<void> serverUpdateLoop(void);
             boost::asio::awaitable<void> serverUpdateProcess(void);
-            boost::asio::awaitable<void> sendUpdateCursorAwait(void);
+            void sendUpdateCursor(uint32_t);
 
             // server interface
             virtual void stop(void) noexcept = 0;
@@ -140,6 +145,8 @@ namespace LTSM {
             virtual void serverDisplayResizedEvent(const XCB::Size &) {/* empty */}
             virtual void serverEncodingsEvent(void) {/* empty */}
             virtual void serverFrameBufferModifyEvent(FrameBuffer &) const {/* empty */}
+
+            void cursorRequest(uint32_t);
 
           public:
             X11Server(boost::asio::io_context & ctx)

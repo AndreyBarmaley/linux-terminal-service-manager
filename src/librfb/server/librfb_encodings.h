@@ -69,7 +69,7 @@ namespace LTSM {
         using EncodingRet = BinaryBuf;
         using PostEncoderJobCb = std::function<EncodingRet(XCB::Region)>;
         using PostEncoderJobRet = std::future<EncodingRet>;
-        using FrameBufferPackets = std::list<BinaryBuf>;
+        using FrameBufferPackets = std::vector<BinaryBuf>;
 
         /// EncoderStream
         class EncoderStream {

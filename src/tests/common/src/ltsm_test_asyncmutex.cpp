@@ -24,7 +24,7 @@ TEST_F(AsyncMutexTest, SingleLockUnlock) {
     bool executed = false;
 
     boost::asio::co_spawn(ctx, [&]() -> boost::asio::awaitable<void> {
-        async_mutex mutex(ctx.get_executor());
+        AsyncMutex mutex(ctx.get_executor());
 
         co_await mutex.async_lock();
         executed = true;
@@ -38,7 +38,7 @@ TEST_F(AsyncMutexTest, SingleLockUnlock) {
 }
 
 TEST_F(AsyncMutexTest, MutualExclusion) {
-    async_mutex mutex(ctx.get_executor());
+    AsyncMutex mutex(ctx.get_executor());
     int shared_resource = 0;
     std::vector<int> execution_order;
 
@@ -81,7 +81,7 @@ TEST_F(AsyncMutexTest, MutualExclusion) {
 
 TEST_F(AsyncMutexTest, FifoOrdering) {
 
-    async_mutex mutex(ctx.get_executor());
+    AsyncMutex mutex(ctx.get_executor());
     std::vector<int> order;
 
     boost::asio::co_spawn(ctx, [&]() -> boost::asio::awaitable<void> {
@@ -111,7 +111,7 @@ TEST_F(AsyncMutexTest, FifoOrdering) {
 }
 
 TEST_F(AsyncMutexTest, CancelAbortsWaitingCoroutines) {
-    async_mutex mutex(ctx.get_executor());
+    AsyncMutex mutex(ctx.get_executor());
     std::atomic<int> aborted_count{0};
     std::atomic<bool> first_locked{false};
 

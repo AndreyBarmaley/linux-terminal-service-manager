@@ -30,14 +30,14 @@
 
 namespace LTSM {
 
-    class async_mutex {
+    class AsyncMutex {
         boost::asio::steady_timer timer_;
         std::atomic<uint32_t> queue_{0};
         std::atomic<bool> cancelled_{false};
 
       public:
-        explicit async_mutex(const boost::asio::any_io_executor & ex) : timer_(ex) {
-            timer_.expires_at(boost::asio::steady_timer::time_point::max());
+        explicit AsyncMutex(const boost::asio::any_io_executor & ex)
+            : timer_{ex, boost::asio::steady_timer::time_point::max()} {
         }
 
         boost::asio::awaitable<void> async_lock(void) {

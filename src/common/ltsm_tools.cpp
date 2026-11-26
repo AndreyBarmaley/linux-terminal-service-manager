@@ -324,14 +324,18 @@ namespace LTSM {
         asio::steady_timer tm_pause{ex};
 
         try {
-            while (! std::filesystem::is_socket(file)) {
+            std::error_code ec;
+            while (! std::filesystem::is_socket(file, ec)) {
                 tm_pause.expires_after(100ms);
                 co_await tm_pause.async_wait(asio::cancel_at(deadline_time, asio::use_awaitable));
             }
         } catch(const system::system_error& err) {
             if(err.code() == asio::error::operation_aborted) {
                 // deadline
-                Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+                if(deadline_time <= std::chrono::steady_clock::now()) {
+                    Application::error("{}: deadline, path: {}", NS_FuncNameV, file.string());
+                    throw system::system_error(asio::error::timed_out);
+                }
             }
             throw;
         }

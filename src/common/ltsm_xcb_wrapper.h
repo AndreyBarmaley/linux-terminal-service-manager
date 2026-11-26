@@ -733,7 +733,7 @@ namespace LTSM {
 
             // root display events
             virtual void xcbDisplayConnectedEvent(void) { /*default empty */ }
-            virtual void xcbFixesCursorChangedEvent(void) { /*default empty */ }
+            virtual void xcbFixesCursorChangedEvent(uint32_t) { /*default empty */ }
             virtual void xcbDamageNotifyEvent(const xcb_rectangle_t &, uint8_t level) { /*default empty */ }
             virtual void xcbRandrScreenSetSizeEvent(const Size &) { /*default empty */ }
             virtual void xcbRandrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) { /*default empty */ }

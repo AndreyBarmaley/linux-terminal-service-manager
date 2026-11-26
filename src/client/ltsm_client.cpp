@@ -737,7 +737,7 @@ namespace LTSM {
 
         try {
             for(;;) {
-                bool events = co_await sdlEventProcessing();
+                bool events = sdlEventProcessing();
 
                 if(events) {
                     std::this_thread::yield();
@@ -761,7 +761,8 @@ namespace LTSM {
     void ClientApp::stop(void) {
         this->rfbMessagesShutdown();
 
-        rfb_cancel_.emit(asio::cancellation_type::terminal);
+        recv_cancel_.emit(asio::cancellation_type::terminal);
+        send_cancel_.emit(asio::cancellation_type::terminal);
         sdl_cancel_.emit(asio::cancellation_type::terminal);
 #ifdef __UNIX__
         x11_cancel_.emit(asio::cancellation_type::terminal);
@@ -846,9 +847,13 @@ namespace LTSM {
 
             asio::co_spawn(ioc(), signalsHandler(), asio::detached);
 
+            // after rfbHandshake: start async send queue
+            asio::co_spawn(rfb_strand(), rfbSendMessagesAwait(),
+                asio::bind_cancellation_slot(send_cancel_.slot(), asio::detached));
+
             // rfb messages loop
             try {
-                co_await rfbMessagesLoopAwait();
+                co_await rfbRecvMessagesAwait();
             } catch(const system::system_error& err) {
                 if(auto ec = err.code(); ec != asio::error::operation_aborted) {
                     Application::error("{}: system error: {}, code: {}", "start", ec.message(), ec.value());
@@ -859,7 +864,7 @@ namespace LTSM {
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
                 co_return;
             }
-        }, asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
+        }, asio::bind_cancellation_slot(recv_cancel_.slot(), asio::detached));
 
         // On Apple platforms, the main thread is the thread that runs your program's main() entry point.
         // On other platforms, the main thread is the one that calls SDL_Init(SDL_INIT_VIDEO)
@@ -884,24 +889,22 @@ namespace LTSM {
         return EXIT_SUCCESS;
     }
 
-    asio::awaitable<void> ClientApp::sdlMouseMotion(const SDL_Event & ev) {
+    void ClientApp::sdlMouseMotion(const SDL_Event & ev) {
         const auto & me = ev.motion;
-        asio::co_spawn(rfb_strand(), sendPointerEventAwait(0xFF & me.state, me.x, me.y), asio::detached);
-        co_return;
+        sendPointerEvent(0xFF & me.state, me.x, me.y);
     }
 
-    asio::awaitable<void> ClientApp::sdlMouseButton(const SDL_Event & ev) {
+    void ClientApp::sdlMouseButton(const SDL_Event & ev) {
         const auto & be = ev.button;
         const uint8_t buttons = ev.type == SDL_MOUSEBUTTONDOWN ? SDL_BUTTON(be.button) : 0;
-        asio::co_spawn(rfb_strand(), sendPointerEventAwait(buttons, be.x, be.y), asio::detached);
-        co_return;
+        sendPointerEvent(buttons, be.x, be.y);
     }
 
-    asio::awaitable<void> ClientApp::sdlMouseWheel(const SDL_Event & ev) {
+    void ClientApp::sdlMouseWheel(const SDL_Event & ev) {
         const auto & we = ev.wheel;
 
         if(0 == we.y) {
-            co_return;
+            return;
         }
 
         int mouseX, mouseY;
@@ -910,9 +913,8 @@ namespace LTSM {
         // press/release up/down
         const uint8_t buttons = SDL_BUTTON(0 < we.y ? SDL_BUTTON_X1 : SDL_BUTTON_X2);
 
-        asio::co_spawn(rfb_strand(), sendPointerEventAwait(buttons, mouseX, mouseY), asio::detached);
-        asio::co_spawn(rfb_strand(), sendPointerEventAwait(0, mouseX, mouseY), asio::detached);
-        co_return;
+        sendPointerEvent(buttons, mouseX, mouseY);
+        sendPointerEvent(0, mouseX, mouseY);
     }
 
     const char* sdlWindowEventName(uint8_t id) {
@@ -984,21 +986,17 @@ namespace LTSM {
         return "unknown";
     }
 
-    asio::awaitable<void> ClientApp::windowResizedEvent(const XCB::Size & wsz) {
+    void ClientApp::windowResizedEvent(const XCB::Size & wsz) {
         auto time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - appStart);
         // skip: starting window resized
         if(time.count() > 3) {
             windowSize_ = wsz;
-            asio::co_spawn(rfb_strand(), [this, wsz=windowSize_]() -> asio::awaitable<void> {
-                co_await sendSetDesktopSizeAwait(wsz);
-                co_return;
-            }, asio::detached);
-            asio::co_spawn(rfb_strand(), sendFrameBufferUpdateAwait(false), asio::detached);
+            sendSetDesktopSize(windowSize_);
+            sendFrameBufferUpdate(false);
         }
-        co_return;
     }
 
-    asio::awaitable<void> ClientApp::sdlWindowEvent(const SDL_Event & ev) {
+    void ClientApp::sdlWindowEvent(const SDL_Event & ev) {
         const auto & we = ev.window;
         Application::debug(DebugType::App, "{}: window event: {}", NS_FuncNameV, sdlWindowEventName(we.event));
 
@@ -1023,7 +1021,7 @@ namespace LTSM {
             case SDL_WINDOWEVENT_RESIZED:
                 Application::debug(DebugType::App, "{}: event resized: [{}, {}]",
                                    NS_FuncNameV, we.data1, we.data2);
-                co_await windowResizedEvent(XCB::Size(we.data1, we.data2));
+                windowResizedEvent(XCB::Size(we.data1, we.data2));
                 break;
 
             default:
@@ -1031,7 +1029,7 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> ClientApp::sdlKeyboardEvent(const SDL_Event & ev) {
+    void ClientApp::sdlKeyboardEvent(const SDL_Event & ev) {
         const auto & ke = ev.key;
 
         // pressed
@@ -1044,7 +1042,7 @@ namespace LTSM {
                (KMOD_CTRL & SDL_GetModState())) {
                 Application::warning("{}: hotkey received ({}), {}", NS_FuncNameV, "ctrl + F10", "close application");
                 asio::post(ioc(), std::bind(&ClientApp::stop, this));
-                co_return;
+                return;
             }
 
             // ctrl + F11 -> fullscreen toggle
@@ -1060,7 +1058,7 @@ namespace LTSM {
                     windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
                 }
 
-                co_return;
+                return;
             }
         }
 
@@ -1068,19 +1066,17 @@ namespace LTSM {
             auto mod = SDL_GetModState();
             SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
             Application::debug(DebugType::App, "{}: CAPS reset", NS_FuncNameV);
-            co_return;
+            return;
         }
 
         // sizeof(ke.keysym.scancode) = 4, sizeof(ke.keysym.sym) = 4
         const bool pressed = ke.state == SDL_PRESSED;
-
-        asio::co_spawn(rfb_strand(), sendKeyEventAwait(pressed, ke.keysym.sym, ke.keysym.scancode), asio::detached);
-        co_return;
+        sendKeyEvent(pressed, ke.keysym.sym, ke.keysym.scancode);
     }
 
     enum LocalEvent { Resize = 776, ResizeCont = 777 };
 
-    asio::awaitable<void> ClientApp::sdlUserEvent(const SDL_Event & ev) {
+    void ClientApp::sdlUserEvent(const SDL_Event & ev) {
 
         const auto & ue = ev.user;
         // resize event
@@ -1094,64 +1090,55 @@ namespace LTSM {
                 window_->resize(windowSz);
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-                co_return;
+                return;
             }
 
             // get real size
             windowSize_ = window_->size();
-
-            asio::co_spawn(rfb_strand(), [this, contUpdateResume, wsz=windowSize_]() -> asio::awaitable<void> {
-                displayResizeEvent(wsz);
-                // full update
-                co_await sendFrameBufferUpdateAwait(false);
-                if(contUpdateResume) {
-                    const auto crt = XCB::Region(XCB::Point(0, 0), wsz);
-                    asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, std::move(crt)), asio::detached);
-                }
-                co_return;
-            }, asio::detached);
+            displayResizeEvent(windowSize_);
+            // full update
+            sendFrameBufferUpdate(false);
+            if(contUpdateResume) {
+                sendContinuousUpdates(true, XCB::Region(windowSize_));
+            }
         }
-        co_return;
     }
 
-    asio::awaitable<void> ClientApp::sdlDropCompleteEvent(const SDL_Event & ev) {
+    void ClientApp::sdlDropCompleteEvent(const SDL_Event & ev) {
         if(! dropFiles.empty()) {
-            asio::co_spawn(rfb_strand(), sendSystemTransferFiles(std::move(dropFiles)), asio::detached);
+            sendSystemTransferFiles(std::move(dropFiles));
             dropFiles.clear();
         }
-        co_return;
     }
 
-    asio::awaitable<bool> ClientApp::sdlEventProcessing(void) {
+    bool ClientApp::sdlEventProcessing(void) {
         SDL_Event ev;
 
         if(! SDL_PollEvent(& ev)) {
-            co_return false;
+            return false;
         }
-
-        co_await fixed_dispatch_await(sdl_strand_);
 
         switch(ev.type) {
             case SDL_MOUSEMOTION:
-                co_await sdlMouseMotion(ev);
+                sdlMouseMotion(ev);
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
-                co_await sdlMouseButton(ev);
+                sdlMouseButton(ev);
                 break;
 
             case SDL_MOUSEWHEEL:
-                co_await sdlMouseWheel(ev);
+                sdlMouseWheel(ev);
                 break;
 
             case SDL_WINDOWEVENT:
-                co_await sdlWindowEvent(ev);
+                sdlWindowEvent(ev);
                 break;
 
             case SDL_KEYDOWN:
             case SDL_KEYUP:
-                co_await sdlKeyboardEvent(ev);
+                sdlKeyboardEvent(ev);
                 break;
 
             case SDL_DROPFILE:
@@ -1162,11 +1149,11 @@ namespace LTSM {
                 break;
 
             case SDL_DROPCOMPLETE:
-                co_await sdlDropCompleteEvent(ev);
+                sdlDropCompleteEvent(ev);
                 break;
 
             case SDL_USEREVENT:
-                co_await sdlUserEvent(ev);
+                sdlUserEvent(ev);
                 break;
 
             case SDL_QUIT:
@@ -1175,10 +1162,10 @@ namespace LTSM {
                 break;
 
             default:
-                co_return false;
+                return false;
         }
 
-        co_return true;
+        return true;
     }
 
     bool ClientApp::pushEventWindowResize(const XCB::Size & nsz) {
@@ -1193,8 +1180,7 @@ namespace LTSM {
         bool contUpdateResume = false;
 
         if(isContinueUpdatesProcessed()) {
-            const auto crt = XCB::Region(XCB::Point(0, 0), windowSize_);
-            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(false, std::move(crt)), asio::detached);
+            sendContinuousUpdates(false, XCB::Region(windowSize_));
             contUpdateResume = true;
         }
 
@@ -1231,10 +1217,7 @@ namespace LTSM {
                             NS_FuncNameV, primarySize_, windowSize_);
 
                 if(! primarySize_.isEmpty() && primarySize_ != windowSize_) {
-                    asio::co_spawn(rfb_strand(), [this, psz=primarySize_]() -> asio::awaitable<void> {
-                        co_await sendSetDesktopSizeAwait(primarySize_);
-                        co_return;
-                    }, asio::detached);
+                    sendSetDesktopSize(primarySize_);
                 }
             } else {
                 // server runtime
@@ -1259,37 +1242,35 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> ClientApp::clientRecvPixelFormatEvent(const PixelFormat & serverPf, const XCB::Size & serverWindowSz) {
+    void ClientApp::clientRecvPixelFormatEvent(const PixelFormat & serverPf, const XCB::Size & serverWindowSz) {
+        // rfb_strand context
         if(window_) {
             Application::warning("{}: window also init", NS_FuncNameV);
-            co_return;
+            return;
         }
 
         // sdl init window
-        co_await fixed_dispatch_await(sdl_strand_);
-
         Application::info("{}: size: {}", NS_FuncNameV, serverWindowSz);
 
-        try {
-            sdlWindowInit(serverWindowSz);
-        } catch(const std::exception& err) {
-            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
-            asio::post(ioc(), std::bind(&ClientApp::stop, this));
-        }
+        auto wait_init = asio::co_spawn(sdl_strand_, sdlWindowInit(serverWindowSz),
+                asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::use_future));
 
+        if(wait_init.get()) {
+            asio::co_spawn(sdl_strand_, sdlEventsLoop(),
+                asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
 #ifdef __UNIX__
-        asio::co_spawn(xcb_strand(), x11EventsLoop(),
-            asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
+            asio::co_spawn(xcb_strand(), x11EventsLoop(),
+                asio::bind_cancellation_slot(x11_cancel_.slot(), asio::detached));
 #endif
-        if(isContinueUpdatesSupport()) {
-            const auto crt = XCB::Region(XCB::Point(0, 0), clientSize());
-            asio::co_spawn(rfb_strand(), sendContinuousUpdatesAwait(true, std::move(crt)), asio::detached);
-        }
+            displayResizeEvent(windowSize_);
 
-        co_return;
+            if(isContinueUpdatesSupport()) {
+                sendContinuousUpdates(true, XCB::Region(clientSize()));
+            }
+        }
     }
 
-    void ClientApp::sdlWindowInit(const XCB::Size & wsz) {
+    asio::awaitable<bool> ClientApp::sdlWindowInit(const XCB::Size& wsz) {
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
 
@@ -1300,7 +1281,8 @@ namespace LTSM {
                 &gmask, &bmask, &amask)) {
             Application::error("{}: {} failed, error: {}", NS_FuncNameV,
                                "SDL_PixelFormatEnumToMasks", SDL_GetError());
-            throw std::runtime_error(NS_FuncNameS);
+            asio::post(ioc(), std::bind(&ClientApp::stop, this));
+            co_return false;
         }
 
         if(primarySize_.isEmpty()) {
@@ -1315,14 +1297,7 @@ namespace LTSM {
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
         windowSize_ = window_->size();
 
-        // start sdl loop
-        asio::co_spawn(sdl_strand_, sdlEventsLoop(),
-                asio::bind_cancellation_slot(sdl_cancel_.slot(), asio::detached));
-
-        asio::co_spawn(rfb_strand(), [this, wsz=windowSize_]() -> asio::awaitable<void> {
-                displayResizeEvent(wsz);
-                co_return;
-        }, asio::detached);
+        co_return true;
     }
 
     void ClientApp::setPixel(const XCB::Point & dst, uint32_t pixel) const {
@@ -1669,10 +1644,7 @@ namespace LTSM {
     void ClientApp::systemLoginSuccessEvent(const JsonObject & jo) {
         if(jo.getBoolean("action", false)) {
             if(! primarySize_.isEmpty() && primarySize_ != windowSize_) {
-                asio::co_spawn(rfb_strand(), [this, psz=primarySize_]() -> asio::awaitable<void> {
-                    co_await sendSetDesktopSizeAwait(psz);
-                    co_return;
-                }, asio::detached);
+                sendSetDesktopSize(primarySize_);
             }
         } else {
             auto error = jo.getString("error");

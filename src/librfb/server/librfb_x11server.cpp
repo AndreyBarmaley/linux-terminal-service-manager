@@ -42,8 +42,8 @@ namespace LTSM {
         return XCB::Rectangle(clientRegion_.load());
     }
 
-    void RFB::X11Server::xcbFixesCursorChangedEvent(void) {
-        clientUpdateCursor_ = isClientSupportedEncoding(ENCODING_RICH_CURSOR);
+    void RFB::X11Server::xcbFixesCursorChangedEvent(uint32_t cursor_serial) {
+        clientUpdateCursorSerial_.store(cursor_serial);
     }
 
     void RFB::X11Server::xcbDamageNotifyEvent(const xcb_rectangle_t & rt, uint8_t level) {
@@ -94,8 +94,8 @@ namespace LTSM {
 
         serverRegion_.store(xcb_rectangle_t{0, 0, wsz.width, wsz.height});
 
-        asio::co_spawn(xcb_strand(), [this, wsz, notify]() -> asio::awaitable<void> {
-            co_await xcbShmInit(0, & wsz);
+        asio::co_spawn(rfb_strand(), [this, wsz, notify]() -> asio::awaitable<void> {
+            xcbShmInit(0, & wsz);
 
             displayResizeProcessed_ = false;
             serverDisplayResizedEvent(wsz);
@@ -104,19 +104,18 @@ namespace LTSM {
                 auto status = randrSequence_ == notify.sequence ?
                           RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
 
-                co_await asio::post(rfb_strand(), asio::use_awaitable);
-
                 if(status == RFB::DesktopResizeStatus::ServerRuntime) {
-                    co_await sendEncodingDesktopResizeAwait(status, RFB::DesktopResizeError::NoError, wsz);
+                    sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
                     displayResizeEvent(wsz);
                 } else if(displayResizeNegotiation_) {
                     // clientSide
-                    co_await sendEncodingDesktopResizeAwait(status, RFB::DesktopResizeError::NoError, wsz);
+                    sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
                     displayResizeEvent(wsz);
                     displayResizeNegotiation_ = false;
                 }
             }
 
+            // FIME check it
             auto ex = co_await asio::this_coro::executor;
             asio::steady_timer tm_delay{ex, 100ms};
             co_await tm_delay.async_wait(asio::use_awaitable);
@@ -133,6 +132,7 @@ namespace LTSM {
         ServerEncoder::asioStop();
 
         rfb_cancel_.emit(asio::cancellation_type::terminal);
+        send_cancel_.emit(asio::cancellation_type::terminal);
         xcb_cancel_.emit(asio::cancellation_type::terminal);
         srv_cancel_.emit(asio::cancellation_type::terminal);
 
@@ -218,11 +218,29 @@ namespace LTSM {
         co_return;
     }
 
-    asio::awaitable<void> RFB::X11Server::rfbReceiveMessages(void) {
+    asio::awaitable<void> RFB::X11Server::rfbSendMessagesAwait(void) {
+        try {
+            for(;;) {
+                co_await sendQueueAwait();
+            }
+        } catch(const system::system_error& err) {
+            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
+                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
+                stop();
+            }
+        } catch(const std::exception& err) {
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
+            stop();
+        }
+
+        co_return;
+    }
+
+    asio::awaitable<void> RFB::X11Server::rfbRecvMessagesAwait(void) {
         try {
             Application::debug(DebugType::Rfb, "{}: wait remote messages...", NS_FuncNameV);
             for(;;) {
-                co_await rfbMessageAwait();
+                co_await recvRfbMessageAwait();
             }
         } catch(const system::system_error& err) {
             if(auto ec = err.code(); ec != asio::error::operation_aborted) {
@@ -326,25 +344,25 @@ namespace LTSM {
         }
 
         if(xcbAllowMessages()) {
-            co_await sendUpdateScreenAwait(damageRect);
+            sendUpdateScreen(damageRect);
 
             if(clientUpdateCursor_) {
-                co_await sendUpdateCursorAwait();
-                clientUpdateCursor_ = false;
+                if(auto cursor_serial = clientUpdateCursorSerial_.load()) {
+                    clientUpdateCursorSerial_.store(0);
+                    sendUpdateCursor(cursor_serial);
+                }
             }
         }
 
         co_return;
     }
 
-    asio::awaitable<uint16_t> RFB::X11Server::xcbDisplayDepth(void) const {
-        co_await fixed_dispatch_await(xcb_strand());
-        co_return XCB::RootDisplay::depth();
+    uint16_t RFB::X11Server::xcbDisplayDepth(void) const {
+        return XCB::RootDisplay::depth();
     }
 
-    asio::awaitable<XCB::Size> RFB::X11Server::xcbDisplaySize(void) const {
-        co_await fixed_dispatch_await(xcb_strand());
-        co_return XCB::RootDisplay::size();
+    XCB::Size RFB::X11Server::xcbDisplaySize(void) const {
+        return XCB::RootDisplay::size();
     }
 
     bool RFB::X11Server::isDisplaySize(const XCB::Size& sz) const {
@@ -391,9 +409,13 @@ namespace LTSM {
 
         serverSecurityInitEvent();
 
+        // after serverSecurityInit: start async send queue
+        asio::co_spawn(rfb_strand(), rfbSendMessagesAwait(),
+            asio::bind_cancellation_slot(send_cancel_.slot(), asio::detached));
+
         // RFB 6.3.1 client init
-        const auto displaySize = co_await xcbDisplaySize();
-        const auto displayDepth = co_await xcbDisplayDepth();
+        const auto displaySize = xcbDisplaySize();
+        const auto displayDepth = xcbDisplayDepth();
 
         serverRegion_.store(xcb_rectangle_t{0, 0, displaySize.width, displaySize.height});
         frameTimePoint_ = std::chrono::steady_clock::now();
@@ -401,7 +423,7 @@ namespace LTSM {
         co_await serverClientInitAwait("X11 Remote Desktop", displaySize, displayDepth, serverFormat());
         timerNotActivated.cancel();
 
-        co_await xcbShmInit();
+        xcbShmInit();
 
         serverConnectedEvent();
         Application::info("{}: wait RFB messages, fps: {}", NS_FuncNameV, frameRateOption());
@@ -411,7 +433,7 @@ namespace LTSM {
 
         asio::co_spawn(ioc_, signalsHandler(), asio::detached);
 
-        asio::co_spawn(rfb_strand(), rfbReceiveMessages(),
+        asio::co_spawn(rfb_strand(), rfbRecvMessagesAwait(),
             asio::bind_cancellation_slot(rfb_cancel_.slot(), asio::detached));
 
         asio::co_spawn(xcb_strand(), xcbEventsLoop(),
@@ -459,13 +481,14 @@ namespace LTSM {
         serverEncodingsEvent();
 
         if(isClientSupportedEncoding(ENCODING_EXT_DESKTOP_SIZE) && rfbDesktopResizeEnabled()) {
-            asio::co_spawn(xcb_strand(), [this]() -> asio::awaitable<void> {
-                const auto dsz = co_await xcbDisplaySize();
-                co_await sendEncodingDesktopResizeAwait(RFB::DesktopResizeStatus::ServerRuntime,
+            const auto dsz = xcbDisplaySize();
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime,
 							RFB::DesktopResizeError::NoError, dsz);
-		co_return;
-            }, asio::detached);
+	    return;
         }
+
+        clientUpdateCursor_ = isClientSupportedEncoding(ENCODING_LTSM_CURSOR) ||
+            isClientSupportedEncoding(ENCODING_RICH_CURSOR);
     }
 
     void RFB::X11Server::serverRecvKeyEvent(bool pressed, uint32_t keycode, uint16_t scancode) {
@@ -541,10 +564,7 @@ namespace LTSM {
     }
 
     void RFB::X11Server::extClipboardSendBuf(std::vector<uint8_t>&& buf) const {
-        asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
-            co_await sendCutTextAwait(buf, true);
-            co_return;
-        }, asio::detached);
+        sendCutText(std::move(buf), true);
     }
 
     uint16_t RFB::X11Server::extClipboardLocalTypes(void) const {
@@ -552,7 +572,7 @@ namespace LTSM {
     }
 
     asio::awaitable<clipboard_buf> RFB::X11Server::extClipboardLocalDataAwait(uint16_t type) {
-        co_await fixed_dispatch_await(xcb_strand());
+        co_await asio::dispatch(xcb_strand(), asio::use_awaitable);
 
         if(0 == extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
@@ -573,15 +593,12 @@ namespace LTSM {
                 try {
                     co_await clipboard_ready_.async_wait(asio::use_awaitable);
                 } catch(const system::system_error& err) {
+                    auto ec = err.code();
                     // clipboard_ready_.cancel() -> data ready
-                    if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                        Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-                        co_return clipboard_buf{};
+                    if(ec == asio::error::operation_aborted) {
+                        co_return clientClipboard_;
                     }
-                }
-
-                if(clientClipboard_.size()) {
-                    co_return clientClipboard_;
+                    Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
                 }
             }
         }
@@ -589,9 +606,7 @@ namespace LTSM {
         co_return clipboard_buf{};
     }
 
-    asio::awaitable<void> RFB::X11Server::extClipboardRemoteTypesAwait(uint16_t types) {
-        co_await fixed_dispatch_await(xcb_strand());
-
+    void RFB::X11Server::extClipboardRemoteTypes(uint16_t types) {
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
@@ -602,13 +617,9 @@ namespace LTSM {
         if(auto paste = static_cast<XCB::ModulePasteSelection*>(XCB::RootDisplay::getExtension(XCB::Module::SELECTION_PASTE))) {
             paste->setSelectionOwner(*this);
         }
-    
-        co_return;
     }
 
-    asio::awaitable<void> RFB::X11Server::extClipboardRemoteDataAwait(uint16_t type, std::vector<uint8_t> buf) {
-        co_await fixed_dispatch_await(xcb_strand());
-
+    void RFB::X11Server::extClipboardRemoteData(uint16_t type, std::vector<uint8_t>&& buf) {
         if(! extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", NS_FuncNameV, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncNameS);
@@ -616,8 +627,6 @@ namespace LTSM {
 
         clientClipboard_.swap(buf);
         clipboard_ready_.cancel();
-
-        co_return;
     }
 
     void RFB::X11Server::selectionReceiveData(xcb_atom_t atom, std::vector<uint8_t>&& buf) const {
@@ -628,10 +637,7 @@ namespace LTSM {
                 ptr->clipboard_ready_.cancel();
             }
         } else {
-            asio::co_spawn(rfb_strand(), [this, buf=std::move(buf)]() -> asio::awaitable<void> {
-                co_await sendCutTextAwait(buf, false /* ext mode */);
-                co_return;
-            }, asio::detached);
+            sendCutText(std::move(buf), false /* ext mode */);
         }
     }
 
@@ -683,14 +689,15 @@ namespace LTSM {
         try {
             co_await clipboard_ready_.async_wait(asio::use_awaitable);
         } catch(const system::system_error& err) {
+            auto ec = err.code();
             // clipboard_ready_.cancel() -> data ready
-            if(auto ec = err.code(); ec != asio::error::operation_aborted) {
-                Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
-                co_return false;
+            if(ec == asio::error::operation_aborted) {
+                co_return true;
             }
+            Application::error("{}: system error: {}, code: {}", NS_FuncNameV, ec.message(), ec.value());
         }
 
-        co_return true;
+        co_return false;
     }
 
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
@@ -789,27 +796,19 @@ namespace LTSM {
 
         if(desktop.x != 0 && desktop.y != 0) {
             Application::error("{}: incorrect desktop size: {}", NS_FuncNameV, desktop);
-	    asio::co_spawn(rfb_strand(), 
-        	sendEncodingDesktopResizeAwait(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, std::move(dsz)),
-	        asio::detached);
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, dsz);
         } else if(! xcbAllowMessages()) {
             Application::error("{}: xcb disabled", NS_FuncNameV);
-	    asio::co_spawn(rfb_strand(),
-        	sendEncodingDesktopResizeAwait(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::Size{0, 0}),
-	        asio::detached);
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::Size{0, 0});
         } else if(dsz == desktop.toSize()) {
-	    asio::co_spawn(rfb_strand(),
-        	sendEncodingDesktopResizeAwait(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::NoError, std::move(dsz)),
-	        asio::detached);
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::NoError, dsz);
         } else {
             displayResizeNegotiation_ = true;
             uint16_t sequence = 0;
             if(XCB::RootDisplay::setRandrScreenSize(desktop.toSize(), & sequence)) {
                 randrSequence_ = sequence;
             } else {
-	        asio::co_spawn(rfb_strand(),
-                    sendEncodingDesktopResizeAwait(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, std::move(dsz)),
-                    asio::detached);
+                sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, dsz);
                 displayResizeNegotiation_ = false;
                 displayResizeProcessed_ = false;
                 randrSequence_ = 0;
@@ -817,8 +816,22 @@ namespace LTSM {
         }
     }
 
-    asio::awaitable<void> RFB::X11Server::sendUpdateCursorAwait(void) {
-        co_await fixed_dispatch_await(xcb_strand());
+    void RFB::X11Server::cursorRequest(uint32_t cursorId) {
+        Application::info("{}: cursorId: {:#010x}", NS_FuncNameV, cursorId);
+        asio::post(xcb_strand(), [this, cursorId]() {
+            cursorsCache_.erase(cursorId);
+        });
+    }
+
+    void RFB::X11Server::sendUpdateCursor(uint32_t cursorId) {
+        if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
+            if(auto it = cursorsCache_.find(cursorId); it != cursorsCache_.end()) {
+                const auto& rt = it->second;
+                sendEncodingLtsmCursor(cursorId, rt.topLeft(), rt.toSize(), {});
+                return;
+            }
+        }
+
         if(auto fixes = static_cast<const XCB::ModuleWindowFixes*>(XCB::RootDisplay::getExtensionConst(XCB::Module::WINFIXES))) {
             XCB::CursorImage replyCursor = fixes->getCursorImage();
             const auto & reply = replyCursor.reply();
@@ -834,14 +847,15 @@ namespace LTSM {
                     const auto cursorSize = XCB::Size(reply->width, reply->height);
                     // priority LTSM cursors
                     if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR)) {
-                        co_await sendEncodingLtsmCursorAwait(cursorHot, cursorSize, std::span{ptr, dataSize * sizeof(uint32_t)});
+                        sendEncodingLtsmCursor(cursorId, cursorHot, cursorSize, std::span{ptr, dataSize * sizeof(uint32_t)});
+                        cursorsCache_.emplace(cursorId, XCB::Region(cursorHot, cursorSize));
                     } else {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                         auto cursorFB = FrameBuffer(ptr, XCB::Region(cursorSize), BGRA32);
 #else
                         auto cursorFB = FrameBuffer(ptr, XCB::Region(cursorSize), ARGB32);
 #endif
-                        co_await sendEncodingRichCursorAwait(cursorFB, cursorHot);
+                        sendEncodingRichCursor(cursorFB, cursorHot);
                     }
                 } else {
                     Application::warning("{}: size mismatch, data: {}, argb: {}", NS_FuncNameV, dataSize, argbSize);
@@ -852,15 +866,11 @@ namespace LTSM {
 
     void RFB::X11Server::serverSendFBUpdateEvent(const XCB::Region & reg) const {
         if(! xcbNoDamageOption()) {
-            asio::dispatch(xcb_strand(), [this, reg]() {
-                XCB::RootDisplay::rootDamageSubtrack(reg);
-            });
+            XCB::RootDisplay::rootDamageSubtrack(reg);
         }
     }
 
-    asio::awaitable<void> RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
-        co_await fixed_dispatch_await(xcb_strand());
-
+    void RFB::X11Server::xcbShmInit(uid_t uid, const XCB::Size* psz) {
         if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM))) {
             auto dsz = XCB::RootDisplay::size();
 
@@ -877,8 +887,6 @@ namespace LTSM {
                 shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
             }
         }
-
-        co_return;
     }
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {

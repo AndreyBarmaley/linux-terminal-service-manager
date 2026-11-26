@@ -40,7 +40,7 @@ jobs:
             libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
             liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
             libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
-            libaudit-dev libspdlog-dev libpipewire-0.3-dev libgmock-dev libgtest-dev libkrb5-dev
+            libaudit-dev libspdlog-dev libpipewire-0.3-dev libgmock-dev libgtest-dev libkrb5-dev liburing-dev
 
     - name: Boost1.88
       run: |
@@ -67,4 +67,6 @@ jobs:
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 4
 
     - name: Tests
-      run: ctest --test-dir build/src/tests/common
+      run: |
+        ctest --test-dir build/src/tests/common
+        ctest --test-dir build/src/tests/librfb
