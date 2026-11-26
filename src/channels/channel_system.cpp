@@ -202,51 +202,35 @@ void Channel::Planned::acceptSockClose(void) {
 
 std::pair<Channel::ConnectorType, std::string>
 Channel::parseUrl(std::string_view url) {
-    if(startsWith(url, "file://")) {
-        return std::make_pair(Channel::ConnectorType::File, view2string(url.substr(7)));
-    }
-
-    if(startsWith(url, "unix://")) {
-        return std::make_pair(Channel::ConnectorType::Unix, view2string(url.substr(7)));
-    }
-
-    if(startsWith(url, "sock://")) {
-        return std::make_pair(Channel::ConnectorType::Socket, view2string(url.substr(7)));
-    }
-
-    if(startsWith(url, "socket://")) {
-        return std::make_pair(Channel::ConnectorType::Socket, view2string(url.substr(9)));
-    }
-
-    if(startsWith(url, "cmd://")) {
-        return std::make_pair(Channel::ConnectorType::Command, view2string(url.substr(6)));
-    }
-
-    if(startsWith(url, "command://")) {
-        return std::make_pair(Channel::ConnectorType::Command, view2string(url.substr(10)));
-    }
-
-    if(startsWith(url, "fuse://")) {
-        return std::make_pair(Channel::ConnectorType::Fuse, view2string(url.substr(7)));
-    }
-
-    if(startsWith(url, "audio://")) {
-        return std::make_pair(Channel::ConnectorType::Audio, view2string(url.substr(8)));
-    }
-
-    if(startsWith(url, "pcsc://")) {
-        return std::make_pair(Channel::ConnectorType::Pcsc, view2string(url.substr(7)));
-    }
-
-    if(startsWith(url, "pkcs11://")) {
-        return std::make_pair(Channel::ConnectorType::Pkcs11, view2string(url.substr(9)));
-    }
-
     if(url.empty()) {
-        return std::make_pair(Channel::ConnectorType::Unknown, "");
+        return {ConnectorType::Unknown, ""};
     }
 
-    return std::make_pair(Channel::ConnectorType::Unknown, view2string(url));
+    struct PrefixMap {
+        std::string_view prefix;
+        ConnectorType type;
+    };
+
+    static constexpr std::array prefixes = {
+        PrefixMap{"file://",    ConnectorType::File},
+        PrefixMap{"unix://",    ConnectorType::Unix},
+        PrefixMap{"sock://",    ConnectorType::Socket},
+        PrefixMap{"socket://",  ConnectorType::Socket},
+        PrefixMap{"cmd://",     ConnectorType::Command},
+        PrefixMap{"command://", ConnectorType::Command},
+        PrefixMap{"fuse://",    ConnectorType::Fuse},
+        PrefixMap{"audio://",   ConnectorType::Audio},
+        PrefixMap{"pcsc://",    ConnectorType::Pcsc},
+        PrefixMap{"pkcs11://",  ConnectorType::Pkcs11}
+    };
+
+    for(const auto& entry : prefixes) {
+        if(url.starts_with(entry.prefix)) {
+            return {entry.type, view2string(url.substr(entry.prefix.size()))};
+        }
+    }
+
+    return {ConnectorType::Unknown, view2string(url)};
 }
 
 std::pair<std::string, uint16_t>
