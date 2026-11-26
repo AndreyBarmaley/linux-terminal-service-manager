@@ -149,6 +149,10 @@ jobs:
             --merge-mode-functions=merge-use-line-max \
             --exclude 'boost_1_.*' \
             --exclude 'build/.*' \
+            --exclude 'src/common/flat_hash_map/.*' \
+            --exclude 'src/common/jsmn/.*' \
+            --exclude 'src/common/libxcb-errors/.*' \
+            --exclude 'src/tests/.*' \
             --sonarqube -o coverage.xml .
 
       - name: SonarQube Cloud Scan
