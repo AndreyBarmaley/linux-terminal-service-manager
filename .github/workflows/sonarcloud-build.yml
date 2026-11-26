@@ -10,9 +10,6 @@ on:
     branches: [ main ]
 
 env:
-    SONAR_SCANNER_VERSION: 5.0.2.4997 # 5.0.1.3006 # https://github.com/SonarSource/sonar-scanner-cli/releases
-    SONAR_SERVER_URL: "https://sonarcloud.io"
-    BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
     BUILD_TYPE: Debug
     DEBIAN_FRONTEND: noninteractive
     BOOST_MINOR: 88
@@ -29,12 +26,6 @@ jobs:
         run: |
          sudo apt-get update
          sudo apt-get -y upgrade
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: "temurin"
-          java-version: 21
 
       - name: Set up Python 3.10 for gcovr
         uses: actions/setup-python@v6
@@ -64,23 +55,6 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      - name: Download and set up sonar-scanner
-        env:
-          SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
-        run: |
-          mkdir -p $HOME/.sonar
-          curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }} 
-          unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
-          echo "$HOME/.sonar/sonar-scanner-${{ env.SONAR_SCANNER_VERSION }}-linux/bin" >> $GITHUB_PATH
-
-      - name: Download and set up build-wrapper
-        env:
-          BUILD_WRAPPER_DOWNLOAD_URL: ${{ env.SONAR_SERVER_URL }}/static/cpp/build-wrapper-linux-x86.zip
-        run: |
-          curl -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip ${{ env.BUILD_WRAPPER_DOWNLOAD_URL }}
-          unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
-          echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
-
       - name: Boost1.88
         run: |
           wget https://archives.boost.io/release/1.${{env.BOOST_MINOR}}.0/source/boost_1_${{env.BOOST_MINOR}}_0.tar.bz2
@@ -89,21 +63,23 @@ jobs:
           ./bootstrap.sh
           ./b2
 
-      - name: Run build-wrapper
+      - name: Configure and build
         run: |
           echo "fix user group"
           sed -i -e 's|ltsm-auth|adm|' ${{github.workspace}}/src/common/ltsm_global.h
           sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/src/common/ltsm_global.h
           echo "start cmake"
           LTSM_BOOST_ROOT=${{github.workspace}}/boost_1_${{env.BOOST_MINOR}}_0 \
-             cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+             cmake -B ${{github.workspace}}/build \
+                -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+                -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
                 -DLTSM_BUILD_SERVER=on \
                 -DLTSM_BUILD_CLIENT=on \
                 -DLTSM_BUILD_TESTS=on \
                 -DLTSM_BUILD_TOOLS=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
           echo "start build"
-          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 4
+          cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 4
 
       - name: Prepare LTSM coverage tests
         run: |
@@ -169,19 +145,19 @@ jobs:
 
       - name: Collect coverage into one XML report
         run: |
-          gcovr --gcov-ignore-parse-errors=all --merge-mode-functions=merge-use-line-max --sonarqube -o coverage.xml .
+          gcovr --gcov-ignore-parse-errors=all \
+            --merge-mode-functions=merge-use-line-max \
+            --exclude 'boost_1_.*' \
+            --exclude 'build/.*' \
+            --sonarqube -o coverage.xml .
 
-      - name: Run sonar-scanner
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          export JAVA_HOME="$JAVA_HOME_21_X64"
-          export JRE="$JAVA_HOME_21_X64"
-          export PATH="$JAVA_HOME_21_X64/bin:$PATH"
-          echo $PATH
-          sonar-scanner --define sonar.host.url="${{ env.SONAR_SERVER_URL }}" \
-            --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
-            --define sonar.coverageReportPaths=coverage.xml \
-            --define sonar.scanner.skipJreProvisioning=true \
-            --define sonar.scanner.javaExe="$JAVA_HOME_21_X64/bin/java"
+        with:
+          args: >
+            -Dsonar.cfamily.compile-commands=build/compile_commands.json
+            -Dsonar.coverageReportPaths=coverage.xml
+            -Dsonar.exclusions=boost_1_${{ env.BOOST_MINOR }}_0/**,build/**
