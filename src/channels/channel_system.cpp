@@ -518,6 +518,7 @@ void ChannelBase::createChannelUnixPath(CID channel, const std::filesystem::path
         auto ex = chan_strand();
         asio::local::stream_protocol::socket sock{ex};
         asio::local::stream_protocol::endpoint endpoint{path.c_str()};
+        sock.connect(endpoint);
 
         Application::info("{}: id: {}, addr: `{}', mode: {}", NS_FuncNameV, channel, path.string(), Channel::Connector::modeString(mode));
         emplaceChannel(channel, Channel::createSocketConnector(channel, AsyncGenericSocket(std::move(sock)), mode, chOpts, *this));
