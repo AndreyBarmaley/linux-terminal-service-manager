@@ -152,8 +152,8 @@ TEST(PixelFormatTest, FormatConversion) {
 
 TEST(PixelLengthTest, PropertiesAccess) {
     PixelLength pl(0xFF00AA, 12);
-    EXPECT_EQ(pl.pixel(), 0xFF00AA);
-    EXPECT_EQ(pl.length(), 12);
+    EXPECT_EQ(pl.pixel, 0xFF00AA);
+    EXPECT_EQ(pl.length, 12);
 }
 
 TEST(FBInfoTest, InternalAllocationAndExternalPointer) {

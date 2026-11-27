@@ -62,8 +62,8 @@ namespace LTSM {
     };
 
     struct PaletteIndex {
-        uint32_t index;
-        uint32_t weight;
+        uint32_t index = 0;
+        uint32_t weight = 0;
     };
 
     using ColorMap = boost::unordered_flat_set<Color, HasherColor>;
@@ -187,16 +187,9 @@ namespace LTSM {
         fbinfo_t & operator=(const fbinfo_t &) = delete;
     };
 
-    struct PixelLength : std::pair<uint32_t /* pixel */, uint32_t /* length */> {
-        PixelLength(uint32_t pixel, uint32_t length) : std::pair<uint32_t, uint32_t>(pixel, length) {}
-
-        const uint32_t & pixel(void) const {
-            return first;
-        }
-
-        const uint32_t & length(void) const {
-            return second;
-        }
+    struct PixelLength {
+        uint32_t pixel = 0;
+        uint32_t length = 0;
     };
 
     using PixelLengthList = std::list<PixelLength>;

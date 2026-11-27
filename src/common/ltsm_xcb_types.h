@@ -166,18 +166,9 @@ namespace LTSM {
             }
         };
 
-        struct RegionPixel : std::pair<Region, uint32_t> {
-            RegionPixel(const Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
-
-            RegionPixel() = default;
-
-            const uint32_t & pixel(void) const {
-                return second;
-            }
-
-            const Region & region(void) const {
-                return first;
-            }
+        struct RegionPixel {
+            Region region{};
+            uint32_t pixel = 0;
         };
     }
     

@@ -105,17 +105,20 @@ namespace LTSM {
         };
 
         template<typename ReplyType>
-        struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError> {
+        struct ReplyError {
+            GenericReply<ReplyType> reply_;
+            GenericError error_;
+
             ReplyError(ReplyType* ptr, xcb_generic_error_t* err)
-                : std::pair<GenericReply<ReplyType>, GenericError>(ptr, err) {
+                : reply_(ptr), error_(err) {
             }
 
             const GenericReply<ReplyType> & reply(void) const {
-                return std::pair<GenericReply<ReplyType>, GenericError>::first;
+                return reply_;
             }
 
             const GenericError & error(void) const {
-                return std::pair<GenericReply<ReplyType>, GenericError>::second;
+                return error_;
             }
         };
 

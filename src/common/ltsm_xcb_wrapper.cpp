@@ -135,7 +135,7 @@ namespace LTSM {
                 error(conn, err.get(), NS_FuncNameV, "xcb_get_property");
             }
 
-            return PropertyReply(std::move(xcbReply.first));
+            return PropertyReply(std::move(xcbReply.reply_));
         }
 
         AtomName::AtomName(xcb_connection_t* conn, xcb_atom_t at) : name{Atom::getName(conn, at)}, atom{at} {
@@ -653,7 +653,7 @@ namespace LTSM {
             return {};
         }
 
-        return RandrScreenResources(std::move(xcbReply.first));
+        return RandrScreenResources(std::move(xcbReply.reply_));
     }
 
     std::span<const xcb_randr_output_t> XCB::RandrScreenResources::getOutputs(void) const {
@@ -2267,7 +2267,7 @@ namespace LTSM {
             extendedError(err.get(), NS_FuncNameV, "xcb_get_property");
         }
 
-        return XCB::PropertyReply(std::move(xcbReply.first));
+        return XCB::PropertyReply(std::move(xcbReply.reply_));
     }
 
     xcb_atom_t XCB::Connector::getPropertyType(xcb_window_t win, xcb_atom_t prop) const {

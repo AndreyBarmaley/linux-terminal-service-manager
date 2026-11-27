@@ -533,10 +533,10 @@ namespace LTSM {
                     auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                     auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
 
-                    if(res.size() && res.back().pixel() == pix) {
-                        res.back().second++;
+                    if(res.size() && res.back().pixel == pix) {
+                        res.back().length++;
                     } else {
-                        res.emplace_back(pix, 1);
+                        res.emplace_back(PixelLength{pix, 1});
                     }
                 }
             }

@@ -239,9 +239,9 @@ namespace LTSM {
                             }
                             auto& back = goods.back();
                             // maybe join prev
-                            if(back.first.y == subreg.y && back.first.height == subreg.height &&
-                               back.first.x - back.first.width == subreg.x && back.second == pixel) {
-                                back.first.width -= subreg.width;
+                            if(back.region.y == subreg.y && back.region.height == subreg.height &&
+                               back.region.x - back.region.width == subreg.x && back.pixel == pixel) {
+                                back.region.width -= subreg.width;
                             } else {
                                 goods.emplace_back(subreg, pixel);
                             }
@@ -388,8 +388,8 @@ namespace LTSM {
 
         for(const auto & pair : rreList) {
             // subrect pixel
-            sb.writePixel(st, pair.pixel());
-            auto & region = pair.region();
+            sb.writePixel(st, pair.pixel);
+            const auto & region = pair.region;
 
             // subrect region (relative coords)
             if(isCoRRE()) {
@@ -405,7 +405,7 @@ namespace LTSM {
             }
 
             Application::trace(DebugType::Enc, "{}: region: {}, back pixel {:#010x}",
-                               NS_FuncNameV, region - reg.topLeft(), pair.pixel());
+                               NS_FuncNameV, region - reg.topLeft(), pair.pixel);
         }
     }
 
@@ -466,8 +466,8 @@ namespace LTSM {
             assertm(!! back, "palette weight not found");
             std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, *back);
             // all other color
-            bool foreground = std::ranges::all_of(goods, [col = goods.front().second](auto & pair) {
-                return pair.pixel() == col;
+            bool foreground = std::ranges::all_of(goods, [col = goods.front().pixel](auto & pair) {
+                return pair.pixel == col;
             });
 
             const size_t hextileRawLength = 1 + reg.width * reg.height * fb.bytePerPixel();
@@ -518,13 +518,13 @@ namespace LTSM {
         sb.writeInt8(rreList.size());
 
         for(const auto & pair : rreList) {
-            auto & region = pair.region();
-            sb.writePixel(st, pair.pixel());
+            const auto & region = pair.region;
+            sb.writePixel(st, pair.pixel);
             sb.writeInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             sb.writeInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
             Application::trace(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}",
-                               NS_FuncNameV, region - reg.topLeft(), pair.pixel());
+                               NS_FuncNameV, region - reg.topLeft(), pair.pixel);
         }
     }
 
@@ -535,12 +535,12 @@ namespace LTSM {
         // hextile background
         sb.writePixel(st, back);
         // hextile foreground
-        sb.writePixel(st, rreList.front().second);
+        sb.writePixel(st, rreList.front().pixel);
         // hextile subrects
         sb.writeInt8(rreList.size());
 
         for(const auto & pair : rreList) {
-            auto & region = pair.region();
+            const auto & region = pair.region;
             sb.writeInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             sb.writeInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
@@ -618,14 +618,14 @@ namespace LTSM {
             // rle plain size
             const size_t rlePlainLength = std::accumulate(rleList.begin(), rleList.end(), 1,
             [](int v, auto & pair) {
-                return v + 3 + std::floor((pair.second - 1) / 255.0) + 1;
+                return v + 3 + std::floor((pair.length - 1) / 255.0) + 1;
             });
 
             // rle palette size (2, 127)
             const size_t rlePaletteLength = 1 < rleList.size() &&
                                             rleList.size() < 128 ? std::accumulate(rleList.begin(), rleList.end(), 1 + 3 * map.size(),
             [](int v, auto & pair) {
-                return v + 1 + std::floor((pair.second - 1) / 255.0) + 1;
+                return v + 1 + std::floor((pair.length - 1) / 255.0) + 1;
             }) : 0xFFFF;
 
             // raw length
@@ -696,8 +696,8 @@ namespace LTSM {
 
         // send rle content
         for(const auto & pair : rle) {
-            sb.writeCPixel(st, pair.pixel());
-            sb.writeRunLength(pair.length());
+            sb.writeCPixel(st, pair.pixel);
+            sb.writeRunLength(pair.length);
         }
     }
 
@@ -713,14 +713,14 @@ namespace LTSM {
 
         // send rle indexes
         for(const auto & pair : rle) {
-            auto index = PixelMap::findColorIndex(pal, pair.pixel());
+            auto index = PixelMap::findColorIndex(pal, pair.pixel);
             assertm(!! index, "palette color not found");
 
-            if(1 == pair.length()) {
+            if(1 == pair.length) {
                 sb.writeInt8(*index);
             } else {
                 sb.writeInt8(*index + 128);
-                sb.writeRunLength(pair.length());
+                sb.writeRunLength(pair.length);
             }
         }
     }

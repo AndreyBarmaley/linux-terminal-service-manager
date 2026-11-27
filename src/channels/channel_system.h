@@ -98,30 +98,26 @@ namespace LTSM {
         ConnectorMode connectorMode(std::string_view);
         Speed connectorSpeed(std::string_view);
 
-        std::pair<ConnectorType, std::string> parseUrl(std::string_view);
-        std::string createUrl(const ConnectorType &, std::string_view);
+        struct TypeContent  {
+            ConnectorType type_{ConnectorType::Unknown};
+            std::string content_{""};
 
-        struct TypeContent : std::pair<ConnectorType, std::string> {
-            explicit TypeContent(const std::pair<ConnectorType, std::string> & pair) : std::pair<ConnectorType, std::string>(pair) {}
-            explicit TypeContent(std::pair<ConnectorType, std::string> && pair) noexcept : std::pair<ConnectorType, std::string>(std::move(pair)) {}
-
-            TypeContent() : std::pair<ConnectorType, std::string> {
-                ConnectorType::Unknown, ""
-            } {}
-            TypeContent(const ConnectorType & type, const std::string & cont) : std::pair<ConnectorType, std::string> {
-                type, cont
-            } {}
+            TypeContent(const ConnectorType & type, const std::string & cont)
+                : type_{type}, content_{cont} {}
 
             const ConnectorType & type(void) const {
-                return first;
+                return type_;
             }
             const std::string & content(void) const {
-                return second;
+                return content_;
             }
             void updateType(ConnectorType type) {
-                first = type;
+                type_ = type;
             }
         };
+
+        TypeContent parseUrl(std::string_view);
+        std::string createUrl(const ConnectorType &, std::string_view);
 
         struct UrlMode : TypeContent {
             ConnectorMode mode = ConnectorMode::Unknown;

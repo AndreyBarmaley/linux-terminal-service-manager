@@ -500,7 +500,7 @@ namespace LTSM {
             if(arg.size()) {
                 auto url = Channel::parseUrl(arg);
 
-                if(url.first == Channel::ConnectorType::Unknown) {
+                if(url.type() == Channel::ConnectorType::Unknown) {
                     Application::warning("{}: parse {} failed, unknown url: {}",
                                          NS_FuncNameV, "printer", arg);
                 } else {
@@ -513,7 +513,7 @@ namespace LTSM {
             if(arg.size()) {
                 auto url = Channel::parseUrl(arg);
 
-                if(url.first == Channel::ConnectorType::Unknown) {
+                if(url.type() == Channel::ConnectorType::Unknown) {
                     Application::warning("{}: parse {} failed, unknown url: {}",
                                          NS_FuncNameV, "sane", arg);
                 } else {

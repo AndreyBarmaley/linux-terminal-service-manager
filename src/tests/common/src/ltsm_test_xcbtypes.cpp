@@ -155,8 +155,8 @@ TEST(XCBRegionPixelTest, DataAccess) {
 
     RegionPixel pixel_node(r, color);
 
-    EXPECT_EQ(pixel_node.pixel(), color);
-    EXPECT_EQ(pixel_node.region(), r);
+    EXPECT_EQ(pixel_node.pixel, color);
+    EXPECT_EQ(pixel_node.region, r);
 }
 
 TEST(XCBRegionContainsTest, InsideScenarios) {

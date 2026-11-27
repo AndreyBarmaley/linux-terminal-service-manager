@@ -200,7 +200,7 @@ void Channel::Planned::acceptSockClose(void) {
     }
 }
 
-std::pair<Channel::ConnectorType, std::string>
+Channel::TypeContent
 Channel::parseUrl(std::string_view url) {
     if(url.empty()) {
         return {ConnectorType::Unknown, ""};
