@@ -59,7 +59,7 @@ namespace LTSM {
     namespace RFB {
         int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
         using TransferChannel = boost::asio::experimental::concurrent_channel<void(boost::system::error_code, BinaryBuf)>;
-        constexpr int TransferChannelSize = 16;
+        constexpr int TransferChannelSize = 256;
 
         /// ServerEncoder
         class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip {

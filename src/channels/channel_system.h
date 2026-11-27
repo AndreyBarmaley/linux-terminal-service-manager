@@ -24,7 +24,6 @@
 #ifndef _CHANNEL_SYSTEM_
 #define _CHANNEL_SYSTEM_
 
-
 #include <span>
 #include <list>
 #include <mutex>
@@ -38,21 +37,18 @@
 #include <filesystem>
 #include <forward_list>
 
-#undef D
-#include <boost/container/flat_map.hpp>
-
-#include "ltsm_audio.h"
-
 #ifdef LTSM_PKCS11_AUTH
 #include "ltsm_pkcs11_wrapper.h"
 #endif
 
 #include "ltsm_tools.h"
+#include "ltsm_audio.h"
 #include "ltsm_application.h"
-
 #include "ltsm_streambuf.h"
 #include "ltsm_json_wrapper.h"
 #include "channel_stream.h"
+
+#include <boost/container/flat_map.hpp>
 
 namespace LTSM {
     static const int LtsmProtocolVersion = 0x03;

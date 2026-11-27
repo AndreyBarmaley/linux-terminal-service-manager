@@ -52,32 +52,32 @@ TEST(PixelMapsTest, PaletteFindColorIndex) {
     PixelMapPalette palette;
 
     // empty
-    EXPECT_EQ(palette.findColorIndex(0xFF00AA), static_cast<uint32_t>(-1));
+    EXPECT_EQ(PixelMap::findColorIndex(palette, 0xFF00AA), std::nullopt);
 
     palette[0xFF0000] = 10; // Red -> Index 10
     palette[0x00FF00] = 20; // Green -> Index 20
     palette[0x0000FF] = 30; // Blue -> Index 30
 
-    EXPECT_EQ(palette.findColorIndex(0x00FF00), 20);
-    EXPECT_EQ(palette.findColorIndex(0x0000FF), 30);
+    EXPECT_EQ(PixelMap::findColorIndex(palette, 0x00FF00), 20);
+    EXPECT_EQ(PixelMap::findColorIndex(palette, 0x0000FF), 30);
 
-    EXPECT_EQ(palette.findColorIndex(0xABCDEF), static_cast<uint32_t>(-1));
+    EXPECT_EQ(PixelMap::findColorIndex(palette, 0xABCDEF), std::nullopt);
 }
 
 TEST(PixelMapsTest, WeightMaxWeightPixel) {
     PixelMapWeight weights;
 
     // empty
-    EXPECT_EQ(weights.maxWeightPixel(), 0);
+    EXPECT_EQ(PixelMap::maxWeightPixel(weights), std::nullopt);
 
     weights[0x111111] = 5;   // Pixel 1, Weight 5
     weights[0x222222] = 100; // Pixel 2, Weight 100
     weights[0x333333] = 42;  // Pixel 3, Weight 42
 
-    EXPECT_EQ(weights.maxWeightPixel(), 0x222222);
+    EXPECT_EQ(PixelMap::maxWeightPixel(weights), 0x222222);
 
     weights[0x111111] = 500;
-    EXPECT_EQ(weights.maxWeightPixel(), 0x111111);
+    EXPECT_EQ(PixelMap::maxWeightPixel(weights), 0x111111);
 }
 
 TEST(PixelFormatTest, ConstructorsAndMaskParsing) {

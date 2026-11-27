@@ -72,10 +72,6 @@ if(LTSM_WITH_EXECUTION_PAR)
     endif()
 endif()
 
-if(LTSM_WITH_STD_MAP)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_STD_MAP)
-endif()
-
 if(LTSM_WITH_JSON)
     target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_JSON)
     target_sources(${CUR_TARGET} PRIVATE ltsm_json_wrapper.cpp)

@@ -36,6 +36,7 @@
 #include <filesystem>
 #include <string_view>
 #include <forward_list>
+#include <unordered_map>
 
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
@@ -370,7 +371,7 @@ namespace LTSM {
         bool getBoolean(void) const override;
 
       protected:
-        INTMAP<std::string, JsonValuePtr> content;
+        std::unordered_map<std::string, JsonValuePtr> content;
         friend class JsonContent;
 
         template<typename T>

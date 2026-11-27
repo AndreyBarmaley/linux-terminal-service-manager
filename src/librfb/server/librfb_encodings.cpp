@@ -330,22 +330,23 @@ namespace LTSM {
         EncodePacket sb(4096, false /* type v1 */);
         sb.writeHeader(getType(), reg + top);
 
-        auto map = fb.pixelMapWeight(reg);
+        auto map = fb.pixelMapPalette(reg);
         if(map.empty()) {
             Application::error("{}: {}", NS_FuncNameV, "pixels map is empty");
             throw rfb_error(NS_FuncNameS);
         }
 
         if(map.size() > 1) {
-            auto back = map.maxWeightPixel();
-            std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, back);
+            auto back = PixelMap::maxWeightPixel(map);
+            assertm(!! back, "palette weight not found");
+            std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, *back);
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
             Application::debug(DebugType::Enc, "{}: region: {}, back pixel {:#010x}, sub rects: {}",
-                               NS_FuncNameV, reg + top, back, goods.size());
+                               NS_FuncNameV, reg + top, *back, goods.size());
 
-            writeRectsTo(sb, st, reg, fb, back, goods);
+            writeRectsTo(sb, st, reg, fb, *back, goods);
         } else {
             // if(map.size() == 1)
             int back = fb.pixel(reg.topLeft());
@@ -444,7 +445,7 @@ namespace LTSM {
         EncodePacket sb(4096, false /* type v1 */);
         sb.writeHeader(getType(), reg + top);
 
-        auto map = fb.pixelMapWeight(reg);
+        auto map = fb.pixelMapPalette(reg);
         if(map.empty()) {
             Application::error("{}: {}", NS_FuncNameV, "pixels map is empty");
             throw rfb_error(NS_FuncNameS);
@@ -461,8 +462,9 @@ namespace LTSM {
             sb.writePixel(st, back);
         } else if(map.size() > 1) {
             // no wait, worked
-            auto back = map.maxWeightPixel();
-            std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, back);
+            auto back = PixelMap::maxWeightPixel(map);
+            assertm(!! back, "palette weight not found");
+            std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, *back);
             // all other color
             bool foreground = std::ranges::all_of(goods, [col = goods.front().second](auto & pair) {
                 return pair.pixel() == col;
@@ -481,9 +483,9 @@ namespace LTSM {
                     writeRegionToRaw(sb, st, reg, fb);
                 } else {
                     Application::debug(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}, sub rects: {}, {}",
-                                       NS_FuncNameV, reg + top, back, goods.size(), "foreground");
+                                       NS_FuncNameV, reg + top, *back, goods.size(), "foreground");
 
-                    writeRegionToForeground(sb, st, reg, fb, back, goods);
+                    writeRegionToForeground(sb, st, reg, fb, *back, goods);
                 }
             } else {
                 const size_t hextileColoredLength = 2 + fb.bytePerPixel() + goods.size() * (2 + fb.bytePerPixel());
@@ -496,9 +498,9 @@ namespace LTSM {
                     writeRegionToRaw(sb, st, reg, fb);
                 } else {
                     Application::debug(DebugType::Enc, "{}: region: {}, back pixel: {:#010x}, sub rects: {}, {}",
-                                       NS_FuncNameV, reg + top, back, goods.size(), "colored");
+                                       NS_FuncNameV, reg + top, *back, goods.size(), "colored");
 
-                    writeRegionToColored(sb, st, reg, fb, back, goods);
+                    writeRegionToColored(sb, st, reg, fb, *back, goods);
                 }
             }
         }
@@ -670,9 +672,9 @@ namespace LTSM {
             for(uint16_t px = 0; px < reg.width; ++px) {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
                 auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
-                auto index = pal.findColorIndex(pix);
-                assertm(0 <= index, "palette color not found");
-                sbp.pushValue(index, field);
+                auto index = PixelMap::findColorIndex(pal, pix);
+                assertm(!! index, "palette color not found");
+                sbp.pushValue(*index, field);
             }
 
             sbp.pushAlign();
@@ -711,13 +713,13 @@ namespace LTSM {
 
         // send rle indexes
         for(const auto & pair : rle) {
-            auto index = pal.findColorIndex(pair.pixel());
-            assertm(0 <= index, "palette color not found");
+            auto index = PixelMap::findColorIndex(pal, pair.pixel());
+            assertm(!! index, "palette color not found");
 
             if(1 == pair.length()) {
-                sb.writeInt8(index);
+                sb.writeInt8(*index);
             } else {
-                sb.writeInt8(index + 128);
+                sb.writeInt8(*index + 128);
                 sb.writeRunLength(pair.length());
             }
         }

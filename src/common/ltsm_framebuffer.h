@@ -27,10 +27,13 @@
 #include <span>
 #include <list>
 #include <memory>
+#include <optional>
+
+#include <boost/unordered/unordered_flat_set.hpp>
+#include <boost/unordered/unordered_flat_map.hpp>
 
 #include "ltsm_global.h"
 #include "ltsm_xcb_types.h"
-//#include "ltsm_streambuf.h"
 
 namespace LTSM {
     struct Color {
@@ -58,16 +61,19 @@ namespace LTSM {
         }
     };
 
-    struct ColorMap : INTSET<Color, HasherColor> {
+    struct PaletteIndex {
+        uint32_t index;
+        uint32_t weight;
     };
 
-    struct PixelMapPalette : INTMAP<uint32_t /* pixel */, uint32_t /* index */> {
-        uint32_t findColorIndex(const uint32_t &) const;
-    };
+    using ColorMap = boost::unordered_flat_set<Color, HasherColor>;
+    using PixelMapPalette = boost::unordered_flat_map<uint32_t, PaletteIndex>;
+    using PixelMapWeight = boost::unordered_flat_map<uint32_t /* pixel */, uint32_t /* weight */>;
 
-    struct PixelMapWeight : INTMAP<uint32_t /* pixel */, uint32_t /* weight */> {
-        uint32_t maxWeightPixel(void) const;
-    };
+    namespace PixelMap {
+        std::optional<uint32_t> findColorIndex(const PixelMapPalette&, uint32_t pixel) noexcept;
+        std::optional<uint32_t> maxWeightPixel(const PixelMapPalette&) noexcept;
+    }
 
     class PixelFormat {
         uint16_t redMax = 0;
@@ -236,7 +242,6 @@ namespace LTSM {
         FrameBuffer copyRegionFormat(const XCB::Region &, const PixelFormat &) const;
         ColorMap colourMap(void) const;
         PixelMapPalette pixelMapPalette(const XCB::Region &) const;
-        PixelMapWeight pixelMapWeight(const XCB::Region &) const;
         PixelLengthList toRLE(const XCB::Region &) const;
         bool allOfPixel(uint32_t pixel, const XCB::Region &) const;
 

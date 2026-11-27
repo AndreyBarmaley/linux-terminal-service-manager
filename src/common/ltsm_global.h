@@ -62,15 +62,4 @@ namespace LTSM {
     };
 }
 
-#if defined(LTSM_WITH_STD_MAP) || defined(__MINGW32__)
-#include <unordered_map>
-#include <unordered_set>
-#define INTMAP std::unordered_map
-#define INTSET std::unordered_set
-#else
-#include "flat_hash_map/unordered_map.hpp"
-#define INTMAP ska::unordered_map
-#define INTSET ska::unordered_set
-#endif
-
 #endif // _LTSM_GLOBALS_

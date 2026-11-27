@@ -1,5 +1,5 @@
 function(CommonDefaults)
-    set(LTSM_WITH_FB_PARALLELS ON PARENT_SCOPE)
+    set(LTSM_WITH_FB_PARALLELS OFF PARENT_SCOPE)
     set(LTSM_WITH_XCB_ERRORS ON PARENT_SCOPE)
 
     list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP ZLIB BOOST OPENSSL)
@@ -15,12 +15,6 @@ function(CommonDefaults)
             set(${PARAM} ON PARENT_SCOPE)
         endif()
     endforeach()
-
-    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-        set(LTSM_WITH_STD_MAP ON PARENT_SCOPE)
-    else()
-        set(LTSM_WITH_STD_MAP OFF PARENT_SCOPE)
-    endif()
 endfunction()
 
 add_custom_command(

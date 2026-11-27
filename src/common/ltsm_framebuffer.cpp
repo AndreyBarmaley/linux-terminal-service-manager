@@ -239,30 +239,22 @@ namespace LTSM {
         }
     }
 
-    uint32_t PixelMapPalette::findColorIndex(const uint32_t & col) const {
-#ifdef LTSM_WITH_EXECUTION_PAR
-        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair) {
-            return pair.first == col;
-        });
-#else
-        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
-            return pair.first == col;
-        });
-#endif
-        return it != cend() ? (*it).second : -1;
+    std::optional<uint32_t> PixelMap::findColorIndex(const PixelMapPalette& palette, uint32_t pixel) noexcept {
+        auto it = palette.find(pixel);
+        return it != palette.end() ? std::make_optional(it->second.index) : std::nullopt;
     }
 
-    uint32_t PixelMapWeight::maxWeightPixel(void) const {
-#ifdef LTSM_WITH_EXECUTION_PAR
-        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2) {
-            return p1.second < p2.second;
-        });
-#else
-        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
-            return p1.second < p2.second;
-        });
-#endif
-        return it != cend() ? (*it).first : 0;
+    std::optional<uint32_t> PixelMap::maxWeightPixel(const PixelMapPalette& palette) noexcept {
+        if (palette.empty()) {
+            return std::nullopt;
+        }
+
+        auto it = std::ranges::max_element(palette, 
+            {}, // comparator std::ranges::less
+            [](const auto& entry) { return entry.second.weight; }
+        );
+
+        return it->first;
     }
 
     FrameBuffer FrameBuffer::copyRegionFormat(const XCB::Region & reg, const PixelFormat & pf) const {
@@ -576,150 +568,47 @@ namespace LTSM {
 
     ColorMap FrameBuffer::colourMap(void) const {
         const PixelFormat & fmt = pixelFormat();
+        const XCB::Region & reg = fbreg;
 
-        auto regionProcessed = [&fmt, this](XCB::Region reg) {
-            ColorMap res;
+        ColorMap res;
+        res.reserve(std::min(reg.width * reg.height, 1024));
 
-            for(uint16_t py = 0; py < reg.height; ++py) {
-                const uint8_t* pitch = pitchData(reg.y + py);
+        for(uint16_t py = 0; py < reg.height; ++py) {
+            const uint8_t* pitch = pitchData(reg.y + py);
 
-                for(uint16_t px = 0; px < reg.width; ++px) {
-                    auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                    auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
-                    res.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
-                }
+            for(uint16_t px = 0; px < reg.width; ++px) {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
+                res.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
             }
-
-            return res;
-        };
-
-#ifdef LTSM_WITH_FB_PARALLELS
-
-        if(2 < std::thread::hardware_concurrency() && 1024 < (fbreg.width * fbreg.height)) {
-            ColorMap map;
-            ParallelsJobs<ColorMap> jobs;
-            auto bsz = XCB::Size(fbreg.width, fbreg.height / 4);
-
-            for(auto & subreg : fbreg.divideBlocks(bsz)) {
-                jobs.addJob(make_async_job(regionProcessed, subreg));
-            }
-
-            for(auto & job : jobs.jobList()) {
-#ifdef LTSM_WITH_STD_MAP
-                map.merge(job.get());
-#else
-                auto ret = job.get();
-                map.insert(ret.begin(), ret.end());
-#endif
-            }
-
-            return map;
         }
 
-#endif
-        return regionProcessed(fbreg);
+        return res;
     }
 
     PixelMapPalette FrameBuffer::pixelMapPalette(const XCB::Region & reg) const {
         PixelMapPalette map;
+        map.reserve(std::min(reg.width * reg.height, 1024));
 
-        auto regionProcessed = [this](XCB::Region reg) {
-            PixelMapPalette res;
+        for(uint16_t py = 0; py < reg.height; ++py) {
+            const uint8_t* pitch = pitchData(reg.y + py);
 
-            for(uint16_t py = 0; py < reg.height; ++py) {
-                const uint8_t* pitch = pitchData(reg.y + py);
-
-                for(uint16_t px = 0; px < reg.width; ++px) {
-                    auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                    res.try_emplace(rawPixel(ptr, bitsPerPixel(), platformBigEndian()), 0);
+            for(uint16_t px = 0; px < reg.width; ++px) {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
+                if(auto ret = map.try_emplace(pix, PaletteIndex{0, 1}); ! ret.second) {
+                    ret.first->second.weight += 1;
                 }
             }
-
-            return res;
-        };
-
-#ifdef LTSM_WITH_FB_PARALLELS
-
-        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
-            ParallelsJobs<PixelMapPalette> jobs;
-            auto bsz = XCB::Size(reg.width, reg.height / 4);
-
-            for(auto & subreg : reg.divideBlocks(bsz)) {
-                jobs.addJob(make_async_job(regionProcessed, subreg));
-            }
-
-            for(auto & job : jobs.jobList()) {
-#ifdef LTSM_WITH_STD_MAP
-                map.merge(job.get());
-#else
-                auto ret = job.get();
-                map.insert(ret.begin(), ret.end());
-#endif
-            }
-        } else {
-            map = regionProcessed(reg);
         }
 
-#else
-        map = regionProcessed(reg);
-#endif // LTSM_WITH_FB_PARALLELS
-
-        int index = 0;
-
-        for(auto & pair : map) {
-            pair.second = index++;
+        // fixed palette index
+        uint32_t index = 0;
+        for(auto & pair: map) {
+            pair.second.index = index++;
         }
 
         return map;
-    }
-
-    PixelMapWeight FrameBuffer::pixelMapWeight(const XCB::Region & reg) const {
-        auto regionProcessed = [this](XCB::Region reg) {
-            PixelMapWeight res;
-
-            for(uint16_t py = 0; py < reg.height; ++py) {
-                const uint8_t* pitch = pitchData(reg.y + py);
-
-                for(uint16_t px = 0; px < reg.width; ++px) {
-                    auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                    auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
-                    auto ret = res.try_emplace(pix, 1);
-
-                    if(! ret.second) {
-                        ret.first->second += 1;
-                    }
-                }
-            }
-
-            return res;
-        };
-
-#ifdef LTSM_WITH_FB_PARALLELS
-
-        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
-            PixelMapWeight map;
-            ParallelsJobs<PixelMapWeight> jobs;
-            auto bsz = XCB::Size(reg.width, reg.height / 4);
-
-            for(auto & subreg : reg.divideBlocks(bsz)) {
-                jobs.addJob(make_async_job(regionProcessed, subreg));
-            }
-
-            for(auto & job : jobs.jobList()) {
-                for(auto & pair : job.get()) {
-                    auto ret = map.try_emplace(pair.first, pair.second);
-
-                    if(! ret.second) {
-                        ret.first->second += pair.second;
-                    }
-                }
-            }
-
-            return map;
-        }
-
-#endif
-        return regionProcessed(reg);
     }
 
     bool FrameBuffer::allOfPixel(uint32_t pix, const XCB::Region & reg) const {

@@ -35,7 +35,7 @@
 namespace LTSM {
     namespace RFB {
         using TransferChannel = boost::asio::experimental::concurrent_channel<void(boost::system::error_code, BinaryBuf)>;
-        constexpr int TransferChannelSize = 16;
+        constexpr int TransferChannelSize = 64;
 
         /* ClientDecoder */
         class ClientDecoder : public ChannelClient, public DecoderRender, public ExtClip {
