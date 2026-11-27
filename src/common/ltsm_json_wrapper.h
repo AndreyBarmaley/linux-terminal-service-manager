@@ -362,6 +362,15 @@ namespace LTSM {
     JsonArray & operator<< (JsonArray &, double);
     JsonArray & operator<< (JsonArray &, bool);
 
+    struct StringHash {
+        // marker for compiler (C++20 lookup)
+        using is_transparent = void; 
+
+        size_t operator()(std::string_view sv) const noexcept {
+            return std::hash<std::string_view>{}(sv);
+        }
+    };
+
     /* JsonObject */
     class JsonObject : public JsonContainer {
       private:
@@ -371,7 +380,7 @@ namespace LTSM {
         bool getBoolean(void) const override;
 
       protected:
-        std::unordered_map<std::string, JsonValuePtr> content;
+        std::unordered_map<std::string, JsonValuePtr, StringHash, std::equal_to<>> content;
         friend class JsonContent;
 
         template<typename T>

@@ -596,8 +596,8 @@ namespace LTSM {
             for(uint16_t px = 0; px < reg.width; ++px) {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                 auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
-                if(auto ret = map.try_emplace(pix, PaletteIndex{0, 1}); ! ret.second) {
-                    ret.first->second.weight += 1;
+                if(auto [it, inserted] = map.try_emplace(pix, PaletteIndex{0, 1}); ! inserted) {
+                    it->second.weight += 1;
                 }
             }
         }
