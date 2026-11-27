@@ -54,9 +54,9 @@ TEST(PixelMapsTest, PaletteFindColorIndex) {
     // empty
     EXPECT_EQ(PixelMap::findColorIndex(palette, 0xFF00AA), std::nullopt);
 
-    palette[0xFF0000] = 10; // Red -> Index 10
-    palette[0x00FF00] = 20; // Green -> Index 20
-    palette[0x0000FF] = 30; // Blue -> Index 30
+    palette[0xFF0000] = PaletteIndex{10, 1}; // Red -> Index 10
+    palette[0x00FF00] = PaletteIndex{20, 1}; // Green -> Index 20
+    palette[0x0000FF] = PaletteIndex{30, 1}; // Blue -> Index 30
 
     EXPECT_EQ(PixelMap::findColorIndex(palette, 0x00FF00), 20);
     EXPECT_EQ(PixelMap::findColorIndex(palette, 0x0000FF), 30);
@@ -65,19 +65,19 @@ TEST(PixelMapsTest, PaletteFindColorIndex) {
 }
 
 TEST(PixelMapsTest, WeightMaxWeightPixel) {
-    PixelMapWeight weights;
+    PixelMapPalette palette;
 
     // empty
-    EXPECT_EQ(PixelMap::maxWeightPixel(weights), std::nullopt);
+    EXPECT_EQ(PixelMap::maxWeightPixel(palette), std::nullopt);
 
-    weights[0x111111] = 5;   // Pixel 1, Weight 5
-    weights[0x222222] = 100; // Pixel 2, Weight 100
-    weights[0x333333] = 42;  // Pixel 3, Weight 42
+    palette[0x111111] = PaletteIndex{1, 5};   // Pixel 1, Weight 5
+    palette[0x222222] = PaletteIndex{2, 100}; // Pixel 2, Weight 100
+    palette[0x333333] = PaletteIndex{3, 42};  // Pixel 3, Weight 42
 
-    EXPECT_EQ(PixelMap::maxWeightPixel(weights), 0x222222);
+    EXPECT_EQ(PixelMap::maxWeightPixel(palette), 0x222222);
 
-    weights[0x111111] = 500;
-    EXPECT_EQ(PixelMap::maxWeightPixel(weights), 0x111111);
+    palette[0x111111] = PaletteIndex{1, 500};
+    EXPECT_EQ(PixelMap::maxWeightPixel(palette), 0x111111);
 }
 
 TEST(PixelFormatTest, ConstructorsAndMaskParsing) {
@@ -280,7 +280,6 @@ TEST(FrameBufferTest, AnalysisAndSerialization) {
     EXPECT_NO_THROW({
         ColorMap c_map = fb.colourMap();
         PixelMapPalette p_palette = fb.pixelMapPalette(fb.region());
-        PixelMapWeight p_weight = fb.pixelMapWeight(fb.region());
     });
 
     EXPECT_NO_THROW({
